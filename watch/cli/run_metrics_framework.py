@@ -514,7 +514,6 @@ def main(cmdline=True, **kwargs):
                     print('error in metrics framework, probably due to zero '
                           'TP site matches or a region without site truth.')
 
-    print('grouped_sites = {}'.format(ub.urepr(grouped_sites, nl=1)))
     if len(grouped_sites) == 1:
         print('Dump confusion')
         # In the case where there is one region:

@@ -2936,3 +2936,83 @@ def reorder_video_frames(dset):
     dset._build_index()
     print('reorder check info = {}'.format(ub.urepr(info, nl=1)))
     return info
+
+
+def pick_channels(coco_img, choices):
+    """
+    Choose the set of channels in choices that all exist in this image.
+
+    TODO:
+        - [ ] Add to CocoIamge as a method
+
+    Args:
+        coco_img (CocoImage): an image with channels
+
+        choices (List[FusedChannelSpec | str]):
+            a list of fused channels in priority order to choose from.
+
+    Returns:
+        None | FusedChannelSpec :
+            The first channel group in ``choices`` where all of those channels
+            exist in the image.
+
+    CommandLine:
+        xdoctest -m watch.utils.kwcoco_extensions pick_channels
+
+    Example:
+        >>> from watch.utils import kwcoco_extensions
+        >>> import kwcoco
+        >>> choices = ['blue|green|red', 'pan']
+        >>> # Make different demo CocoImages that contain different bands
+        >>> coco_img1 = kwcoco.CocoImage({
+        >>>     'channels': 'red|green|blue', 'file_name': 'dummy'})
+        >>> coco_img2 = kwcoco.CocoImage({
+        >>>     'channels': 'green|blue', 'file_name': 'dummy'})
+        >>> coco_img3 = kwcoco.CocoImage({
+        >>>     'channels': 'blue|green|red', 'file_name': 'dummy'})
+        >>> coco_img4 = kwcoco.CocoImage({
+        >>>     'channels': 'pan', 'file_name': 'dummy'})
+        >>> # Channels are only found if all bands in a choices item are given
+        >>> found1 = kwcoco_extensions.pick_channels(coco_img1, choices)
+        >>> found2 = kwcoco_extensions.pick_channels(coco_img2, choices)
+        >>> found3 = kwcoco_extensions.pick_channels(coco_img3, choices)
+        >>> found4 = kwcoco_extensions.pick_channels(coco_img4, choices)
+        >>> print(f'found1={found1}')
+        >>> print(f'found2={found2}')
+        >>> print(f'found3={found3}')
+        >>> print(f'found4={found4}')
+        found1=<FusedChannelSpec(blue|green|red)>
+        found2=None
+        found3=<FusedChannelSpec(blue|green|red)>
+        found4=<FusedChannelSpec(pan)>
+
+    Example:
+        >>> # Test case with different choices orders
+        >>> from watch.utils import kwcoco_extensions
+        >>> channel_priority1 = ['blue|green|red', 'pan']
+        >>> channel_priority2 = ['pan', 'blue|green|red']
+        >>> coco_img1 = kwcoco.CocoImage({
+        >>>     'channels': 'blue|green|red|pan', 'file_name': 'dummy'})
+        >>> coco_img2 = kwcoco.CocoImage({
+        >>>     'channels': 'pan|blue|green|red', 'file_name': 'dummy'})
+        >>> found1 = kwcoco_extensions.pick_channels(coco_img1, channel_priority1)
+        >>> found2 = kwcoco_extensions.pick_channels(coco_img1, channel_priority2)
+        >>> found3 = kwcoco_extensions.pick_channels(coco_img2, channel_priority1)
+        >>> found4 = kwcoco_extensions.pick_channels(coco_img2, channel_priority2)
+        >>> # The first found band in choices is returned when
+        >>> # the image contains both, regardless of order in the image.
+        >>> print(f'found1={found1}')
+        >>> print(f'found2={found2}')
+        >>> print(f'found3={found3}')
+        >>> print(f'found4={found4}')
+        found1=<FusedChannelSpec(blue|green|red)>
+        found2=<FusedChannelSpec(pan)>
+        found3=<FusedChannelSpec(blue|green|red)>
+        found4=<FusedChannelSpec(pan)>
+    """
+    import kwcoco
+    have_chans = coco_img.channels.fuse()
+    for candidate in choices:
+        candidate = kwcoco.FusedChannelSpec.coerce(candidate)
+        if candidate.issubset(have_chans):
+            return candidate

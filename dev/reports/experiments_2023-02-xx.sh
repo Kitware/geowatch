@@ -3556,7 +3556,7 @@ geowatch schedule --params="
 
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
@@ -3642,6 +3642,7 @@ geowatch schedule --params="
 
         sc_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            - $HOME/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_3/checkpoints/epoch=0-step=342-val_loss=4.648.ckpt.pt
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap: 0.3
@@ -3668,19 +3669,19 @@ geowatch schedule --params="
 
         sc_poly.thresh:
             - 0.00001
-            - 0.01
-            - 0.05
-            - 0.08
+            #- 0.01
+            #- 0.05
+            #- 0.08
             - 0.07
-            - 0.09
+            #- 0.09
             - 0.10
             - 0.15
             - 0.20
             - 0.25
             - 0.30
-            - 0.325
+            #- 0.325
             - 0.35
-            - 0.375
+            #- 0.375
             - 0.40
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 8GSD
@@ -3704,7 +3705,7 @@ geowatch schedule --params="
         sc_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask" \
-    --devices="0,1" --tmux_workers=4 \
+    --devices="1," --tmux_workers=1 \
     --backend=tmux --queue_name "_toothbrush_eval15_bas_nomask" \
     --skip_existing=1 \
     --run=1

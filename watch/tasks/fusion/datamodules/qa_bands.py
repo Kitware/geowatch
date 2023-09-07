@@ -65,7 +65,7 @@ def _dump_qa_debug_vid():
 
 class QA_SpecMixin:
 
-    def draw_labels(table, quality_im, legend='separate'):
+    def draw_labels(table, quality_im, legend='separate', legend_dpi=96):
         """
 
         The doctest can be used to debug cloudmasks for the datasets
@@ -180,7 +180,7 @@ class QA_SpecMixin:
         qa_canvas = colorized
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
-        legend = kwplot.make_legend_img(label_to_color)  # Make a legend
+        legend = kwplot.make_legend_img(label_to_color, dpi=legend_dpi)  # Make a legend
 
         drawings = {
             'qa_canvas': qa_canvas,

@@ -249,3 +249,129 @@ def _check_target(self):
         pass
 
     # mode_name = 'invariants.0|invariants.1|invariants.2|invariants.3|invariants.4|invariants.5|invariants.6|invariants.7|invariants.8|invariants.9|invariants.10|invariants.11|invariants.12|invariants.13|invariants.14|invariants.15|invariants.16'
+
+
+def debug_cloudmasks():
+    """
+    Visualize cloudmasks for all types of sensors and on a variety of real
+    datasets.
+    """
+    import kwcoco
+    import watch
+    import kwimage
+    import ubelt as ub
+    import kwarray
+
+    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+
+    coco_fpath = dvc_dpath / 'Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip'
+    dset = kwcoco.CocoDataset(coco_fpath)
+    coco_images = dset.images().coco_images
+
+    # Select a group of images
+    group_to_images = ub.udict(ub.group_items(
+        coco_images,
+        key=lambda coco_img: (
+            coco_img['sensor_coarse'],
+            tuple(sorted(coco_img.channels.unique(normalize=True)))
+        )
+    ))
+
+    # Print info about number of images per type
+    print(ub.urepr(group_to_images.map_values(len)))
+
+    rng = kwarray.ensure_rng(48942398243, api='python')
+    images_of_interest = []
+    for sensor, imgs in group_to_images.items():
+        # Randomly pick one image for each sensor
+        coco_img = rng.choice(imgs)
+        images_of_interest.append(coco_img)
+
+    out_dpath = ub.Path('$HOME/temp/debug_qa').expand().ensuredir()
+
+    for coco_img in ub.ProgIter(images_of_interest, desc='draw cloudmask debug image', verbose=3):
+        vidname = coco_img.video['name']
+        imgname = coco_img['name']
+        sensor = coco_img['sensor_coarse']
+        fname = f'qa_debug_{vidname}_{sensor}_{imgname}.jpg'
+        print(coco_img.dsize)
+        print('fname = {}'.format(ub.urepr(fname, nl=1)))
+
+        drawings = debug_single_cloudmask(coco_img)
+
+        tci_canvas = drawings['tci_canvas']
+        qa_canvas = drawings['qa_canvas']
+        legend = drawings['legend']
+        title = drawings['title']
+
+        canvas = kwimage.stack_images([tci_canvas, qa_canvas, legend], axis=1)
+        canvas = kwimage.draw_header_text(canvas, title)
+
+        print(f'canvas.shape={canvas.shape}')
+
+        fpath = out_dpath / fname
+        kwimage.imwrite(fpath, canvas)
+
+    # import kwplot
+    # kwplot.autoplt()
+    # kwplot.imshow(canvas, fnum=1)
+    # kwplot.imshow(legend, fnum=2)
+
+
+def debug_single_cloudmask(coco_img):
+    """
+    """
+    import kwimage
+    from watch.utils import kwcoco_extensions
+    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from watch.utils import util_time
+
+    tci_channel_priority = [
+        'red|green|blue',
+        'pan',
+    ]
+    tci_channels = kwcoco_extensions.pick_channels(coco_img, tci_channel_priority)
+
+    # Load quality and visual bands in image space
+    space = 'image'
+    qa_delayed = coco_img.imdelay('quality', interpolation='nearest', antialias=False, space=space)
+    tci_delayed = coco_img.imdelay(tci_channels, space=space)
+
+    quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False)
+    tci_raw = tci_delayed.finalize(nodata_method='float')
+    tci_canvas = kwimage.normalize_intensity(tci_raw)
+
+    sensor = coco_img.img.get('sensor_coarse')
+    print(f'sensor={sensor}')
+
+    # Lookup the correct QA spec for the image type.
+    spec_name = 'ACC-1'
+    sensor = coco_img['sensor_coarse']
+    table = QA_SPECS.find_table(spec_name, sensor)
+
+    drawings = table.draw_labels(quality_im, legend_dpi=300)
+    drawings['tci_canvas'] = tci_canvas
+    drawings['tci_canvas'] = kwimage.ensure_uint255(drawings['tci_canvas'])
+    drawings['qa_canvas'] = kwimage.ensure_uint255(drawings['qa_canvas'])
+
+    datestr = util_time.coerce_datetime(coco_img['date_captured']).date().isoformat()
+
+    title_parts = [
+        coco_img.video['name'],
+        coco_img['sensor_coarse'],
+        datestr,
+    ]
+
+    drawings['title'] = ' - '.join(title_parts)
+
+    if 0:
+        import kwplot
+        kwplot.autompl()
+        tci_canvas = drawings['tci_canvas']
+        qa_canvas = drawings['qa_canvas']
+        legend = drawings['legend']
+        kwplot.imshow(tci_canvas, fnum=1)
+        kwplot.imshow(qa_canvas, fnum=2)
+        kwplot.imshow(legend, fnum=3)
+
+    return drawings

@@ -7706,7 +7706,7 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 24
+    accumulate_grad_batches: 6
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     devices              : 0,
@@ -7729,5 +7729,6 @@ torch_globals:
     float32_matmul_precision: auto
 
 initializer:
-    init: /home/joncrall/quicklinks/toothbrush_training/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V81/lightning_logs/version_19/checkpoints/epoch=186-step=16082-val_loss=1.418.ckpt.pt
+    #init: /home/joncrall/quicklinks/toothbrush_training/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V81/lightning_logs/version_19/checkpoints/epoch=186-step=16082-val_loss=1.418.ckpt.pt
+    init: /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761_weight_hacked.ckpt
 "

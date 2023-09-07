@@ -1522,6 +1522,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
 
     cells = []
+    from watch.utils import kwcoco_extensions
     for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
         dets = gid_to_dets[gid]
@@ -1531,7 +1532,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             color = obj['cache']['confusion']['color']
             colors.append(color)
 
-        channels = find_visual_channels(coco_img, tci_channel_priority)
+        channels = kwcoco_extensions.pick_channels(coco_img, tci_channel_priority)
 
         tci_delayed = coco_img.imdelay(channels=channels, resolution=resolution, nodata_method='float')
         tci_imcrop = tci_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
@@ -1933,16 +1934,6 @@ def fix_site_id(site_id, region_id, performer_id):
     if site_id.startswith('_'):
         site_id = region_id + site_id
     return site_id
-
-
-def find_visual_channels(coco_img, channel_priority):
-    import kwcoco
-    have_chans = coco_img.channels
-    for p in channel_priority:
-        p = kwcoco.FusedChannelSpec.coerce(p)
-        common = have_chans & p
-        if common.numel() == p.numel():
-            return p
 
 
 def coco_upgrade_track_ids(coco_dset):

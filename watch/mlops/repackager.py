@@ -83,7 +83,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                     repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                                                 train_dpath_hint, model_config_fpath)
                 except Exception as ex:
-                    print('ERROR: Failed to package: {}'.format(ex))
+                    print('ERROR: Failed to package: {!r}'.format(ex))
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
     from kwutil import util_yaml
