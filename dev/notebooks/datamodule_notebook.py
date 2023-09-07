@@ -264,30 +264,43 @@ def debug_cloudmasks():
 
     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
 
-    coco_fpath = dvc_dpath / 'Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip'
-    dset = kwcoco.CocoDataset(coco_fpath)
-    coco_images = dset.images().coco_images
+    bundle_dpath = dvc_dpath / 'Aligned-Drop7'
 
-    # Select a group of images
-    group_to_images = ub.udict(ub.group_items(
-        coco_images,
-        key=lambda coco_img: (
-            coco_img['sensor_coarse'],
-            tuple(sorted(coco_img.channels.unique(normalize=True)))
-        )
-    ))
+    coco_dataset_fpaths = [
+        bundle_dpath / 'KR_R002/imgonly-KR_R002.kwcoco.zip',
+        bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
+    ]
 
-    # Print info about number of images per type
-    print(ub.urepr(group_to_images.map_values(len)))
-
-    rng = kwarray.ensure_rng(48942398243, api='python')
-    images_of_interest = []
-    for sensor, imgs in group_to_images.items():
-        # Randomly pick one image for each sensor
-        coco_img = rng.choice(imgs)
-        images_of_interest.append(coco_img)
-
+    # Directory to write debugging visualizations to
     out_dpath = ub.Path('$HOME/temp/debug_qa').expand().ensuredir()
+
+    coco_datasets = list(kwcoco.CocoDataset.coerce_multiple(coco_dataset_fpaths, workers=16))
+
+    images_of_interest = []
+
+    for coco_dset in ub.ProgIter(coco_datasets, desc='choosing images of interest'):
+        coco_images = coco_dset.images().coco_images
+
+        # Select a group of images
+        group_to_images = ub.udict(ub.group_items(
+            coco_images,
+            key=lambda coco_img: (
+                coco_img['sensor_coarse'],
+                tuple(sorted(coco_img.channels.unique(normalize=True)))
+            )
+        ))
+
+        # Print info about number of images per type
+        print('coco_dset = {}'.format(ub.urepr(coco_dset, nl=1)))
+        print(ub.urepr(group_to_images.map_values(len)))
+
+        # Seeded random number generator
+        rng = kwarray.ensure_rng(48942398243, api='python')
+
+        for sensor, imgs in group_to_images.items():
+            # Randomly pick one image for each sensor
+            coco_img = rng.choice(imgs)
+            images_of_interest.append(coco_img)
 
     for coco_img in ub.ProgIter(images_of_interest, desc='draw cloudmask debug image', verbose=3):
         vidname = coco_img.video['name']
