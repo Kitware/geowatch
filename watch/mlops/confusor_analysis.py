@@ -128,8 +128,15 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
                 self.src_kwcoco = src_kwcoco_cands[0]
 
             if self.bas_kwcoco is None:
-                # hack: note robust
-                bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
+
+                # Hack for AC node on full pipeline
+                # Need to have a nicer way to get a reference to the BAS coco
+                # file for AC nodes.
+                bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/sc_poly/*/.pred/sc_pxl/*/.pred/sc_crop/*/.pred/cluster_sites/*/.pred/sv_depth_filter/*/.pred/sv_dino_filter/*/.pred/sv_dino_boxes/*/.pred/sv_crop/*/.pred/bas_poly/*/poly.kwcoco.zip'))
+
+                if len(bas_kwcoco_cands) == 0:
+                    # hack: not robust
+                    bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
                 if len(bas_kwcoco_cands) == 0:
                     bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/bas_poly_eval/*/.pred/bas_poly/*/poly.kwcoco.zip'))
                 assert len(bas_kwcoco_cands) == 1, 'mlops assumption violated'

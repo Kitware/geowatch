@@ -3733,7 +3733,7 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 13
+        top_k: 5
         per_group: 1
         macro_analysis: 0
         analyze: 0
@@ -3751,17 +3751,22 @@ DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 # (cd "$DVC_EXPT_DPATH"; git pull)
 sdvc request --paths="
-    #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
-    #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
-    #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
     #- $DVC_EXPT_DPATH/models/fusion/uconn/D7-MNW10_coldL8S2-cv-a0-a1-b1-c1-rmse-split6_eval11_Norm_lr1e4_bs48_focal/epoch=16-step=374.pt
     # - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
-    - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
-    - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
-    - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
-    - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+
+    #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
+    #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
+    #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
+    #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
     "
 
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch schedule --params="
     pipeline: bas
 
@@ -3770,14 +3775,18 @@ geowatch schedule --params="
 
     matrix:
         bas_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
-            - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
+            #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
+            #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/combo_imganns-CN_C000_EI2.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/KW_C001/combo_imganns-KW_C001_EI2.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CO_C001/combo_imganns-CO_C001_EI2.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/combo_imganns-CN_C000_EI2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/KW_C001/combo_imganns-KW_C001_EI2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CO_C001/combo_imganns-CO_C001_EI2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
