@@ -646,8 +646,10 @@ def demo_dataset_with_regions_and_sites(dpath=None):
     import kwimage
     import kwarray
 
-    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True,
-                                    dates=True, image_size=(96, 96))
+    coco_dset = watch.coerce_kwcoco(
+        'watch-msi', heatmap=True, geodata=True,
+        dates=True, image_size=(96, 96)
+    )
     rng = kwarray.ensure_rng(4329423)
 
     # Make some region models for this dataset
