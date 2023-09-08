@@ -292,19 +292,24 @@ class GDalCommandBuilder:
         return command
 
     def set_cog_options(self, compress='DEFLATE', blocksize=256,
-                        overviews='AUTO'):
+                        overviews='AUTO', overview_resampling='CUBIC'):
         if compress == 'RAW':
             compress = 'NONE'
         self['-of'] = 'COG'
         self.options['-co']['OVERVIEWS'] = str(overviews)
         self.options['-co']['BLOCKSIZE'] = str(blocksize)
         self.options['-co']['COMPRESS'] = compress
+        self.options['-co']['OVERVIEW_RESAMPLING'] = overview_resampling
+
+        if self.options['-co']['OVERVIEWS'] == 'NONE':
+            self.options['-co'].pop('OVERVIEW_RESAMPLING', None)
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
                           compress='DEFLATE', tries=1, cooldown=1, verbose=0,
                           eager=True, gdal_cachemax=None, num_threads=None,
-                          use_tempfile=True, timeout=None):
+                          use_tempfile=True, timeout=None,
+                          overviews='AUTO', overview_resampling='CUBIC'):
     """
     Crops geotiffs using pixels
 
@@ -397,7 +402,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
 
     builder = GDalCommandBuilder('gdal_translate')
     # builder['--debug'] = 'off'
-    builder.set_cog_options(compress=compress, blocksize=blocksize)
+    builder.set_cog_options(compress=compress, blocksize=blocksize,
+                            overviews=overviews,
+                            overview_resampling=overview_resampling)
     # Use the new COG output driver
     # Perf options
     if gdal_cachemax is not None:
@@ -481,6 +488,8 @@ def gdal_single_warp(in_fpath,
                      rpcs=None,
                      blocksize=256,
                      compress='DEFLATE',
+                     overviews='AUTO',
+                     overview_resampling='CUBIC',
                      as_vrt=False,
                      use_te_geoidgrid=False,
                      dem_fpath=None,
@@ -664,7 +673,8 @@ def gdal_single_warp(in_fpath,
         builder['-of'] = 'VRT'
     else:
         builder.set_cog_options(compress=compress, blocksize=blocksize,
-                                overviews='AUTO')
+                                overview_resampling=overview_resampling,
+                                overviews=overviews)
 
     if space_box is not None:
 
@@ -769,7 +779,10 @@ def gdal_single_warp(in_fpath,
 def gdal_multi_warp(in_fpaths, out_fpath,
                     space_box=None, local_epsg=4326, box_epsg=4326,
                     nodata=None, tries=1, cooldown=1,
-                    blocksize=256, compress='DEFLATE', error_logfile=None,
+                    blocksize=256, compress='DEFLATE',
+                    overviews='AUTO',
+                    overview_resampling='CUBIC',
+                    error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
                     eager=True, gdal_cachemax=None, num_threads=None,
@@ -865,7 +878,8 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         >>> commands = gdal_multi_warp(
         >>>     in_fpaths, out_fpath=out_fpath, space_box=space_box,
         >>>     local_epsg=local_epsg, verbose=3, eager=False)
-        >>> print('commands = {}'.format(ub.urepr(commands, nl=1)))
+        >>> for cmd in commands:
+        >>>     print(cmd)
 
     Returns:
         None | List[str]:
@@ -934,6 +948,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     single_warp_kwargs['num_threads'] = num_threads
     single_warp_kwargs['use_tempfile'] = False
     single_warp_kwargs['timeout'] = timeout
+    single_warp_kwargs['overviews'] = 'NONE'
     # Delay the actual execution of the partial warps until merge is called.
 
     if not use_tempfile:
@@ -1018,6 +1033,8 @@ def gdal_multi_warp(in_fpaths, out_fpath,
                                  verbose=verbose, eager=eager, tries=tries,
                                  cooldown=cooldown,
                                  gdal_cachemax=gdal_cachemax,
+                                 overviews=overviews,
+                                 overview_resampling=overview_resampling,
                                  num_threads=num_threads, timeout=timeout)
     if eager:
         # Remove temporary files

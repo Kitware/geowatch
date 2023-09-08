@@ -2312,6 +2312,11 @@ def _aligncrop(obj_group,
     cooldown = asset_config.cooldown
     gdal_verbose = 0 if verbose < 2 else verbose
 
+    if 'quality' in roles:
+        overview_resampling = 'NEAREST'
+    else:
+        overview_resampling = 'CUBIC'
+
     gdalkw = dict(
         space_box=space_box,
         local_epsg=local_epsg,
@@ -2326,6 +2331,8 @@ def _aligncrop(obj_group,
         gdal_cachemax='1500',
         num_threads='2',
         timeout=asset_config.asset_timeout,
+        overviews='AUTO',
+        overview_resampling=overview_resampling,
     )
 
     if len(input_gpaths) > 1:

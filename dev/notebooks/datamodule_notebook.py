@@ -267,8 +267,10 @@ def debug_cloudmasks():
     bundle_dpath = dvc_dpath / 'Aligned-Drop7'
 
     coco_dataset_fpaths = [
-        bundle_dpath / 'KR_R002/imgonly-KR_R002.kwcoco.zip',
-        bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
+        # bundle_dpath / 'KR_R002/imgonly-KR_R002.kwcoco.zip',
+        # bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
+        bundle_dpath / 'CH_R001/imgonly-CH_R001.kwcoco.zip',
+        # bundle_dpath / 'NZ_R001/imgonly-NZ_R001.kwcoco.zip',
     ]
 
     # Directory to write debugging visualizations to
@@ -277,6 +279,22 @@ def debug_cloudmasks():
     coco_datasets = list(kwcoco.CocoDataset.coerce_multiple(coco_dataset_fpaths, workers=16))
 
     images_of_interest = []
+
+    # Choose these names instead of choosing randomly
+    interest_names = [
+        # 'crop_20180105T020000Z_N37.734145E128.855484_N37.811709E128.946746_WV_0'
+
+        'crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1',
+    ]
+
+    image_per_group = 0
+
+    import numpy as np
+    def choices_without_replacement(rng, arr, k):
+        idxs = np.arange(len(arr))
+        rng.shuffle(idxs)
+        chosen_idxs = idxs[:k]
+        return [arr[idx] for idx in chosen_idxs]
 
     for coco_dset in ub.ProgIter(coco_datasets, desc='choosing images of interest'):
         coco_images = coco_dset.images().coco_images
@@ -295,35 +313,24 @@ def debug_cloudmasks():
         print(ub.urepr(group_to_images.map_values(len)))
 
         # Seeded random number generator
-        rng = kwarray.ensure_rng(48942398243, api='python')
+        rng = kwarray.ensure_rng(48942398243, api='numpy')
 
         for sensor, imgs in group_to_images.items():
+            if 'WV' not in sensor:
+                continue
             # Randomly pick one image for each sensor
-            coco_img = rng.choice(imgs)
-            images_of_interest.append(coco_img)
+            name_to_img = {g['name']: g for g in imgs}
+            found = set(name_to_img) & set(interest_names)
+            coco_imgs = choices_without_replacement(rng, imgs, image_per_group)
+            images_of_interest.extend(coco_imgs)
+
+            if found:
+                for n in found:
+                    coco_img = name_to_img[n]
+                    images_of_interest.append(coco_img)
 
     for coco_img in ub.ProgIter(images_of_interest, desc='draw cloudmask debug image', verbose=3):
-        vidname = coco_img.video['name']
-        imgname = coco_img['name']
-        sensor = coco_img['sensor_coarse']
-        fname = f'qa_debug_{vidname}_{sensor}_{imgname}.jpg'
-        print(coco_img.dsize)
-        print('fname = {}'.format(ub.urepr(fname, nl=1)))
-
-        drawings = debug_single_cloudmask(coco_img)
-
-        tci_canvas = drawings['tci_canvas']
-        qa_canvas = drawings['qa_canvas']
-        legend = drawings['legend']
-        title = drawings['title']
-
-        canvas = kwimage.stack_images([tci_canvas, qa_canvas, legend], axis=1)
-        canvas = kwimage.draw_header_text(canvas, title)
-
-        print(f'canvas.shape={canvas.shape}')
-
-        fpath = out_dpath / fname
-        kwimage.imwrite(fpath, canvas)
+        debug_single_cloudmask(coco_img, out_dpath)
 
     # import kwplot
     # kwplot.autoplt()
@@ -331,13 +338,15 @@ def debug_cloudmasks():
     # kwplot.imshow(legend, fnum=2)
 
 
-def debug_single_cloudmask(coco_img):
+def debug_single_cloudmask(coco_img, out_dpath):
     """
     """
     import kwimage
     from watch.utils import kwcoco_extensions
     from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     from watch.utils import util_time
+    import numpy as np
+    import ubelt as ub
 
     tci_channel_priority = [
         'red|green|blue',
@@ -350,7 +359,42 @@ def debug_single_cloudmask(coco_img):
     qa_delayed = coco_img.imdelay('quality', interpolation='nearest', antialias=False, space=space)
     tci_delayed = coco_img.imdelay(tci_channels, space=space)
 
-    quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False)
+    qa_fpath = list(qa_delayed.leafs())[0].fpath
+
+    raw = kwimage.imread(qa_fpath)
+    overview1 = kwimage.imread(qa_fpath, overview=1)
+    overview2 = kwimage.imread(qa_fpath, overview=2)
+    print(len(np.unique(raw)))
+    print(len(np.unique(overview1)))
+    print(len(np.unique(overview2)))
+
+    if 1:
+        import numpy as np
+        canvas_size = np.array(qa_delayed.dsize)
+        desired_max_canvas_size = np.array([4000, 4000])
+        sf = min((desired_max_canvas_size / canvas_size).min(), 1)
+        qa_delayed = qa_delayed.scale(sf)
+        tci_delayed = tci_delayed.scale(sf)
+
+        print('Original graph')
+        qa_delayed.print_graph(fields=True)
+
+        qa_delayed._set_nested_params(antialias=False, interpolation='nearest')
+
+        print('After param update')
+        qa_delayed.print_graph(fields=True)
+
+        qa_delayed = qa_delayed.prepare()
+
+        print('After preprate')
+        qa_delayed.print_graph(fields=True)
+
+        qa_delayed = qa_delayed.optimize()
+
+        print('After optimize')
+        qa_delayed.print_graph(fields=True)
+
+    quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False, optimize=False)
     tci_raw = tci_delayed.finalize(nodata_method='float')
     tci_canvas = kwimage.normalize_intensity(tci_raw)
 
@@ -362,7 +406,7 @@ def debug_single_cloudmask(coco_img):
     sensor = coco_img['sensor_coarse']
     table = QA_SPECS.find_table(spec_name, sensor)
 
-    drawings = table.draw_labels(quality_im, legend_dpi=300)
+    drawings = table.draw_labels(quality_im, legend_dpi=300, verbose=1)
     drawings['tci_canvas'] = tci_canvas
     drawings['tci_canvas'] = kwimage.ensure_uint255(drawings['tci_canvas'])
     drawings['qa_canvas'] = kwimage.ensure_uint255(drawings['qa_canvas'])
@@ -373,9 +417,35 @@ def debug_single_cloudmask(coco_img):
         coco_img.video['name'],
         coco_img['sensor_coarse'],
         datestr,
+        '\nshown_channels=' + tci_channels.spec,
+        '\navail_channels=' + coco_img.channels.spec,
+        '\n' + coco_img.name,
     ]
 
     drawings['title'] = ' - '.join(title_parts)
+
+    used_mask = table.mask_any(quality_im, ['cloud'])
+    drawings['used_mask'] = (used_mask.astype(np.uint8) * 255)
+
+    vidname = coco_img.video['name']
+    imgname = coco_img['name']
+    sensor = coco_img['sensor_coarse']
+    fname = f'qa_debug_{vidname}_{sensor}_{imgname}.png'
+    print(coco_img.dsize)
+    print('fname = {}'.format(ub.urepr(fname, nl=1)))
+
+    canvas = kwimage.stack_images([
+        # drawings['tci_canvas'],
+        drawings['used_mask'],
+        drawings['qa_canvas'],
+        drawings['legend']
+    ], axis=1)
+    canvas = kwimage.draw_header_text(canvas, drawings['title'])
+
+    print(f'canvas.shape={canvas.shape}')
+
+    fpath = out_dpath / fname
+    kwimage.imwrite(fpath, canvas)
 
     if 0:
         import kwplot
