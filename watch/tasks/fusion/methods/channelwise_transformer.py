@@ -217,6 +217,19 @@ class MultimodalTransformerConfig(scfg.DataConfig):
             DiceFocal losses. Default: 2.0
             '''))
 
+    perterb_scale = scfg.Value(0.0, type=float, help=ub.paragraph(
+        '''
+        If specified enables weight perterbation on every optimizer step.  This
+        is the perterb part of shrink and perterb. The shrink part should be
+        taken care of by weight decay.
+        '''))
+
+    continual_learning = scfg.Value(False, type=float, help=ub.paragraph(
+        '''
+        If True, attempt to enable experimental loss-of-plasticity generate and
+        test algorithm to encourage continual learning.
+        '''))
+
     def __post_init__(self):
         super().__post_init__()
         from kwutil.util_yaml import Yaml
@@ -251,11 +264,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> batch = next(iter(loader))
         >>> for item_idx, item in enumerate(batch):
         >>>     print(f'item_idx={item_idx}')
-        >>>     for frame_idx, frame in enumerate(item['frames']):
-        >>>         print(f'  * frame_idx={frame_idx}')
-        >>>         print(f'  * frame.sensor = {frame["sensor"]}')
-        >>>         for mode_code, mode_val in frame['modes'].items():
-        >>>             print(f'      * {mode_code=} @shape={mode_val.shape}, num_nam={mode_val.isnan().sum()}')
+        >>>     item_summary = dataset.summarize_item(item)
+        >>>     print('item_summary = {}'.format(ub.urepr(item_summary, nl=2)))
         >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
@@ -300,6 +310,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
             >>> assert "tokenizer" in model.hparams
         """
+        # self.automatic_optimization = False
+
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
         print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
@@ -700,6 +712,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             - [ ] Enable use of other optimization algorithms on the CLI
             - [ ] Enable use of other scheduler algorithms on the CLI
 
+        Note:
+            Is this even called when using LightningCLI?
+            Nope, the LightningCLI overwrites it.
+
         References:
             https://pytorch-optimizer.readthedocs.io/en/latest/index.html
             https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
@@ -792,6 +808,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             raise KeyError(self.hparams.lr_scheduler)
 
+        # if self.hparams.continual_learning:
+        #     raise NotImplementedError
+
         return [optimizer], [scheduler]
 
     def overfit(self, batch):
@@ -809,7 +828,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> from watch.utils.util_data import find_dvc_dpath
             >>> import watch
             >>> import kwcoco
             >>> from os.path import join
@@ -1758,10 +1777,15 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
         """
+        import os
+        if self.hparams.continual_learning and not os.environ.get('HACK_SAVE_ANYWAY', ''):
+            print('HACK NOT SAVING FOR CONTINUAL LEARNING')
+            # HACK
+            return
         self._save_package(package_path, verbose=verbose)
 
     @profile
-    def forward(self, images):
+    def forward(self, batch):
         """
         Example:
             >>> import pytest
@@ -1788,11 +1812,61 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     attention_impl='performer',
             >>>     tokenizer=tokenizer,
             >>> )
-            >>> images = torch.stack([ub.peek(f['modes'].values()) for f in batch[0]['frames']])[None, :]
-            >>> images.shape
-            >>> self.forward(images)
+            >>> #images = torch.stack([ub.peek(f['modes'].values()) for f in batch[0]['frames']])[None, :]
+            >>> #images.shape
+            >>> #self.forward(images)
         """
-        raise NotImplementedError('see forward_step instad')
+        with_loss = self.training
+        return self.forward_step(batch, with_loss=with_loss)
+        # raise NotImplementedError('see forward_step instad')
+
+    # function hook in LightningModule
+    def optimizer_step(self, *args, **kwargs):
+        ret = super().optimizer_step(*args, **kwargs)
+
+        optimizer = kwargs.get('optimizer')
+
+        if self.hparams.continual_learning:
+            if not hasattr(self.trainer, 'gnt'):
+                import geowatch_tpl
+                geowatch_tpl.import_submodule('torchview')
+                geowatch_tpl.import_submodule('lop')
+
+                # See:
+                # ~/code/watch/geowatch_tpl/submodules/loss-of-plasticity/lop/algos/gen_and_test.py
+                # ~/code/watch/geowatch_tpl/submodules/torchview/torchview/torchview.py
+                from lop.algos.gen_and_test import GenerateAndTest
+                print('Setup gen and test')
+                input_data = self.demo_batch(new_mode_sample=1)
+                gnt = GenerateAndTest(self, 'relu', optimizer, input_data,
+                                      device=self.main_device)
+                # Give gnt to the trainer and dont do anything on the first
+                # pass
+                self.trainer.gnt = gnt
+                # optimizer.gnt = gnt
+            else:
+                # On a subsequent passes start using it.
+                assert self.training
+                gnt = self.trainer.gnt
+                # print('START GEN AND TESTING')
+                gnt.gen_and_test()
+                # print('DID GEN AND TESTING')
+
+        if self.hparams.perterb_scale > 0:
+            # Add a small bit of noise to every parameter
+            assert self.training
+            with torch.no_grad():
+                seen_ids = set()
+                for param_group in optimizer.param_groups:
+                    for param in param_group['params']:
+                        param_id = id(param)
+                        if param_id not in seen_ids:
+                            seen_ids.add(param_id)
+                            param += torch.empty(param.shape,
+                                                 device=param.device).normal_(
+                                                     mean=0, std=self.hparams.perterb_scale)
+
+        return ret
 
 
 def slice_to_agree(a1, a2, axes=None):

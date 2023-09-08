@@ -15,6 +15,38 @@ class WatchModuleMixins:
             if hasattr(mod, 'reset_parameters'):
                 mod.reset_parameters()
 
+    def _device_dict(self):
+        return {key: item.device for key, item in self.state_dict().items()}
+
+    def devices(self):
+        """
+        Returns all devices this module state is mounted on
+
+        Returns:
+            Set[torch.device]: set of devices used by this model
+        """
+        state_devices = self._device_dict()
+        devices = set(state_devices.values())
+        if hasattr(self, 'device_ids'):
+            # Handle data parallel
+            for _id in self.device_ids:
+                devices.add(torch.device(_id))
+        return devices
+
+    @property
+    def main_device(self):
+        """
+        The main/src torch device used by this model
+        """
+        if hasattr(self, 'src_device_obj'):
+            return self.src_device_obj
+        else:
+            devices = self.devices()
+            if len(devices) > 1:
+                raise NotImplementedError('no information maintained on which device is primary')
+            else:
+                return list(devices)[0]
+
     @classmethod
     def demo_dataset_stats(cls):
         """
@@ -40,7 +72,7 @@ class WatchModuleMixins:
         }
         return channels, classes, dataset_stats
 
-    def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8, nans=0, rng=None):
+    def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8, nans=0, rng=None, new_mode_sample=0):
         """
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
@@ -73,6 +105,16 @@ class WatchModuleMixins:
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(result1))
             >>>   print(nh.data.collate._debug_inbatch_shapes(result2))
+
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch(new_mode_sample=1)
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
         """
         import kwarray
         from kwarray import distributions
@@ -99,6 +141,16 @@ class WatchModuleMixins:
         width_distri = _specific_coerce(width, rng=rng)
         height_distri = _specific_coerce(height, rng=rng)
 
+        sensor_to_modes = ub.ddict(list)
+        for sensor, mode in self.dataset_stats['unique_sensor_modes']:
+            sensor_to_modes[sensor].append(mode)
+
+        import itertools as it
+        import kwcoco
+        # sensor_mode_iter = it.cycle(self.dataset_stats['unique_sensor_modes'])
+        sensor_iter = it.cycle(sensor_to_modes.keys())
+
+        # OLD_MODES = 0
         for bx in range(B):
             modes = []
             frames = []
@@ -115,16 +167,28 @@ class WatchModuleMixins:
                 H2 = height_distri.sample()
                 W2 = width_distri.sample()
 
-                modes = {
-                    'pan': rng.rand(1, H0, W0).astype("float32"),
-                    'red|green|blue': rng.rand(3, H1, W1).astype("float32"),
-                    'nir|swir16|swir22': rng.rand(3, H2, W2).astype("float32"),
-                }
+                if new_mode_sample:
+                    sensor = next(sensor_iter)
+                    modes = {}
+                    H, W = H0, W0
+                    for mode in sensor_to_modes[sensor]:
+                        size = kwcoco.FusedChannelSpec.coerce(mode).numel()
+                        modes[mode] = rng.rand(size, H, W).astype("float32")
+                        H = height_distri.sample()
+                        W = width_distri.sample()
 
-                # Add in channels the model exepcts
-                for stream in self.input_sensorchan.streams():
-                    C = stream.chans.numel()
-                    modes[stream.chans.spec] = rng.rand(C, H1, W1).astype("float32")
+                else:
+                    sensor = 'sensor1'
+                    modes = {
+                        'pan': rng.rand(1, H0, W0).astype("float32"),
+                        'red|green|blue': rng.rand(3, H1, W1).astype("float32"),
+                        'nir|swir16|swir22': rng.rand(3, H2, W2).astype("float32"),
+                    }
+
+                    # Add in channels the model exepcts
+                    for stream in self.input_sensorchan.streams():
+                        C = stream.chans.numel()
+                        modes[stream.chans.spec] = rng.rand(C, H1, W1).astype("float32")
 
                 frame = {}
                 if time_index == 0:
@@ -146,7 +210,7 @@ class WatchModuleMixins:
 
                 frame['date_captured'] = '',
                 frame['gid'] = bx
-                frame['sensor'] = 'sensor1'
+                frame['sensor'] = sensor
                 frame['time_index'] = bx
                 frame['time_offset'] = np.array([1]),
                 frame['timestamp'] = 1
@@ -467,7 +531,7 @@ class WatchModuleMixins:
             >>> from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> from watch.utils.util_data import find_dvc_dpath
             >>> import watch
             >>> import kwcoco
             >>> from os.path import join

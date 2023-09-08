@@ -277,7 +277,7 @@ def prep_splits(cmdline=False, **kwargs):
         # Auto hack.
         raise NotImplementedError
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_dpath = watch.find_dvc_dpath()
         # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
     else:

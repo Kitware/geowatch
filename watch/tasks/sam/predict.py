@@ -4,12 +4,6 @@ import ubelt as ub
 from torch.utils import data
 
 
-if 1:
-    # put the vendored package into our namespace.
-    import geowatch_tpl  # NOQA
-    import segment_anything
-
-
 class SAMConfig(scfg.DataConfig):
     input_kwcoco = scfg.Value(None, help='input kwcoco dataset')
     output_kwcoco = scfg.Value(None, help='output')
@@ -74,6 +68,7 @@ class SAMWrapperDataset(data.Dataset):
         import kwimage
         import torch
         import numpy as np
+        import einops
 
         torch_dataset = self.subdset
 
@@ -90,7 +85,6 @@ class SAMWrapperDataset(data.Dataset):
 
         # Get a nodata mask for the output we expect, Only mask an output block
         # if more than half of its input pixels were nodata.
-        import einops
         factor = 16
         isnodat_mask = hwc_isnodata_mask.all(axis=2).astype(np.uint8)
         isnodata_blocks = einops.rearrange(isnodat_mask, '(h2 s1) (w2 s2) -> h2 w2 (s1 s2)', s1=factor, s2=factor)
@@ -163,6 +157,11 @@ class DenseFeaturePredictor:
         from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
         from watch.utils import util_parallel
         from watch.utils import process_context
+
+        # put the vendored package into our namespace.
+        import geowatch_tpl  # NOQA
+
+        segment_anything = geowatch_tpl.import_submodule('segment_anything')
 
         config = self.config
         datamodule = kwcoco_datamodule.KWCocoVideoDataModule(

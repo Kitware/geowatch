@@ -266,7 +266,7 @@ def schedule_evaluation(config):
     # Dont put in post-init because it is called by the CLI!
     if config['root_dpath'] in {None, 'auto'}:
         import watch
-        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
     root_dpath = ub.Path(config['root_dpath'])
@@ -292,7 +292,8 @@ def schedule_evaluation(config):
                 region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
                 region_dpath = (smart_highres_bundle / region_id)
                 hires_coco_fpath = region_dpath / f'imgonly-{region_id}.kwcoco.zip'
-                assert hires_coco_fpath.exists()
+                if not hires_coco_fpath.exists():
+                    raise Exception(f'Expected hires path does not exist: {hires_coco_fpath}')
                 submatrices.append({
                     'bas_pxl.test_dataset': bas_fpath,
                     'sv_crop.crop_src_fpath': hires_coco_fpath,

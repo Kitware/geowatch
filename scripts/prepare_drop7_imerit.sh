@@ -24,7 +24,7 @@ simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 # MY_C000, BR_C010, BO_C001, PH_C001
 
 
-simple_dvc validate_sidecar "$DVC_DATA_DPATH/annotations/drop7"
+#simple_dvc validate_sidecar "$DVC_DATA_DPATH/annotations/drop7"
 
 
     #--regions="
@@ -41,6 +41,10 @@ simple_dvc validate_sidecar "$DVC_DATA_DPATH/annotations/drop7"
     #    - $DVC_DATA_DPATH/annotations/drop7/site_models/CO_C001_*.geojson
     #    - $DVC_DATA_DPATH/annotations/drop7/site_models/VN_C002_*.geojson
     #" \
+    #
+    #
+    #
+#rm -rf 	Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/ Drop6-MeanYear10GSD/ Drop6_Mean3Month10GSD/ Drop6_MeanYear/ Drop7-Cropped2GSD-V2/
 
 # Construct the TA2-ready dataset
 python -m watch.cli.prepare_ta2_dataset \
@@ -60,8 +64,6 @@ python -m watch.cli.prepare_ta2_dataset \
     --align_workers=8 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
-    --separate_region_queues=1 \
-    --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
     --cache=1 \
@@ -339,3 +341,26 @@ python -m watch.mlops.confusor_analysis \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --viz_site_case=True
+
+
+
+# Compute all feature except COLD
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
+python -m watch.cli.prepare_teamfeats \
+    --src_kwcocos "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=1 \
+    --with_invariants2=1 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_mae=1 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, --tmux_workers=8 --backend=tmux --run=1
+
+dvc add -- */teamfeats

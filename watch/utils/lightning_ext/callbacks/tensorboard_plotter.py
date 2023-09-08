@@ -335,6 +335,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             if verbose:
                 print('Save plot: ' + str(fpath))
             ax.figure.savefig(fpath)
+            ax.figure.subplots_adjust(top=0.8)
 
 
 def smooth_curve(ydata, beta):
@@ -403,6 +404,9 @@ def redraw_cli(train_dpath):
             $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
     """
     train_dpath = ub.Path(train_dpath)
+
+    expt_name = train_dpath.parent.parent.name
+
     hparams_fpath = train_dpath / 'hparams.yaml'
     if hparams_fpath.exists():
         import yaml
@@ -419,8 +423,9 @@ def redraw_cli(train_dpath):
             model_cfgstr = smart_truncate(ub.urepr(
                 model_config, compact=1, nl=0), max_length=64)
             title = model_cfgstr
+        title = expt_name + '\n' + title
     else:
-        title = train_dpath.parent.parent.name
+        title = expt_name
 
     print(f'train_dpath={train_dpath}')
     print(f'title={title}')

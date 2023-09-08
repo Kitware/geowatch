@@ -128,8 +128,15 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
                 self.src_kwcoco = src_kwcoco_cands[0]
 
             if self.bas_kwcoco is None:
-                # hack: note robust
-                bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
+
+                # Hack for AC node on full pipeline
+                # Need to have a nicer way to get a reference to the BAS coco
+                # file for AC nodes.
+                bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/sc_poly/*/.pred/sc_pxl/*/.pred/sc_crop/*/.pred/cluster_sites/*/.pred/sv_depth_filter/*/.pred/sv_dino_filter/*/.pred/sv_dino_boxes/*/.pred/sv_crop/*/.pred/bas_poly/*/poly.kwcoco.zip'))
+
+                if len(bas_kwcoco_cands) == 0:
+                    # hack: not robust
+                    bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
                 if len(bas_kwcoco_cands) == 0:
                     bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/bas_poly_eval/*/.pred/bas_poly/*/poly.kwcoco.zip'))
                 assert len(bas_kwcoco_cands) == 1, 'mlops assumption violated'
@@ -444,7 +451,7 @@ class ConfusionAnalysis:
             if true_cfsn is None:
                 print('truth_status = {}'.format(ub.urepr(truth_status, nl=1)))
                 print('has_positive_match = {}'.format(ub.urepr(has_positive_match, nl=1)))
-                raise AssertionError
+                raise AssertionError('no true cfsn')
 
             cfsn_row = {
                 'true_site_id': true_site_id,
@@ -481,7 +488,7 @@ class ConfusionAnalysis:
             if pred_cfsn is None:
                 print('row = {}'.format(ub.urepr(row, nl=1)))
                 print('truth_match_statuses = {}'.format(ub.urepr(truth_match_statuses, nl=1)))
-                raise AssertionError
+                raise AssertionError('no pred cfsn')
 
             cfsn_row = {
                 'pred_site_id': pred_site_id,
@@ -837,6 +844,7 @@ class ConfusionAnalysis:
         # dst_dset._update_fpath(config.dst_kwcoco)
         dst_dset.reroot(absolute=True)
         dst_dset.fpath = config.dst_kwcoco
+
         dst_dset.clear_annotations()
 
         true_site_infos2 = [s.pandas() for s in true_sites]
@@ -877,12 +885,15 @@ class ConfusionAnalysis:
         )
 
         # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
-        # repr1 = str(dst_dset.annots())
-        # print(f'repr1={repr1}')
+        repr1 = str(dst_dset.annots())
+        print(f'repr1={repr1}')
         dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
-        # repr2 = str(dst_dset.annots())
-        # print(f'repr1={repr1}')
-        # print(f'repr2={repr2}')
+        repr2 = str(dst_dset.annots())
+        print(f'repr1={repr1}')
+        print(f'repr2={repr2}')
+
+        set(dst_dset.index.trackid_to_aids)
+
         pred_kwargs['src'] = dst_dset
         dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
         # repr3 = str(dst_dset.annots())
@@ -981,6 +992,8 @@ class ConfusionAnalysis:
                     errors.append(ex)
                     rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
                     rich.print(f'[red] ERRORS {len(errors)} / {total}')
+                    # import xdev
+                    # xdev.embed()
                     if self.config.strict:
                         raise
                     continue
@@ -1097,10 +1110,26 @@ class ConfusionAnalysis:
             )
             cases.append(case)
 
+        # Handle truth sites that didn't match anything.
+        _true_utm_gdf = true_utm_gdf.set_index('site_id')
         for true_site in type_to_sites.get('gt_false_neg', []):
             confusion_type = true_site.header['properties']['cache']['confusion']['type']
-            true_geom = true_site.geometry
-            case = make_single_case(true_site, true_geom, confusion_type)
+            # true_geom = true_site.geometry
+            cfsn_status = '_falseneg'
+
+            true_utm_geoms = _true_utm_gdf.loc[[true_site.site_id]].geometry
+
+            case = make_case(
+                [],
+                [true_site],
+                true_utm_geoms,
+                None,
+                None,
+                region_start_date,
+                region_end_date,
+                performer_id,
+                confusion_type + cfsn_status,
+            )
             cases.append(case)
 
         print(f'Found {len(cases)} cases')
@@ -1165,9 +1194,13 @@ def make_case(pred_sites,
         union_areas = true_utm_geoms.union(main_pred_geom).area
         ious = isect_areas / union_areas
         main_true_idx = ious.argmax()
+    else:
+        main_true_idx = None
 
     if has_true:
         # TODO generalize
+        if main_true_idx is None:
+            main_true_idx = 0
         # main_true_idx = main_true_idxs[0]
         main_true_geom = true_utm_geoms.iloc[main_true_idx]
         main_true_site = true_sites[main_true_idx]
@@ -1233,7 +1266,12 @@ def make_case(pred_sites,
             'time_iop': time_iop,
         })
     else:
-        case['name'] = f'{main_pred_site.site_id}-vs-null'
+        if has_pred:
+            case['name'] = f'{main_pred_site.site_id}-vs-null'
+        elif has_true:
+            case['name'] = f'null-vs-{main_true_site.site_id}'
+        else:
+            raise AssertionError('no pred or true')
 
     case['type'] = type_
 
@@ -1243,48 +1281,6 @@ def make_case(pred_sites,
         'region_end_date': region_end_date,
     })
     return case
-
-
-def make_single_case(site, geom, type_):
-    from kwutil import util_time
-
-    area = geom.area
-    obs = site.pandas_observations()
-    dates = obs['observation_date'].values
-    dates = list(map(util_time.coerce_datetime, dates))
-    confusion = ub.udict(site.header['properties']['cache']['confusion'])
-    confusion &= {k for k in confusion if k.startswith('te_')}
-
-    if 'gt_' in type_:
-        coco_site_id = differentiate_site_id(site.site_id, 'te')
-        case = {
-            'name': f'None-vs-{site.site_id}',
-            'true_site_id': site.site_id,
-            'true_coco_site_id': coco_site_id,
-            'true_area': area,
-            'true_dates': dates,
-            'type': type_,
-            **confusion,
-        }
-    else:
-        coco_site_id = differentiate_site_id(site.site_id, 'kit')
-        case = {
-            'name': f'{site.site_id}-vs-None',
-            'pred_site_id': site.site_id,
-            'pred_coco_site_id': coco_site_id,
-            'pred_area': area,
-            'pred_dates': dates,
-            'type': type_,
-            **confusion,
-        }
-    return case
-
-
-# def enrich_case(coco_dset, case, true_id_to_site, pred_id_to_site):
-#     """
-#     Give the case enough information so it can be computed in parallel.
-#     """
-#     ...
 
 
 def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
@@ -1341,10 +1337,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
                 else:
                     main_true_aids.update(site_aids)
 
-    case['pred_sites']
-    case['true_sites']
-
-    case['main_pred_site']
+    # case['main_pred_site']
 
     all_aids = sorted(all_aids)
     _all_annots = coco_dset.annots(all_aids)
@@ -1384,7 +1377,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     all_images = _all_images.take(_sortx)
 
     unique_vidids = sorted(set(_all_images.lookup('video_id')))
-    assert len(unique_vidids) == 1
+    assert len(unique_vidids) == 1, 'not a single video'
     video_id = unique_vidids[0]
 
     # In most cases try to only use the "lo" number of images, but allow us to
@@ -1529,6 +1522,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
 
     cells = []
+    from watch.utils import kwcoco_extensions
     for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
         dets = gid_to_dets[gid]
@@ -1538,7 +1532,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             color = obj['cache']['confusion']['color']
             colors.append(color)
 
-        channels = find_visual_channels(coco_img, tci_channel_priority)
+        channels = kwcoco_extensions.pick_channels(coco_img, tci_channel_priority)
 
         tci_delayed = coco_img.imdelay(channels=channels, resolution=resolution, nodata_method='float')
         tci_imcrop = tci_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
@@ -1717,6 +1711,7 @@ def make_pred_score_timeline(main_pred_site):
 
     ax = sns.lineplot(data=df, x='date', y='score', hue='class', ax=ax,
                       palette=palette, legend=False)
+    ax.set_ylim(0, 1)
     imdata = kwplot.render_figure_to_image(ax.figure)
     return imdata
     # kwimage.imwrite('foo.png', imdata)
@@ -1939,16 +1934,6 @@ def fix_site_id(site_id, region_id, performer_id):
     if site_id.startswith('_'):
         site_id = region_id + site_id
     return site_id
-
-
-def find_visual_channels(coco_img, channel_priority):
-    import kwcoco
-    have_chans = coco_img.channels
-    for p in channel_priority:
-        p = kwcoco.FusedChannelSpec.coerce(p)
-        common = have_chans & p
-        if common.numel() == p.numel():
-            return p
 
 
 def coco_upgrade_track_ids(coco_dset):

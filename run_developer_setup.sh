@@ -31,6 +31,10 @@ if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	set -eo pipefail
 fi
 
+if [[ "${DEV_TRACE+x}" != "" ]]; then
+	set -x
+fi
+
 
 if [[ "$VIRTUAL_ENV" == "" && "$PIP_ROOT_USER_ACTION" != "ignore" ]]; then
     echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
@@ -73,7 +77,11 @@ apt_ensure(){
     done
 
     if [ "${#MISS_PKGS}" -gt 0 ]; then
-        sudo apt install -y "${MISS_PKGS[@]}"
+        if type sudo ; then
+            sudo apt install -y "${MISS_PKGS[@]}"
+        else
+            apt install -y "${MISS_PKGS[@]}"
+        fi
     else
         echo "No missing packages"
     fi
@@ -247,10 +255,10 @@ fix_opencv_conflicts(){
     up the incorrect libraries and install the desired (headless) ones.
     "
     # Fix opencv issues
-    python -m pip freeze | grep "opencv-python=="
-    HAS_OPENCV_RETCODE="$?"
-    python -m pip freeze | grep "opencv-python-headless=="
-    HAS_OPENCV_HEADLESS_RETCODE="$?"
+    HAS_OPENCV_RETCODE="0"
+    HAS_OPENCV_HEADLESS_RETCODE="0"
+    python -m pip freeze | grep "opencv-python==" || HAS_OPENCV_RETCODE="$?"
+    python -m pip freeze | grep "opencv-python-headless==" || HAS_OPENCV_HEADLESS_RETCODE="$?"
 
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
@@ -323,4 +331,3 @@ EAGER_IMPORT=1 python -m watch --help
 #EAGER_IMPORT=1 python -m watch hello_world
 python -c "import torch; print(torch.cuda.is_available())"
 set +x
-

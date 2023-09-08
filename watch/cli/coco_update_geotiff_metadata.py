@@ -70,7 +70,7 @@ def main(cmdline=True, **kwargs):
     Ignore:
         from watch.cli.coco_update_geotiff_metadata import *  # NOQA
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_dpath = watch.find_dvc_dpath()
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/dzyne_landcover.kwcoco.json'
         kwargs = {'src': base_fpath}

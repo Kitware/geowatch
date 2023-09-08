@@ -1195,21 +1195,22 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
                               'Fixing here, but it should be fixed in the site model itself.')
                 start_date, end_date = end_date, start_date
 
-    # This check doesn't seem generally necessary.
-    if start_date is not None and observation_dates[0] != start_date:
-        print('\n')
-        rich.print('[yellow]WARNING: inconsistent start')
-        rich.print(site_gdf)
-        rich.print(f'[yellow]start_date = {start_date}')
-        rich.print(f'[yellow]end_date   = {end_date}')
-        rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
-    if end_date is not None and observation_dates[-1] != end_date:
-        print('\n')
-        rich.print('[yellow]WARNING: inconsistent end date')
-        rich.print(site_gdf)
-        rich.print(f'[yellow]start_date = {start_date}')
-        rich.print(f'[yellow]end_date   = {end_date}')
-        rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
+    if 0:
+        # This check doesn't seem generally necessary.
+        if start_date is not None and observation_dates[0] != start_date:
+            print('\n')
+            rich.print('[yellow]WARNING: inconsistent start')
+            rich.print(site_gdf)
+            rich.print(f'[yellow]start_date = {start_date}')
+            rich.print(f'[yellow]end_date   = {end_date}')
+            rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
+        if end_date is not None and observation_dates[-1] != end_date:
+            print('\n')
+            rich.print('[yellow]WARNING: inconsistent end date')
+            rich.print(site_gdf)
+            rich.print(f'[yellow]start_date = {start_date}')
+            rich.print(f'[yellow]end_date   = {end_date}')
+            rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
 
     # Assuming observations are sorted by date
     assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])

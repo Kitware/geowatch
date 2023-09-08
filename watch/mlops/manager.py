@@ -291,7 +291,7 @@ class DVCExptManager(ub.NiceRepr):
     def coerce(cls, expt_dvc_dpath=None):
         import watch
         if expt_dvc_dpath is None:
-            expt_dvc_dpath = watch.find_smart_dvc_dpath()
+            expt_dvc_dpath = watch.find_dvc_dpath()
         dvc_remote = 'aws'
         # dataset_codes = heuristics.DATASET_CODES
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
@@ -849,7 +849,7 @@ class ExperimentState(ub.NiceRepr):
             >>> from watch.mlops.manager import *  # NOQA
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-            >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+            >>> #expt_dvc_dpath = watch.find_dvc_dpath(hardware='ssd')
             >>> #dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
             >>> self = ExperimentState(expt_dvc_dpath)
             >>> self.summarize()

@@ -559,7 +559,7 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
 
         if found_idx is not None:
             # import watch
-            # dvc_dpath = watch.find_smart_dvc_dpath()
+            # dvc_dpath = watch.find_dvc_dpath()
             pname = ub.Path(*path.parts[idx + 1:])
             pname_dvc = pname.augment(tail='.dvc')
             cwd = ub.Path('.').absolute()

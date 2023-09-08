@@ -22,7 +22,7 @@ class WVRgbDataset(_CocoTorchDataset):
         >>> from watch.tasks.depth.datasets import *  # NOQA
         >>> import watch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> input_dset = kwcoco.CocoDataset(coco_fpath)
         >>> self = WVRgbDataset(input_dset)

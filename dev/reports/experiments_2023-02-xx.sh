@@ -3556,7 +3556,7 @@ geowatch schedule --params="
 
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
@@ -3642,6 +3642,7 @@ geowatch schedule --params="
 
         sc_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            - $HOME/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_3/checkpoints/epoch=0-step=342-val_loss=4.648.ckpt.pt
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap: 0.3
@@ -3668,19 +3669,19 @@ geowatch schedule --params="
 
         sc_poly.thresh:
             - 0.00001
-            - 0.01
-            - 0.05
-            - 0.08
+            #- 0.01
+            #- 0.05
+            #- 0.08
             - 0.07
-            - 0.09
+            #- 0.09
             - 0.10
             - 0.15
             - 0.20
             - 0.25
             - 0.30
-            - 0.325
+            #- 0.325
             - 0.35
-            - 0.375
+            #- 0.375
             - 0.40
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 8GSD
@@ -3704,7 +3705,7 @@ geowatch schedule --params="
         sc_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask" \
-    --devices="0,1" --tmux_workers=4 \
+    --devices="1," --tmux_workers=1 \
     --backend=tmux --queue_name "_toothbrush_eval15_bas_nomask" \
     --skip_existing=1 \
     --run=1
@@ -3733,7 +3734,7 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 13
+        top_k: 5
         per_group: 1
         macro_analysis: 0
         analyze: 0
@@ -3743,3 +3744,115 @@ python -m watch.mlops.aggregate \
         show_csv: 0
     " \
     --rois="KR_R002,CN_C000"
+
+
+# TEST SRI's MODELS ON YARDRAT
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+# (cd "$DVC_EXPT_DPATH"; git pull)
+sdvc request --paths="
+    #- $DVC_EXPT_DPATH/models/fusion/uconn/D7-MNW10_coldL8S2-cv-a0-a1-b1-c1-rmse-split6_eval11_Norm_lr1e4_bs48_focal/epoch=16-step=374.pt
+    # - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
+
+    #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
+    #- $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
+    #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
+    #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+    - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+    "
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+geowatch schedule --params="
+    pipeline: bas
+
+    # Convinience argument
+    # smart_highres_bundle: $DVC_HDD_DATA_DPATH/Aligned-Drop7
+
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=31-step_checkpint=352.pt
+            - $DVC_EXPT_DPATH/models/wu/bas/wu_bas_mae_10GSD_epoch=49-step_scratch=550.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/combo_imganns-CN_C000_EI2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/KW_C001/combo_imganns-KW_C001_EI2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CO_C001/combo_imganns-CO_C001_EI2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims: auto
+        bas_pxl.time_span: auto
+        bas_pxl.time_sampling: soft4
+        bas_poly.thresh:
+            - 0.35
+            - 0.375
+            - 0.4
+            - 0.425
+        bas_poly.inner_window_size: 1y
+        bas_poly.inner_agg_fn: mean
+        bas_poly.norm_ord: inf
+        bas_poly.polygon_simplify_tolerance: 1
+        bas_poly.agg_fn: probs
+        bas_poly.time_thresh:
+            - 0.8
+            #- 0.6
+        bas_poly.resolution: 10GSD
+        bas_poly.moving_window_size: null
+        bas_poly.poly_merge_method: 'v2'
+        bas_poly.min_area_square_meters: 7200
+        bas_poly.max_area_square_meters: 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop7/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop7/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop7/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_yardrat_bas_test" \
+    --devices="0," --tmux_workers=4 \
+    --backend=tmux --queue_name "_yardrat_bas_test" \
+    --skip_existing=1 \
+    --run=1
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_yardrat_bas_test
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_yardrat_bas_test/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.bas_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 11
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 1
+        show_csv: 0
+    " \
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"

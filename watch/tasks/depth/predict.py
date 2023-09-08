@@ -58,7 +58,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.depth.predict import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> dataset = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_vali.kwcoco.json'
         >>> output = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/dzyne_depth_test.kwcoco.json'
         >>> deployed = dvc_dpath / "models/depth/weights_v1.pt"

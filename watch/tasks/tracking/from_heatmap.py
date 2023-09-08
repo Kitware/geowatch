@@ -14,12 +14,14 @@ import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
-from watch.tasks.tracking.utils import (NewTrackFunction,
-                                        mask_to_polygons,
-                                        _validate_keys, score_track_polys,
-                                        trackid_is_default,
-                                        gpd_sort_by_gid, gpd_len,
-                                        gpd_compute_scores)
+from watch.tasks.tracking.utils import (
+    NewTrackFunction,
+    mask_to_polygons,
+    _validate_keys,
+    score_track_polys,
+    trackid_is_default,
+    gpd_sort_by_gid, gpd_len,
+    gpd_compute_scores)
 
 try:
     from xdev import profile

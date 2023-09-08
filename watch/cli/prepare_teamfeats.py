@@ -138,7 +138,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     base_fpath = scfg.Value(None, help=ub.paragraph(
             '''
             One or more base coco files to compute team-features on.
-            '''), nargs='+', group='inputs')
+            '''), nargs='+', alias=['src_kwcocos'], group='inputs')
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
             '''
             The DVC directory where team feature model weights can be
@@ -558,7 +558,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 'patch_size': 256,
                 'patch_overlap': 0.3,
                 'do_pca': config['invariant_pca'],
-                'tasks': 'before_after pretext',
+                'tasks': ['before_after', 'pretext'],
             },
             perf_params={
                 'workers': data_workers,

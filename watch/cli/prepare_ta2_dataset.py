@@ -861,7 +861,14 @@ def main(cmdline=False, **kwargs):
         */*.json
         ''')
 
-    config.run_queue(queue, system=True)
+    print_kwargs = {
+        'with_status': 0,
+        'style': "colors",
+        'with_locks': 0,
+        'exclude_tags': ['boilerplate'],
+    }
+
+    config.run_queue(queue, system=True, print_kwargs=print_kwargs)
     # if config.rprint:
     #     queue.print_graph()
     #     queue.rprint()

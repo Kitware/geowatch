@@ -160,13 +160,49 @@ def transfer_features_main(cmdline=1, **kwargs):
 
     src_video_names = src.videos().lookup('name')
 
+    dst_vidnames = sorted(set(dst.index.name_to_video))
+    src_vidnames = sorted(set(src.index.name_to_video))
+    if src_vidnames != dst_vidnames:
+        # If video names do not agree, we need to check for overlaps
+        from watch.utils import kwcoco_extensions
+        from watch.utils import util_gis
+        src_vid_gdf = kwcoco_extensions.covered_video_geo_regions(src)
+        dst_vid_gdf = kwcoco_extensions.covered_video_geo_regions(dst)
+        dst_to_src_idxs = util_gis.geopandas_pairwise_overlaps(dst_vid_gdf, src_vid_gdf)
+        # For each site, chose a single video assign to Note: this only works
+        # well when the dst are smaller than the src, which is the case it is
+        # being written for. If larger dst are needed the logic will need to
+        # change.
+        vidname_pairs = []
+        for dst_idx, src_idxs in dst_to_src_idxs.items():
+            if len(src_idxs) == 0:
+                continue
+            elif len(src_idxs) == 1:
+                idx = 0
+            else:
+                qshape = dst_vid_gdf.iloc[dst_idx]['geometry']
+                candidates = src_vid_gdf.iloc[src_idxs]
+                overlaps = []
+                for dshape in candidates['geometry']:
+                    iarea = qshape.intersection(dshape).area
+                    uarea = qshape.area
+                    iofa = iarea / uarea
+                    overlaps.append(iofa)
+                idx = ub.argmax(overlaps)
+
+            dst_vidname = dst_vid_gdf.iloc[dst_idx].video_name
+            src_vidname = src_vid_gdf.iloc[src_idxs[idx]].video_name
+            vidname_pairs.append((src_vidname, dst_vidname))
+    else:
+        vidname_pairs = list(zip(src_video_names, dst_vidnames))
+        ...
+
     # We will build a list containing all of the assignments to make
     assignments = []
-
-    for vidname in src_video_names:
+    for src_vidname, dst_vidname in vidname_pairs:
         # For each corresponding video
-        src_video = src.index.name_to_video[vidname]
-        dst_video = dst.index.name_to_video[vidname]
+        src_video = src.index.name_to_video[src_vidname]
+        dst_video = dst.index.name_to_video[dst_vidname]
         # Look at each sequence of images
         all_src_images = src.images(video_id=src_video['id'])
         dst_images = dst.images(video_id=dst_video['id'])
@@ -234,25 +270,40 @@ def transfer_features_main(cmdline=1, **kwargs):
                         assignments.append({
                             'src_image_id': src_image_ids[src_idx],
                             'dst_image_id': dst_image_ids[dst_idx],
-                            'video_name': vidname,
+                            'src_vidname': src_vidname,
+                            'dst_vidname': dst_vidname,
                         })
 
     print(f'Found {len(assignments)} image-to-image assignments to transfer')
     assets_to_transfer = []
 
     # Now we have image assignments, find the assets to transfer
-    vidname_to_assignments = ub.group_items(assignments, lambda x: x['video_name'])
-    for vidname, vid_assignments in vidname_to_assignments.items():
-        src_video = src.index.name_to_video[vidname]
-        dst_video = dst.index.name_to_video[vidname]
-        # In most cases the source and destination videos will have the exact same
-        # width / height, but in some cases they may differ if one is downsampled.
-        # Just to be safe, assume the videos align and compute a scale factor
-        # transform to account for this case (its just the identity if width/height
-        # are the same).
-        fx = src_video['width'] / src_video['width']
-        fy = dst_video['height'] / dst_video['height']
-        warp_dstvid_from_srcvid = kwimage.Affine.scale((fx, fy))
+    vidname_to_assignments = ub.group_items(assignments, lambda x: (x['src_vidname'], x['dst_vidname']))
+    for vidnames, vid_assignments in vidname_to_assignments.items():
+        src_vidname, dst_vidname = vidnames
+        src_video = src.index.name_to_video[src_vidname]
+        dst_video = dst.index.name_to_video[dst_vidname]
+
+        if 0:
+            # OVERSIMPLIFIED LOGIC
+            # In most cases the source and destination videos will have the exact same
+            # width / height, but in some cases they may differ if one is downsampled.
+            # Just to be safe, assume the videos align and compute a scale factor
+            # transform to account for this case (its just the identity if width/height
+            # are the same).
+            fx = dst_video['width'] / src_video['width']
+            fy = dst_video['height'] / src_video['height']
+            warp_dstvid_from_srcvid = kwimage.Affine.scale((fx, fy))
+        else:
+            # Better logic
+            dst_crs = dst_video['wld_crs_info']
+            src_crs = src_video['wld_crs_info']
+            assert dst_crs == src_crs, 'not handling different CRS atm'
+
+            warp_src_from_wld = kwimage.Affine.coerce(src_video['warp_wld_to_vid'])
+            warp_dst_from_wld = kwimage.Affine.coerce(dst_video['warp_wld_to_vid'])
+            warp_wld_from_src = warp_src_from_wld.inv()
+            warp_dstvid_from_srcvid = warp_dst_from_wld @ warp_wld_from_src
 
         for assignment in vid_assignments:
             src_image_id = assignment['src_image_id']
