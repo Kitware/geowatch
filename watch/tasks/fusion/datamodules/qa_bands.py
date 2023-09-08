@@ -65,7 +65,7 @@ def _dump_qa_debug_vid():
 
 class QA_SpecMixin:
 
-    def draw_labels(table, quality_im, legend='separate', legend_dpi=96):
+    def draw_labels(table, quality_im, legend='separate', legend_dpi=96, verbose=0):
         """
 
         The doctest can be used to debug cloudmasks for the datasets
@@ -140,16 +140,37 @@ class QA_SpecMixin:
         import kwarray
         import numpy as np
         import kwplot
+
+        if verbose:
+            print(f'Build quality image for {quality_im.shape}')
+
         _raw = quality_im.ravel()
-        is_nan = np.isnan(_raw)
-        num_nan = is_nan.sum()
-        _raw2 = _raw[~is_nan]
-        qavals_to_count = ub.dict_hist(_raw2)
+
+        if quality_im.dtype.kind not in {'u', 'i'}:
+            if verbose:
+                print('Check for nan')
+            is_nan = np.isnan(_raw)
+            num_nan = is_nan.sum()
+            _raw2 = _raw[~is_nan]
+        else:
+            num_nan = 0
+            _raw2 = _raw
+
+        if verbose:
+            print('Counting unique values')
+
+        # qavals_to_count = ub.dict_hist(_raw2)
+        qavals, counts = np.unique(_raw2, return_counts=True)
+        qavals_to_count = ub.dzip(qavals, counts)
+
         if num_nan:
             print('warning nan QA')
             # qavals_to_count[np.nan] = num_nan
 
         unique_qavals = list(qavals_to_count.keys())
+
+        if verbose:
+            print(f'Found {len(unique_qavals)} unique labels')
 
         max_labels = 32
         if len(qavals_to_count) > max_labels:
@@ -167,20 +188,30 @@ class QA_SpecMixin:
         quality_im = kwarray.atleast_nd(quality_im, 3)
 
         # Colorize the QA bands
-        colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.float32)
+        if verbose:
+            print('Colorizing')
+
+        colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.uint8)
         if len(qval_to_color) > 10:
             qa_iter = ub.ProgIter(qval_to_color.items(), total=len(qval_to_color), desc='complex QA')
         else:
             qa_iter = qval_to_color.items()
-        for qabit, color in qa_iter:
+        for qabit, color in ub.ProgIter(qa_iter, desc='colorize', enabled=verbose):
+            color255 = kwimage.Color.coerce(color).as255()
             mask = quality_im[:, :, 0] == qabit
-            colorized[mask] = color
+            colorized[mask] = color255
 
         # Because the QA band is categorical, we should be able to make a short
         qa_canvas = colorized
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
+
+        if verbose:
+            print('Build legend')
         legend = kwplot.make_legend_img(label_to_color, dpi=legend_dpi)  # Make a legend
+
+        if verbose:
+            print('finished qa drawing')
 
         drawings = {
             'qa_canvas': qa_canvas,
@@ -273,7 +304,7 @@ class QA_BitSpecTable(QA_SpecMixin):
                 parts['value'] = val
                 parts['bits'] = '---'
                 parts['desc'] = 'nodata'
-            val_to_desc[val] = ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+            val_to_desc[val] = '───\n' + ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0) + '\n───'
         return val_to_desc
 
 

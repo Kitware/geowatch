@@ -388,3 +388,45 @@ def debug_single_cloudmask(coco_img):
         kwplot.imshow(legend, fnum=3)
 
     return drawings
+
+
+def debug_specific_qa_masks():
+
+    from watch.utils import util_fsspec
+    util_fsspec.FSPath.coerce
+    # fs = util_fsspec.S3Path._new_fs(profile='iarpa')
+
+    s3_paths = [util_fsspec.FSPath.coerce('s3://' + p[7:]) for p in  [
+        "/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/52/S/DG/2018/1/5/18JAN05020545-P1BS-011778196010_01_P001/18JAN05020545-P1BS-011778196010_01_P001_ACC_QA.tif",
+        "/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/52/S/DG/2018/1/5/18JAN05020545-M1BS-011778196010_01_P001/18JAN05020545-M1BS-011778196010_01_P001_ACC_QA.tif",
+        "/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/52/S/DG/2018/1/5/18JAN05020545-M1BS-011778196010_01_P002/18JAN05020545-M1BS-011778196010_01_P002_ACC_QA.tif",
+        "/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/52/S/DG/2018/1/5/18JAN05020545-P1BS-011778196010_01_P002/18JAN05020545-P1BS-011778196010_01_P002_ACC_QA.tif"
+    ]]
+    import ubelt as ub
+    dpath = ub.Path.appdir('watch/temp/').ensuredir()
+
+    local_fpaths = []
+    for p in s3_paths:
+        fpath = dpath / p.name
+        local_fpaths.append(fpath)
+        if not fpath.exists():
+            p.copy(fpath)
+
+    import kwimage
+    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    table = QA_SPECS.find_table('ACC-1', 'WV')
+
+    for fpath in local_fpaths:
+        viz_fpath = fpath.augment(prefix='_viz', ext='.png')
+        if True or not viz_fpath.exists():
+            if 'M1BS' in str(fpath.name):
+                quality_im = kwimage.imread(fpath, overview=1)
+            if 'P1BS' in fpath.name:
+                quality_im = kwimage.imread(fpath, overview=3)
+            drawings = table.draw_labels(quality_im, legend_dpi=300, verbose=1)
+            qa_canvas = kwimage.ensure_uint255(drawings['qa_canvas'])
+            im_legend = kwimage.ensure_uint255(drawings['legend'])
+            # middle = kwimage.imcrop(qa_canvas, (1000, 1000), about='cc')
+            canvas = kwimage.stack_images([qa_canvas, im_legend], axis=1)
+            canvas = kwimage.draw_header_text(canvas, fpath.name)
+            kwimage.imwrite(viz_fpath, canvas)
