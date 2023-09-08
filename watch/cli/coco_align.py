@@ -1262,7 +1262,9 @@ class SimpleDataCube:
 
         TIME_WINDOW_FILTER = 1
         import math
+        import numpy as np
         nan = float('nan')
+
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
             sensor_to_time_window = ub.udict(sensor_to_time_window)
@@ -1276,9 +1278,20 @@ class SimpleDataCube:
                         # Assign a contamination score to each image.
                         cloudcover = nan
                         contamination = nan
+
+                        # TODO: Better estimation of whole image contamination.
                         if 'stac_properties' in img:
-                            cloudcover = img['stac_properties'].get('eo:cloud_cover', nan) / 100
-                            contamination = img['stac_properties'].get('quality_info:contaminated_percentage', nan) / 100
+                            prop = img['stac_properties']
+                            cloudcover = prop.get('eo:cloud_cover', nan) / 100
+                            contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
+
+                        if 'parent_stac_properties' in img:
+                            for prop in img['parent_stac_properties']:
+                                _cloudcover = prop.get('eo:cloud_cover', nan) / 100
+                                _contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
+                                cloudcover = np.nanmin([cloudcover, _cloudcover])
+                                contamination = np.nanmin([contamination, _contamination])
+
                         if math.isnan(contamination):
                             contamination = cloudcover
 
@@ -1479,6 +1492,7 @@ class SimpleDataCube:
                 job = image_jobs.submit(
                     extract_image_job,
                     img=img,
+                    other_imgs=other_imgs,
                     anns=anns,
                     bundle_dpath=bundle_dpath,
                     new_bundle_dpath=new_bundle_dpath,
@@ -1494,7 +1508,6 @@ class SimpleDataCube:
                     start_gid=start_gid,
                     start_aid=start_aid,
                     local_epsg=local_epsg,
-                    other_imgs=other_imgs,
                     img_config=img_config)
                 job.request_idx = request_idx
                 start_gid = start_gid + 1
@@ -1736,6 +1749,7 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
 
 @profile
 def extract_image_job(img,
+                      other_imgs,
                       anns,
                       bundle_dpath,
                       new_bundle_dpath,
@@ -1751,7 +1765,6 @@ def extract_image_job(img,
                       start_gid,
                       start_aid,
                       local_epsg=None,
-                      other_imgs=None,
                       img_config=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
@@ -1826,6 +1839,8 @@ def extract_image_job(img,
                 is_rpc = True
         else:
             if 'geotiff_metadata' not in obj:
+                # Note: this takes 34% of the time in the case where images are
+                # pre-cached and dont need download
                 kwcoco_extensions._populate_canvas_obj(bundle_dpath, obj,
                                                        keep_geotiff_metadata=True)
             if obj['geotiff_metadata']['is_rpc']:
@@ -1897,12 +1912,13 @@ def extract_image_job(img,
 
     assert len(dst_list) == len(obj_groups)
     # Hack because heurstics break when fnames change
-    for old_aux_group, new_aux in zip(obj_groups, dst_list):
-        if new_aux is not None:
-            if len(old_aux_group) > 1:
-                new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-            else:
-                new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+    if 0:
+        for old_aux_group, new_aux in zip(obj_groups, dst_list):
+            if new_aux is not None:
+                if len(old_aux_group) > 1:
+                    new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+                else:
+                    new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     new_img = {
         'id': new_gid,
@@ -1910,9 +1926,17 @@ def extract_image_job(img,
         'align_method': align_method,
     }
 
-    if 'stac_properties' in img:
-        # Transfer stack properties from the parent
-        new_img['stac_properties'] = img
+    parent_stac_properties = []
+    parent_imgs = [img] + other_imgs
+    for _parent in parent_imgs:
+        if 'stac_properties' in _parent:
+            parent_stac_properties.append(_parent['stac_properties'])
+        elif 'parent_stac_properties' in _parent:
+            parent_stac_properties.extend(_parent['parent_stac_properties'])
+
+    # if 'stac_properties' in img:
+    #     # Transfer stack properties from the parent
+    #     new_img['stac_properties'] = img
 
     if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
@@ -1941,14 +1965,21 @@ def extract_image_job(img,
         'aux_annotated_candidate'
     })
 
+    # There are often going to be multiple images so we cant just use the
+    # "main" image properties.
+
     # Carry over appropriate metadata from original image
     new_img.update(carry_over)
-    new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
-    new_img['parent_name'] = img.get('name', None)  # remember which image this came from
-    new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
+    # new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
+    # new_img['parent_name'] = img.get('name', None)  # remember which image this came from
+    # new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
+
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = datetime_.timestamp()
+
+    if parent_stac_properties:
+        new_img['parent_stac_properties'] = parent_stac_properties
 
     new_coco_img = CocoImage(new_img)
 
@@ -1958,6 +1989,8 @@ def extract_image_job(img,
 
     new_coco_img._bundle_dpath = new_bundle_dpath
     new_coco_img._video = {}
+
+    # Note this takes 61% of the time when images are already cached.
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
     # TODO: deprecate and remove annotation handling in this tool to simplify
@@ -2162,6 +2195,8 @@ def _aligncrop(obj_group,
         dst['channels'] = first_obj['channels']
     if first_obj.get('num_bands', None):
         dst['num_bands'] = first_obj['num_bands']
+
+    dst['parent_file_names'] = [o.get('file_name', None) for o in obj_group]
 
     already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
