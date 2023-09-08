@@ -430,3 +430,12 @@ def debug_specific_qa_masks():
             canvas = kwimage.stack_images([qa_canvas, im_legend], axis=1)
             canvas = kwimage.draw_header_text(canvas, fpath.name)
             kwimage.imwrite(viz_fpath, canvas)
+
+            iffy_qa_names = ['cloud', 'cirrus']
+            train_mask = table.mask_any(quality_im, iffy_qa_names)
+            avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+            time_combo_mask = table.mask_any(quality_im, avoid_quality_values)
+            viz_fpath = fpath.augment(prefix='_viz_mask1', ext='.png')
+            kwimage.imwrite(viz_fpath, kwimage.ensure_uint255(train_mask))
+            viz_fpath = fpath.augment(prefix='_viz_mask2', ext='.png')
+            kwimage.imwrite(viz_fpath, kwimage.ensure_uint255(time_combo_mask))

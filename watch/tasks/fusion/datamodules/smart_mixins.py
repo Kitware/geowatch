@@ -223,36 +223,19 @@ class SMARTDataMixin:
             draw_cloudmask_viz(qa_data, rgb_data)
 
         """
-        # NOTES ON QUALITY / CLOUDMASK
-        # https://github.com/GERSL/Fmask#46-version
-        # The cloudmask band is a class-idx based raster with labels
-        # 0 => clear land pixel
-        # 1 => clear water pixel
-        # 2 => cloud shadow
-        # 3 => snow
-        # 4 => cloud
-        # 255 => no observation
+        from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
 
-        # However, in my data I seem to see:
-        # Unique values   8,  16,  65, 128
-
-        # These are specs
-        # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
-        # TODO: this could be a specially handled frame like ASI.
         quality_aliases = ['quality', 'cloudmask']
         for quality_chan_name in quality_aliases:
             if quality_chan_name in coco_img.channels:
                 break
+
         if quality_chan_name in coco_img.channels:
-            import operator as op
-            import functools
             tr_cloud = tr_frame.copy()
             tr_cloud['channels'] = quality_chan_name
-            # tr_cloud['channels'] = 'red|green|blue'
             tr_cloud['antialias'] = False
             tr_cloud['interpolation'] = 'nearest'
             tr_cloud['nodata'] = None
-            # import numpy as np
             qa_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
                 # TODO: use a better constant value
@@ -260,37 +243,19 @@ class SMARTDataMixin:
                 # dtype=np.float32
             )
             qa_data = qa_sample['im']
-            # if tr_cloud.get('use_native_scale', None):
-            # qa_data = qa_data[0][0]
 
-            if 0:
-                # OLD BROKEN METHOD
-                iffy_bits = functools.reduce(
-                    op.or_, ub.take(heuristics.QUALITY_BITS,
-                                    ['dilated_cloud', 'cirrus', 'cloud']))
-                is_cloud_iffy = (qa_data & iffy_bits) > 0
-
-            if 1:
-                # NEW BROKEN METHOD
-                # TODO: Ensure we are using the correct QA spec from
-                # ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
-                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-                # We don't have the exact right information here, so we can
-                # punt for now and assume "Drop4"
-                spec_name = 'ACC-1'
-                sensor = coco_img.img.get('sensor_coarse', '*')
-                try:
-                    table = QA_SPECS.find_table(spec_name, sensor)
-                except AssertionError as ex:
-                    print(f'warning ex={ex}')
-                    is_cloud_iffy = None
-                else:
-                    iffy_qa_names = [
-                        'cloud',
-                        # 'dilated_cloud',
-                        'cirrus',
-                    ]
-                    is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
+            # TODO: we need a better way to map from a quality band to the
+            # quality spec that it should be using.
+            spec_name = 'ACC-1'
+            sensor = coco_img.img.get('sensor_coarse', '*')
+            try:
+                table = QA_SPECS.find_table(spec_name, sensor)
+            except AssertionError as ex:
+                print(f'warning ex={ex}')
+                is_cloud_iffy = None
+            else:
+                iffy_qa_names = ['cloud']
+                is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
 
         else:
             is_cloud_iffy = None

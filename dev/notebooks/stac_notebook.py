@@ -16,7 +16,7 @@ def print_provider_debug_information():
 
     CommandLine:
         source $HOME/code/watch/secrets/secrets
-        xdoctest -m watch.stac._notebook print_provider_debug_information
+        xdoctest dev/notebooks/stac_notebook.py print_provider_debug_information
     """
     from rich import print
     print('Printing debug information about known and discoverable providers')
@@ -158,7 +158,7 @@ def check_processed_regions():
 
     CommandLine:
         source $HOME/code/watch/secrets/secrets
-        xdoctest -m watch.stac._notebook check_processed_regions
+        xdoctest $HOME/code/watch/dev/notebooks/stac_notebook.py check_processed_regions
     """
     import json
     import pystac_client
@@ -174,7 +174,7 @@ def check_processed_regions():
         'x-api-key': os.environ['SMART_STAC_API_KEY']
     }
 
-    base = ((dvc_data_dpath / 'annotations') / 'drop6')
+    base = ((dvc_data_dpath / 'annotations') / 'drop7')
     # base = dvc_data_dpath / 'annotations'
 
     region_dpath = base / 'region_models'
@@ -260,10 +260,18 @@ def check_processed_regions():
                 job.region_id = region_id
                 job.collection = collection
 
+        collect_errors = []
+
+        import rich
         for job in mprog(jobs.as_completed(), total=len(jobs), desc='collect results'):
             region_id = job.region_id
             collection = job.collection
-            results = job.result()
+            try:
+                results = job.result()
+            except Exception as ex:
+                rich.print(f'[red]ERROR IN {region_id} for {collection}: {ex}')
+                collect_errors.append(ex)
+                continue
             region_to_results[region_id] = results
 
             year_to_results = ub.udict(ub.group_items(results, key=lambda r: r.get_datetime().year))
@@ -292,6 +300,11 @@ def check_processed_regions():
                     'max_date': max_date.isoformat(),
                     # **year_oo_num
                 })
+
+    if collect_errors:
+        print("ERROR")
+        print('collect_errors = {}'.format(ub.urepr(collect_errors, nl=1)))
+        print("ERROR")
 
     for row in peryear_rows + peritem_rows:
         if row['collection'].endswith('acc-2'):

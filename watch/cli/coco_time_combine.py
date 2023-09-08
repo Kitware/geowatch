@@ -680,7 +680,7 @@ def combine_kwcoco_channels_temporally(config):
     return output_coco_dset
 
 
-def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'], crop_slice=None):
+def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None):
     """Get a binary mask of the quality data.
 
     Args:
@@ -694,15 +694,15 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
     """
     import numpy as np
     delay = coco_image.imdelay('quality',
-                                 space=space,
-                                 interpolation='nearest',
-                                 antialias=False,
-                                 resolution=resolution)
+                               space=space,
+                               interpolation='nearest',
+                               antialias=False,
+                               resolution=resolution)
     if crop_slice:
         delay = delay.crop(crop_slice)
     qa_data = delay.finalize(antialias=False, interpolation='nearest')
 
-    if qa_data.dtype.kind == 'f':
+    if qa_data.dtype.kind == 'f' or avoid_quality_values is None:
         # If the qa band is a float, then it must be a nan channel
         return np.ones_like(qa_data, dtype=np.uint8)
 
@@ -805,7 +805,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
             allow_overshoot=True
         )
 
-    avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    # avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    avoid_quality_values = ['cloud']
     # avoid_quality_values += ['ice']
 
     # Create canvas to combine averaged tiles into.

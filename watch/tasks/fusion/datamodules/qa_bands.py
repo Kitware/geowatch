@@ -790,14 +790,6 @@ QA_SPECS.append(QA_BitSpecTable({
 }))
 
 
-def reformat():
-    for spec in QA_SPECS:
-        text = 'QA_SPECS.append(' + spec.__class__.__name__ + '(' + ub.urepr(spec.spec, nl=-1) + '))'
-        print(text)
-        print()
-        print()
-
-
 def demo():
     import sys
     fpath = sys.argv[1]
