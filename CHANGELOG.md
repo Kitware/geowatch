@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added 
 
 * Added a fork of torchview and loss-of-plasticity to geowatch-tpl
+* Confusion visualization now shows BAS and AC heatmaps if available
+
+### Changed
+* STAC metadata is now preserved by coco-align.
+* Selection of images when picking 1 image per time window in coco-align is now influenced by STAC metadata for `eo:cloud_cover` and `quality_info:contaminated_percentage`
 
 
 ## Version 0.9.3 - Released 2023-08-31

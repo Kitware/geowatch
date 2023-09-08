@@ -1261,6 +1261,8 @@ class SimpleDataCube:
         sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
 
         TIME_WINDOW_FILTER = 1
+        import math
+        nan = float('nan')
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
             sensor_to_time_window = ub.udict(sensor_to_time_window)
@@ -1270,9 +1272,26 @@ class SimpleDataCube:
                 for dt, gids in datetime_to_gids.items():
                     for gid in gids:
                         img = coco_dset.imgs[gid]
+
+                        # Assign a contamination score to each image.
+                        cloudcover = nan
+                        contamination = nan
+                        if 'stac_properties' in img:
+                            cloudcover = img['stac_properties'].get('eo:cloud_cover', nan) / 100
+                            contamination = img['stac_properties'].get('quality_info:contaminated_percentage', nan) / 100
+                        if math.isnan(contamination):
+                            contamination = cloudcover
+
+                        if math.isnan(contamination):
+                            # For cases where we don't have info, prioritize
+                            # these before very contaminated images, but after
+                            # known good ones.
+                            contamination = 0.6
+
                         row = {
                             'gid': gid,
                             'sensor': img['sensor_coarse'],
+                            'contamination': contamination,
                             'unixtime': dt.timestamp(),
                         }
                         rows.append(row)
@@ -1286,14 +1305,12 @@ class SimpleDataCube:
                     chosen_gids.update(group['gid'])
 
                 for sensor in restrict_sensors:
-                    # TODO: need cloudcover info
                     if sensor in sensor_to_df:
                         subdf = sensor_to_df[sensor]
                         window_seconds = sensor_to_time_window[sensor].total_seconds()
                         subdf['bucket'] = (subdf['unixtime'] // window_seconds).astype(int)
-                        subdf['cloudcover'] = 0.10
                         for _, group in subdf.groupby('bucket'):
-                            group = group.sort_values(['cloudcover', 'unixtime'])
+                            group = group.sort_values(['contamination', 'unixtime'])
                             chosen_gid = group.iloc[0]['gid']
                             chosen_gids.add(chosen_gid)
 
