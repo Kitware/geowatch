@@ -88,6 +88,9 @@ class FSPath(str):
         """
         if path.startswith('s3:'):
             self = S3Path(path)
+        # elif path.startswith('/vsis3/'):
+        #     # convert gdal virtual filesystems to s3 paths?
+        #     self = S3Path('s3://' + path[7:])
         else:
             self = LocalPath(path)
         return self
@@ -269,7 +272,12 @@ class FSPath(str):
             https://filesystem-spec.readthedocs.io/en/latest/copying.html
         """
         if recursive == 'auto':
-            recursive = self.is_dir()
+            # On S3, asking if something is a dir can give permission
+            # issues, whereas asking if something is a file seems ok.
+            # try:
+            # recursive = self.is_dir()
+            # except PermissionError:
+            recursive = not self.is_file()
 
         if callback is None:
             callback = NOOP_CALLBACK
@@ -295,13 +303,18 @@ class FSPath(str):
             if not self.exists():
                 raise IOError(f'{self} does not exist')
             if isinstance(dst, RemotePath):
+
                 # TODO: test if we are an empty directory and fail because
                 # generally we cant copy an empty directory to a remote.
                 try:
-                    return dst.fs.put(self, dst, **commonkw, callback=callback)
+                    if recursive:
+                        return dst.fs.put(self, dst, **commonkw, callback=callback)
+                    else:
+                        return dst.fs.put_file(self, dst, callback=callback)
                 except FileExistsError:
                     # TODO: overwrite
                     raise
+
             elif isinstance(dst, LocalPath):
                 return self.fs.copy(self, dst, **commonkw, callback=callback)
             else:
@@ -309,8 +322,16 @@ class FSPath(str):
         elif isinstance(self, RemotePath):
             if isinstance(dst, RemotePath):
                 return self.fs.copy(self, dst, **commonkw, on_error=on_error)
-            elif isinstance(dst, LocalPath):
-                return self.fs.get(self, dst, **commonkw, callback=callback)
+            elif isinstance(dst, (LocalPath, pathlib.Path)):
+
+                if recursive:
+                    return self.fs.get(self, dst, **commonkw, callback=callback)
+                else:
+                    # Using put on an s3 bucket seems like it fails when
+                    # directories have tight permissions, but put file
+                    # seems ok. Need to ensure that we are actually just
+                    # using a file in this instance.
+                    return self.fs.get_file(self, dst, callback=callback)
             else:
                 raise TypeError(type(dst))
         else:
@@ -576,6 +597,9 @@ class S3Path(RemotePath):
         >>> fs = S3Path._new_fs()
     """
     __protocol__ = 's3'
+
+    def _as_gdal_vsi(self):
+        return '/vsis3/' + self[len(self.__protocol__) + 3:]
 
 
 class SSHPath(RemotePath):
