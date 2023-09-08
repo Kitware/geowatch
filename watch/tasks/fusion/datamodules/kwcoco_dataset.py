@@ -1273,7 +1273,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             return x if isinstance(x, list) else [x]
 
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', self.config['mask_samecolor_method'])
-        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_samecolor_bands']))
+        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
         SAMECOLOR_VALUES = target_.get('SAMECOLOR_VALUES', _ensure_list(self.config['mask_samecolor_values']))
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
 
@@ -1283,7 +1283,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
-        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']))
+        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
