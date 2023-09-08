@@ -1893,6 +1893,10 @@ def extract_image_job(img,
         'align_method': align_method,
     }
 
+    if 'stac_properties' in img:
+        # Transfer stack properties from the parent
+        new_img['stac_properties'] = img
+
     if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
         new_img.update(base_dst)
