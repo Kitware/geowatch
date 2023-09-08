@@ -607,6 +607,12 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans', group=FILTER_GROUP),
 
+        'mask_nan_bands': scfg.Value('', help=ub.paragraph(
+            '''
+            Channels that propogate their nans to other bands / streams. This should be
+            FusedChannelSpec coercible.
+            '''), group=FILTER_GROUP),
+
         'mask_samecolor_method': scfg.Value(None, help=ub.paragraph(
             '''
             If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
@@ -1277,9 +1283,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
-        # These bands propogate their nans to other bands / streams
-        # PROPOGATE_NAN_BANDS = target_.get('PROPOGATE_NAN_BANDS', {'red'})
-        PROPOGATE_NAN_BANDS = target_.get('PROPOGATE_NAN_BANDS', {})
+        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']))
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -1353,10 +1357,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         samecolor_values=SAMECOLOR_VALUES)
                     unobservable_mask.update(samecolor_mask)
 
-            relevant_bands = stream_oset & PROPOGATE_NAN_BANDS
+            relevant_bands = stream_oset & PROPAGATE_NAN_BANDS
             for band in relevant_bands:
-                # Marke the nans in these bands as unobservable.
-                bx = stream_oset.index('red')
+                # Mark the nans in these bands as unobservable.
+                bx = stream_oset.index(band)
                 band = sample['im'][0][:, :, bx]
                 nodata_mask = np.isnan(band)
                 unobservable_mask.update(nodata_mask)
