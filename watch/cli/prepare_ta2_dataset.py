@@ -719,7 +719,7 @@ def main(cmdline=False, **kwargs):
             )
             align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
 
-        if site_globstr:
+        if site_globstr and config.reproject_annotations:
             # Visualization here is too slow, add on another option if we
             # really need to
             viz_part = ''
@@ -824,7 +824,7 @@ def main(cmdline=False, **kwargs):
     )
 
     new_pipeline.inspect_configurables()
-    new_pipeline.print_graphs()
+    # new_pipeline.print_graphs()
 
     new_pipeline.submit_jobs(
         queue, skip_existing=config.skip_existing,
@@ -874,7 +874,6 @@ def main(cmdline=False, **kwargs):
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
-
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
     # if config.rprint:
     #     queue.print_graph()

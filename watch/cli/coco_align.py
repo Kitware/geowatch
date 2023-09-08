@@ -1266,7 +1266,7 @@ class SimpleDataCube:
 
         sub_bundle_dpath = (ub.Path(extract_dpath) / image_overlaps['sub_bundle_dname']).ensuredir()
 
-        subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json'
+        subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.zip'
         if subdata_fpath.exists() and extract_config.keep in {'roi-img', 'roi'}:
             print('ROI cache hit')
             sub_dset = kwcoco.CocoDataset(subdata_fpath)
@@ -1660,7 +1660,7 @@ class SimpleDataCube:
                 new_dset._check_json_serializable()
 
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
-            sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json')
+            sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.zip')
             sub_dset.reroot(new_root=os.fspath(sub_bundle_dpath), absolute=False)
 
             # Fix frame order issue
