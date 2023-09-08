@@ -374,7 +374,9 @@ def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
         >>> import kwcoco
         >>> import kwarray
         >>> stream = kwcoco.FusedChannelSpec.coerce('foo|red|green|bar')
+        >>> stream_oset = ub.oset(stream)
         >>> relevant_bands = ['red', 'green']
+        >>> relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands]
         >>> rng = kwarray.ensure_rng(0)
         >>> hwc = (rng.rand(32, 32, stream.numel()) * 3).astype(int)
         >>> use_regions = 0
@@ -382,7 +384,7 @@ def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
         >>> samecolor_mask = samecolor_nodata_mask(
         >>>     stream, hwc, relevant_bands, use_regions=use_regions,
         >>>     samecolor_values=samecolor_values)
-        >>> assert samecolor_mask.sum() == (hwc[..., 1] == 0).sum()
+        >>> assert samecolor_mask.sum() == (hwc[..., relevant_band_idxs] == 0).any(axis=2).sum()
     """
     from watch.utils import util_kwimage
     stream_oset = ub.oset(stream)
