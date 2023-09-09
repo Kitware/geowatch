@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * STAC metadata is now preserved by coco-align.
 * Selection of images when picking 1 image per time window in coco-align is now influenced by STAC metadata for `eo:cloud_cover` and `quality_info:contaminated_percentage`
+* prepare ta2 dataset now outputs per-region kwcoco files inside their region directories and adds the -rawbands suffix.
 
 ### Fixed
 coco-align now handles overviews correctly for quality bands.

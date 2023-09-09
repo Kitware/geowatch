@@ -636,8 +636,8 @@ def main(cmdline=False, **kwargs):
     for info in uncropped_fielded_jobs:
         toalign_info = info.copy()
         name = toalign_info['name'] = info['name']
-        toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.zip'
-        toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.zip'
+        toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / name / f'imgonly-{name}-rawbands.kwcoco.zip'
+        toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / name / f'imganns-{name}-rawbands.kwcoco.zip'
         # TODO: take only the corresponding set of site models here.
         toalign_info['site_globstr'] = info['site_globstr']
         toalign_info['region_globstr'] = info['region_globstr']
@@ -687,6 +687,7 @@ def main(cmdline=False, **kwargs):
             }),
             out_paths={
                 'dst': aligned_imgonly_fpath,
+                'dst_bundle_dpath': aligned_kwcoco_bundle,
             },
             group_dname=aligned_bundle_name,
         )

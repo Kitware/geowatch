@@ -277,6 +277,14 @@ class CocoAlignGeotiffConfig(ExtractConfig):
             bundle directory or kwcoco json file for the output
             '''), group='outputs')
 
+    dst_bundle_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, this is the directory where the output bundle will be
+        created. This can be used when dst is a kwcoco file that lives
+        somewhere other than the top level bundle path. This cannot be used if
+        dst is a directory.
+        '''))
+
     regions = scfg.Value('annots', help=ub.paragraph(
         '''
         The path to a set of geojson input region or site models.  Can also be
@@ -591,12 +599,19 @@ def main(cmdline=True, **kw):
     print('img_workers = {!r}'.format(config.img_workers))
     print('aux_workers = {!r}'.format(config.aux_workers))
 
+    output_bundle_dpath = None
+    if config.dst_bundle_dpath is not None:
+        output_bundle_dpath = str(config.dst_bundle_dpath)
+
     dst = ub.Path(config['dst']).expand()
     # TODO: handle this coercion of directories or bundles in kwcoco itself
     if 'json' in dst.name.split('.') or 'kwcoco' in dst.name.split('.'):
-        output_bundle_dpath = str(dst.parent)
+        if output_bundle_dpath is None:
+            output_bundle_dpath = str(dst.parent)
         dst_fpath = str(dst)
     else:
+        if output_bundle_dpath is not None:
+            raise AssertionError('cannot give dst as a path and dst_bundle_dpath')
         output_bundle_dpath = str(dst)
         dst_fpath = str(dst / 'data.kwcoco.json')
 
@@ -786,21 +801,25 @@ def main(cmdline=True, **kw):
 
     proc_context.stop()
 
+    new_dset._update_fpath(dst_fpath)
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
-    try:
-        rerooted_dataset = new_dset.copy()
-        rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
-    except Exception:
-        # Hack to fix broken pipeline, todo: find robust fix
-        hack_region_id = infos[0]['fpath'].stem
-        rerooted_dataset = new_dset.copy()
-        rerooted_dataset.reroot(new_prefix=hack_region_id)
-        rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # try:
+    #     rerooted_dataset = new_dset.copy()
+    #     rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # except Exception:
+    #     # Hack to fix broken pipeline, todo: find robust fix
+    #     hack_region_id = infos[0]['fpath'].stem
+    #     rerooted_dataset = new_dset.copy()
+    #     rerooted_dataset.reroot(new_prefix=hack_region_id)
+    #     rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
+    # print('finished')
+    # return rerooted_dataset
 
-    rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
+    new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
-    return rerooted_dataset
+    return new_dset
 
 
 class SimpleDataCube:
