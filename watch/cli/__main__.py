@@ -76,6 +76,9 @@ def main(cmdline=True, **kw):
     module_lut['schedule'] = ub.import_module_from_name('watch.mlops.schedule_evaluation')
     module_lut['manager'] = ub.import_module_from_name('watch.mlops.manager')
     module_lut['aggregate'] = ub.import_module_from_name('watch.mlops.aggregate')
+    module_lut['repackage'] = ub.import_module_from_name('watch.mlops.repackager')
+    # module_lut['fit'] = ub.import_module_from_name('watch.tasks.fusion.fit_lightning')
+    # module_lut['predict'] = ub.import_module_from_name('watch.tasks.fusion.predict')
 
     # Create a list of all submodules with CLI interfaces
     cli_modules = list(module_lut.values())

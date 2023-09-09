@@ -34,6 +34,7 @@ class RepackageConfig(scfg.DataConfig):
         python -m watch.mlops.repackager \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=3*.ckpt
     """
+    __command__ = 'repackage'
     checkpoint_fpath = scfg.Value(None, position=1, nargs='+', help=ub.paragraph(
         '''
         One or more checkpoint paths to repackage. This can be a path to a file
@@ -43,11 +44,17 @@ class RepackageConfig(scfg.DataConfig):
     force = scfg.Value(False, isflag=True, help='if True, rewrite the packages even if they exist')
 
 
-def main(**kwargs):
-    config = RepackageConfig.cli(data=kwargs)
+def main(cmdline=True, **kwargs):
+    import os
+    os.environ['HACK_SAVE_ANYWAY'] = '1'
+    config = RepackageConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
     checkpoint_fpath = config['checkpoint_fpath']
     repackage(checkpoint_fpath, force=config['force'])
+
+
+__config__ = RepackageConfig
+__config__.main = main
 
 
 def repackage(checkpoint_fpath, force=False, dry=False):

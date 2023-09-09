@@ -10,6 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Added a fork of torchview and loss-of-plasticity to geowatch-tpl
 * Confusion visualization now shows BAS and AC heatmaps if available
+* Experimental Generate & Test algorithm for continual backprop.
+* Shrink & Perterb Algorithm for regularization.
 
 ### Changed
 * STAC metadata is now preserved by coco-align.

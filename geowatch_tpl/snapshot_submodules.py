@@ -33,6 +33,7 @@ def main():
                     p_dst = static_submod_dpath / p
                     assert p_src.exists()
                     p_dst.parent.ensuredir()
+                    p_dst.delete()
                     p_src.copy(p_dst)
                     ...
             else:

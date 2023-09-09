@@ -7636,7 +7636,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
 EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=3e-4
+TARGET_LR=5e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
@@ -7654,7 +7654,7 @@ data:
     input_resolution      : 2.0GSD
     output_resolution     : 2.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 8
+    batch_size             : 4
     normalize_perframe     : false
     normalize_peritem      : 'blue|green|red|nir|pan'
     max_epoch_length       : 1000000
@@ -7676,9 +7676,9 @@ model:
     init_args:
         #saliency_weights      : '1:1'
         #class_weights         : auto
-        class_weights          : 'auto:ignore+0.0001,Unknown+0.0001,Unknown+0.0001'
+        class_weights          : 'auto'
         tokenizer              : linconv
-        arch_name              : smt_it_stm_p16
+        arch_name              : smt_it_stm_p24
         decoder                : mlp
         positive_change_weight : 1
         negative_change_weight : 0.01
@@ -7730,5 +7730,6 @@ torch_globals:
 
 initializer:
     #init: /home/joncrall/quicklinks/toothbrush_training/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V81/lightning_logs/version_19/checkpoints/epoch=186-step=16082-val_loss=1.418.ckpt.pt
-    init: /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761_weight_hacked.ckpt
+    #init: /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761_weight_hacked.ckpt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_3/checkpoints/last.pt
 "
