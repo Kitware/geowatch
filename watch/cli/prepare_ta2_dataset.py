@@ -271,6 +271,12 @@ class PrepareTA2Config(CMDQueueConfig):
             transform in the geotiff metadata.
             '''))
 
+    reproject_annotations = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If True and site models are given, project annotations onto the coco
+        files after they are cropped / aligned.
+        '''))
+
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Hack lazy is a proof of concept with the intent on speeding

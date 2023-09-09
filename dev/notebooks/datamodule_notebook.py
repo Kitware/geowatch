@@ -361,12 +361,33 @@ def debug_single_cloudmask(coco_img, out_dpath):
 
     qa_fpath = list(qa_delayed.leafs())[0].fpath
 
-    raw = kwimage.imread(qa_fpath)
-    overview1 = kwimage.imread(qa_fpath, overview=1)
-    overview2 = kwimage.imread(qa_fpath, overview=2)
-    print(len(np.unique(raw)))
-    print(len(np.unique(overview1)))
-    print(len(np.unique(overview2)))
+    if 0:
+        '''
+
+        # Copy known bad image to test path
+        cp \
+            /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop7/CH_R001/../CH_R001/WV/affine_warp/crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1/crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1_quality.tif \
+            foo.tiff
+
+        chmod +w foo.tiff
+
+        # Modify overviews inplace (hope this is enough)
+        gdaladdo -r nearest foo.tiff
+
+        python -c "if 1:
+            import kwimage
+            import numpy as np
+            print(len(np.unique(kwimage.imread('foo.tiff', overview=0))))
+            print(len(np.unique(kwimage.imread('foo.tiff', overview=1))))
+        "
+
+        '''
+        raw = kwimage.imread(qa_fpath)
+        overview1 = kwimage.imread(qa_fpath, overview=1)
+        overview2 = kwimage.imread(qa_fpath, overview=2)
+        print(len(np.unique(raw)))
+        print(len(np.unique(overview1)))
+        print(len(np.unique(overview2)))
 
     if 1:
         import numpy as np
