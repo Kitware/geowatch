@@ -607,10 +607,27 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans', group=FILTER_GROUP),
 
+        'mask_nan_bands': scfg.Value('', help=ub.paragraph(
+            '''
+            Channels that propogate their nans to other bands / streams. This should be
+            FusedChannelSpec coercible.
+            '''), group=FILTER_GROUP),
+
         'mask_samecolor_method': scfg.Value(None, help=ub.paragraph(
             '''
             If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
             Can be histogram or region.
+            '''), group=FILTER_GROUP),
+
+        'mask_samecolor_bands': scfg.Value('red', help=ub.paragraph(
+            '''
+            Channels to use for SAMECOLOR_QUALITY_HEURISTIC. This should be
+            FusedChannelSpec coercible.
+            '''), group=FILTER_GROUP),
+
+        'mask_samecolor_values': scfg.Value(0, type=list, help=ub.paragraph(
+            '''
+            List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
             '''), group=FILTER_GROUP),
 
         'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing', group=FILTER_GROUP),
@@ -1252,19 +1269,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
 
-        # TODO: disable the samecolor quality heuristic by defaults.  We should
-        # use a preprocessing step to nan-out these regions more robustly.
+        def _ensure_list(x):
+            return x if isinstance(x, list) else [x]
 
-        # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'region')
-        SAMECOLOR_VALUES = {0}
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', self.config['mask_samecolor_method'])
-        # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', None)
+        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
+        SAMECOLOR_VALUES = target_.get('SAMECOLOR_VALUES', _ensure_list(self.config['mask_samecolor_values']))
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
-        # There are only some values that we care about for the samecolor
-        # metric. It turns out in our data only zeros are confused for NODATA.
-        # so we can hack this metric in. Setting it to none would generalize it
-        # to allow any value in a large homogenous region to be considered as
-        # nodata.
 
         force_bad_frames = target_.get('force_bad_frames', self.config['force_bad_frames'])
         stop_on_bad_image = not force_bad_frames
@@ -1272,14 +1283,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
-        # These bands propogate their nans to other bands / streams
-        # PROPOGATE_NAN_BANDS = target_.get('PROPOGATE_NAN_BANDS', {'red'})
-        PROPOGATE_NAN_BANDS = target_.get('PROPOGATE_NAN_BANDS', {})
-
-        # We are only going to compute the same color quality heuristic on a
-        # single band.
-        valid_bands_for_samecolor_quality_heuristic = {
-            'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}
+        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -1345,7 +1349,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if SAMECOLOR_QUALITY_HEURISTIC:
                 # Update our observable mask based on bands heuristically
                 # marked as valid or observable (i.e. rgb bands)
-                relevant_bands = stream_oset & valid_bands_for_samecolor_quality_heuristic
+                relevant_bands = stream_oset & SAMECOLOR_BANDS
                 if relevant_bands:
                     samecolor_mask = data_utils.samecolor_nodata_mask(
                         stream, sample['im'][0], relevant_bands,
@@ -1353,10 +1357,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         samecolor_values=SAMECOLOR_VALUES)
                     unobservable_mask.update(samecolor_mask)
 
-            relevant_bands = stream_oset & PROPOGATE_NAN_BANDS
+            relevant_bands = stream_oset & PROPAGATE_NAN_BANDS
             for band in relevant_bands:
-                # Marke the nans in these bands as unobservable.
-                bx = stream_oset.index('red')
+                # Mark the nans in these bands as unobservable.
+                bx = stream_oset.index(band)
                 band = sample['im'][0][:, :, bx]
                 nodata_mask = np.isnan(band)
                 unobservable_mask.update(nodata_mask)
