@@ -3567,9 +3567,9 @@ geowatch schedule --params="
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
             - 0.37
-            - 0.3875
-            - 0.4
-            - 0.41
+            #- 0.3875
+            #- 0.4
+            #- 0.41
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
@@ -3626,14 +3626,14 @@ geowatch schedule --params="
         ########################
         ## AC/SC CROP PARAMS  ##
         ########################
-        sc_crop.target_gsd: 8GSD
-        sc_crop.minimum_size: '128x128@8GSD'
-        sc_crop.force_min_gsd: 8GSD
+        sc_crop.target_gsd: 2GSD
+        sc_crop.minimum_size: '128x128@2GSD'
+        sc_crop.force_min_gsd: 2GSD
         sc_crop.context_factor: 1.0
         sc_crop.rpc_align_method: affine_warp
         sc_crop.sensor_to_time_window:
             - 'S2: 1month'
-            - 'S2: 3month'
+            #- 'S2: 3month'
             #- 'S2: 0.5month'
 
         ########################
@@ -3641,14 +3641,14 @@ geowatch schedule --params="
         ########################
 
         sc_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
             - $HOME/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_3/checkpoints/epoch=0-step=342-val_loss=4.648.ckpt.pt
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap: 0.3
-        sc_pxl.input_space_scale: 8GSD
-        sc_pxl.window_space_scale: 8GSD
-        sc_pxl.output_space_scale: 8GSD
+        sc_pxl.input_space_scale: 2GSD
+        sc_pxl.window_space_scale: 2GSD
+        sc_pxl.output_space_scale: 2GSD
         sc_pxl.chip_dims: '128,128'
         #sc_pxl.time_span: 6m
         #sc_pxl.time_sampling: auto
@@ -3668,7 +3668,7 @@ geowatch schedule --params="
         ########################
 
         sc_poly.thresh:
-            - 0.00001
+            #- 0.00001
             #- 0.01
             #- 0.05
             #- 0.08
@@ -3677,12 +3677,12 @@ geowatch schedule --params="
             - 0.10
             - 0.15
             - 0.20
-            - 0.25
+            #- 0.25
             - 0.30
             #- 0.325
-            - 0.35
+            #- 0.35
             #- 0.375
-            - 0.40
+            #- 0.40
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
@@ -3705,7 +3705,7 @@ geowatch schedule --params="
         sc_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask" \
-    --devices="1," --tmux_workers=1 \
+    --devices="0," --tmux_workers=1 \
     --backend=tmux --queue_name "_toothbrush_eval15_bas_nomask" \
     --skip_existing=1 \
     --run=1
@@ -3734,8 +3734,8 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 5
-        per_group: 1
+        top_k: 40
+        per_group: .inf
         macro_analysis: 0
         analyze: 0
         print_models: True
@@ -3743,7 +3743,7 @@ python -m watch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002,CN_C000"
+    --rois="KR_R002"
 
 
 # TEST SRI's MODELS ON YARDRAT

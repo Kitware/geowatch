@@ -7733,3 +7733,107 @@ initializer:
     #init: /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761_weight_hacked.ckpt
     init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_3/checkpoints/last.pt
 "
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-Cropped2GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_gnt_snp_split6_V85
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1.0y,-0.9y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,0.9y,1.0y)'
+    window_resolution     : 2.0GSD
+    input_resolution      : 2.0GSD
+    output_resolution     : 2.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : False
+    use_grid_negatives     : False
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights      : '1:1'
+        #class_weights         : auto
+        class_weights          : 'auto'
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p24
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 1.00
+        global_saliency_weight : 0.05
+        multimodal_reduce      : learned_linear
+        continual_learning     : true
+        perterb_scale          : 0.000001
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+trainer:
+    accumulate_grad_batches: 64
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+    callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+              save_last: true
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_9/checkpoints/epoch=91-step=31464-val_loss=2.286.ckpt.pt
+"

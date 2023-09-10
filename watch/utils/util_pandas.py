@@ -21,15 +21,15 @@ class DataFrame(pd.DataFrame):
     # _metadata = ['added_property']
     # added_property = 1  # This will be passed to copies
 
+    @property
+    def _constructor(self):
+        return DataFrame
+
     @classmethod
     def random(cls, n=10):
         import numpy as np
         self = cls({k: np.random.rand(10) for k in 'abcde'})
         return self
-
-    @property
-    def _constructor(self):
-        return DataFrame
 
     def safe_drop(self, labels, axis=0):
         """
@@ -103,6 +103,8 @@ def pandas_argmaxima(data, columns, k=1):
         >>> print(data.loc[top_indexes])
     """
     ranked_data = data.sort_values(columns, ascending=False)
+    if isinstance(k, float) and math.isinf(k):
+        k = None
     top_locs = ranked_data.index[0:k]
     return top_locs
 
@@ -243,6 +245,19 @@ class DotDictDataFrame(pd.DataFrame):
         >>> # Test glob
         >>> assert set(self.find_columns('*metri*')) == {'node1.metrics.ap', 'node2.metrics.ap'}
     """
+
+    # Not sure how safe it is to do this.
+    # Consider the case of the dataframe with columns ['a.b.c', 'b.c'].
+    # Asking for ['b.c'] would return both, there is no way to just get the
+    # specific b.c column because its a suffix of another columns.
+    # We would need to disallow the current __getitem__ behavior in order to
+    # make a consistent variant of this, and perhaps thats an ok idea. Perhaps
+    # we do a df.nest[<index>] localizer similar to df.loc or df.iloc and keep
+    # default getitem behavior. That seems cleaner.
+    #
+    # @property
+    # def _constructor(self):
+    #     return DotDictDataFrame
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)

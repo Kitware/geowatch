@@ -354,6 +354,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         # TIME OPTIONS
         ##############
 
+        # TODO: make auto based on time kernel.
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims'], group=TIME_GROUP),
 
 
@@ -504,6 +505,9 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         ############################
         # DATA NORMALIZATION OPTIONS
         ############################
+
+        # TODO: 'normalizer': scfg.Value - user specified normalizer configuration.
+        # might want tight jsonargparse integeration here.
 
         'prenormalize_inputs': scfg.Value(None, help=ub.paragraph(
             '''
