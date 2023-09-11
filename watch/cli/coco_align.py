@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
-regions around areas of intere/t across time.
+regions around areas of interest across time.
 
 The align script works by making two geopandas data frames of geo-boundaries,
 one for regions and one for all images (as defined by their geotiff metadata).
@@ -481,7 +481,7 @@ def main(cmdline=True, **kw):
         >>> coco_img = new_dset.coco_image(2)
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
-        >>> parent_fpath = asset['parent_file_name']
+        >>> parent_fpath = asset['parent_file_names']
         >>> crop_fpath = ub.Path(new_dset.bundle_dpath) / asset['file_name']
         >>> info = geotiff_crs_info(crop_fpath)
         >>> assert(all(info['meter_per_pxl'] == 60.0))
@@ -532,7 +532,7 @@ def main(cmdline=True, **kw):
         >>> coco_img = new_dset.coco_image(2)
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
-        >>> parent_fpath = asset['parent_file_name']
+        >>> parent_fpath = asset['parent_file_names']
         >>> crop_fpath = str(ub.Path(new_dset.bundle_dpath) / asset['file_name'])
         >>> print(ub.cmd(['gdalinfo', parent_fpath])['out'])
         >>> print(ub.cmd(['gdalinfo', crop_fpath])['out'])

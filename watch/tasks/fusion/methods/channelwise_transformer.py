@@ -1857,14 +1857,17 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             assert self.training
             with torch.no_grad():
                 seen_ids = set()
-                for param_group in optimizer.param_groups:
-                    for param in param_group['params']:
-                        param_id = id(param)
-                        if param_id not in seen_ids:
-                            seen_ids.add(param_id)
-                            param += torch.empty(param.shape,
-                                                 device=param.device).normal_(
-                                                     mean=0, std=self.hparams.perterb_scale)
+                if optimizer is None:
+                    print('Optimizer is None. No SnP')
+                else:
+                    for param_group in optimizer.param_groups:
+                        for param in param_group['params']:
+                            param_id = id(param)
+                            if param_id not in seen_ids:
+                                seen_ids.add(param_id)
+                                param += torch.empty(param.shape,
+                                                     device=param.device).normal_(
+                                                         mean=0, std=self.hparams.perterb_scale)
 
         return ret
 

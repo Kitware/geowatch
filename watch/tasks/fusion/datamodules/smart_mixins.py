@@ -1,6 +1,5 @@
 import pandas as pd
 import ubelt as ub
-from watch import heuristics
 
 
 class SMARTDataMixin:
