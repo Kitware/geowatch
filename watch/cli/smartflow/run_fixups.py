@@ -34,6 +34,16 @@ class FixupConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
+    region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to ingress and fix up
+            '''))
+
+    site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to ingress and fix up
+            '''))
+
 
 def main():
     config = FixupConfig.cli(strict=True)
@@ -50,8 +60,8 @@ def main():
 
     ingressed_assets = smartflow_ingress(
         config.input_path,
-        ['cropped_region_models_sc',
-         'cropped_site_models_sc'],
+        [config.region_models_asset_name,
+         config.site_models_asset_name],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
@@ -70,8 +80,8 @@ def main():
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
-    input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_sc'])
-    input_site_dpath = ub.Path(ingressed_assets['cropped_site_models_sc'])
+    input_region_dpath = ub.Path(ingressed_assets[config.region_models_asset_name])
+    input_site_dpath = ub.Path(ingressed_assets[config.site_models_asset_name])
 
     output_region_dpath = ingress_dir / 'cropped_region_models_fixed'
     output_site_dpath = ingress_dir / 'cropped_site_models_fixed'
