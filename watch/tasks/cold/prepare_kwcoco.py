@@ -450,7 +450,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
 
     # It is important that the categorical QA band is not interpolated or
     # antialiased, whereas the intensity bands should be.
-    qa_data = delayed_qa.finalize(interpolation='nearest', antialias=False)
+    qa_data = delayed_qa.finalize(interpolation='nearest', antialias=False, optimize=False)
     # Decoding QA band
     if adj_cloud:
         qa_unpacked = qa_decoding(qa_data)
