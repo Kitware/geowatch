@@ -1520,6 +1520,7 @@ class SimpleDataCube:
                     num=num,
                     frame_index=frame_index,
                     new_vidid=new_vidid,
+                    new_vidname=video_name,
                     sub_bundle_dpath=sub_bundle_dpath,
                     space_str=space_str,
                     space_region=space_region,
@@ -1777,6 +1778,7 @@ def extract_image_job(img,
                       num,
                       frame_index,
                       new_vidid,
+                      new_vidname,
                       sub_bundle_dpath,
                       space_str,
                       space_region,
@@ -1885,7 +1887,7 @@ def extract_image_job(img,
     )
     asset_config['verbose'] = aux_verbose
 
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp assets', verbose=verbose):
+    for obj_group in ub.ProgIter(obj_groups, desc=f'submit warp assets in {new_vidname}', verbose=verbose):
         job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
@@ -1908,7 +1910,7 @@ def extract_image_job(img,
     new_gid = start_gid
 
     if verbose > 2:
-        print(f'Finish channel crop jobs: {new_gid}')
+        print(f'Finish channel crop jobs: {new_gid} in {new_vidname}')
 
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
@@ -2097,7 +2099,7 @@ def extract_image_job(img,
             new_anns.append(ann)
 
     if DEBUG:
-        print(f'Finished extract img job: {new_gid}')
+        print(f'Finished extract img job: {new_gid} in {new_vidname}')
     return new_img, new_anns
 
 

@@ -277,6 +277,12 @@ class PrepareTA2Config(CMDQueueConfig):
         files after they are cropped / aligned.
         '''))
 
+    final_union = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If True, union all regions into a single kwcoco file at the end
+        to represent the entired dataset.
+        '''))
+
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Hack lazy is a proof of concept with the intent on speeding
@@ -495,6 +501,7 @@ def main(cmdline=False, **kwargs):
                 'collated': default_collated,
             })
     else:
+        # Typically unused
         s3_fpath_list = config['s3_fpath']
         collated_list = config['collated']
         if len(collated_list) != len(s3_fpath_list):
@@ -785,24 +792,25 @@ def main(cmdline=False, **kwargs):
     aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
 
     # COMBINE Uncropped datasets
-    union_node = new_pipeline.submit(
-        name='kwcoco-union',
-        executable=ub.codeblock(
-            fr'''
-            {job_environ_str}python -m kwcoco union
-            '''),
-        in_paths=_justkeys({
-            'src': aligned_fpaths,
-        }),
-        out_paths={
-            'dst': aligned_final_fpath,
-        },
-        group_dname=aligned_bundle_name,
-    )
-    for node in union_depends_nodes:
-        node.outputs['dst'].connect(union_node.inputs['src'])
+    if config.final_union:
+        union_node = new_pipeline.submit(
+            name='kwcoco-union',
+            executable=ub.codeblock(
+                fr'''
+                {job_environ_str}python -m kwcoco union
+                '''),
+            in_paths=_justkeys({
+                'src': aligned_fpaths,
+            }),
+            out_paths={
+                'dst': aligned_final_fpath,
+            },
+            group_dname=aligned_bundle_name,
+        )
+        for node in union_depends_nodes:
+            node.outputs['dst'].connect(union_node.inputs['src'])
 
-    aligned_final_nodes = [union_node]
+        aligned_final_nodes = [union_node]
 
     # Determine what stages will be cached.
     cache = config.cache
@@ -823,7 +831,7 @@ def main(cmdline=False, **kwargs):
         cache=config.cache
     )
 
-    new_pipeline.inspect_configurables()
+    # new_pipeline.inspect_configurables()
     # new_pipeline.print_graphs()
 
     new_pipeline.submit_jobs(
