@@ -30,8 +30,8 @@ Example:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
     python -m watch.cli.validate_annotation_schemas \
-        --site_models="$DVC_DATA_DPATH"/annotations/drop6/site_models \
-        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models
+        --site_models="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+        --region_models="$DVC_DATA_DPATH"/annotations/drop7/region_models
 
     python -m watch.cli.validate_annotation_schemas \
         --site_models="<path-to-site-models>" \
@@ -230,49 +230,10 @@ def validate_schemas(region_model_infos, site_model_infos, strict=False):
     print(f'{len(region_errors)} / {len(region_model_infos)} region model errors')
 
 
-def validate_site_dataframe(site_df):
-    from dateutil.parser import parse
-    import numpy as np
-    dummy_start_date = '1970-01-01'  # hack, could be more robust here
-    dummy_end_date = '2101-01-01'
-    first = site_df.iloc[0]
-    rest = site_df.iloc[1:]
-    assert first['type'] == 'site', 'first row must have type of site'
-    assert first['region_id'] is not None, 'first row must have a region id'
-    assert rest['type'].apply(lambda x: x == 'observation').all(), (
-        'rest of row must have type observation')
-    assert rest['region_id'].apply(lambda x: x is None).all(), (
-        'rest of row must have region_id=None')
-
-    site_start_date = first['start_date'] or dummy_start_date
-    site_end_date = first['end_date'] or dummy_end_date
-    site_start_datetime = parse(site_start_date)
-    site_end_datetime = parse(site_end_date)
-
-    if site_end_datetime < site_start_datetime:
-        print('\n\nBAD SITE DATES:')
-        print(first)
-
-    # Check datetime errors in observations
-    try:
-        obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
-        obs_isvalid = [x is None for x in obs_dates]
-        valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
-        if not all(valid_obs_dates):
-            # null_obs_sites.append(first[['site_id', 'status']].to_dict())
-            pass
-        valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
-        assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
-    except AssertionError as ex:
-        print('ex = {!r}'.format(ex))
-        print(site_df)
-        raise
-
-
 def validate_region_model_content(region_df, fpath):
-    from dateutil.parser import parse
     # import pandas as pd
     import os
+    from kwutil import util_time
     is_region = region_df['type'] == 'region'
     region_part = region_df[is_region]
     assert len(region_part) == 1, 'must have exactly one region in each region file'
@@ -316,31 +277,24 @@ def validate_region_model_content(region_df, fpath):
             })
             raise AbortCheck
 
-        # This is a warning
-        # if not pd.isnull(sites_part['region_id']).all():
-        #     errors.append({
-        #         'description': 'site-summaries should not have region ids',
-        #     })
-        #     raise AbortCheck
-
         region_start_date = region_row['start_date'] or dummy_start_date
         region_end_date = region_row['end_date'] or dummy_end_date
 
-        region_start_datetime = parse(region_start_date)
-        region_end_datetime = parse(region_end_date)
+        region_start_datetime = util_time.coerce_datetime(region_start_date)
+        region_end_datetime = util_time.coerce_datetime(region_end_date)
         if region_end_datetime < region_start_datetime:
             errors.append(f'Bad region dates: {region_start_datetime=}, {region_end_datetime=}')
 
         # Check datetime errors
-        sitesum_start_dates = sites_part['start_date'].apply(lambda x: parse(x or region_start_date))
-        sitesum_end_dates = sites_part['end_date'].apply(lambda x: parse(x or region_end_date))
+        sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or region_start_date))
+        sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or region_end_date))
         has_bad_time_range = sitesum_start_dates > sitesum_end_dates
 
         bad_date_rows = sites_part[has_bad_time_range]
         if len(bad_date_rows):
             bad_row_info = bad_date_rows[['site_id', 'start_date', 'end_date', 'originator']].to_dict('records')
             errors.append({
-                'description': 'Site summary rows with start_dates > end_date or outside of region start/end dates',
+                'description': f'Site summary rows with start_dates > end_date or outside of region start/end dates ({region_start_date} - {region_end_date})',
                 'offending_rows': bad_row_info,
             })
     except AbortCheck:
@@ -357,7 +311,7 @@ def validate_region_model_content(region_df, fpath):
 
 
 def validate_site_content(site_df, site_fpath):
-    from dateutil.parser import parse
+    from kwutil import util_time
     import os
     import numpy as np
     dummy_start_date = '1970-01-01'  # hack, could be more robust here
@@ -373,8 +327,8 @@ def validate_site_content(site_df, site_fpath):
 
     site_start_date = first['start_date'] or dummy_start_date
     site_end_date = first['end_date'] or dummy_end_date
-    site_start_datetime = parse(site_start_date)
-    site_end_datetime = parse(site_end_date)
+    site_start_datetime = util_time.coerce_datetime(site_start_date)
+    site_end_datetime = util_time.coerce_datetime(site_end_date)
 
     rel_fpath = site_fpath.relative_to(site_fpath.parent.parent.parent)
 
@@ -386,23 +340,28 @@ def validate_site_content(site_df, site_fpath):
         'errors': errors,
     }
 
-    if site_end_datetime < site_start_datetime:
-        offending = first[['site_id', 'start_date', 'end_date', 'originator']].to_dict()
-        errors.append({
-            'description': 'Site summary row has a start_date > end_date',
-            'offending_info': offending,
-        })
+    if site_end_datetime is not None and site_start_datetime is not None:
+        if site_end_datetime < site_start_datetime:
+            offending = first[['site_id', 'start_date', 'end_date', 'originator']].to_dict()
+            errors.append({
+                'description': 'Site summary row has a start_date > end_date',
+                'offending_info': offending,
+            })
 
     # Check datetime errors in observations
     null_obs_sites = []
     try:
-        obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
+        obs_dates = [None if x is None else util_time.coerce_datetime(x) for x in rest['observation_date']]
         obs_isvalid = [x is not None for x in obs_dates]
         valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
         if not all(valid_obs_dates):
             null_obs_sites.append(first[['site_id', 'status']].to_dict())
         valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
-        assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
+        if not (valid_deltas >= 0).all():
+            errors.append({
+                'description': 'observations are not sorted temporally',
+                'offending_info': valid_obs_dates,
+            })
     except AssertionError as ex:
         print('ex = {!r}'.format(ex))
         print(site_df)
