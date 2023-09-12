@@ -20,6 +20,9 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
         - [ ] Rename to geojson stats? Or geomodel stats?
         - [ ] make text output more  consistent and more useful.
     """
+    __command__ = 'site_stats'
+    __alias__ = ['geojson_stats', 'geomodel_stats']
+
     models = scfg.Value(None, help='site OR region models coercables (the script will attempt to distinguish them)', nargs='+', position=1)
 
     site_models = scfg.Value(None, help='site model coercable', nargs='+', alias=['sites'])
@@ -463,6 +466,7 @@ def geopandas_shape_stats(df):
 
 
 __config__ = GeojsonSiteStatsConfig
+__config__.main = main
 
 if __name__ == '__main__':
     """

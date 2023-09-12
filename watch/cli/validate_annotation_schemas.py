@@ -50,45 +50,137 @@ class ValidateAnnotationConfig(scfg.DataConfig):
     """
     Validate the site / region model schemas
     """
+    __command__ = 'site_validate'
+    __alias__ = ['validate_sites']
+
+    models = scfg.Value(None, help='site OR region models coercables (the script will attempt to distinguish them)', nargs='+', position=1)
 
     site_models = scfg.Value(None, nargs='+', help='coercable site models')
 
     region_models = scfg.Value(None, nargs='+', help='coercable region models')
 
+    io_workers = scfg.Value('avail', help='number of workers for parallel io')
 
-def main():
-    config = ValidateAnnotationConfig.cli(strict=True)
+    strict = scfg.Value(False, help='if True use the strict schema (i.e. enforces IARPA naming)')
+
+
+def main(cmdline=1, **kwargs):
+    """
+    Example:
+        >>> import ubelt as ub
+        >>> import sys, ubelt
+        >>> from watch.cli.validate_annotation_schemas import ValidateAnnotationConfig
+        >>> from watch.geoannots import geomodels
+        >>> dpath = ub.Path.appdir('watch', 'tests', 'test_validate_geoannot_schema')
+        >>> dpath.ensuredir()
+        >>> region, sites = geomodels.RegionModel.random(with_sites=True)
+        >>> region_fpath = dpath / (region.region_id + '.geojson')
+        >>> region_fpath.write_text(region.dumps())
+        >>> for site in sites:
+        >>>     site_fpath = dpath / (site.site_id + '.geojson')
+        >>>     site_fpath.write_text(site.dumps())
+        >>> kwargs = {
+        >>>     'models': str(dpath / '*.geojson')
+        >>> }
+        >>> cmdline = 0
+        >>> ValidateAnnotationConfig.main(cmdline=cmdline, **kwargs)
+    """
+    config = ValidateAnnotationConfig.cli(data=kwargs, cmdline=cmdline)
     from watch.utils import util_gis
     import rich
     rich.print(ub.urepr(config))
 
-    site_model_fpaths = util_gis.coerce_geojson_paths(config['site_models'])
-    region_model_fpaths = util_gis.coerce_geojson_paths(config['region_models'])
+    from watch.geoannots import geomodels
+    from watch.utils import util_parallel
 
-    #  hack to remove known invalid site models
-    if 0:
-        site_model_fpaths = [s for s in site_model_fpaths if 'Rxxx' not in s.stem]
+    io_workers = util_parallel.coerce_num_workers(config['io_workers'])
+
+    if config.models:
+        if config.site_models:
+            raise ValueError('the models and site_models arguments are mutex')
+        if config.region_models:
+            raise ValueError('the models and region_models arguments are mutex')
+        model_infos = list(util_gis.coerce_geojson_datas(config.models, format='json', workers=io_workers))
+        site_model_infos = []
+        region_model_infos = []
+        for model_info in model_infos:
+            model_data = model_info.pop('data')
+            model = geomodels.coerce_site_or_region_model(model_data)
+            model_info['model'] = model
+            if isinstance(model, geomodels.SiteModel):
+                site_model_infos.append(model_info)
+            elif isinstance(model, geomodels.RegionModel):
+                region_model_infos.append(model_info)
+            else:
+                raise AssertionError
+    else:
+        site_model_infos = list(util_gis.coerce_geojson_datas(config['site_models'], format='json', workers=io_workers))
+        region_model_infos = list(util_gis.coerce_geojson_datas(config['region_models'], format='json', workers=io_workers))
+
+        for model_info in region_model_infos + site_model_infos:
+            model_data = model_info.pop('data')
+            model = geomodels.coerce_site_or_region_model(model_data)
+            model_info['model'] = model
 
     print('Validate Data Content')
-    validate_data_contents(region_model_fpaths, site_model_fpaths)
+    validate_data_contents(region_model_infos, site_model_infos)
 
     print('Validate Schemas')
-    validate_schemas(site_model_fpaths, region_model_fpaths)
+    validate_schemas(region_model_infos, site_model_infos,
+                     strict=config.strict)
 
 
-def validate_schemas(site_model_fpaths, region_model_fpaths):
+def validate_data_contents(region_model_infos, site_model_infos):
+    """
+    Content validation (i.e. dates look sane)
+    """
+    # Finish reading region models and build reports
+    region_reports = []
+    for region_info in region_model_infos:
+        region_model = region_info['model']
+        region_fpath = region_info['fpath']
+        region_df = region_model.pandas()
+        region_report = validate_region_model_content(region_df, region_fpath)
+        region_reports.append(region_report)
+    region_reports = sorted(region_reports, key=lambda x: (x['num_errors'], x['region_id']))
+    print('region_reports = {}'.format(ub.urepr(region_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
 
-    from watch.geoannots import geomodels
+    # Finish reading site models, build reports while this is happening.
+    site_reports = []
+    for site_info in site_model_infos:
+        site_model = site_info['model']
+        site_fpath = site_info['fpath']
+        site_df = site_model.pandas()
+        site_report = validate_site_content(site_df, site_fpath)
+        site_reports.append(site_report)
 
-    strict = False
+    region_id_to_site_reports = ub.group_items(site_reports, lambda x: x['region_id'])
+    region_id_to_report_group = {}
+    for region_id, sub_reports in region_id_to_site_reports.items():
+        total_errors = sum([r['num_errors'] for r in sub_reports])
+        invalid_site_reports = [r for r in sub_reports if r['num_errors']]
+        for r in invalid_site_reports:
+            r.pop('region_id', None)
+        region_id_to_report_group[region_id] = {
+            'region_id': region_id,
+            'num_errors': total_errors,
+            'valid_sites': len(sub_reports) - len(invalid_site_reports),
+            'invalid_site_reports': invalid_site_reports,
+        }
+
+    grouped_site_reports = sorted(region_id_to_report_group.values(), key=lambda x: (x['num_errors'], x['region_id']))
+    print('site_reports = {}'.format(ub.urepr(grouped_site_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
+
+
+def validate_schemas(region_model_infos, site_model_infos, strict=False):
 
     region_errors = []
-    prog = ub.ProgIter(region_model_fpaths, desc='check region models')
-    for region_model_fpath in prog:
-        region_model = geomodels.RegionModel.coerce(region_model_fpath)
+    prog = ub.ProgIter(region_model_infos, desc='check region models')
+    for region_model_info in prog:
+        region_model_fpath = region_model_info['fpath']
+        region_model = region_model_info['model']
         try:
             region_model.validate(verbose=0, strict=strict)
-            # region_model._validate_parts(strict=strict)
         except jsonschema.ValidationError as ex:
             error_info = {
                 'type': 'region_model_error',
@@ -107,9 +199,10 @@ def validate_schemas(site_model_fpaths, region_model_fpaths):
             prog.set_description(f'check region models, errors: {len(region_errors)}')
 
     site_errors = []
-    prog = ub.ProgIter(site_model_fpaths, desc='check site models')
-    for site_model_fpath in prog:
-        site_model = geomodels.SiteModel.coerce(site_model_fpath)
+    prog = ub.ProgIter(site_model_infos, desc='check site models')
+    for site_model_info in prog:
+        site_model_fpath = site_model_info['fpath']
+        site_model = site_model_info['model']
         try:
             site_model.validate(verbose=0, strict=strict)
             # site_model._validate_parts(strict=strict)
@@ -133,8 +226,8 @@ def validate_schemas(site_model_fpaths, region_model_fpaths):
     print('site_errors = {}'.format(ub.urepr(site_errors, nl=1)))
     print('region_errors = {}'.format(ub.urepr(region_errors, nl=1)))
 
-    print(f'{len(site_errors)} / {len(site_model_fpaths)} site model errors')
-    print(f'{len(region_errors)} / {len(region_model_fpaths)} region model errors')
+    print(f'{len(site_errors)} / {len(site_model_infos)} site model errors')
+    print(f'{len(region_errors)} / {len(region_model_infos)} region model errors')
 
 
 def validate_site_dataframe(site_df):
@@ -176,7 +269,7 @@ def validate_site_dataframe(site_df):
         raise
 
 
-def validate_region_model_content(region_df):
+def validate_region_model_content(region_df, fpath):
     from dateutil.parser import parse
     # import pandas as pd
     import os
@@ -185,11 +278,11 @@ def validate_region_model_content(region_df):
     assert len(region_part) == 1, 'must have exactly one region in each region file'
     assert region_part['region_id'].apply(lambda x: x is not None).all(), 'regions must have region ids'
 
-    region_rel_fpath = region_df.fpath.relative_to(region_df.fpath.parent.parent.parent)
+    region_rel_fpath = fpath.relative_to(fpath.parent.parent.parent)
 
     region_row = region_part.iloc[0]
     region_id = region_row['region_id']
-    region_stem = region_df.fpath.stem
+    region_stem = fpath.stem
 
     errors = []
     region_report = {
@@ -203,7 +296,7 @@ def validate_region_model_content(region_df):
             'description': 'A region file name does not match its region id',
             'offending_info': {
                 'region_id': region_id,
-                'filename': region_df.fpath.name,
+                'filename': fpath.name,
             }
         })
 
@@ -263,9 +356,10 @@ def validate_region_model_content(region_df):
     return region_report
 
 
-def validate_site_content(site_df):
+def validate_site_content(site_df, site_fpath):
     from dateutil.parser import parse
     import os
+    import numpy as np
     dummy_start_date = '1970-01-01'  # hack, could be more robust here
     dummy_end_date = '2101-01-01'
     first = site_df.iloc[0]
@@ -274,7 +368,7 @@ def validate_site_content(site_df):
     assert first['region_id'] is not None, 'first row must have a region id'
     assert rest['type'].apply(lambda x: x == 'observation').all(), (
         'rest of row must have type observation')
-    assert rest['region_id'].apply(lambda x: x is None).all(), (
+    assert rest['region_id'].isna().all(), (
         'rest of row must have region_id=None')
 
     site_start_date = first['start_date'] or dummy_start_date
@@ -282,7 +376,7 @@ def validate_site_content(site_df):
     site_start_datetime = parse(site_start_date)
     site_end_datetime = parse(site_end_date)
 
-    rel_fpath = site_df.fpath.relative_to(site_df.fpath.parent.parent.parent)
+    rel_fpath = site_fpath.relative_to(site_fpath.parent.parent.parent)
 
     errors = []
     site_report = {
@@ -301,7 +395,6 @@ def validate_site_content(site_df):
 
     # Check datetime errors in observations
     null_obs_sites = []
-    import numpy as np
     try:
         obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
         obs_isvalid = [x is not None for x in obs_dates]
@@ -328,58 +421,8 @@ def validate_site_content(site_df):
     return site_report
 
 
-def validate_data_contents(region_model_fpaths, site_model_fpaths):
-    import geopandas as gpd
-    # Start reading sites while we are doing other work
-    site_read_pool = ub.JobPool(mode='process', max_workers=8)
-    for site_model_fpath in ub.ProgIter(site_model_fpaths, desc='load site models'):
-        job = site_read_pool.submit(gpd.read_file, site_model_fpath)
-        job.fpath = site_model_fpath
-
-    # Construct the region reports
-    region_read_pool = ub.JobPool(mode='thread', max_workers=0)
-    for region_model_fpath in ub.ProgIter(region_model_fpaths, desc='load region models'):
-        job = region_read_pool.submit(gpd.read_file, region_model_fpath)
-        job.fpath = region_model_fpath
-
-    # Finish reading region models and build reports
-    region_models = []
-    region_reports = []
-    for job in region_read_pool.as_completed(desc='collect region models'):
-        region_df = job.result()
-        region_df.fpath = job.fpath
-        region_report = validate_region_model_content(region_df)
-        region_models.append(region_df)
-        region_reports.append(region_report)
-    region_reports = sorted(region_reports, key=lambda x: (x['num_errors'], x['region_id']))
-    print('region_reports = {}'.format(ub.urepr(region_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
-
-    # Finish reading site models, build reports while this is happening.
-    site_reports = []
-    site_models = []
-    for job in site_read_pool.as_completed(desc='collect site models'):
-        site_df = job.result()
-        site_df.fpath = job.fpath
-        site_report = validate_site_content(site_df)
-        site_reports.append(site_report)
-        site_models.append(site_df)
-
-    region_id_to_site_reports = ub.group_items(site_reports, lambda x: x['region_id'])
-    region_id_to_report_group = {}
-    for region_id, sub_reports in region_id_to_site_reports.items():
-        total_errors = sum([r['num_errors'] for r in sub_reports])
-        invalid_site_reports = [r for r in sub_reports if r['num_errors']]
-        for r in invalid_site_reports:
-            r.pop('region_id', None)
-        region_id_to_report_group[region_id] = {
-            'region_id': region_id,
-            'num_errors': total_errors,
-            'valid_sites': len(sub_reports) - len(invalid_site_reports),
-            'invalid_site_reports': invalid_site_reports,
-        }
-
-    grouped_site_reports = sorted(region_id_to_report_group.values(), key=lambda x: (x['num_errors'], x['region_id']))
-    print('site_reports = {}'.format(ub.urepr(grouped_site_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
+__config__ = ValidateAnnotationConfig
+__config__.main = main
 
 
 if __name__ == '__main__':

@@ -60,30 +60,40 @@ class PrepareSplitsConfig(scfg.DataConfig):
     Ignore:
         base_fpath = 'imganns*.kwcoco.*'
     """
-    __default__ = {
-        'src_kwcocos': scfg.Value(None, nargs='+', help='input kwcoco files to be joined into splits', position=1, alias=['base_fpath']),
-
-        'dst_dpath': scfg.Value(None, help='location to write the new kwcoco files. If unspecfied uses the folder of the first input kwcoco file'),
-        'suffix': scfg.Value('', help='destination suffix for the output split filenames'),
-
-        'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
+    src_kwcocos = scfg.Value(None, alias=['base_fpath'], position=1, help=ub.paragraph(
             '''
-            Command to start the appropriate virtual environment if your bashrc
-            does not start it by default.''')),
-        'run': scfg.Value(True, help='if True execute the pipeline'),
-        'cache': scfg.Value(0, help='if True skip completed results'),
-
-        'backend': scfg.Value('tmux', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-        'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
-        'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
-
-        'constructive_mode': scfg.Value(True, help='if True use the new constructive mode'),
-
-        'verbose': scfg.Value(1, help=''),
-        'workers': scfg.Value(2, help='', alias=['tmux_workers']),
-
-        'splits': scfg.Value('*', help='restrict to only a specific split')
-    }
+            input kwcoco files to be joined into splits
+            '''), nargs='+')
+    dst_dpath = scfg.Value(None, help=ub.paragraph(
+            '''
+            location to write the new kwcoco files. If unspecfied uses
+            the folder of the first input kwcoco file
+            '''))
+    suffix = scfg.Value('', help=ub.paragraph(
+            '''
+            destination suffix for the output split filenames
+            '''))
+    virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Command to start the appropriate virtual environment if your
+            bashrc does not start it by default.
+            '''))
+    run = scfg.Value(True, help='if True execute the pipeline')
+    cache = scfg.Value(0, help='if True skip completed results')
+    backend = scfg.Value('tmux', help=ub.paragraph(
+            '''
+            can be serial, tmux, or slurm. Using tmux is recommended.
+            '''))
+    with_textual = scfg.Value('auto', help='setting for cmd-queue monitoring')
+    other_session_handler = scfg.Value('ask', help=ub.paragraph(
+            '''
+            for tmux backend only. How to handle conflicting sessions.
+            Can be ask, kill, or ignore, or auto
+            '''))
+    constructive_mode = scfg.Value(True, help='if True use the new constructive mode')
+    verbose = scfg.Value(1, help='')
+    workers = scfg.Value(2, alias=['tmux_workers'], help='')
+    splits = scfg.Value('*', help='restrict to only a specific split')
 
 
 imerit_vali_regions = {'CN_C000', 'KW_C001', 'SA_C001', 'CO_C001', 'VN_C002'}

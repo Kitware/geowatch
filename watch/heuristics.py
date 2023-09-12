@@ -438,6 +438,7 @@ def hack_track_categories(track_catnames, task):
         >>>         ['No Activity'],
         >>>         ['Post Construction'],
         >>>         ['Post Construction', 'Post Construction', ],
+        >>>         ['Post Construction', 'Post Construction', 'Post Construction', ],
         >>>         ['No Activity', 'ignore', 'ignore'],
         >>>         ['No Activity', 'Post Construction'],
         >>>         ['No Activity', 'Site Preparation', 'Post Construction'],

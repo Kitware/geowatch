@@ -17,6 +17,7 @@ def main(cmdline=True, **kw):
     modnames = [
         'watch_coco_stats',
         'geojson_site_stats',
+        'validate_annotation_schemas',
         'torch_model_stats',
         'coco_spectra',
 
@@ -48,7 +49,7 @@ def main(cmdline=True, **kw):
 
     cmd_alias = {
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
-        'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats', 'geomodel_stats'],
+        # 'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats', 'geomodel_stats'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
         'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
@@ -130,7 +131,7 @@ def main(cmdline=True, **kw):
         if not hasattr(cli_module, '__config__'):
             if hasattr(cli_module, 'modal'):
                 continue
-            raise AssertionError('We are only supporting scriptconfig CLIs')
+            raise AssertionError(f'We are only supporting scriptconfig CLIs. {cli_module} does not have __config__ attr')
         # scriptconfig cli pattern
         cli_subconfig = cli_module.__config__
 

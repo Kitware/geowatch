@@ -160,6 +160,9 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_resolution
 
     # import pandas as pd
+    if config.dst_dpath is None:
+        raise ValueError('Destination path is required')
+
     dst_dpath = ub.Path(config.dst_dpath)
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
 
