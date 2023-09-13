@@ -43,6 +43,11 @@ def main(cmdline=True, **kw):
         'coco_remove_bad_images',
         'coco_average_features',
 
+        # Due to LightningCLI fit does not play nicely here.
+        'fit',
+        # Predict also has issues because of its heavy imports.
+        'predict',
+
         # 'mlops_cli',
         'special.finish_install',
     ]
@@ -172,8 +177,63 @@ def main(cmdline=True, **kw):
         cli_config.__alias__ = list(secondary_cmdnames)
         modal.register(cli_config)
 
-    ret = modal.run(strict=not WATCH_LOOSE_CLI)
+    ret = modal.main(strict=not WATCH_LOOSE_CLI)
     return ret
+
+
+# def modal_main(self, argv=None, strict=True, autocomplete='auto'):
+#     """
+#     Overwrite modal main to support Lightning CLI
+#     """
+#     if isinstance(self, type):
+#         self = self()
+
+#     parser = self.argparse()
+
+#     if autocomplete:
+#         try:
+#             import argcomplete
+#             # Need to run: "$(register-python-argcomplete xdev)"
+#             # or activate-global-python-argcomplete --dest=-
+#             # activate-global-python-argcomplete --dest ~/.bash_completion.d
+#             # To enable this.
+#         except ImportError:
+#             argcomplete = None
+#             if autocomplete != 'auto':
+#                 raise
+#     else:
+#         argcomplete = None
+
+#     if argcomplete is not None:
+#         argcomplete.autocomplete(parser)
+
+#     if strict:
+#         ns = parser.parse_args(args=argv)
+#     else:
+#         ns, _ = parser.parse_known_args(args=argv)
+
+#     kw = ns.__dict__
+
+#     if kw.pop('version', None):
+#         print(self.version)
+#         return 0
+
+#     sub_main = kw.pop('main', None)
+#     if sub_main is None:
+#         parser.print_help()
+#         raise ValueError('no command given')
+#         return 1
+
+#     try:
+#         ret = sub_main(cmdline=False, **kw)
+#     except Exception as ex:
+#         print('ERROR ex = {!r}'.format(ex))
+#         raise
+#         return 1
+#     else:
+#         if ret is None:
+#             ret = 0
+#         return ret
 
 
 if __name__ == '__main__':

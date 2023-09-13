@@ -346,7 +346,7 @@ def make_cli(config=None):
     return cli
 
 
-def main(config=None):
+def main(cmdline=True, config=None):
     """
     Args:
         config (None | Dict):
