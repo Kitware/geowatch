@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 
 SeeAlso:
     ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py
@@ -21,6 +21,25 @@ CommandLine:
         --src $DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.zip \
         --dst $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+
+
+Ignore:
+    # Debugging
+
+    python -m watch.cli.coco_time_combine \
+        --kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Aligned-Drop7/VN_C002/imgonly-VN_C002-rawbands.kwcoco.zip" \
+        --output_kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-V2/VN_C002/_unfielded_imgonly-VN_C002-rawbands.kwcoco.zip" \
+        --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
+        --resolution="10GSD" \
+        --time_window=1y \
+        --remove_seasons=winter \
+        --merge_method=median \
+        --spatial_tile_size=1024 \
+        --mask_low_quality=True \
+        --start_time=2010-03-01 \
+        --assets_dname="raw_bands" \
+        --workers=0
+
 
 Example:
     >>> # Toydata example for CI
@@ -613,6 +632,8 @@ def combine_kwcoco_channels_temporally(config):
                 print('N images per window: = {}'.format(ub.urepr(bucket_stats, nl=1)))
 
             jobs = ub.JobPool(mode='process', max_workers=workers)
+            import xdev
+            xdev.embed()
 
             # 3. For each temporal window, combine the spatial data from each channel.
             chunk_image_idxs = list(groupid_to_idxs.values())
