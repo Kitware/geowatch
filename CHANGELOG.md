@@ -19,7 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * prepare ta2 dataset now outputs per-region kwcoco files inside their region directories and adds the -rawbands suffix.
 
 ### Fixed
-coco-align now handles overviews correctly for quality bands.
+* coco-align now handles overviews correctly for quality bands.
+* fixed issue where dataloader did not relabel post construction to background if all frames post construction.
 
 
 ## Version 0.9.3 - Released 2023-08-31

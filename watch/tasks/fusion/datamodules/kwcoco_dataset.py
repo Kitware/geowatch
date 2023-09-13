@@ -2585,15 +2585,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             for poly in class_sseg_groups['ignore']:
                 poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['background']:
-                # task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['undistinguished']:
                 task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['foreground']:
                 poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
