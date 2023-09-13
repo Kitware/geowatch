@@ -105,6 +105,8 @@ import warnings
 
 class ManagerConfig(scfg.DataConfig):
     """
+    Manage trained models in the GeoWATCH experiment DVC repo.
+
     Certain parts of these names have special nomenclature to make them easier
     to work with in Python and Bash.
     """

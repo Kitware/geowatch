@@ -16,8 +16,7 @@ import scriptconfig as scfg
 
 class AddWatchFieldsConfig(scfg.DataConfig):
     """
-    Updates image transforms in a kwcoco json file to align all videos to a
-    target GSD.
+    Updates kwcoco image transforms and sets video space to a target GSD.
     """
     src = scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1)
 

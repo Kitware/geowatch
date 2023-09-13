@@ -35,8 +35,7 @@ except ImportError:
 
 class CocoSpectraConfig(scfg.DataConfig):
     """
-    Updates image transforms in a kwcoco json file to align all videos to a
-    target GSD.
+    Plot the spectrum of band intensities in a kwcoco file.
     """
     __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input coco dataset', position=1),

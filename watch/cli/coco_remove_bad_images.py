@@ -5,8 +5,8 @@ import scriptconfig as scfg
 
 class CocoRemoveBadImagesConfig(scfg.DataConfig):
     """
-    Remove image frames that have little or nothing useful in them from a
-    kwcoco file. Can also delete the asset data if desired.
+    Remove coco images that are mostly nodata.
+    Can also delete the on-disk assets if specified.
     """
     __command__ = 'remove_bad_images'
     __default__ = {

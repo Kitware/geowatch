@@ -6,6 +6,8 @@ import importlib
 
 class RepackageConfig(scfg.DataConfig):
     r"""
+    Convert a raw torch checkpoint into a torch package.
+
     Attempts to combine checkpoint weights with its associated model code in a
     standalone torch package.
 

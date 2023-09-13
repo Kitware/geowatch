@@ -4,7 +4,7 @@ import scriptconfig as scfg
 
 class PredictCLI(scfg.DataConfig):
     """
-    Does not work from geowatch CLI.
+    Does not work from geowatch CLI yet. See help.
     Use ``python -m watch.tasks.fusion.predict`` instead for now.
 
     ..code:: bash
