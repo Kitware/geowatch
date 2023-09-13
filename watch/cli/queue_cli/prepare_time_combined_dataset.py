@@ -18,27 +18,25 @@ class PrepareTimeAverages(CMDQueueConfig):
         The regions to time average (this is not a robust implementation)
         '''))
 
-    reproject = scfg.Value(True, isflag=True, help='Enable reprojection of annotations')
-
     resolution = '10GSD'
 
     time_window = '1year'
     merge_method = 'mean'
     remove_seasons = scfg.Value([], nargs='+')
     spatial_tile_size = None
+    mask_low_quality = scfg.Value(True)
 
     combine_workers = scfg.Value(4, help='number of workers per combine job')
 
     input_bundle_dpath = scfg.Value(None)
     output_bundle_dpath = scfg.Value(None)
 
-    true_site_dpath = scfg.Value(None)
-    true_region_dpath = scfg.Value(None)
-
-    mask_low_quality = scfg.Value(True)
-
     skip_existing = scfg.Value(True)
     cache = scfg.Value(True)
+
+    reproject = scfg.Value(False, isflag=True, help='Enable reprojection of annotations. Requires true_site_dpath and true_region_dpath be specified')
+    true_site_dpath = scfg.Value(None)
+    true_region_dpath = scfg.Value(None)
 
     queue_name = scfg.Value('time-ave-queue', help='overwrite the default queue name', group='cmd-queue')
 

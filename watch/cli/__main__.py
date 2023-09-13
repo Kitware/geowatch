@@ -127,19 +127,24 @@ def main(cmdline=True, **kw):
 
     for cli_module in cli_modules:
 
-        cli_subconfig = None
-        if not hasattr(cli_module, '__config__'):
+        cli_config = None
+
+        if hasattr(cli_module, '__config__'):
+            # New way
+            cli_config = cli_module.__config__
+        elif hasattr(cli_module, '__cli__'):
+            # New way
+            cli_config = cli_module.__cli__
+        else:
             if hasattr(cli_module, 'modal'):
                 continue
             raise AssertionError(f'We are only supporting scriptconfig CLIs. {cli_module} does not have __config__ attr')
-        # scriptconfig cli pattern
-        cli_subconfig = cli_module.__config__
 
-        if not hasattr(cli_subconfig, 'main'):
+        if not hasattr(cli_config, 'main'):
             if hasattr(cli_module, 'main'):
                 main_func = cli_module.main
                 # Hack the main function into the config
-                cli_subconfig.main = main_func
+                cli_config.main = main_func
             else:
                 raise AssertionError(f'No main function for {cli_module}')
 
@@ -148,11 +153,11 @@ def main(cmdline=True, **kw):
         cli_rel_modname = cli_modname.split('.')[-1]
 
         cmdname_aliases = ub.oset()
-        alias = getattr(cli_subconfig, '__alias__', [])
+        alias = getattr(cli_config, '__alias__', [])
         if isinstance(alias, str):
             alias = [alias]
         command = getattr(cli_module, '__command__', None)
-        command = getattr(cli_subconfig, '__command__', command)
+        command = getattr(cli_config, '__command__', command)
         if command is not None:
             cmdname_aliases.add(command)
         cmdname_aliases.update(alias)
@@ -163,9 +168,9 @@ def main(cmdline=True, **kw):
         secondary_cmdnames = cmdname_aliases[1:]
         if not isinstance(primary_cmdname, str):
             raise AssertionError(primary_cmdname)
-        cli_subconfig.__command__ = primary_cmdname
-        cli_subconfig.__alias__ = list(secondary_cmdnames)
-        modal.register(cli_subconfig)
+        cli_config.__command__ = primary_cmdname
+        cli_config.__alias__ = list(secondary_cmdnames)
+        modal.register(cli_config)
 
     ret = modal.run(strict=not WATCH_LOOSE_CLI)
     return ret
