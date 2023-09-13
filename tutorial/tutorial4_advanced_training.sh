@@ -165,7 +165,7 @@ WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 
 export CUDA_VISIBLE_DEVICES=0,1
-export DISABLE_TENSORBOARD_PLOTTER=0
+export DISABLE_TENSORBOARD_PLOTTER=1
 export DISABLE_BATCH_PLOTTER=1
 export DDP_WORKAROUND=0
 python -m watch.tasks.fusion fit --config "

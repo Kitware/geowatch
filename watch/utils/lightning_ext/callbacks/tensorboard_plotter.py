@@ -396,15 +396,7 @@ def tensorboard_inlier_ylim(ydata):
 
 def redraw_cli(train_dpath):
     """
-        from watch.utils.lightning_ext.callbacks.tensorboard_plotter import *  # NOQA
-        from watch.utils.lightning_ext.callbacks.tensorboard_plotter import _dump_measures
-        train_dpath = '/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/'
-
-        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/
-
-        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
+    Create png plots for the tensorboard data in a training directory.
     """
     train_dpath = ub.Path(train_dpath)
 
