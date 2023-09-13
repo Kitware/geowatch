@@ -1833,7 +1833,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
         """
-        from watch.utils import util_environ
+        from kwutil import util_environ
         if self.hparams.continual_learning and not util_environ.envflag('HACK_SAVE_ANYWAY'):
             print('HACK NOT SAVING FOR CONTINUAL LEARNING')
             # HACK

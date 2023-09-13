@@ -57,6 +57,10 @@ class TensorboardPlotter(pl.callbacks.Callback):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
+        from kwutil import util_environ
+        if util_environ.envflag('DISABLE_TENSORBOARD_PLOTTER'):
+            return
+
         if trainer.global_rank != 0:
             return
 

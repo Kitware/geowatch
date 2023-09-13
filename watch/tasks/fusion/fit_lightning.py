@@ -13,7 +13,7 @@ import yaml
 from jsonargparse import set_loader, set_dumper
 # from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-from watch.utils import util_environ
+from kwutil import util_environ
 
 
 # FIXME: we should be able to use our callbacks when ddp is enabled.

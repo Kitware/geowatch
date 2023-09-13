@@ -7921,7 +7921,7 @@ lr_scheduler:
     max_lr: $TARGET_LR
     total_steps: $MAX_STEPS
     anneal_strategy: cos
-    pct_start: 0.05
+    pct_start: 0.5
 trainer:
     accumulate_grad_batches: 32
     default_root_dir     : $DEFAULT_ROOT_DIR
@@ -7947,5 +7947,6 @@ torch_globals:
 
 initializer:
     # init: $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
+    #init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_2/package-interupt/package_epoch1_step81.pt
 "
