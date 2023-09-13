@@ -314,6 +314,8 @@ def make_cli(config=None):
         else:
             # Only use tensorboard if we have it.
             default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+    else:
+        pl_ext.callbacks.TensorboardPlotter()
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from

@@ -53,13 +53,12 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>>     print(df)
     """
 
-    def _on_epoch_end(self, trainer, logs=None):
+    def _on_epoch_end(self, trainer, logs=None, serial=False):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
         if trainer.global_rank != 0:
             return
-        serial = False
 
         # train_dpath = trainer.logger.log_dir
         train_dpath = trainer.log_dir

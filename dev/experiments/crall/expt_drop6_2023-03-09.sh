@@ -7839,7 +7839,7 @@ initializer:
 "
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0,1
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
@@ -7850,13 +7850,13 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
-EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7908,7 +7908,8 @@ model:
         global_class_weight    : 1.00
         global_saliency_weight : 0.05
         multimodal_reduce      : learned_linear
-        continual_learning     : true
+        #continual_learning     : true
+        perterb_scale          : 0.000001
 optimizer:
     class_path: torch.optim.SGD
     init_args:
@@ -7922,12 +7923,12 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 64
+    accumulate_grad_batches: 32
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
-    devices              : 0,
-    #devices              : 0,1
-    #strategy             : ddp
+    #devices              : 0,
+    devices              : 0,1
+    strategy             : ddp_find_unused_parameters_true
     limit_val_batches    : 256
     limit_train_batches  : 2048
     num_sanity_val_steps : 0
@@ -7945,5 +7946,6 @@ torch_globals:
     float32_matmul_precision: auto
 
 initializer:
-    init: $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+    # init: $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
 "
