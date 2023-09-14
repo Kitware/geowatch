@@ -62,6 +62,8 @@ class ValidateAnnotationConfig(scfg.DataConfig):
 
     io_workers = scfg.Value('avail', help='number of workers for parallel io')
 
+    fixup = scfg.Value(False, isflag=True, help='if True then run fixups before validation to check if the fixed version works')
+
     strict = scfg.Value(False, help='if True use the strict schema (i.e. enforces IARPA naming)')
 
 
@@ -122,6 +124,13 @@ def main(cmdline=1, **kwargs):
             model_data = model_info.pop('data')
             model = geomodels.coerce_site_or_region_model(model_data)
             model_info['model'] = model
+
+    if config.fixup:
+        for info in region_model_infos:
+            info['model'].fixup()
+
+        for info in site_model_infos:
+            info['model'].fixup()
 
     print('Validate Data Content')
     validate_data_contents(region_model_infos, site_model_infos)
