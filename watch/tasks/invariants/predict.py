@@ -334,10 +334,11 @@ class Predictor(object):
                     # Remove nans before going into the network
                     image_stack = torch.nan_to_num(image_stack)
 
+                    all_features = self.pretext_model(image_stack)
                     #select features corresponding to first image
-                    features = self.pretext_model(image_stack)[:, 0, :, :, :]
+                    features = all_features[:, 0, :, :, :]
                     #select features corresponding to second image
-                    features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
+                    features2 = all_features[:, 1, :, :, :]
                     if self.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)

@@ -251,7 +251,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             window_space_scale=window_space_scale,
         )
         sample_grid = builder.build()
-        vidid_to_new_samples = fixup_samples(coco_dset, sample_grid)
+        vidid_to_new_samples = fixup_samples(coco_dset, sample_grid, num_images)
 
         # Sort the patches into an order where we can
         self.patches = []
@@ -764,7 +764,7 @@ class HashableBox(util_kwimage.Box):
         return tuple([box.format] + box.data.tolist())
 
 
-def fixup_samples(coco_dset, sample_grid):
+def fixup_samples(coco_dset, sample_grid, time_dims):
     """
     Takes the output of the sample grid and ensures we get at least one sample
     on each frame. Getting this to happen is something the time sampler should
@@ -796,6 +796,16 @@ def fixup_samples(coco_dset, sample_grid):
         target['frame_index'] = main_frame_index
         target['main_idx'] = main_time_sampler_index
         target['frame_indexes'] = frame_indexes
+
+    WORKAROUND_NON_UNIQUE_IMAGE_IDS = 1
+    if WORKAROUND_NON_UNIQUE_IMAGE_IDS:
+        workaround_samples = []
+        for tr in all_samples:
+            unique_gids = list(ub.unique(tr['gids']))
+            if len(unique_gids) == time_dims: 
+                tr['gids'] = unique_gids
+                workaround_samples.append(tr)
+        all_samples = workaround_samples
 
     # Postprocess the grid we get out of the temporal sampler to make it a
     # little nicer for this problem.
