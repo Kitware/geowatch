@@ -32,7 +32,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
