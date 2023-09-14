@@ -204,10 +204,10 @@ def check_processed_regions():
         # 'ta1-10m-tsmoothed-acc-3',
         # 'ta1-10m-acc-3',
 
-        # 'ta1-s2-acc-4',
-        # 'ta1-ls-acc-4',
-        # 'ta1-wv-acc-4',
-        # 'ta1-pd-acc-4',
+        'ta1-s2-acc-4',
+        'ta1-ls-acc-4',
+        'ta1-wv-acc-4',
+        'ta1-pd-acc-4',
 
         'ta1-s2-acc-3',
         'ta1-ls-acc-3',

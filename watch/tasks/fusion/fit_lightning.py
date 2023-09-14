@@ -206,10 +206,11 @@ class SmartLightningCLI(LightningCLI_Extension):
         # https://github.com/omni-us/jsonargparse/issues/170
         # https://github.com/omni-us/jsonargparse/pull/326
         # Ensure the datamodule
-        parser.add_instantiator(
-            instantiate_datamodule,
-            class_type=pl.LightningDataModule
-        )
+        if hasattr(parser, 'add_instantiator'):
+            parser.add_instantiator(
+                instantiate_datamodule,
+                class_type=pl.LightningDataModule
+            )
 
         # pass dataset stats to model after initialization datamodule
         parser.link_arguments(

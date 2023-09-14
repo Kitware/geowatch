@@ -7856,7 +7856,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7921,9 +7921,9 @@ lr_scheduler:
     max_lr: $TARGET_LR
     total_steps: $MAX_STEPS
     anneal_strategy: cos
-    pct_start: 0.5
+    pct_start: 0.9
 trainer:
-    accumulate_grad_batches: 32
+    accumulate_grad_batches: 16
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     #devices              : 0,
@@ -7947,6 +7947,7 @@ torch_globals:
 
 initializer:
     # init: $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-    #init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
-    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_2/package-interupt/package_epoch1_step81.pt
+    # init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
+    # init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_2/package-interupt/package_epoch1_step81.pt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt_weight_hacked.pt
 "

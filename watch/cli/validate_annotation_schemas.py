@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 r"""
 CommandLine:
     python ~/code/watch/dev/validate_annotation_schemas.py

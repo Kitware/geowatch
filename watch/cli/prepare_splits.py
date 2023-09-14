@@ -4,7 +4,6 @@
 TODO:
     move to queue_cli
 
-
 CommandLine:
     xdoctest -m watch.cli.prepare_splits __doc__
 

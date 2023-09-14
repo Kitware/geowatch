@@ -664,6 +664,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.automatic_optimization = True
 
+        if 0:
+            ...
+
     @classmethod
     def add_argparse_args(cls, parent_parser):
         """
