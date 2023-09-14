@@ -119,7 +119,7 @@ class Predictor(object):
         >>> from watch.tasks.invariants.predict import *  # NOQA
         >>> import kwcoco
         >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> #  Write out smaller version of the dataset
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
         >>> images = dset.videos(names=['KR_R001']).images[0]
@@ -334,10 +334,11 @@ class Predictor(object):
                     # Remove nans before going into the network
                     image_stack = torch.nan_to_num(image_stack)
 
+                    all_features = self.pretext_model(image_stack)
                     #select features corresponding to first image
-                    features = self.pretext_model(image_stack)[:, 0, :, :, :]
+                    features = all_features[:, 0, :, :, :]
                     #select features corresponding to second image
-                    features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
+                    features2 = all_features[:, 1, :, :, :]
                     if self.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
@@ -448,8 +449,6 @@ class Predictor(object):
 
 def main():
     args = InvariantPredictConfig.cli()
-    import rich
-    rich.print('config = {}'.format(ub.urepr(args, nl=1)))
     Predictor(args).forward()
 
 
