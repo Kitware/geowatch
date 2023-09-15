@@ -632,8 +632,6 @@ def combine_kwcoco_channels_temporally(config):
                 print('N images per window: = {}'.format(ub.urepr(bucket_stats, nl=1)))
 
             jobs = ub.JobPool(mode='process', max_workers=workers)
-            import xdev
-            xdev.embed()
 
             # 3. For each temporal window, combine the spatial data from each channel.
             chunk_image_idxs = list(groupid_to_idxs.values())
