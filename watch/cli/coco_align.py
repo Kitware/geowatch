@@ -208,7 +208,7 @@ class ExtractConfig(ImageExtractConfig):
     extract_overlaps. We may use this config as a base class to inherit from,
     but for now we duplicate param names.
     """
-    write_subsets = scfg.Value(True, isflag=1, help=ub.paragraph(
+    write_subsets = scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
             if True, writes a separate kwcoco file for every discovered
             ROI in addition to the final kwcoco file.

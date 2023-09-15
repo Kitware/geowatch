@@ -7852,7 +7852,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
 EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=3e-4
+TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
@@ -7877,7 +7877,7 @@ data:
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
-    mask_low_quality       : False
+    mask_low_quality       : True
     mask_samecolor_method  : None
     observable_threshold   : 0.0
     quality_threshold      : 0.0
@@ -7906,12 +7906,12 @@ model:
         class_head_hidden      : 6
         global_change_weight   : 0.00
         global_class_weight    : 1.00
-        global_saliency_weight : 0.05
+        global_saliency_weight : 1.00
         multimodal_reduce      : learned_linear
-        #continual_learning     : true
-        perterb_scale          : 0.000001
+        continual_learning     : true
+        perterb_scale          : 1e-7
 optimizer:
-    class_path: torch.optim.SGD
+    class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
         weight_decay : $WEIGHT_DECAY
@@ -7921,9 +7921,9 @@ lr_scheduler:
     max_lr: $TARGET_LR
     total_steps: $MAX_STEPS
     anneal_strategy: cos
-    pct_start: 0.9
+    pct_start: 0.90
 trainer:
-    accumulate_grad_batches: 16
+    accumulate_grad_batches: 32
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     #devices              : 0,
@@ -7949,5 +7949,8 @@ initializer:
     # init: $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
     # init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_sgd_split6_V86/lightning_logs/version_0/checkpoints/epoch=39-step=1280-val_loss=3.681.ckpt.pt
     # init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_2/package-interupt/package_epoch1_step81.pt
-    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt_weight_hacked.pt
+    #init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt_weight_hacked.pt
+    #init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_6/checkpoints/epoch=17-step=2304-val_loss=2.604.ckpt.ckpt
+    # init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_8/checkpoints/epoch=0-step=128-val_loss=2.614.ckpt.ckpt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_9/checkpoints/epoch=9-step=640-val_loss=2.145.ckpt.ckpt
 "
