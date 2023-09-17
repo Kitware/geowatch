@@ -310,8 +310,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
             >>> assert "tokenizer" in model.hparams
         """
-        # self.automatic_optimization = False
-
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
         print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
@@ -663,6 +661,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
+
+        self.automatic_optimization = True
+
+        if 0:
+            ...
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -1726,9 +1729,65 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
     @profile
     def training_step(self, batch, batch_idx=None):
-        # print('TRAIN STEP')
+
+        if not self.automatic_optimization:
+            # Do we have to do this ourselves?
+            # https://lightning.ai/docs/pytorch/stable/common/optimization.html
+            opt = self.optimizers()
+            opt.zero_grad()
+
         outputs = self.forward_step(batch, with_loss=True, stage='train')
+
+        if not self.automatic_optimization:
+            loss = outputs['loss']
+            self.manual_backwards(loss)
+
         return outputs
+
+    def optimizer_step(self, *args, **kwargs):
+        # function hook in LightningModule
+        ret = super().optimizer_step(*args, **kwargs)
+        optimizer = kwargs.get('optimizer')
+        if optimizer is None:
+            if len(args) >= 3:
+                if isinstance(args[2], torch.optim.Optimizer):
+                    optimizer = args[2]
+        assert optimizer is not None
+        self.parameter_hacking(optimizer)
+        return ret
+
+    def parameter_hacking(self, optimizer):
+        if self.hparams.continual_learning:
+            if not hasattr(self.trainer, 'gnt'):
+                import geowatch_tpl
+                geowatch_tpl.import_submodule('torchview')
+                geowatch_tpl.import_submodule('lop')
+
+                # See:
+                # ~/code/watch/geowatch_tpl/submodules/loss-of-plasticity/lop/algos/gen_and_test.py
+                # ~/code/watch/geowatch_tpl/submodules/torchview/torchview/torchview.py
+                from lop.algos.gen_and_test import GenerateAndTest
+                print('Setup gen and test')
+                input_data = self.demo_batch(new_mode_sample=1)
+                gnt = GenerateAndTest(self, 'relu', optimizer, input_data,
+                                      device=self.main_device)
+                # Give gnt to the trainer and dont do anything on the first
+                # pass
+                self.trainer.gnt = gnt
+                # optimizer.gnt = gnt
+            else:
+                # On a subsequent passes start using it.
+                assert self.training
+                gnt = self.trainer.gnt
+                # print('START GEN AND TESTING')
+                gnt.gen_and_test()
+                # print('DID GEN AND TESTING')
+
+        if self.hparams.perterb_scale > 0:
+            # Add a small bit of noise to every parameter
+            with torch.no_grad():
+                std = self.hparams.perterb_scale
+                perterb_params(optimizer, std)
 
     @profile
     def validation_step(self, batch, batch_idx=None):
@@ -1777,8 +1836,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
         """
-        import os
-        if self.hparams.continual_learning and not os.environ.get('HACK_SAVE_ANYWAY', ''):
+        from kwutil import util_environ
+        if self.hparams.continual_learning and not util_environ.envflag('HACK_SAVE_ANYWAY'):
             print('HACK NOT SAVING FOR CONTINUAL LEARNING')
             # HACK
             return
@@ -1820,54 +1879,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         return self.forward_step(batch, with_loss=with_loss)
         # raise NotImplementedError('see forward_step instad')
 
-    # function hook in LightningModule
-    def optimizer_step(self, *args, **kwargs):
-        ret = super().optimizer_step(*args, **kwargs)
-
-        optimizer = kwargs.get('optimizer')
-
-        if self.hparams.continual_learning:
-            if not hasattr(self.trainer, 'gnt'):
-                import geowatch_tpl
-                geowatch_tpl.import_submodule('torchview')
-                geowatch_tpl.import_submodule('lop')
-
-                # See:
-                # ~/code/watch/geowatch_tpl/submodules/loss-of-plasticity/lop/algos/gen_and_test.py
-                # ~/code/watch/geowatch_tpl/submodules/torchview/torchview/torchview.py
-                from lop.algos.gen_and_test import GenerateAndTest
-                print('Setup gen and test')
-                input_data = self.demo_batch(new_mode_sample=1)
-                gnt = GenerateAndTest(self, 'relu', optimizer, input_data,
-                                      device=self.main_device)
-                # Give gnt to the trainer and dont do anything on the first
-                # pass
-                self.trainer.gnt = gnt
-                # optimizer.gnt = gnt
-            else:
-                # On a subsequent passes start using it.
-                assert self.training
-                gnt = self.trainer.gnt
-                # print('START GEN AND TESTING')
-                gnt.gen_and_test()
-                # print('DID GEN AND TESTING')
-
-        if self.hparams.perterb_scale > 0:
-            # Add a small bit of noise to every parameter
-            assert self.training
-            with torch.no_grad():
-                seen_ids = set()
-                for param_group in optimizer.param_groups:
-                    for param in param_group['params']:
-                        param_id = id(param)
-                        if param_id not in seen_ids:
-                            seen_ids.add(param_id)
-                            param += torch.empty(param.shape,
-                                                 device=param.device).normal_(
-                                                     mean=0, std=self.hparams.perterb_scale)
-
-        return ret
-
 
 def slice_to_agree(a1, a2, axes=None):
     """
@@ -1898,3 +1909,20 @@ def slice_to_agree(a1, a2, axes=None):
         a1 = a1[sl]
         a2 = a2[sl]
     return a1, a2
+
+
+def perterb_params(optimizer, std):
+    """
+    Given an optimizer, perterb all parameters with Gaussian noise
+    """
+    # Gether unique parameters
+    id_to_params = {}
+    for param_group in optimizer.param_groups:
+        id_to_params.update({
+            id(param): param
+            for param in param_group['params']
+        })
+    for param in id_to_params.values():
+        param += torch.empty(
+            param.shape, device=param.device).normal_(
+                mean=0, std=std)

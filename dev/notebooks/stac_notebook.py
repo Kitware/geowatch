@@ -16,7 +16,7 @@ def print_provider_debug_information():
 
     CommandLine:
         source $HOME/code/watch/secrets/secrets
-        xdoctest -m watch.stac._notebook print_provider_debug_information
+        xdoctest dev/notebooks/stac_notebook.py print_provider_debug_information
     """
     from rich import print
     print('Printing debug information about known and discoverable providers')
@@ -158,7 +158,7 @@ def check_processed_regions():
 
     CommandLine:
         source $HOME/code/watch/secrets/secrets
-        xdoctest -m watch.stac._notebook check_processed_regions
+        xdoctest $HOME/code/watch/dev/notebooks/stac_notebook.py check_processed_regions
     """
     import json
     import pystac_client
@@ -167,14 +167,14 @@ def check_processed_regions():
     import pandas as pd
     from rich import print
 
-    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
 
     # MODIFY AS NEEDED
     headers = {
         'x-api-key': os.environ['SMART_STAC_API_KEY']
     }
 
-    base = ((dvc_data_dpath / 'annotations') / 'drop6')
+    base = ((dvc_data_dpath / 'annotations') / 'drop7')
     # base = dvc_data_dpath / 'annotations'
 
     region_dpath = base / 'region_models'
@@ -201,14 +201,18 @@ def check_processed_regions():
         # 'ta1-wv-acc-2',
         # 'ta1-pd-acc-2',
 
-        'ta1-10m-tsmoothed-acc-3',
+        # 'ta1-10m-tsmoothed-acc-3',
+        # 'ta1-10m-acc-3',
 
-        # 'ta1-s2-acc-3',
-        # 'ta1-ls-acc-3',
-        # 'ta1-wv-acc-3',
-        # 'ta1-pd-acc-3',
+        'ta1-s2-acc-4',
+        'ta1-ls-acc-4',
+        'ta1-wv-acc-4',
+        'ta1-pd-acc-4',
 
-        'ta1-10m-acc-3',
+        'ta1-s2-acc-3',
+        'ta1-ls-acc-3',
+        'ta1-wv-acc-3',
+        'ta1-pd-acc-3',
 
         # 'ta1-s2-acc',
         # 'ta1-s2-acc-1',
@@ -232,11 +236,13 @@ def check_processed_regions():
 
     mprog = util_progress.ProgressManager()
     jobs = ub.JobPool(mode='thread', max_workers=20)
+
+    region_to_results = ub.ddict(list)
+
     with mprog, jobs:
         # Check that planet items exist
         for collection in mprog.progiter(collections_of_interest, desc='Query collections'):
             # Check that planet items exist in our regions
-            region_to_results = {}
             region_iter = mprog.progiter(region_fpaths, desc=f'Submit query regions for {str(collection)}')
             for region_fpath in region_iter:
                 with open(region_fpath) as file:
@@ -260,11 +266,19 @@ def check_processed_regions():
                 job.region_id = region_id
                 job.collection = collection
 
+        collect_errors = []
+
+        import rich
         for job in mprog(jobs.as_completed(), total=len(jobs), desc='collect results'):
             region_id = job.region_id
             collection = job.collection
-            results = job.result()
-            region_to_results[region_id] = results
+            try:
+                results = job.result()
+            except Exception as ex:
+                rich.print(f'[red]ERROR IN {region_id} for {collection}: {ex}')
+                collect_errors.append(ex)
+                continue
+            region_to_results[region_id] += results
 
             year_to_results = ub.udict(ub.group_items(results, key=lambda r: r.get_datetime().year))
 
@@ -292,6 +306,19 @@ def check_processed_regions():
                     'max_date': max_date.isoformat(),
                     # **year_oo_num
                 })
+
+    region_to_num_results = ub.udict(region_to_results).map_values(len)
+    region_to_num_results = ub.udict(region_to_num_results).sorted_values()
+    print('region_to_num_results = {}'.format(ub.urepr(region_to_num_results, nl=1)))
+
+    # for r, v in region_to_num_results.items():
+    #     if v:
+    #         print('- $DVC_DATA_DPATH/annotations/drop7/region_models/' + r + '.geojson')
+
+    if collect_errors:
+        print("ERROR")
+        print('collect_errors = {}'.format(ub.urepr(collect_errors, nl=1)))
+        print("ERROR")
 
     for row in peryear_rows + peritem_rows:
         if row['collection'].endswith('acc-2'):
@@ -400,7 +427,6 @@ def check_processed_regions():
 def _devcheck_providers_exist():
     """
     developer logic to test to see if providers are working
-
     """
     # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 
 SeeAlso:
     ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py
@@ -21,6 +21,25 @@ CommandLine:
         --src $DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.zip \
         --dst $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+
+
+Ignore:
+    # Debugging
+
+    python -m watch.cli.coco_time_combine \
+        --kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Aligned-Drop7/VN_C002/imgonly-VN_C002-rawbands.kwcoco.zip" \
+        --output_kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-V2/VN_C002/_unfielded_imgonly-VN_C002-rawbands.kwcoco.zip" \
+        --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
+        --resolution="10GSD" \
+        --time_window=1y \
+        --remove_seasons=winter \
+        --merge_method=median \
+        --spatial_tile_size=1024 \
+        --mask_low_quality=True \
+        --start_time=2010-03-01 \
+        --assets_dname="raw_bands" \
+        --workers=0
+
 
 Example:
     >>> # Toydata example for CI
@@ -680,7 +699,7 @@ def combine_kwcoco_channels_temporally(config):
     return output_coco_dset
 
 
-def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'], crop_slice=None):
+def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None):
     """Get a binary mask of the quality data.
 
     Args:
@@ -694,15 +713,15 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
     """
     import numpy as np
     delay = coco_image.imdelay('quality',
-                                 space=space,
-                                 interpolation='nearest',
-                                 antialias=False,
-                                 resolution=resolution)
+                               space=space,
+                               interpolation='nearest',
+                               antialias=False,
+                               resolution=resolution)
     if crop_slice:
         delay = delay.crop(crop_slice)
     qa_data = delay.finalize(antialias=False, interpolation='nearest')
 
-    if qa_data.dtype.kind == 'f':
+    if qa_data.dtype.kind == 'f' or avoid_quality_values is None:
         # If the qa band is a float, then it must be a nan channel
         return np.ones_like(qa_data, dtype=np.uint8)
 
@@ -805,7 +824,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
             allow_overshoot=True
         )
 
-    avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    # avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    avoid_quality_values = ['cloud']
     # avoid_quality_values += ['ice']
 
     # Create canvas to combine averaged tiles into.

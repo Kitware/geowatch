@@ -271,6 +271,18 @@ class PrepareTA2Config(CMDQueueConfig):
             transform in the geotiff metadata.
             '''))
 
+    reproject_annotations = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If True and site models are given, project annotations onto the coco
+        files after they are cropped / aligned.
+        '''))
+
+    final_union = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If True, union all regions into a single kwcoco file at the end
+        to represent the entired dataset.
+        '''))
+
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Hack lazy is a proof of concept with the intent on speeding
@@ -489,6 +501,7 @@ def main(cmdline=False, **kwargs):
                 'collated': default_collated,
             })
     else:
+        # Typically unused
         s3_fpath_list = config['s3_fpath']
         collated_list = config['collated']
         if len(collated_list) != len(s3_fpath_list):
@@ -630,8 +643,8 @@ def main(cmdline=False, **kwargs):
     for info in uncropped_fielded_jobs:
         toalign_info = info.copy()
         name = toalign_info['name'] = info['name']
-        toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.zip'
-        toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.zip'
+        toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / name / f'imgonly-{name}-rawbands.kwcoco.zip'
+        toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / name / f'imganns-{name}-rawbands.kwcoco.zip'
         # TODO: take only the corresponding set of site models here.
         toalign_info['site_globstr'] = info['site_globstr']
         toalign_info['region_globstr'] = info['region_globstr']
@@ -681,6 +694,7 @@ def main(cmdline=False, **kwargs):
             }),
             out_paths={
                 'dst': aligned_imgonly_fpath,
+                'dst_bundle_dpath': aligned_kwcoco_bundle,
             },
             group_dname=aligned_bundle_name,
         )
@@ -712,7 +726,7 @@ def main(cmdline=False, **kwargs):
             )
             align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
 
-        if site_globstr:
+        if site_globstr and config.reproject_annotations:
             # Visualization here is too slow, add on another option if we
             # really need to
             viz_part = ''
@@ -778,24 +792,25 @@ def main(cmdline=False, **kwargs):
     aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
 
     # COMBINE Uncropped datasets
-    union_node = new_pipeline.submit(
-        name='kwcoco-union',
-        executable=ub.codeblock(
-            fr'''
-            {job_environ_str}python -m kwcoco union
-            '''),
-        in_paths=_justkeys({
-            'src': aligned_fpaths,
-        }),
-        out_paths={
-            'dst': aligned_final_fpath,
-        },
-        group_dname=aligned_bundle_name,
-    )
-    for node in union_depends_nodes:
-        node.outputs['dst'].connect(union_node.inputs['src'])
+    if config.final_union:
+        union_node = new_pipeline.submit(
+            name='kwcoco-union',
+            executable=ub.codeblock(
+                fr'''
+                {job_environ_str}python -m kwcoco union
+                '''),
+            in_paths=_justkeys({
+                'src': aligned_fpaths,
+            }),
+            out_paths={
+                'dst': aligned_final_fpath,
+            },
+            group_dname=aligned_bundle_name,
+        )
+        for node in union_depends_nodes:
+            node.outputs['dst'].connect(union_node.inputs['src'])
 
-    aligned_final_nodes = [union_node]
+        aligned_final_nodes = [union_node]
 
     # Determine what stages will be cached.
     cache = config.cache
@@ -816,8 +831,8 @@ def main(cmdline=False, **kwargs):
         cache=config.cache
     )
 
-    new_pipeline.inspect_configurables()
-    new_pipeline.print_graphs()
+    # new_pipeline.inspect_configurables()
+    # new_pipeline.print_graphs()
 
     new_pipeline.submit_jobs(
         queue, skip_existing=config.skip_existing,
@@ -867,7 +882,6 @@ def main(cmdline=False, **kwargs):
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
-
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
     # if config.rprint:
     #     queue.print_graph()

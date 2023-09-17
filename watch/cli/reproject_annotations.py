@@ -41,6 +41,9 @@ Notes:
     region models instead of site-models themselves.  Code to do this is in:
         https://gitlab.kitware.com/smart/watch/-/blob/master/watch/cli/kwcoco_to_geojson.py#L476
     in `add_site_summary_to_kwcoco`.
+
+TODO:
+    - [ ] use the new proper kwcoco track ids.
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -51,8 +54,9 @@ import math
 
 class ReprojectAnnotationsConfig(scfg.DataConfig):
     r"""
-    Projects annotations from geospace onto a kwcoco dataset and optionally
-    propogates them across time.
+    Warp annotations from geospace onto kwcoco pixel space.
+
+    This also propogates track information across time in video datasets.
 
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type

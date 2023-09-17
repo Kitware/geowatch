@@ -165,7 +165,10 @@ WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 
 export CUDA_VISIBLE_DEVICES=0,1
-DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
+export DISABLE_TENSORBOARD_PLOTTER=1
+export DISABLE_BATCH_PLOTTER=1
+export DDP_WORKAROUND=0
+python -m watch.tasks.fusion fit --config "
 seed_everything: 8675309
 data:
     num_workers          : 2
@@ -209,7 +212,7 @@ lr_scheduler:
     anneal_strategy : cos
     pct_start       : 0.05
 trainer:
-    accumulate_grad_batches: 24
+    accumulate_grad_batches: 2
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     #devices              : 0,
@@ -235,9 +238,9 @@ torch_globals:
 
 __doc__="
 
-#########################
-# DEMO: MultiGPU Training
-#########################
+########################################################
+# DEMO: MultiGPU Training with Heterogeneous Transformer
+########################################################
 
 The following command trains a HeterogeneousModel model on two GPUs with DDP
 "

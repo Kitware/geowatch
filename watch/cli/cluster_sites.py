@@ -160,6 +160,9 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_resolution
 
     # import pandas as pd
+    if config.dst_dpath is None:
+        raise ValueError('Destination path is required')
+
     dst_dpath = ub.Path(config.dst_dpath)
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
 
@@ -193,8 +196,13 @@ def main(cmdline=1, **kwargs):
     for input_region_model in input_region_models:
 
         input_region_model.fixup()
+
         if 1:
-            input_region_model.validate(strict=0)
+            try:
+                input_region_model.validate(strict=0)
+            except Exception:
+                input_region_model.fixup()
+                input_region_model.validate(strict=0)
 
         region_id = input_region_model.region_id
         region_header = input_region_model.pandas_region()
@@ -339,7 +347,11 @@ def main(cmdline=1, **kwargs):
             dst_dpath.ensuredir()
             fpath = dst_dpath / (subregion_id + '.geojson')
 
-            sub_region.validate(strict=False)
+            try:
+                sub_region.validate(strict=False)
+            except Exception:
+                sub_region.fixup()
+                sub_region.validate(strict=False)
 
             fpath.write_text(sub_region.dumps())
 

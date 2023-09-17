@@ -18,27 +18,27 @@ class PrepareTimeAverages(CMDQueueConfig):
         The regions to time average (this is not a robust implementation)
         '''))
 
-    reproject = scfg.Value(True, isflag=True, help='Enable reprojection of annotations')
-
     resolution = '10GSD'
 
     time_window = '1year'
     merge_method = 'mean'
     remove_seasons = scfg.Value([], nargs='+')
     spatial_tile_size = None
+    mask_low_quality = scfg.Value(True)
 
     combine_workers = scfg.Value(4, help='number of workers per combine job')
 
     input_bundle_dpath = scfg.Value(None)
     output_bundle_dpath = scfg.Value(None)
 
+    skip_existing = scfg.Value(True)
+    cache = scfg.Value(True)
+
+    reproject = scfg.Value(False, isflag=True, help='Enable reprojection of annotations. Requires true_site_dpath and true_region_dpath be specified')
     true_site_dpath = scfg.Value(None)
     true_region_dpath = scfg.Value(None)
 
-    mask_low_quality = scfg.Value(True)
-
-    skip_existing = scfg.Value(True)
-    cache = scfg.Value(True)
+    queue_name = scfg.Value('time-ave-queue', help='overwrite the default queue name', group='cmd-queue')
 
 
 def _find_valid_regions():
@@ -133,10 +133,10 @@ def main(cmdline=1, **kwargs):
         input_bundle_dpath = ub.Path(config.input_bundle_dpath)
         output_bundle_dpath = ub.Path(config.output_bundle_dpath)
 
-        INPUT_KWCOCO_FPATH = input_bundle_dpath / region / f'imgonly-{region}.kwcoco.zip'
-        TAVE_KWCOCO_FPATH = output_bundle_dpath / region / f'imgonly-{region}.kwcoco.zip'
-        FIELDED_KWCOCO_FPATH = output_bundle_dpath / region / f'imgonly-{region}-fielded.kwcoco.zip'
-        FINAL_KWCOCO_FPATH = output_bundle_dpath / region / f'imganns-{region}.kwcoco.zip'
+        INPUT_KWCOCO_FPATH = input_bundle_dpath / region / f'imgonly-{region}-rawbands.kwcoco.zip'
+        TAVE_KWCOCO_FPATH = output_bundle_dpath / region / f'_unfielded_imgonly-{region}-rawbands.kwcoco.zip'
+        FIELDED_KWCOCO_FPATH = output_bundle_dpath / region / f'imgonly-{region}-rawbands.kwcoco.zip'
+        FINAL_KWCOCO_FPATH = output_bundle_dpath / region / f'imganns-{region}-rawbands.kwcoco.zip'
 
         fmtdict['INPUT_KWCOCO_FPATH'] = INPUT_KWCOCO_FPATH
         fmtdict['TAVE_KWCOCO_FPATH'] = TAVE_KWCOCO_FPATH
@@ -169,23 +169,23 @@ def main(cmdline=1, **kwargs):
         )
         combine_job = submit_job_step(node)
 
-        if config.reproject:
-            code = subtemplate(ub.codeblock(
-                r'''
-                python -m watch add_fields \
-                    --src $TAVE_KWCOCO_FPATH \
-                    --dst $FIELDED_KWCOCO_FPATH
-                '''), fmtdict)
-            node = ProcessNode(
-                name=f'add-fields-{region}',
-                command=code,
-                in_paths={'src': subtemplate('$TAVE_KWCOCO_FPATH', fmtdict)},
-                out_paths={'dst': subtemplate('$FIELDED_KWCOCO_FPATH', fmtdict)},
-                _no_outarg=True,
-                _no_inarg=True,
-            )
-            field_job = submit_job_step(node, depends=[combine_job])
+        code = subtemplate(ub.codeblock(
+            r'''
+            python -m watch add_fields \
+                --src $TAVE_KWCOCO_FPATH \
+                --dst $FIELDED_KWCOCO_FPATH
+            '''), fmtdict)
+        node = ProcessNode(
+            name=f'add-fields-{region}',
+            command=code,
+            in_paths={'src': subtemplate('$TAVE_KWCOCO_FPATH', fmtdict)},
+            out_paths={'dst': subtemplate('$FIELDED_KWCOCO_FPATH', fmtdict)},
+            _no_outarg=True,
+            _no_inarg=True,
+        )
+        field_job = submit_job_step(node, depends=[combine_job])
 
+        if config.reproject:
             code = subtemplate(ub.codeblock(
                 r'''
                 python -m watch reproject \

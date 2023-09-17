@@ -1090,7 +1090,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1,
+    def report_best(agg, top_k=3, shorten=True, per_group=None, verbose=1,
                     reference_region=None, print_models=False, concise=False,
                     show_csv=False) -> TopResultsReport:
         """
@@ -1132,6 +1132,11 @@ class AggregatorAnalysisMixin:
         import pandas as pd
         import numpy as np
         from watch.utils import util_pandas
+
+        if isinstance(per_group, float) and math.isinf(per_group):
+            per_group = None
+        if isinstance(top_k, float) and math.isinf(top_k):
+            top_k = None
 
         if reference_region:
             # In every region group, restrict to only the top values for the
@@ -1202,8 +1207,10 @@ class AggregatorAnalysisMixin:
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)
-                ranking = group['param_hashid'].apply(
-                    lambda x: reference_hashid_to_rank.get(x, np.inf))
+                def make_rank_getter(d):  # no closure for embed debug
+                    return lambda x: d.get(x, float('inf'))
+                rank_getter = make_rank_getter(reference_hashid_to_rank)
+                ranking = group['param_hashid'].apply(rank_getter)
                 ranking = ranking[np.isfinite(ranking)]
                 ranked_locs = ranking.sort_values().index
 
@@ -1757,6 +1764,36 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         return key
 
     def filterto(agg, index=None, models=None, param_hashids=None, query=None):
+        """
+        Build a new aggregator with a subset of rows from this one.
+
+        Args:
+            index (List | pd.Index): a subset of pandas row indexes to restrict to
+
+            models (List[str]): list of effective model names (not paths) to restrict to.
+
+            param_hashids (List[str]): list of parameter hashids to restrict to
+
+            query(str):
+                A custom query string currently parsed :func:`our_hack_query`,
+                which can either be a DataFrame.query or a simple eval using
+                ``df`` as the dataframe variable (i.e. ``agg.table``) that
+                should resolve to flags or indexes to indicates which rows to
+                take. See the example for demo usage.
+
+        Returns:
+            Aggregator: A new aggregator with a subset of data
+
+        Example:
+            >>> from watch.mlops.aggregate import *  # NOQA
+            >>> agg = Aggregator.demo(rng=0, num=100)
+            >>> agg.build()
+            >>> subagg = agg.filterto(query='df["context.demo_node.uuid"].str.startswith("c")')
+            >>> assert len(subagg) > 0, 'query should return something'
+            >>> assert subagg.table['context.demo_node.uuid'].str.startswith('c').all()
+            >>> assert not agg.table['context.demo_node.uuid'].str.startswith('c').all()
+            >>> print(subagg.table['context.demo_node.uuid'])
+        """
         import numpy as np
         import kwarray
         final_flags = 1
@@ -2037,6 +2074,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         import pandas as pd
         import numpy as np
+        from watch.utils.util_pandas import DotDictDataFrame
         # Given a specific group of regions,
 
         regions_of_interest = agg._coerce_rois(rois)
@@ -2051,7 +2089,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
         sum_cols = agg.metrics.columns.intersection(sum_cols)
 
-        from watch.utils.util_pandas import DotDictDataFrame
         start_time_cols = DotDictDataFrame.search_columns(agg.table, 'start_timestamp')
         stop_time_cols = DotDictDataFrame.search_columns(agg.table, 'stop_timestamp')
 

@@ -8,33 +8,83 @@ class GenerateAuthorsConfig(scfg.DataConfig):
 
 
 KNOWN_ENTITIES = [
-    {'email': 'aan244@csr.uky.edu', 'name': 'Aram Ansary Ogholbake'},
-    {'email': 'ahadzic@dzynetech.com', 'name': 'Armin Hadzic'},
-    {'email': 'aupadhyaya@dzynetech.com', 'name': 'Ajay Upadhyaya'},
-    {'email': 'bane.sullivan@kitware.com', 'name': 'Bane Sullivan'},
-    {'email': 'benjaminbrodie21@gmail.com', 'name': 'Benjamin Brodie'},
-    {'email': 'cgarchbold@gmail.com', 'name': 'Cohen Archbold'},
-    {'email': 'david.joy@kitware.com', 'name': 'David Joy'},
-    {'email': 'dlau@dzynetech.com', 'name': 'Dexter Lau'},
-    {'email': 'jacob.derosa@kitware.com', 'name': 'Jacob DeRosa'},
-    {'email': 'jacobbirge24@gmail.com', 'name': 'Jacob Birge'},
-    {'email': 'ji.suh@uconn.edu', 'name': 'Ji Won Suh'},
-    {'email': 'matthew.bernstein@kitware.com', 'name': 'Matthew Bernstein'},
-    {'email': 'matthew.purri@rutgers.edu', 'name': 'Matthew Purri'},
-    {'email': 'peri.akiva@rutgers.edu', 'name': 'Peri Akiva'},
-    {'email': 'ryanlaclair@gmail.com', 'name': 'Ryan LaClair'},
-    {'email': 's.sastry@wustl.edu', 'name': 'Srikumar Sastry'},
-    {'email': 'skakun@umd.edu', 'name': 'Sergii Skakun'},
-    {'email': 'sworkman@dzynetech.com', 'name': 'Scott Workman'},
-    {'email': 'usman.rafique@kitware.com', 'name': 'Usman Rafique'},
+    {'email': 'aan244@csr.uky.edu', 'keyname': 'Aram Ansary Ogholbake'},
+    {'email': 'ahadzic@dzynetech.com', 'keyname': 'Armin Hadzic'},
+    {'email': 'aupadhyaya@dzynetech.com', 'keyname': 'Ajay Upadhyaya'},
+    {'email': 'bane.sullivan@kitware.com', 'keyname': 'Bane Sullivan'},
+    {'email': 'benjaminbrodie21@gmail.com', 'keyname': 'Benjamin Brodie'},
+    {'email': 'cgarchbold@gmail.com', 'keyname': 'Cohen Archbold'},
+    {'email': 'david.joy@kitware.com', 'keyname': 'David Joy'},
+    {'email': 'dlau@dzynetech.com', 'keyname': 'Dexter Lau'},
+    {'email': 'jacob.derosa@kitware.com', 'keyname': 'Jacob DeRosa'},
+    {'email': 'jacobbirge24@gmail.com', 'keyname': 'Jacob Birge'},
+    {'email': 'ji.suh@uconn.edu', 'keyname': 'Ji Won Suh'},
+    {'email': 'matthew.bernstein@kitware.com', 'keyname': 'Matthew Bernstein'},
 
-    {'email': 'connor.greenwell@kitware.com', 'name': 'Connor Greenwell'},
-    {'email': 'connor.greenwell@horologic.khq.kitware.com', 'name': 'Connor Greenwell'},
-    {'email': 'connor.greenwell@arthur.khq.kitware.com', 'name': 'Connor Greenwell'},
+    {'email': 'atrias@dzynetech.com', 'keyname': 'Antonio Trias'},
+    {'email': 'atrias@local.dzynetech.com', 'keyname': 'Antonio Trias'},
 
-    {'email': 'jon.crall@kitware.com' , 'name': 'Jon Crall'},
-    {'email': 'erotemic@gmail.com', 'name': 'Jon Crall'},
+    {'email': 'wpines@clarityinnovates.com', 'keyname': 'Wade Pines'},
+
+    {'email': 'matthew.purri@rutgers.edu', 'keyname': 'Matthew Purri'},
+
+    {'email': 'matthew.purri@rutgers.edu', 'keyname': 'Matthew Purri'},
+    {'email': 'mjp372@scarletmail.rutgers.edu', 'keyname': 'Matthew Purri'},
+
+    {'email': 'peri.akiva@rutgers.edu', 'keyname': 'Peri Akiva'},
+    {'email': 'periha@gmail.com', 'keyname': 'Peri Akiva'},
+
+    {'email': 'ryanlaclair@gmail.com', 'keyname': 'Ryan LaClair'},
+    {'email': 's.sastry@wustl.edu', 'keyname': 'Srikumar Sastry'},
+    {'email': 'skakun@umd.edu', 'keyname': 'Sergii Skakun'},
+    {'email': 'sworkman@dzynetech.com', 'keyname': 'Scott Workman'},
+
+    {'email': 'usman.rafique@kitware.com', 'keyname': 'Usman Rafique'},
+    {'email': 'usman.rafique@horologic.khq.kitware.com', 'keyname': 'Usman Rafique'},
+
+    {'email': 'connor.greenwell@kitware.com', 'keyname': 'Connor Greenwell'},
+    {'email': 'connor.greenwell@horologic.khq.kitware.com', 'keyname': 'Connor Greenwell'},
+    {'email': 'connor.greenwell@arthur.khq.kitware.com', 'keyname': 'Connor Greenwell'},
+    {'email': 'connor.greenwell@kwintern-1811.khq.kitware.com', 'keyname': 'Connor Greenwell'},
+    {'email': 'cgree3@gmail.com', 'keyname': 'Connor Greenwell'},
+
+    {'email': 'jon.crall@kitware.com' , 'keyname': 'Jon Crall'},
+    {'email': 'erotemic@gmail.com', 'keyname': 'Jon Crall'},
 ]
+
+
+def generate_mailmap():
+
+    existing_name_email_pairs = []
+    for line in ub.cmd('git shortlog --summary --numbered --email').stdout.split('\n'):
+        if line:
+            num, pair = line.split('\t')
+            name, b = pair.split(' <')
+            email = b.strip()[:-1]
+            pair = (name, email)
+            existing_name_email_pairs.append(pair)
+
+    keyname_to_group = ub.group_items(KNOWN_ENTITIES, key=lambda r: r['keyname'])
+    email_to_keyname = {r['email']: r['keyname'] for r in KNOWN_ENTITIES}
+
+    mailmap_lines = []
+    for name, email in existing_name_email_pairs:
+        if email in email_to_keyname:
+            keyname = email_to_keyname[email]
+            group = keyname_to_group[keyname]
+            if group:
+                cannon = group[0]
+                part1 = f"{cannon['keyname']} <{cannon['email']}>"
+                part2 = f"{name} <{email}>"
+                if part1 != part2:
+                    new_line = f'{part1} {part2}'
+                    mailmap_lines.append(new_line)
+        else:
+            print(f'Unknown entity: {name} {email}')
+
+    text = '\n'.join(sorted(mailmap_lines)) + '\n'
+    mailmap_fpath = ub.Path('.mailmap')
+    mailmap_fpath.write_text(text)
 
 
 def main(cmdline=1, **kwargs):
@@ -60,7 +110,7 @@ def main(cmdline=1, **kwargs):
     for line in lines:
         result = parser.parse(line)
         row = dict(result.named)
-        row['id'] = row['name'].lower().replace(' ', '')
+        row['id'] = row['keyname'].lower().replace(' ', '')
         rows.append(row)
 
     df = pd.DataFrame(rows)
@@ -71,7 +121,7 @@ def main(cmdline=1, **kwargs):
         }
         new_row['num'] = group['num'].sum()
         new_row['id'] = group['id'].iloc[0]
-        new_row['name'] = max(group['name'].tolist(), key=len)
+        new_row['keyname'] = max(group['keyname'].tolist(), key=len)
         new_row['email'] = group['email'].iloc[0]
         grouped_rows.append(new_row)
 
@@ -83,14 +133,14 @@ def main(cmdline=1, **kwargs):
         }
         new_row['num'] = group['num'].sum()
         new_row['id'] = group['id'].iloc[0]
-        new_row['name'] = max(group['name'].tolist(), key=len)
+        new_row['keyname'] = max(group['keyname'].tolist(), key=len)
         new_row['email'] = group['email'].iloc[0]
         grouped_rows.append(new_row)
 
     df = pd.DataFrame(grouped_rows)
     df = df.sort_values('num', ascending=False)
     print(df)
-    print(', '.join(df['name']))
+    print(', '.join(df['keyname']))
     # print(ub.urepr(df.drop(['id', 'num'], axis=1).to_dict('records')))
 
 
@@ -121,14 +171,14 @@ def author_stats(repo):
 
     author_alias = {}
     for r in KNOWN_ENTITIES:
-        author_alias[r['email']] = r['name']
-        author_alias[r['name']] = r['name']
+        author_alias[r['email']] = r['keyname']
+        author_alias[r['keyname']] = r['keyname']
 
     rows = []
     for author, stats in author_stats.items():
         name = author_alias.get(author, author)
         row = {'author': author}
-        row['name'] = name
+        row['keyname'] = name
         row.update(stats)
         rows.append(row)
 
@@ -136,7 +186,7 @@ def author_stats(repo):
     import rich
     df = pd.DataFrame(rows)
 
-    final_df = df.groupby('name').sum()
+    final_df = df.groupby('keyname').sum()
     final_df = final_df.sort_values('commits')
     rich.print(final_df)
 

@@ -31,6 +31,13 @@ KNOWN_LAYERS = (torch.nn.Linear, torch.nn.Conv2d)
 
 
 def test_complex():
+    """
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch/geowatch_tpl/submodules/loss-of-plasticity'))
+        sys.path.append(ubelt.expandpath('~/code/watch/geowatch_tpl/submodules/torchview'))
+        from lop.algos.gen_and_test import *  # NOQA
+    """
     from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
     from watch.tasks.fusion import datamodules
     print('(STEP 0): SETUP THE DATA MODULE')
@@ -74,9 +81,34 @@ def test_complex():
     meta.tv_graph.visual_graph.render(format='png')
 
     ### DEV
+    found_connections = []
+    missing_connections = []
     for layer_name in meta.layer_names:
         next_layer_name = list([t[0] for t in meta.next_layers(layer_name)])
         print(f'connections {layer_name} -> {next_layer_name}')
+        if len(next_layer_name):
+            found_connections.append(layer_name)
+        else:
+            missing_connections.append(layer_name)
+
+    missing_connections
+
+    for nx_node, node_data in meta.nx_graph.nodes(data=True):
+        if 'layer_name' in node_data:
+            layer_name = node_data['layer_name']
+            if layer_name in found_connections:
+                node_data['label'] = '[green]' + node_data['label'] + '[\\green]'
+            elif layer_name in missing_connections:
+                node_data['label'] = '[red]' + node_data['label'] + '[\\red]'
+            else:
+                ...
+
+    import networkx as nx
+    nx.write_network_text(meta.nx_graph, rich.print, vertical_chains=1, end='')
+
+    for name in missing_connections:
+        layer = meta.name_to_layer[name]
+        print(f'{name} {layer}')
 
     from torch.optim import AdamW
     opt = AdamW(net.parameters())
@@ -96,7 +128,7 @@ def test_complex():
         self.gen_and_test()
 
 
-class GenerateAndTest(object):
+class GenerateAndTest:
     """
     Generate-and-Test algorithm for feed forward neural networks, based on
     maturity-threshold based replacement
@@ -105,12 +137,13 @@ class GenerateAndTest(object):
         xdoctest -m lop/algos/gen_and_test.py GenerateAndTest
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/loss-of-plasticity'))
-        >>> from lop.algos.gen_and_test import *  # NOQA
+        >>> import geowatch_tpl
         >>> import torchvision
-        >>> net = torchvision.models.resnet18()
+        >>> from lop.algos.gen_and_test import *  # NOQA
         >>> from torch.optim import AdamW
+        >>> geowatch_tpl.import_submodule('torchview')
+        >>> geowatch_tpl.import_submodule('lop')
+        >>> net = torchvision.models.resnet18()
         >>> opt = AdamW(net.parameters())
         >>> hidden_activation = 'relu'
         >>> #inputs = torch.rand(2, 3, 224, 224)
@@ -140,6 +173,17 @@ class GenerateAndTest(object):
         >>>     outputs = net(input_data)
         >>>     loss = outputs.sum()
         >>>     loss.backward()
+        >>>     #
+        >>>     input_data2 = torch.rand(2, 3, 224, 224)
+        >>>     outputs = net(input_data2)
+        >>>     loss = outputs.sum()
+        >>>     loss.backward()
+        >>>     #
+        >>>     input_data2 = torch.rand(2, 3, 224, 224)
+        >>>     outputs = net(input_data2)
+        >>>     loss = outputs.sum()
+        >>>     loss.backward()
+        >>>     #
         >>>     opt.zero_grad()
         >>>     opt.step()
         >>>     self.gen_and_test()
@@ -465,12 +509,14 @@ class GenerateAndTest(object):
             features_to_replace[layer_name] = new_replace_idxs
             num_features_to_replace[layer_name] = new_num_replace
 
-        return features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace
+        test_result = (features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace)
+        return test_result
 
-    def gen_new_features(self, features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace):
+    def gen_new_features(self, test_result):
         """
         Generate new features: Reset input and output weights for low utility features
         """
+        features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace = test_result
         with torch.no_grad():
             for layer_name in self.tracked_layer_names:
 
@@ -505,10 +551,11 @@ class GenerateAndTest(object):
                     next_layer = self.meta.name_to_layer[next_layer_name]
                     next_layer.weight.data[:, out_feat_idx] = 0
 
-    def update_optim_params(self, features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace):
+    def update_optim_params(self, test_result):
         """
         Update Optimizer's state
         """
+        features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace = test_result
         if self.opt_type == 'adam':
             for layer_name in self.tracked_layer_names:
 
@@ -528,47 +575,55 @@ class GenerateAndTest(object):
                     curr_bias_state = self.opt.state[layer.bias]
                     next_weight_state = self.opt.state[next_layer.weight]
 
-                    import xdev
-                    with xdev.embed_on_exception_context:
-                        if 'exp_avg' in curr_weight_state:
-                            curr_weight_state['exp_avg'][in_feat_idx, :] = 0.0
-                        if 'exp_avg_sq' in curr_weight_state:
-                            curr_weight_state['exp_avg_sq'][in_feat_idx, :] = 0.0
-                        if 'step' in curr_weight_state:
-                            try:
-                                curr_weight_state['step'][in_feat_idx] = 0
-                            except Exception:
-                                curr_weight_state['step'].zero_()
+                    if 'exp_avg' in curr_weight_state:
+                        curr_weight_state['exp_avg'][in_feat_idx, :] = 0.0
+                    if 'exp_avg_sq' in curr_weight_state:
+                        curr_weight_state['exp_avg_sq'][in_feat_idx, :] = 0.0
+                    if 'step' in curr_weight_state:
+                        try:
+                            curr_weight_state['step'][in_feat_idx] = 0
+                        except Exception:
+                            curr_weight_state['step'].zero_()
 
-                        if 'exp_avg' in curr_bias_state:
-                            curr_bias_state['exp_avg'][in_feat_idx] = 0.0
-                        if 'exp_avg_sq' in curr_bias_state:
-                            curr_bias_state['exp_avg_sq'][in_feat_idx] = 0.0
-                        if 'step' in curr_bias_state:
-                            try:
-                                curr_bias_state['step'][in_feat_idx] = 0
-                            except Exception:
-                                curr_bias_state['step'].zero_()
+                    if 'exp_avg' in curr_bias_state:
+                        curr_bias_state['exp_avg'][in_feat_idx] = 0.0
+                    if 'exp_avg_sq' in curr_bias_state:
+                        curr_bias_state['exp_avg_sq'][in_feat_idx] = 0.0
+                    if 'step' in curr_bias_state:
+                        try:
+                            curr_bias_state['step'][in_feat_idx] = 0
+                        except Exception:
+                            curr_bias_state['step'].zero_()
 
-                        if 'exp_avg' in next_weight_state:
-                            next_weight_state['exp_avg'][:, out_feat_idx] = 0.0
-                        if 'exp_avg_sq' in next_weight_state:
-                            next_weight_state['exp_avg_sq'][:, out_feat_idx] = 0.0
-                        if 'step' in next_weight_state:
-                            try:
-                                next_weight_state['step'][:, out_feat_idx] = 0
-                            except Exception:
-                                next_weight_state['step'].zero_()
+                    if 'exp_avg' in next_weight_state:
+                        next_weight_state['exp_avg'][:, out_feat_idx] = 0.0
+                    if 'exp_avg_sq' in next_weight_state:
+                        next_weight_state['exp_avg_sq'][:, out_feat_idx] = 0.0
+                    if 'step' in next_weight_state:
+                        try:
+                            next_weight_state['step'][:, out_feat_idx] = 0
+                        except Exception:
+                            next_weight_state['step'].zero_()
+
+    def current_features(self):
+        running_features = self.meta.activation_cache
+        running_features = {k: v for k, v in running_features.items() if k in self.tracked_layer_names}
+        features = {k: v.mean() for k, v in running_features.items()}
+        return features
+
+    def clear_features(self):
+        for v in self.meta.activation_cache.values():
+            v.clear()
 
     def gen_and_test(self):
         """
         Perform generate-and-test
         """
-        features = self.meta.activation_cache
-        features = {k: v for k, v in features.items() if k in self.tracked_layer_names}
-        features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace = self.test_features(features=features)
-        self.gen_new_features(features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace)
-        self.update_optim_params(features_to_replace_input_indices, features_to_replace_output_indices, num_features_to_replace)
+        features = self.current_features()
+        test_result = self.test_features(features=features)
+        self.gen_new_features(test_result)
+        self.update_optim_params(test_result)
+        self.clear_features()
 
 
 def model_layers(model):
@@ -603,9 +658,9 @@ class MetaNetwork:
     Stores extra information that we need about the network
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/loss-of-plasticity/'))
-        >>> from lop.algos.gen_and_test import *  # NOQA
+        >>> import geowatch_tpl
+        >>> geowatch_tpl.import_submodule('torchview')
+        >>> geowatch_tpl.import_submodule('lop')
         >>> import torchvision
         >>> net = torchvision.models.resnet18()
         >>> meta = MetaNetwork(net)._build()
@@ -827,6 +882,51 @@ class MetaNetwork:
                         yield next_layer_name, next_layer
 
 
+class TorchRunningStats:
+    """
+    Example:
+        import torch
+        data = torch.rand(1, 3, 32, 32, device=0)
+        self = TorchRunningStats()
+        self.update(data)
+        self.update(torch.rand(1, 3, 32, 32, device=0))
+        self.update(torch.rand(1, 3, 32, 32, device=0))
+        self.update(torch.rand(1, 3, 32, 32, device=0))
+        self.summarize()
+    """
+    def __init__(self, device=None):
+        self.n = 0
+        self.raw_total = 0
+        self.device = device
+
+    def clear(self):
+        self.n = 0
+        self.raw_total = 0
+
+    def update(self, data):
+        self.raw_total = self.raw_total + data
+        self.n += 1
+
+    @property
+    def shape(self):
+        return self.raw_total.shape
+
+    def mean(self):
+        n = self.n
+        total = self.raw_total
+        return total / n
+
+    def summarize(self):
+        n = self.n
+        total = self.raw_total
+        info = {
+            'total': total,
+            'mean': total / n,
+            'n': n,
+        }
+        return info
+
+
 class RecordActivationHook:
     def __init__(self, name, meta):
         self.name = name
@@ -834,7 +934,10 @@ class RecordActivationHook:
 
     def __call__(self, layer, input, output):
         activation = output.detach()
-        self.meta.activation_cache[self.name] = activation
+        if self.name not in self.meta.activation_cache:
+            self.meta.activation_cache[self.name] = TorchRunningStats(device=activation.device)
+        runner = self.meta.activation_cache[self.name]
+        runner.update(activation)
 
 
 def patched_trace_graph(net_copy, input_data):

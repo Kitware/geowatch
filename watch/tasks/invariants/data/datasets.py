@@ -802,7 +802,7 @@ def fixup_samples(coco_dset, sample_grid, time_dims):
         workaround_samples = []
         for tr in all_samples:
             unique_gids = list(ub.unique(tr['gids']))
-            if len(unique_gids) == time_dims: 
+            if len(unique_gids) == time_dims:
                 tr['gids'] = unique_gids
                 workaround_samples.append(tr)
         all_samples = workaround_samples

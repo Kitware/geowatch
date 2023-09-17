@@ -5,9 +5,9 @@ import ubelt as ub
 
 class CleanGeotiffConfig(scfg.DataConfig):
     r"""
-    A preprocessing step for geotiff datasets.
+    Clean geotiff files inplace by masking bad pixels with NODATA.
 
-    Replaces large contiguous regions of specific same-valued pixels as nodata.
+    Replaces large contiguous regions of specific same-valued pixels as NODATA.
 
     Note:
         This is a destructive operation and overwrites the geotiff image data

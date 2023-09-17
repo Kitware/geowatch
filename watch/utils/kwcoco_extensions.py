@@ -456,6 +456,7 @@ def coco_populate_geo_img_heuristics2(
     return img
 
 
+@profile
 def _populate_valid_region(coco_img):
     """
     Ignore:

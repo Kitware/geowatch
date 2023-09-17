@@ -399,7 +399,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         end_date = self.end_date
         if start_date is not None and end_date is not None:
             if end_date < start_date:
-                raise AssertionError('bad date')
+                raise AssertionError(f'bad date: start_date={start_date} end_date={end_date}')
 
     def _validate_schema(self, strict=True, verbose=1, parts=True):
         schema = self.load_schema(strict=strict)
@@ -525,6 +525,26 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                         except Exception:
                             print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
                         props[key] = newval
+
+    def fix_backwards_dates(self):
+        """
+        If start and end dates are backwards, flip them.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> ss = SiteSummary.random()
+            >>> ss['properties']['start_date'] = '1970-01-01T000000'
+            >>> ss.ensure_isodates()
+            >>> assert ss['properties']['start_date'] == '1970-01-01'
+        """
+        start_date = self.start_date
+        end_date = self.end_date
+        if start_date is not None and end_date is not None:
+            if end_date < start_date:
+                _new_start = self.header['properties']['end_date']
+                _new_end = self.header['properties']['start_date']
+                self.header['properties']['start_date'] = _new_start
+                self.header['properties']['end_date'] = _new_end
 
 
 def _report_jsonschema_error(ex):
@@ -723,10 +743,14 @@ class RegionModel(_Model):
     def fixup(self):
         """
         Fix common issues with this region model
+
+        Returns:
+            RegionModel
         """
         self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
+        self.fix_backwards_dates()
         return self
 
     def remove_invalid_properties(self):
@@ -996,12 +1020,16 @@ class SiteModel(_Model):
     def fixup(self):
         """
         Fix common issues with this site model
+
+        Returns:
+            SiteModel
         """
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
         self.ensure_isodates()
         self.fix_current_phase_salient()
+        self.fix_backwards_dates()
         # self.fix_geom()
         return self
 

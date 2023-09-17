@@ -5,6 +5,8 @@ import scriptconfig as scfg
 
 class CocoAverageFeaturesConfig(scfg.DataConfig):
     """
+    Average multiple kwcoco files - i.e. ensemble heatmap predictions.
+
     Create a new kwcoco file with averaged features from multiple kwcoco files.
 
     High Level Steps:

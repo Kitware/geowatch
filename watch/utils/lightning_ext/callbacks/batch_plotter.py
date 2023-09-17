@@ -124,6 +124,10 @@ class BatchPlotter(pl.callbacks.Callback):
 
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
+        from kwutil import util_environ
+        if util_environ.envflag('DISABLE_BATCH_PLOTTER'):
+            return
+
         if trainer.log_dir is None:
             warnings.warn('The trainer logdir is not set. Cannot dump a batch plot')
             return

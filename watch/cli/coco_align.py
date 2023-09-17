@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
-regions around areas of intere/t across time.
+regions around areas of interest across time.
 
 The align script works by making two geopandas data frames of geo-boundaries,
 one for regions and one for all images (as defined by their geotiff metadata).
@@ -208,7 +208,7 @@ class ExtractConfig(ImageExtractConfig):
     extract_overlaps. We may use this config as a base class to inherit from,
     but for now we duplicate param names.
     """
-    write_subsets = scfg.Value(True, isflag=1, help=ub.paragraph(
+    write_subsets = scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
             if True, writes a separate kwcoco file for every discovered
             ROI in addition to the final kwcoco file.
@@ -276,6 +276,14 @@ class CocoAlignGeotiffConfig(ExtractConfig):
             '''
             bundle directory or kwcoco json file for the output
             '''), group='outputs')
+
+    dst_bundle_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, this is the directory where the output bundle will be
+        created. This can be used when dst is a kwcoco file that lives
+        somewhere other than the top level bundle path. This cannot be used if
+        dst is a directory.
+        '''))
 
     regions = scfg.Value('annots', help=ub.paragraph(
         '''
@@ -473,7 +481,7 @@ def main(cmdline=True, **kw):
         >>> coco_img = new_dset.coco_image(2)
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
-        >>> parent_fpath = asset['parent_file_name']
+        >>> parent_fpath = asset['parent_file_names']
         >>> crop_fpath = ub.Path(new_dset.bundle_dpath) / asset['file_name']
         >>> info = geotiff_crs_info(crop_fpath)
         >>> assert(all(info['meter_per_pxl'] == 60.0))
@@ -524,7 +532,7 @@ def main(cmdline=True, **kw):
         >>> coco_img = new_dset.coco_image(2)
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
-        >>> parent_fpath = asset['parent_file_name']
+        >>> parent_fpath = asset['parent_file_names']
         >>> crop_fpath = str(ub.Path(new_dset.bundle_dpath) / asset['file_name'])
         >>> print(ub.cmd(['gdalinfo', parent_fpath])['out'])
         >>> print(ub.cmd(['gdalinfo', crop_fpath])['out'])
@@ -591,12 +599,19 @@ def main(cmdline=True, **kw):
     print('img_workers = {!r}'.format(config.img_workers))
     print('aux_workers = {!r}'.format(config.aux_workers))
 
+    output_bundle_dpath = None
+    if config.dst_bundle_dpath is not None:
+        output_bundle_dpath = str(config.dst_bundle_dpath)
+
     dst = ub.Path(config['dst']).expand()
     # TODO: handle this coercion of directories or bundles in kwcoco itself
     if 'json' in dst.name.split('.') or 'kwcoco' in dst.name.split('.'):
-        output_bundle_dpath = str(dst.parent)
+        if output_bundle_dpath is None:
+            output_bundle_dpath = str(dst.parent)
         dst_fpath = str(dst)
     else:
+        if output_bundle_dpath is not None:
+            raise AssertionError('cannot give dst as a path and dst_bundle_dpath')
         output_bundle_dpath = str(dst)
         dst_fpath = str(dst / 'data.kwcoco.json')
 
@@ -786,21 +801,25 @@ def main(cmdline=True, **kw):
 
     proc_context.stop()
 
+    new_dset._update_fpath(dst_fpath)
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
-    try:
-        rerooted_dataset = new_dset.copy()
-        rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
-    except Exception:
-        # Hack to fix broken pipeline, todo: find robust fix
-        hack_region_id = infos[0]['fpath'].stem
-        rerooted_dataset = new_dset.copy()
-        rerooted_dataset.reroot(new_prefix=hack_region_id)
-        rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # try:
+    #     rerooted_dataset = new_dset.copy()
+    #     rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # except Exception:
+    #     # Hack to fix broken pipeline, todo: find robust fix
+    #     hack_region_id = infos[0]['fpath'].stem
+    #     rerooted_dataset = new_dset.copy()
+    #     rerooted_dataset.reroot(new_prefix=hack_region_id)
+    #     rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    # rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
+    # print('finished')
+    # return rerooted_dataset
 
-    rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
+    new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
-    return rerooted_dataset
+    return new_dset
 
 
 class SimpleDataCube:
@@ -1247,7 +1266,7 @@ class SimpleDataCube:
 
         sub_bundle_dpath = (ub.Path(extract_dpath) / image_overlaps['sub_bundle_dname']).ensuredir()
 
-        subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json'
+        subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.zip'
         if subdata_fpath.exists() and extract_config.keep in {'roi-img', 'roi'}:
             print('ROI cache hit')
             sub_dset = kwcoco.CocoDataset(subdata_fpath)
@@ -1262,7 +1281,9 @@ class SimpleDataCube:
 
         TIME_WINDOW_FILTER = 1
         import math
+        import numpy as np
         nan = float('nan')
+
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
             sensor_to_time_window = ub.udict(sensor_to_time_window)
@@ -1276,9 +1297,20 @@ class SimpleDataCube:
                         # Assign a contamination score to each image.
                         cloudcover = nan
                         contamination = nan
+
+                        # TODO: Better estimation of whole image contamination.
                         if 'stac_properties' in img:
-                            cloudcover = img['stac_properties'].get('eo:cloud_cover', nan) / 100
-                            contamination = img['stac_properties'].get('quality_info:contaminated_percentage', nan) / 100
+                            prop = img['stac_properties']
+                            cloudcover = prop.get('eo:cloud_cover', nan) / 100
+                            contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
+
+                        if 'parent_stac_properties' in img:
+                            for prop in img['parent_stac_properties']:
+                                _cloudcover = prop.get('eo:cloud_cover', nan) / 100
+                                _contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
+                                cloudcover = np.nanmin([cloudcover, _cloudcover])
+                                contamination = np.nanmin([contamination, _contamination])
+
                         if math.isnan(contamination):
                             contamination = cloudcover
 
@@ -1479,6 +1511,7 @@ class SimpleDataCube:
                 job = image_jobs.submit(
                     extract_image_job,
                     img=img,
+                    other_imgs=other_imgs,
                     anns=anns,
                     bundle_dpath=bundle_dpath,
                     new_bundle_dpath=new_bundle_dpath,
@@ -1487,6 +1520,7 @@ class SimpleDataCube:
                     num=num,
                     frame_index=frame_index,
                     new_vidid=new_vidid,
+                    new_vidname=video_name,
                     sub_bundle_dpath=sub_bundle_dpath,
                     space_str=space_str,
                     space_region=space_region,
@@ -1494,7 +1528,6 @@ class SimpleDataCube:
                     start_gid=start_gid,
                     start_aid=start_aid,
                     local_epsg=local_epsg,
-                    other_imgs=other_imgs,
                     img_config=img_config)
                 job.request_idx = request_idx
                 start_gid = start_gid + 1
@@ -1628,7 +1661,7 @@ class SimpleDataCube:
                 new_dset._check_json_serializable()
 
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
-            sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json')
+            sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.zip')
             sub_dset.reroot(new_root=os.fspath(sub_bundle_dpath), absolute=False)
 
             # Fix frame order issue
@@ -1736,6 +1769,7 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
 
 @profile
 def extract_image_job(img,
+                      other_imgs,
                       anns,
                       bundle_dpath,
                       new_bundle_dpath,
@@ -1744,6 +1778,7 @@ def extract_image_job(img,
                       num,
                       frame_index,
                       new_vidid,
+                      new_vidname,
                       sub_bundle_dpath,
                       space_str,
                       space_region,
@@ -1751,7 +1786,6 @@ def extract_image_job(img,
                       start_gid,
                       start_aid,
                       local_epsg=None,
-                      other_imgs=None,
                       img_config=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
@@ -1826,6 +1860,8 @@ def extract_image_job(img,
                 is_rpc = True
         else:
             if 'geotiff_metadata' not in obj:
+                # Note: this takes 34% of the time in the case where images are
+                # pre-cached and dont need download
                 kwcoco_extensions._populate_canvas_obj(bundle_dpath, obj,
                                                        keep_geotiff_metadata=True)
             if obj['geotiff_metadata']['is_rpc']:
@@ -1851,7 +1887,7 @@ def extract_image_job(img,
     )
     asset_config['verbose'] = aux_verbose
 
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp assets', verbose=verbose):
+    for obj_group in ub.ProgIter(obj_groups, desc=f'submit warp assets in {new_vidname}', verbose=verbose):
         job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
@@ -1874,7 +1910,7 @@ def extract_image_job(img,
     new_gid = start_gid
 
     if verbose > 2:
-        print(f'Finish channel crop jobs: {new_gid}')
+        print(f'Finish channel crop jobs: {new_gid} in {new_vidname}')
 
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
@@ -1897,12 +1933,13 @@ def extract_image_job(img,
 
     assert len(dst_list) == len(obj_groups)
     # Hack because heurstics break when fnames change
-    for old_aux_group, new_aux in zip(obj_groups, dst_list):
-        if new_aux is not None:
-            if len(old_aux_group) > 1:
-                new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-            else:
-                new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+    if 0:
+        for old_aux_group, new_aux in zip(obj_groups, dst_list):
+            if new_aux is not None:
+                if len(old_aux_group) > 1:
+                    new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+                else:
+                    new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     new_img = {
         'id': new_gid,
@@ -1910,9 +1947,17 @@ def extract_image_job(img,
         'align_method': align_method,
     }
 
-    if 'stac_properties' in img:
-        # Transfer stack properties from the parent
-        new_img['stac_properties'] = img
+    parent_stac_properties = []
+    parent_imgs = [img] + other_imgs
+    for _parent in parent_imgs:
+        if 'stac_properties' in _parent:
+            parent_stac_properties.append(_parent['stac_properties'])
+        elif 'parent_stac_properties' in _parent:
+            parent_stac_properties.extend(_parent['parent_stac_properties'])
+
+    # if 'stac_properties' in img:
+    #     # Transfer stack properties from the parent
+    #     new_img['stac_properties'] = img
 
     if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
@@ -1941,14 +1986,21 @@ def extract_image_job(img,
         'aux_annotated_candidate'
     })
 
+    # There are often going to be multiple images so we cant just use the
+    # "main" image properties.
+
     # Carry over appropriate metadata from original image
     new_img.update(carry_over)
-    new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
-    new_img['parent_name'] = img.get('name', None)  # remember which image this came from
-    new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
+    # new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
+    # new_img['parent_name'] = img.get('name', None)  # remember which image this came from
+    # new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
+
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = datetime_.timestamp()
+
+    if parent_stac_properties:
+        new_img['parent_stac_properties'] = parent_stac_properties
 
     new_coco_img = CocoImage(new_img)
 
@@ -1958,6 +2010,8 @@ def extract_image_job(img,
 
     new_coco_img._bundle_dpath = new_bundle_dpath
     new_coco_img._video = {}
+
+    # Note this takes 61% of the time when images are already cached.
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
     # TODO: deprecate and remove annotation handling in this tool to simplify
@@ -2045,7 +2099,7 @@ def extract_image_job(img,
             new_anns.append(ann)
 
     if DEBUG:
-        print(f'Finished extract img job: {new_gid}')
+        print(f'Finished extract img job: {new_gid} in {new_vidname}')
     return new_img, new_anns
 
 
@@ -2163,6 +2217,8 @@ def _aligncrop(obj_group,
     if first_obj.get('num_bands', None):
         dst['num_bands'] = first_obj['num_bands']
 
+    dst['parent_file_names'] = [o.get('file_name', None) for o in obj_group]
+
     already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
 
@@ -2277,6 +2333,11 @@ def _aligncrop(obj_group,
     cooldown = asset_config.cooldown
     gdal_verbose = 0 if verbose < 2 else verbose
 
+    if 'quality' in roles:
+        overview_resampling = 'NEAREST'
+    else:
+        overview_resampling = 'CUBIC'
+
     gdalkw = dict(
         space_box=space_box,
         local_epsg=local_epsg,
@@ -2291,6 +2352,8 @@ def _aligncrop(obj_group,
         gdal_cachemax='1500',
         num_threads='2',
         timeout=asset_config.asset_timeout,
+        overviews='AUTO',
+        overview_resampling=overview_resampling,
     )
 
     if len(input_gpaths) > 1:

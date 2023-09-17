@@ -354,6 +354,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         # TIME OPTIONS
         ##############
 
+        # TODO: make auto based on time kernel.
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims'], group=TIME_GROUP),
 
 
@@ -504,6 +505,9 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         ############################
         # DATA NORMALIZATION OPTIONS
         ############################
+
+        # TODO: 'normalizer': scfg.Value - user specified normalizer configuration.
+        # might want tight jsonargparse integeration here.
 
         'prenormalize_inputs': scfg.Value(None, help=ub.paragraph(
             '''
@@ -953,11 +957,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         self.special_inputs = {}
 
-        if self.config['normalize_peritem']:
-            self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
-        else:
-            self.normalize_peritem = None
-
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
@@ -1048,6 +1047,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 ','.join(_input_sensorchans)
             )
 
+        if self.config['normalize_peritem']:
+            # (this probably should be extended to be a sensorchan...)
+            if self.config['normalize_peritem'] is True:
+                # If True, then normalize all known channels
+                self.normalize_peritem = kwcoco.FusedChannelSpec.coerce(
+                    '|'.join(sorted(set(ub.flatten([
+                        s.chans.to_list()
+                        for s in self.input_sensorchan.streams()])))))
+            else:
+                # Otherwise assume the user specified what channels to normalize
+                self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+        else:
+            self.normalize_peritem = None
+
         self.mode = mode
 
         # hidden option for now (todo: expose this)
@@ -1108,6 +1121,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # raise NotImplementedError('need to compute prenormaliztions')
 
             elif isinstance(self.config['prenormalize_inputs'], dict):
+                # TODO: Fixme!
                 ...
             elif isinstance(self.config['prenormalize_inputs'], list):
                 ...
@@ -1823,6 +1837,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             permode_datas = ub.ddict(list)
             prev_timestamp = None
 
+            # TODO: this should be part of the model.
+            # The dataloader should know nothing about positional encodings
+            # except what is needed in order to pass the data to the model.
             time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
 
             for frame_item in frame_items:
@@ -2124,7 +2141,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def _prepare_truth_info(self, final_gids, gid_to_sample, num_frames, target, target_):
         """
         Helper used to construct information about the truth before we start
-        constructing the frames.
+        constructing the frames. This handles contextual relabeling of classes
+        (i.e. if all frames show post construction relabel it as background).
         """
         # build up info about the tracks
         dset = self.sampler.dset
@@ -2212,6 +2230,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     @profile
     def _build_frame_items(self, final_gids, gid_to_sample,
                            truth_info, resolution_info):
+        """
+        Returns:
+            List[Dict]:
+                A dictionary for each frame containing metadata, input tensors,
+                and (optionally) truth tensors for the frame.
+        """
 
         common_outspace_box = resolution_info['common_outspace_box']
         vidspace_dsize = resolution_info['vidspace_dsize']
@@ -2320,7 +2344,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
                                mode_to_invalid_mask, resolution_info, truth_info):
         """
-        Build single-frame truth-labels.
+        Enrich a ``frame_item`` with rasterized truth-labels.
+
+        No return value ``frame_item`` is modified inplace.
 
         Helper function to populate truth labels for a frame in a video
         sequence. This was factored out of the original getitem, and
@@ -2559,15 +2585,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             for poly in class_sseg_groups['ignore']:
                 poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['background']:
-                # task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['undistinguished']:
                 task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['foreground']:
                 poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)

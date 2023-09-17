@@ -2,6 +2,7 @@
 from watch.tasks.fusion.methods import *  # NOQA
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
+from watch.utils.lightning_ext.lightning_cli_ext import LightningArgumentParser
 from watch.utils import lightning_ext as pl_ext
 
 import pytorch_lightning as pl
@@ -13,7 +14,7 @@ import yaml
 from jsonargparse import set_loader, set_dumper
 # from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-from watch.utils import util_environ
+from kwutil import util_environ
 
 
 # FIXME: we should be able to use our callbacks when ddp is enabled.
@@ -172,7 +173,7 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         return [optimizer], [lr_scheduler]
 
-    def add_arguments_to_parser(self, parser):
+    def add_arguments_to_parser(self, parser: LightningArgumentParser):
 
         # TODO: separate final_package dir and fpath for more configuration
         # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
@@ -201,6 +202,16 @@ class SmartLightningCLI(LightningCLI_Extension):
             # apply_on="instantiate",
         )
 
+        # Reference:
+        # https://github.com/omni-us/jsonargparse/issues/170
+        # https://github.com/omni-us/jsonargparse/pull/326
+        # Ensure the datamodule
+        if hasattr(parser, 'add_instantiator'):
+            parser.add_instantiator(
+                instantiate_datamodule,
+                class_type=pl.LightningDataModule
+            )
+
         # pass dataset stats to model after initialization datamodule
         parser.link_arguments(
             "data",
@@ -214,6 +225,17 @@ class SmartLightningCLI(LightningCLI_Extension):
             apply_on="instantiate")
 
         super().add_arguments_to_parser(parser)
+
+
+def instantiate_datamodule(cls, *args, **kwargs):
+    """
+    Custom instantiator for the datamodule that simply calls setup after
+    creating the instance.
+    """
+    self = cls(*args, **kwargs)
+    if not self.did_setup:
+        self.setup('fit')
+    return self
 
 
 def _final_pkg_compute_fn(root):
@@ -314,6 +336,10 @@ def make_cli(config=None):
         else:
             # Only use tensorboard if we have it.
             default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+    else:
+        # TODO: write the redraw script at the start
+        # pl_ext.callbacks.TensorboardPlotter()
+        ...
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from

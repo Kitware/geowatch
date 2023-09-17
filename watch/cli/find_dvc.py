@@ -56,7 +56,7 @@ import scriptconfig as scfg
 
 class FindDVCConfig(scfg.DataConfig):
     """
-    Command line helper to find the path to the watch DVC repo
+    Find the path to a registered DVC repo.
 
     Example Usage:
         # List currently known directories

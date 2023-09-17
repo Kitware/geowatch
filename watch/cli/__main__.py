@@ -17,6 +17,7 @@ def main(cmdline=True, **kw):
     modnames = [
         'watch_coco_stats',
         'geojson_site_stats',
+        'validate_annotation_schemas',
         'torch_model_stats',
         'coco_spectra',
 
@@ -42,13 +43,18 @@ def main(cmdline=True, **kw):
         'coco_remove_bad_images',
         'coco_average_features',
 
+        # Due to LightningCLI fit does not play nicely here.
+        'fit',
+        # Predict also has issues because of its heavy imports.
+        'predict',
+
         # 'mlops_cli',
         'special.finish_install',
     ]
 
     cmd_alias = {
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
-        'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats', 'geomodel_stats'],
+        # 'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats', 'geomodel_stats'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
         'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
@@ -76,6 +82,9 @@ def main(cmdline=True, **kw):
     module_lut['schedule'] = ub.import_module_from_name('watch.mlops.schedule_evaluation')
     module_lut['manager'] = ub.import_module_from_name('watch.mlops.manager')
     module_lut['aggregate'] = ub.import_module_from_name('watch.mlops.aggregate')
+    module_lut['repackage'] = ub.import_module_from_name('watch.mlops.repackager')
+    # module_lut['fit'] = ub.import_module_from_name('watch.tasks.fusion.fit_lightning')
+    # module_lut['predict'] = ub.import_module_from_name('watch.tasks.fusion.predict')
 
     # Create a list of all submodules with CLI interfaces
     cli_modules = list(module_lut.values())
@@ -123,19 +132,24 @@ def main(cmdline=True, **kw):
 
     for cli_module in cli_modules:
 
-        cli_subconfig = None
-        if not hasattr(cli_module, '__config__'):
+        cli_config = None
+
+        if hasattr(cli_module, '__config__'):
+            # New way
+            cli_config = cli_module.__config__
+        elif hasattr(cli_module, '__cli__'):
+            # New way
+            cli_config = cli_module.__cli__
+        else:
             if hasattr(cli_module, 'modal'):
                 continue
-            raise AssertionError('We are only supporting scriptconfig CLIs')
-        # scriptconfig cli pattern
-        cli_subconfig = cli_module.__config__
+            raise AssertionError(f'We are only supporting scriptconfig CLIs. {cli_module} does not have __config__ attr')
 
-        if not hasattr(cli_subconfig, 'main'):
+        if not hasattr(cli_config, 'main'):
             if hasattr(cli_module, 'main'):
                 main_func = cli_module.main
                 # Hack the main function into the config
-                cli_subconfig.main = main_func
+                cli_config.main = main_func
             else:
                 raise AssertionError(f'No main function for {cli_module}')
 
@@ -144,11 +158,11 @@ def main(cmdline=True, **kw):
         cli_rel_modname = cli_modname.split('.')[-1]
 
         cmdname_aliases = ub.oset()
-        alias = getattr(cli_subconfig, '__alias__', [])
+        alias = getattr(cli_config, '__alias__', [])
         if isinstance(alias, str):
             alias = [alias]
         command = getattr(cli_module, '__command__', None)
-        command = getattr(cli_subconfig, '__command__', command)
+        command = getattr(cli_config, '__command__', command)
         if command is not None:
             cmdname_aliases.add(command)
         cmdname_aliases.update(alias)
@@ -159,12 +173,67 @@ def main(cmdline=True, **kw):
         secondary_cmdnames = cmdname_aliases[1:]
         if not isinstance(primary_cmdname, str):
             raise AssertionError(primary_cmdname)
-        cli_subconfig.__command__ = primary_cmdname
-        cli_subconfig.__alias__ = list(secondary_cmdnames)
-        modal.register(cli_subconfig)
+        cli_config.__command__ = primary_cmdname
+        cli_config.__alias__ = list(secondary_cmdnames)
+        modal.register(cli_config)
 
-    ret = modal.run(strict=not WATCH_LOOSE_CLI)
+    ret = modal.main(strict=not WATCH_LOOSE_CLI)
     return ret
+
+
+# def modal_main(self, argv=None, strict=True, autocomplete='auto'):
+#     """
+#     Overwrite modal main to support Lightning CLI
+#     """
+#     if isinstance(self, type):
+#         self = self()
+
+#     parser = self.argparse()
+
+#     if autocomplete:
+#         try:
+#             import argcomplete
+#             # Need to run: "$(register-python-argcomplete xdev)"
+#             # or activate-global-python-argcomplete --dest=-
+#             # activate-global-python-argcomplete --dest ~/.bash_completion.d
+#             # To enable this.
+#         except ImportError:
+#             argcomplete = None
+#             if autocomplete != 'auto':
+#                 raise
+#     else:
+#         argcomplete = None
+
+#     if argcomplete is not None:
+#         argcomplete.autocomplete(parser)
+
+#     if strict:
+#         ns = parser.parse_args(args=argv)
+#     else:
+#         ns, _ = parser.parse_known_args(args=argv)
+
+#     kw = ns.__dict__
+
+#     if kw.pop('version', None):
+#         print(self.version)
+#         return 0
+
+#     sub_main = kw.pop('main', None)
+#     if sub_main is None:
+#         parser.print_help()
+#         raise ValueError('no command given')
+#         return 1
+
+#     try:
+#         ret = sub_main(cmdline=False, **kw)
+#     except Exception as ex:
+#         print('ERROR ex = {!r}'.format(ex))
+#         raise
+#         return 1
+#     else:
+#         if ret is None:
+#             ret = 0
+#         return ret
 
 
 if __name__ == '__main__':

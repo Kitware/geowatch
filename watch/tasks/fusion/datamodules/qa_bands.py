@@ -65,7 +65,7 @@ def _dump_qa_debug_vid():
 
 class QA_SpecMixin:
 
-    def draw_labels(table, quality_im, legend='separate', legend_dpi=96):
+    def draw_labels(table, quality_im, legend='separate', legend_dpi=96, verbose=0):
         """
 
         The doctest can be used to debug cloudmasks for the datasets
@@ -140,16 +140,37 @@ class QA_SpecMixin:
         import kwarray
         import numpy as np
         import kwplot
+
+        if verbose:
+            print(f'Build quality image for {quality_im.shape}')
+
         _raw = quality_im.ravel()
-        is_nan = np.isnan(_raw)
-        num_nan = is_nan.sum()
-        _raw2 = _raw[~is_nan]
-        qavals_to_count = ub.dict_hist(_raw2)
+
+        if quality_im.dtype.kind not in {'u', 'i'}:
+            if verbose:
+                print('Check for nan')
+            is_nan = np.isnan(_raw)
+            num_nan = is_nan.sum()
+            _raw2 = _raw[~is_nan]
+        else:
+            num_nan = 0
+            _raw2 = _raw
+
+        if verbose:
+            print('Counting unique values')
+
+        # qavals_to_count = ub.dict_hist(_raw2)
+        qavals, counts = np.unique(_raw2, return_counts=True)
+        qavals_to_count = ub.dzip(qavals, counts)
+
         if num_nan:
             print('warning nan QA')
             # qavals_to_count[np.nan] = num_nan
 
         unique_qavals = list(qavals_to_count.keys())
+
+        if verbose:
+            print(f'Found {len(unique_qavals)} unique labels')
 
         max_labels = 32
         if len(qavals_to_count) > max_labels:
@@ -167,20 +188,30 @@ class QA_SpecMixin:
         quality_im = kwarray.atleast_nd(quality_im, 3)
 
         # Colorize the QA bands
-        colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.float32)
+        if verbose:
+            print('Colorizing')
+
+        colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.uint8)
         if len(qval_to_color) > 10:
             qa_iter = ub.ProgIter(qval_to_color.items(), total=len(qval_to_color), desc='complex QA')
         else:
             qa_iter = qval_to_color.items()
-        for qabit, color in qa_iter:
+        for qabit, color in ub.ProgIter(qa_iter, desc='colorize', enabled=verbose):
+            color255 = kwimage.Color.coerce(color).as255()
             mask = quality_im[:, :, 0] == qabit
-            colorized[mask] = color
+            colorized[mask] = color255
 
         # Because the QA band is categorical, we should be able to make a short
         qa_canvas = colorized
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
+
+        if verbose:
+            print('Build legend')
         legend = kwplot.make_legend_img(label_to_color, dpi=legend_dpi)  # Make a legend
+
+        if verbose:
+            print('finished qa drawing')
 
         drawings = {
             'qa_canvas': qa_canvas,
@@ -273,7 +304,7 @@ class QA_BitSpecTable(QA_SpecMixin):
                 parts['value'] = val
                 parts['bits'] = '---'
                 parts['desc'] = 'nodata'
-            val_to_desc[val] = ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+            val_to_desc[val] = '───\n' + ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0) + '\n───'
         return val_to_desc
 
 
@@ -381,9 +412,7 @@ class QA_ValueSpecTable(QA_SpecMixin):
         return val_to_desc
 
 
-class QA_SpecRegistry:
-    def __init__(self):
-        self.tables = []
+class QA_SpecRegistry(list):
 
     def query_table(self, spec_name='*', sensor='*'):
         """
@@ -398,7 +427,7 @@ class QA_SpecRegistry:
         """
         spec_pat = util_pattern.Pattern.coerce(spec_name)
         sensor_pat = util_pattern.Pattern.coerce(sensor)
-        for table in self.tables:
+        for table in self:
             matches_main_sensor = sensor_pat.match(table.spec['sensor'])
             maches_sensor_alias = any(
                 sensor_pat.match(a) for a in table.spec.get('sensor_alias', []))
@@ -414,66 +443,172 @@ class QA_SpecRegistry:
         table = results[0]
         return table
 
-    def __iadd__(self, table):
-        self.tables.append(table)
-        return self
-
 
 QA_SPECS = QA_SpecRegistry()
 
 
-QA_SPECS += QA_BitSpecTable({
+QA_SPECS.append(QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'S2',
     'sensor_alias': ['Sentinel-2'],
     'dtype': {'kind': 'u', 'itemsize': 2},
     'bits': [
-        {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [{'value': 1, 'description': 'use-pixel'}]},
-        {'bit_number': 1, 'qa_name': 'cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 2, 'qa_name': 'cloud_adjacent', 'qa_description': 'adjacent to cloud/shadow', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 3, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 4, 'qa_name': 'ice', 'qa_description': 'snow / ice', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 5, 'qa_name': 'water', 'qa_description': 'water', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {
+            'bit_number': 0,
+            'qa_name': 'combined',
+            'qa_description': 'combined qa mask',
+            'bit_value': [
+                {'value': 1, 'description': 'use-pixel'}
+            ]
+        },
+        {
+            'bit_number': 1,
+            'qa_name': 'cloud',
+            'qa_description': 'cloud',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 2,
+            'qa_name': 'cloud_adjacent',
+            'qa_description': 'adjacent to cloud/shadow',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 3,
+            'qa_name': 'cloud_shadow',
+            'qa_description': 'cloud shadow',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 4,
+            'qa_name': 'ice',
+            'qa_description': 'snow / ice',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 5,
+            'qa_name': 'water',
+            'qa_description': 'water',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
         {'bit_number': 6, 'qa_name': None, 'qa_description': 'reserved for future use'},
         {'bit_number': 7, 'qa_name': None, 'qa_description': 'reserved for future use'},
-        {'bit_number': 8, 'qa_name': 'filled', 'qa_description': 'filled value', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {
+            'bit_number': 8,
+            'qa_name': 'filled',
+            'qa_description': 'filled value',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
         {'bit_number': 9, 'qa_description': 'reserved for future use'},
         {'bit_number': 10, 'qa_description': 'reserved for future use'},
         {'bit_number': 11, 'qa_description': 'reserved for future use'},
         {'bit_number': 12, 'qa_description': 'reserved for future use'},
         {'bit_number': 13, 'qa_description': 'reserved for future use'},
         {'bit_number': 14, 'qa_description': 'reserved for future use'},
-        {'bit_number': 15, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
     ]
-})
+}))
 
 
-QA_SPECS += QA_BitSpecTable({
+QA_SPECS.append(QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'L8',
     'sensor_alias': ['Landsat 8'],
     'dtype': {'kind': 'u', 'itemsize': 2},
     'bits': [
-        {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [{'value': 1, 'description': 'use-pixel'}]},
-        {'bit_number': 1, 'qa_name': 'cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 2, 'qa_name': 'cloud_adjacent', 'qa_description': 'adjacent to cloud/shadow', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 3, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 4, 'qa_name': 'ice', 'qa_description': 'snow / ice', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
-        {'bit_number': 5, 'qa_name': 'water', 'qa_description': 'water', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {
+            'bit_number': 0,
+            'qa_name': 'combined',
+            'qa_description': 'combined qa mask',
+            'bit_value': [
+                {'value': 1, 'description': 'use-pixel'}
+            ]
+        },
+        {
+            'bit_number': 1,
+            'qa_name': 'cloud',
+            'qa_description': 'cloud',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 2,
+            'qa_name': 'cloud_adjacent',
+            'qa_description': 'adjacent to cloud/shadow',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 3,
+            'qa_name': 'cloud_shadow',
+            'qa_description': 'cloud shadow',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 4,
+            'qa_name': 'ice',
+            'qa_description': 'snow / ice',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 5,
+            'qa_name': 'water',
+            'qa_description': 'water',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
         {'bit_number': 6, 'qa_name': None, 'qa_description': 'reserved for future use'},
         {'bit_number': 7, 'qa_name': None, 'qa_description': 'reserved for future use'},
-        {'bit_number': 8, 'qa_name': 'filled', 'qa_description': 'filled value', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {
+            'bit_number': 8,
+            'qa_name': 'filled',
+            'qa_description': 'filled value',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
         {'bit_number': 9, 'qa_description': 'reserved for future use'},
         {'bit_number': 10, 'qa_description': 'reserved for future use'},
         {'bit_number': 11, 'qa_description': 'reserved for future use'},
         {'bit_number': 12, 'qa_description': 'reserved for future use'},
         {'bit_number': 13, 'qa_description': 'reserved for future use'},
         {'bit_number': 14, 'qa_description': 'reserved for future use'},
-        {'bit_number': 15, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
     ]
-})
+}))
 
 
 """
@@ -481,95 +616,178 @@ Note: In Ver 2 processing, WorldView VNIR products will include a 2nd QA file
 containing QA information per multispectral band -Filename: *_QA2.tif -Format
 same as original QA file
 """
-QA_SPECS += QA_BitSpecTable({
-
+QA_SPECS.append(QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'WV',
     'sensor_alias': ['WV1'],
     'dtype': {'kind': 'u', 'itemsize': 2},
-
     'bits': [
-        {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [{'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}]},
-        {'bit_number': 1, 'qa_name': 'cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 2, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 3, 'qa_name': 'thin_cloud', 'qa_description': 'thin cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 4, 'qa_description': 'reserved for future use', },
-        {'bit_number': 7, 'qa_description': 'reserved for future use', },
-        {'bit_number': 8, 'qa_description': 'filled value / suspicious pixel', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 9, 'qa_description': 'AOD Source', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 10, 'qa_description': 'climatology source', 'bit_value': [{'value': 1, 'description': 'climatology'}, {'value': 0, 'description': 'MODIS'}] },
-        {'bit_number': 11, 'qa_description': 'reserved for future use', },
-        {'bit_number': 12, 'qa_description': 'reserved for future use', },
-        {'bit_number': 13, 'qa_description': 'reserved for future use', },
-        {'bit_number': 14, 'qa_description': 'reserved for future use', },
-        {'bit_number': 15, 'qa_description': 'reserved for future use', },
+        {
+            'bit_number': 0,
+            'qa_name': 'combined',
+            'qa_description': 'combined qa mask',
+            'bit_value': [
+                {'value': 1, 'description': 'use-pixel'},
+                {'value': 0, 'description': 'ignore-pixel'}
+            ]
+        },
+        {
+            'bit_number': 1,
+            'qa_name': 'cloud',
+            'qa_description': 'cloud',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 2,
+            'qa_name': 'cloud_shadow',
+            'qa_description': 'cloud shadow',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 3,
+            'qa_name': 'thin_cloud',
+            'qa_description': 'thin cloud',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {'bit_number': 4, 'qa_description': 'reserved for future use'},
+        {'bit_number': 7, 'qa_description': 'reserved for future use'},
+        {
+            'bit_number': 8,
+            'qa_description': 'filled value / suspicious pixel',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 9,
+            'qa_description': 'AOD Source',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 10,
+            'qa_description': 'climatology source',
+            'bit_value': [
+                {'value': 1, 'description': 'climatology'},
+                {'value': 0, 'description': 'MODIS'}
+            ]
+        },
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
     ]
-})
+}))
 
 
-QA_SPECS += QA_BitSpecTable({
+QA_SPECS.append(QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'PD',
-    'dtype': {
-        'kind': 'u',
-        'itemsize': 2,  # in bytes
-    },
-
+    'dtype': {'kind': 'u', 'itemsize': 2},
     'bits': [
-        {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [ {'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}, ], },
-        {'bit_number': 1, 'qa_name': 'cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 2, 'qa_description': 'reserved for future use', },
-        {'bit_number': 7, 'qa_description': 'reserved for future use', },
-        {'bit_number': 8, 'qa_name': 'filled', 'qa_description': 'filled value / suspicious pixel', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 9, 'qa_description': 'AOD Source', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}] },
-        {'bit_number': 10, 'qa_description': 'climatology source', 'bit_value': [{'value': 1, 'description': 'climatology'}, {'value': 0, 'description': 'MODIS'}] },
-        {'bit_number': 11, 'qa_description': 'reserved for future use', },
-        {'bit_number': 12, 'qa_description': 'reserved for future use', },
-        {'bit_number': 13, 'qa_description': 'reserved for future use', },
-        {'bit_number': 14, 'qa_description': 'reserved for future use', },
-        {'bit_number': 15, 'qa_description': 'reserved for future use', },
+        {
+            'bit_number': 0,
+            'qa_name': 'combined',
+            'qa_description': 'combined qa mask',
+            'bit_value': [
+                {'value': 1, 'description': 'use-pixel'},
+                {'value': 0, 'description': 'ignore-pixel'}
+            ]
+        },
+        {
+            'bit_number': 1,
+            'qa_name': 'cloud',
+            'qa_description': 'cloud',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {'bit_number': 2, 'qa_description': 'reserved for future use'},
+        {'bit_number': 7, 'qa_description': 'reserved for future use'},
+        {
+            'bit_number': 8,
+            'qa_name': 'filled',
+            'qa_description': 'filled value / suspicious pixel',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 9,
+            'qa_description': 'AOD Source',
+            'bit_value': [
+                {'value': 1, 'description': 'yes'},
+                {'value': 0, 'description': 'no'}
+            ]
+        },
+        {
+            'bit_number': 10,
+            'qa_description': 'climatology source',
+            'bit_value': [
+                {'value': 1, 'description': 'climatology'},
+                {'value': 0, 'description': 'MODIS'}
+            ]
+        },
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
     ]
-})
+}))
 
 
 # https://github.com/GERSL/Fmask#46-version
-QA_SPECS += QA_ValueSpecTable({
+QA_SPECS.append(QA_ValueSpecTable({
     'qa_spec_name': 'FMASK',
     'qa_spec_date': '???',
     'sensor': '*',
     'dtype': {'kind': 'u', 'itemsize': 1},
-    # Note: this is different than a bit table.
     'values': [
         {'value': 0, 'qa_name': 'clear', 'qa_description': 'clear land pixel'},
         {'value': 1, 'qa_name': 'water', 'qa_description': 'clear water pixel'},
         {'value': 2, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow'},
         {'value': 3, 'qa_name': 'ice', 'qa_description': 'snow'},
         {'value': 4, 'qa_name': 'cloud', 'qa_description': 'cloud'},
-        {'value': 255, 'qa_description': 'no observation'},
+        {'value': 255, 'qa_description': 'no observation'}
     ]
-})
+}))
 
 
 # https://github.com/GERSL/Fmask#46-version
-QA_SPECS += QA_BitSpecTable({
+QA_SPECS.append(QA_BitSpecTable({
     'qa_spec_name': 'Phase1_QA',
     'qa_spec_date': '2022-03-28',
     'sensor': '*',
     'dtype': {'kind': 'u', 'itemsize': 1},
-    # Note: this is different than a bit table.
     'bits': [
-        { 'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'TnE'},
-        { 'bit_number': 1, 'qa_name': 'dilated_cloud', 'qa_description': 'dilated_cloud'},
-        { 'bit_number': 2, 'qa_name': 'cirrus', 'qa_description': 'cirrus'},
-        { 'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
-        { 'bit_number': 4, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud_shadow'},
-        { 'bit_number': 5, 'qa_name': 'ice', 'qa_description': 'snow'},
-        { 'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
-        { 'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'},
+        {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'TnE'},
+        {'bit_number': 1, 'qa_name': 'dilated_cloud', 'qa_description': 'dilated_cloud'},
+        {'bit_number': 2, 'qa_name': 'cirrus', 'qa_description': 'cirrus'},
+        {'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
+        {'bit_number': 4, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud_shadow'},
+        {'bit_number': 5, 'qa_name': 'ice', 'qa_description': 'snow'},
+        {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
+        {'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'}
     ]
-})
+}))
 
 
 def demo():

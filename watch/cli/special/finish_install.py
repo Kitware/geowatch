@@ -5,7 +5,10 @@ import ubelt as ub
 
 class FinishInstallCLI(scfg.DataConfig):
     """
-    This script finishes the install of geowatch
+    Finish the install of geowatch.
+
+    This is a special script that handles install logic that could not be added
+    to the setup.py
     """
     __command__ = 'finish_install'
 
@@ -43,7 +46,6 @@ class FinishInstallCLI(scfg.DataConfig):
 
 __cli__ = FinishInstallCLI
 main = __cli__.main
-__config__ = __cli__
 
 
 if __name__ == '__main__':
