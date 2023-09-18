@@ -73,7 +73,7 @@ def main(cmdline=1, **kwargs):
 
     for t in tracks:
         if t['score'] < config.threshold:
-            track_ids_to_drop.append(t['track_id'])
+            track_ids_to_drop.append(t['id'])
 
     print(f"Dropping {len(track_ids_to_drop)} / {len(tracks)} tracks")
 

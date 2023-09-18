@@ -49,8 +49,10 @@ def score_tracks(img_coco_dset, model_fpath):
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
     use_ln = False
+    res = '2GSD'
     if str(model_fpath).find('model4') != -1:
         use_ln = True
+        res = '1GSD'
     model = getModel(proto=proto_fpath, use_ln=use_ln)
 
     model.load_weights(model_fpath, by_name=True, skip_mismatch=True)
@@ -139,7 +141,7 @@ def score_tracks(img_coco_dset, model_fpath):
         # videospace region down. Looks like quantization errors may happen
         # here not sure how I deal with in the dataloader, it probably needs to
         # be fixed there too.
-        res = '2GSD'
+        # res = '2GSD'
         scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
 
         # cxy = vidspace_annot_box.to_cxywh().data[0:2]
