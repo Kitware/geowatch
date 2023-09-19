@@ -882,7 +882,7 @@ class ProcessNode(Node):
     # A path that will specified directly after the DAG root dpath.
     group_dname : Optional[str] = None
 
-    resources : Collection = None
+    # resources : Collection = None  # Unused?
 
     executable : Optional[str] = None
 
@@ -905,7 +905,7 @@ class ProcessNode(Node):
                  executable=None,
                  algo_params=None,
                  perf_params=None,
-                 resources=None,
+                 # resources=None,
                  in_paths=None,
                  out_paths=None,
                  group_dname=None,
@@ -946,10 +946,10 @@ class ProcessNode(Node):
 
         args = locals()
         fallbacks = {
-            'resources': {
-                'cpus': 2,
-                'gpus': 0,
-            },
+            # 'resources': {
+            #     'cpus': 2,
+            #     'gpus': 0,
+            # },
             'config': {},
             'in_paths': {},
             'out_paths': {},

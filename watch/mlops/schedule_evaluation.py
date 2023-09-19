@@ -214,8 +214,8 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
     cache = scfg.Value(True, isflag=True, help=(
         'if true, each a test is appened to each job to skip itself if its output exists'))
 
-    draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on eval')
-    draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on eval')
+    draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on pixel eval')
+    draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on pixel eval')
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 

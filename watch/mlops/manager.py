@@ -40,7 +40,7 @@ Example:
     python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
 
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
+    HACK_SAVE_ANYWAY=1 python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
 
     python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
 
@@ -866,6 +866,10 @@ class ExperimentState(ub.NiceRepr):
     def package_checkpoints(self, yes=None):
         from watch.mlops import repackager
         from rich.prompt import Confirm
+
+        import os
+        os.environ['HACK_SAVE_ANYWAY'] = '1'
+
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
@@ -946,8 +950,8 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m watch.mlops.manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.mlops.manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.manager "pull packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.manager "status packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
             """))
 
     def add_packages(self, yes=None):
