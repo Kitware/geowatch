@@ -255,22 +255,23 @@ def export_cold_main(cmdline=1, **kwargs):
                                        zip(img_dates, img_names)))
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                        zip(img_dates, img_names)))
-    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                       zip(img_dates_L8, img_names_L8)))
-    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                       zip(img_dates_L8, img_names_L8)))
-    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                       zip(img_dates_S2, img_names_S2)))
-    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                       zip(img_dates_S2, img_names_S2)))
-
     img_dates = sorted(img_dates)
     img_names = sorted(img_names)
-    img_dates_L8 = sorted(img_dates_L8)
-    img_names_L8 = sorted(img_names_L8)
-    img_dates_S2 = sorted(img_dates_S2)
-    img_names_S2 = sorted(img_names_S2)
-    
+    if 'L8' in sensors:
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_L8, img_names_L8)))
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                        zip(img_dates_L8, img_names_L8)))
+        img_dates_L8 = sorted(img_dates_L8)
+        img_names_L8 = sorted(img_names_L8)
+    if 'S2' in sensors:
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_S2, img_names_S2)))
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                        zip(img_dates_S2, img_names_S2)))
+        img_dates_S2 = sorted(img_dates_S2)
+        img_names_S2 = sorted(img_names_S2) 
+           
     if timestamp:
         ordinal_day_list = img_dates
     if not timestamp:
@@ -280,24 +281,36 @@ def export_cold_main(cmdline=1, **kwargs):
         first_img_names_S2 = []
         last_year_L8 = None
         last_year_S2 = None
-        for ordinal_day_L8, img_name_L8 in zip(img_dates_L8, img_names_L8):
-            year_L8 = pd.Timestamp.fromordinal(ordinal_day_L8).year
-            if year_L8 != last_year_L8:
-                # print("L8", img_name_L8)
-                first_ordinal_dates_L8.append(ordinal_day_L8)
-                first_img_names_L8.append(img_name_L8)
-                last_year_L8 = year_L8
-        for ordinal_day_S2, img_name_S2 in zip(img_dates_S2, img_names_S2):
-            year_S2 = pd.Timestamp.fromordinal(ordinal_day_S2).year
-            if year_S2 != last_year_S2:
-                # print("S2", img_name_S2)
-                first_ordinal_dates_S2.append(ordinal_day_S2)
-                first_img_names_S2.append(img_name_S2)
-                last_year_S2 = year_S2
+        if 'L8' in sensors:
+            for ordinal_day_L8, img_name_L8 in zip(img_dates_L8, img_names_L8):
+                year_L8 = pd.Timestamp.fromordinal(ordinal_day_L8).year
+                if year_L8 != last_year_L8:
+                    # print("L8", img_name_L8)
+                    first_ordinal_dates_L8.append(ordinal_day_L8)
+                    first_img_names_L8.append(img_name_L8)
+                    last_year_L8 = year_L8
+        if 'S2' in sensors:
+            for ordinal_day_S2, img_name_S2 in zip(img_dates_S2, img_names_S2):
+                year_S2 = pd.Timestamp.fromordinal(ordinal_day_S2).year
+                if year_S2 != last_year_S2:
+                    # print("S2", img_name_S2)
+                    first_ordinal_dates_S2.append(ordinal_day_S2)
+                    first_img_names_S2.append(img_name_S2)
+                    last_year_S2 = year_S2
         if exclude_first:
-            ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:]
+            if 'L8' in sensors and 'S2' in sensors:
+                ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:]
+            elif 'L8' in sensors and 'S2' not in sensors:
+                ordinal_day_list = first_ordinal_dates_L8[1:]
+            elif 'S2' in sensors and 'L8' not in sensors:
+                ordinal_day_list = first_ordinal_dates_S2[1:]
         else:
-            ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+            if 'L8' in sensors and 'S2' in sensors:
+                ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+            elif 'L8' in sensors and 'S2' not in sensors:
+                ordinal_day_list = first_ordinal_dates_L8
+            elif 'S2' in sensors and 'L8' not in sensors:
+                ordinal_day_list = first_ordinal_dates_S2
         ordinal_day_list.sort()
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)

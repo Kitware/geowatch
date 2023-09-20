@@ -216,12 +216,6 @@ def assemble_main(cmdline=1, **kwargs):
     else:
         year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
 
-    img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates, img_names)))
-    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates_L8, img_names_L8)))
-    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates_S2, img_names_S2)))
     if year_highbound is None:
         year_high_ordinal = max(img_dates)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
@@ -230,16 +224,24 @@ def assemble_main(cmdline=1, **kwargs):
 
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                             zip(img_dates, img_names)))
-    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                            zip(img_dates_L8, img_names_L8)))
-    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                            zip(img_dates_S2, img_names_S2)))
     img_dates = sorted(img_dates)
-    img_names = sorted(img_names)
-    img_dates_L8 = sorted(img_dates_L8)
-    img_names_L8 = sorted(img_names_L8)
-    img_dates_S2 = sorted(img_dates_S2)
-    img_names_S2 = sorted(img_names_S2)
+    img_names = sorted(img_names)    
+
+    if 'L8' in sensors:
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_L8, img_names_L8)))
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                        zip(img_dates_L8, img_names_L8)))
+        img_dates_L8 = sorted(img_dates_L8)
+        img_names_L8 = sorted(img_names_L8)
+    if 'S2' in sensors:
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_S2, img_names_S2)))
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                        zip(img_dates_S2, img_names_S2)))
+        img_dates_S2 = sorted(img_dates_S2)
+        img_names_S2 = sorted(img_names_S2) 
+    
     if timestamp:
         ordinal_day_list = img_dates
     if combine:
@@ -272,26 +274,39 @@ def assemble_main(cmdline=1, **kwargs):
         first_ordinal_dates_S2 = []
         first_img_names_S2 = []
         last_year = None
-        for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates_L8.append(ordinal_day)
-                first_img_names_L8.append(img_name[:-4])
-                last_year = year
-        for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates_S2.append(ordinal_day)
-                first_img_names_S2.append(img_name[:-4])
-                last_year = year
+        if 'L8' in sensors:
+            for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
+                year = pd.Timestamp.fromordinal(ordinal_day).year
+                if year != last_year:
+                    first_ordinal_dates_L8.append(ordinal_day)
+                    first_img_names_L8.append(img_name[:-4])
+                    last_year = year
+        if 'S2' in sensors:
+            for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
+                year = pd.Timestamp.fromordinal(ordinal_day).year
+                if year != last_year:
+                    first_ordinal_dates_S2.append(ordinal_day)
+                    first_img_names_S2.append(img_name[:-4])
+                    last_year = year
         if exclude_first:
-            combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:], 
+            if 'L8' in sensors and 'S2' in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:], 
                                      first_img_names_L8[1:] + first_img_names_S2[1:]))
+            elif 'L8' in sensors and 'S2' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+            elif 'S2' in sensors and 'L8' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
+            
             # ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[:1]
             # img_names = first_img_names_L8[1:] + first_img_names_S2[1:]
         else:
-            combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2, 
+            if 'L8' in sensors and 'S2' in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2, 
                                      first_img_names_L8 + first_img_names_S2))
+            elif 'L8' in sensors and 'S2' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+            elif 'S2' in sensors and 'L8' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
             # ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
             # img_names = first_img_names_L8 + first_img_names_S2
         combined_data.sort(key=lambda x: x[0])
