@@ -143,7 +143,7 @@ def binary(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
 
-    return hard_probs.astype("float")
+    return hard_probs.astype('float')
 
 
 def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999, viz_dpath=None):
@@ -155,7 +155,7 @@ def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.9
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
 
-    return hard_probs.astype("float")
+    return hard_probs.astype('float')
 
 
 def probs(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
@@ -187,10 +187,10 @@ def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.99
 
 
 def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None, viz_dpath=None):
-    '''
+    """
     Normalize average_heatmap by applying a scaling based on max(heatmaps) and
     max(average_heatmap)
-    '''
+    """
     import numpy as np
     import kwimage
     average = _norm(heatmaps, norm_ord)
@@ -210,10 +210,10 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None, viz_dpath
 
 
 def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3, viz_dpath=None):
-    '''
+    """
     Convert a list of heatmaps to an aggregated score, averaging is computed
     based on samples for every pixel
-    '''
+    """
     import kwimage
     import numpy as np
     heatmaps = np.array(heatmaps)
@@ -249,9 +249,9 @@ AGG_FN_REGISTRY = {
 
 
 class TimePolygonFilter:
-    '''
+    """
     Cuts off start and end of each track based on min response.
-    '''
+    """
 
     def __init__(self, threshold):
         self.threshold = threshold
@@ -278,9 +278,9 @@ class TimePolygonFilter:
 
 
 class ResponsePolygonFilter:
-    '''
+    """
     Filters each track based on the average response of all tracks.
-    '''
+    """
 
     def __init__(self, gdf, threshold):
 
@@ -444,21 +444,21 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
     #     for ann in sub_dset.dataset["annotations"]
     # ])
     import pandas as pd
-    imgs = pd.DataFrame(sub_dset.dataset["images"])
-    if "timestamp" not in imgs.columns:
-        imgs["timestamp"] = imgs["id"]
+    imgs = pd.DataFrame(sub_dset.dataset['images'])
+    if 'timestamp' not in imgs.columns:
+        imgs['timestamp'] = imgs['id']
 
-    annots = pd.DataFrame(sub_dset.dataset["annotations"])
+    annots = pd.DataFrame(sub_dset.dataset['annotations'])
 
     if annots.shape[0] == 0:
-        print("Nothing to filter")
+        print('Nothing to filter')
         return sub_dset
 
     annots = annots[[
-        "id", "image_id", "track_id", "score"
+        'id', 'image_id', 'track_id', 'score'
     ]].join(
-        imgs[["timestamp"]],
-        on="image_id",
+        imgs[['timestamp']],
+        on='image_id',
     )
 
     track_ids_to_drop = []
@@ -470,10 +470,10 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
         # `span_steps`-wide weighted moving average. The maximum
         # value of this decides whether to keep the track.
         # TODO: do something more elegant here?
-        score = track_group["score"].ewm(span=span_steps).mean().max()
+        score = track_group['score'].ewm(span=span_steps).mean().max()
         if score < thresh:
             track_ids_to_drop.append(track_id)
-            ann_ids_to_drop.extend(track_group["id"].tolist())
+            ann_ids_to_drop.extend(track_group['id'].tolist())
 
     print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
     if len(ann_ids_to_drop) > 0:
@@ -484,7 +484,7 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
 
 @profile
 def time_aggregated_polys(sub_dset, **kwargs):
-    '''
+    """
     Track function.
 
     Aggregate heatmaps across time, threshold them to get polygons,
@@ -546,7 +546,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
         >>>                 sub_dset, thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
         >>> assert inter_track.iloc[0][('fg', -1)] == 0
         >>> assert inter_track.iloc[1][('fg', -1)] > 0
-    '''
+    """
     #
     # --- input validation ---
     #
@@ -741,7 +741,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
 
 def _merge_polys(p1, p2, poly_merge_method=None):
-    '''
+    """
     Given two lists of polygons, p1 and p2, merge these according to:
       - add all unique polygons in the merged list
       - for overlapping polygons, add the union of both polygons
@@ -778,7 +778,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                 combo = unary_union([_p1, _p2])
                 if combo.geom_type != 'Polygon':
                     raise Exception('!')
-    '''
+    """
     import numpy as np
     merged_polys = []
     if poly_merge_method is None:
@@ -902,9 +902,9 @@ viz_n_window = 0  # FIXME, no dynamic globals
 
 @profile
 def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
-    '''
+    """
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
-    '''
+    """
     global viz_n_window
     import numpy as np
 
@@ -1159,6 +1159,9 @@ def _resolve_arg_values(self):
 
 
 class _GidPolyConfig(scfg.DataConfig):
+    # This is the base config that all from-heatmap trackers have in common
+    # which has to do with how heatmaps are loaded, normalized, and aggregated.
+
     key = scfg.Value('salient', help=ub.paragraph(
         '''
         One or more channels to use as positive class for binary heatmap
@@ -1247,7 +1250,6 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     This is an intermediate config that we will use to transition between the
     current dataclass configuration and a new scriptconfig based one.
 
-
     python -c "if 1:
         from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
         TimeAggregatedBAS().argparse().print_help()
@@ -1325,9 +1327,9 @@ class TrackFnWithSV(CommonTrackFn):
 
 
 class TimeAggregatedBAS(TrackFnWithSV):
-    '''
+    """
     Wrapper for BAS that looks for change heatmaps.
-    '''
+    """
     thresh: float = 0.2
     key: str = 'salient'
     agg_fn: str = 'probs'
@@ -1349,14 +1351,14 @@ class TimeAggregatedBAS(TrackFnWithSV):
 
 
 class TimeAggregatedSC(TrackFnWithSV):
-    '''
+    """
     Wrapper for Site Characterization that looks for phase heatmaps.
 
     Alias: class_heatmaps
 
     Note:
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
-    '''
+    """
     thresh: float = 0.01
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
@@ -1364,12 +1366,12 @@ class TimeAggregatedSC(TrackFnWithSV):
     time_thresh = None
 
     def create_tracks(self, sub_dset):
-        '''
+        """
         boundaries_as: use for Site Boundary annots in coco_dset
             'bounds': generated polys will lie inside the boundaries
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
-        '''
+        """
         import kwcoco
         import kwimage
 
@@ -1427,7 +1429,7 @@ class TimeAggregatedSC(TrackFnWithSV):
 
 
 class TimeAggregatedSV(CommonTrackFn):
-    '''
+    """
     Wrapper for Site Validation that looks for phase heatmaps.
 
     Alias:
@@ -1435,19 +1437,19 @@ class TimeAggregatedSV(CommonTrackFn):
 
     Note:
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
-    '''
+    """
     thresh: float = 0.1
     key: str = 'salient'
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
     span_steps: int = 120
 
     def create_tracks(self, sub_dset):
-        '''
+        """
         boundaries_as: use for Site Boundary annots in coco_dset
             'bounds': generated polys will lie inside the boundaries
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
-        '''
+        """
         import kwcoco
         import kwimage
         if self.boundaries_as == 'polys':
