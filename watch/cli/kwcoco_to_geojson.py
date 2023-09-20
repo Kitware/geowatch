@@ -475,11 +475,14 @@ def predict_phase_changes(site_id, observations):
                 obs_date = util_time.coerce_datetime(props['observation_date'])
                 days = cache['phase_transition_days'][_idx]
                 pred_delta = datetime_mod.timedelta(days=int(days))
-                return (obs_date + pred_delta).isoformat()
+                pred_datetime = (obs_date + pred_delta)
+                pred_date = pred_datetime.date()
+                return pred_date.isoformat()
         print(f'warning: {site_id=} is missing {phase=}')
         final_date = util_time.coerce_datetime(
             feature_properties[-1]['observation_date'])
         tomorrow = final_date + datetime_mod.timedelta(days=1)
+        tomorrow = tomorrow.date()
         return tomorrow.isoformat()
 
     final_phase = feature_phases[-1]
