@@ -40,7 +40,7 @@ Example:
     >>>     print(f'{node.config=}')
     >>>     print(f'{node.in_paths=}')
     >>>     print(f'{node.out_paths=}')
-    >>>     print(f'{node.resources=}')
+    >>>     #print(f'{node.resources=}')
     >>>     print(f'{node.algo_params=}')
     >>>     print('node.depends = {}'.format(ub.urepr(node.depends, nl=1, sort=0)))
     >>>     final = node._finalize_templates()
@@ -162,19 +162,16 @@ class HeatmapPrediction(ProcessNode):
     executable = 'python -m watch.tasks.fusion.predict'
     group_dname = PREDICT_NAME
 
-    resources = {
-        'cpus': 2,
-        'gpus': 1,
-    }
+    # resources = {
+    #     'cpus': 2,
+    #     'gpus': 1,
+    # }
 
     perf_params = {
         'num_workers': 2,
         'devices': '0,',
         #'accelerator': 'gpu',
         'batch_size': 1,
-        'with_saliency': 'auto',
-        'with_class': 'auto',
-        'with_change': 'auto',
     }
 
     in_paths = {
@@ -184,6 +181,9 @@ class HeatmapPrediction(ProcessNode):
 
     algo_params = {
         'drop_unused_frames': True,
+        'with_saliency': 'auto',
+        'with_class': 'auto',
+        'with_change': 'auto',
     }
 
     out_paths = {
@@ -375,9 +375,9 @@ class KWCocoVisualization(ProcessNode):
     executable = 'python -m watch.cli.coco_visualize_videos'
     group_dname = PREDICT_NAME
 
-    resources = {
-        'cpus': 2,
-    }
+    # resources = {
+    #     'cpus': 2,
+    # }
 
     in_paths = {
         'poly_kwcoco_fpath',
@@ -471,7 +471,7 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
     # # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
     # node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
 
-    perf_params = ub.udict(HeatmapPrediction.perf_params) | {
+    algo_params = ub.udict(HeatmapPrediction.algo_params) | {
         'with_saliency': True,
         'with_class': False,
         'with_change': False,
@@ -490,8 +490,9 @@ class SC_HeatmapPrediction(HeatmapPrediction):
     # # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
     # node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
 
-    perf_params = ub.udict(HeatmapPrediction.perf_params) | {
-        'with_saliency': False,
+    algo_params = ub.udict(HeatmapPrediction.algo_params) | {
+        'saliency_chan_code': 'ac_salient',
+        'with_saliency': True,
         'with_class': True,
         'with_change': False,
     }

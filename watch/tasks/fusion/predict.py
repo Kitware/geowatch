@@ -135,6 +135,17 @@ class PredictConfig(DataModuleConfigMixin):
             currently hard-coded based on expected output heads. This
             may change in the future.
             '''))
+    write_workers = scfg.Value('datamodule', help=ub.paragraph(
+            '''
+            workers to use for writing results. If unspecified uses the
+            datamodule num_workers
+            '''))
+
+    saliency_chan_code = scfg.Value('salient', help=ub.paragraph(
+        '''
+        Quick and dirty param to modify the channel name of salient output.
+        This probably isn't generally useful and should be refactored later.
+        '''))
 
 
 def build_stitching_managers(config, method, result_dataset, writer_queue=None):
@@ -224,7 +235,8 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
     if config['with_saliency']:
         # hack: the model should tell us what the shape of its head is
         task_name = 'saliency'
-        head_classes = ['not_salient', 'salient']
+        salient_code = config.saliency_chan_code
+        head_classes = ['not_' + salient_code, salient_code]
         head_keep_idxs = [
             idx for idx, catname in enumerate(head_classes)
             if catname not in ignore_classes]
@@ -241,7 +253,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
             result_dataset,
             chan_code=chan_code,
             short_code='pred_' + task_name,
-            polygon_categories=['salient'],
+            polygon_categories=[salient_code],
             num_bands=len(head_keep_classes),
             **stitcher_common_kw,
         )
@@ -600,7 +612,7 @@ def predict(cmdline=False, **kwargs):
     import rich
     args = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     args.datamodule_defaults = args.__DATAMODULE_DEFAULTS__
-    config = args.asdict()
+    config = args
     datamodule_defaults = args.datamodule_defaults
     # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
     rich.print('config = {}'.format(ub.urepr(args, nl=2)))
@@ -845,7 +857,7 @@ def predict(cmdline=False, **kwargs):
                         bad_data._build_hashid())
         return jsonified
 
-    config_resolved = jsonify(config)
+    config_resolved = jsonify(config.asdict())
     traintime_params = jsonify(traintime_params)
 
     from kwcoco.util import util_json

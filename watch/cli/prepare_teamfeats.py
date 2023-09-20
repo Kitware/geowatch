@@ -18,7 +18,7 @@ Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
-    >>>     'base_fpath': './pretend_bundle/data.kwcoco.json',
+    >>>     'src_kwcocos': './pretend_bundle/data.kwcoco.json',
     >>>     'gres': [0, 1],
     >>>     'expt_dvc_dpath': './pretend_expt_dvc',
     >>> #
@@ -51,7 +51,7 @@ Ignore:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
+        --src_kwcocos "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=0 \
         --with_landcover=0 \
@@ -67,7 +67,7 @@ Ignore:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
+        --src_kwcocos "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
         --with_landcover=0 \
@@ -85,7 +85,7 @@ Ignore:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+        --src_kwcocos "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=1 \
         --with_invariants2=1 \
@@ -99,7 +99,7 @@ Ignore:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     python -m watch.cli.prepare_splits \
-        --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
+        --src_kwcocos=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
         --constructive_mode=True \
         --suffix=I2LS \
         --backend=tmux --tmux_workers=6 \
@@ -135,10 +135,10 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     TODO:
         - [ ] jsonargparse use-case: specifying parmeters of the subalgos
     """
-    base_fpath = scfg.Value(None, help=ub.paragraph(
+    src_kwcocos = scfg.Value(None, help=ub.paragraph(
             '''
             One or more base coco files to compute team-features on.
-            '''), nargs='+', alias=['src_kwcocos'], group='inputs')
+            '''), nargs='+', alias=['base_fpath'], group='inputs')
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
             '''
             The DVC directory where team feature model weights can be
@@ -236,7 +236,7 @@ def prep_feats(cmdline=True, **kwargs):
         '_rutgers_material_seg_v4',
     ]
 
-    base_fpath_pat = config['base_fpath']
+    base_fpath_pat = config['src_kwcocos']
     base_fpath_list = list(util_path.coerce_patterned_paths(
         base_fpath_pat, globfallback=True))
 
@@ -244,21 +244,21 @@ def prep_feats(cmdline=True, **kwargs):
 
     dag_nodes = []
 
-    for base_fpath in base_fpath_list:
+    for src_fpath in base_fpath_list:
         # Hack to prevent doubling up.
         # Should really just choose a better naming scheme so we don't have
         # to break user expectations about glob
-        if any(b in base_fpath.name for b in blocklist):
-            print(f'blocked base_fpath={base_fpath}')
+        if any(b in src_fpath.name for b in blocklist):
+            print(f'blocked src_fpath={src_fpath}')
             continue
 
         if config.check:
-            if not base_fpath.exists():
+            if not src_fpath.exists():
                 raise FileNotFoundError(
-                    'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
-        aligned_bundle_dpath = base_fpath.parent
+                    'Specified kwcoco file: {src_fpath!r=} does not exist and check=True')
+        aligned_bundle_dpath = src_fpath.parent
 
-        nodes = _make_teamfeat_nodes(base_fpath, expt_dvc_dpath,
+        nodes = _make_teamfeat_nodes(src_fpath, expt_dvc_dpath,
                                      aligned_bundle_dpath, config)
         dag_nodes.extend(nodes)
 
@@ -285,7 +285,7 @@ def prep_feats(cmdline=True, **kwargs):
     return queue
 
 
-def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
+def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
     from watch.mlops.pipeline_nodes import ProcessNode
     from watch.utils import util_parallel
     from watch.utils import simple_dvc
@@ -327,9 +327,12 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
         'sam': expt_dvc_dpath / 'models/sam/sam_vit_h_4b8939.pth'
     }
 
-    subset_name = base_fpath.name.split('.')[0]
+    subset_name = src_fpath.name.split('.')[0]
 
-    name_suffix = '_' + ub.hash_data(base_fpath)[0:8]
+    if subset_name.endswith('-rawbands'):
+        subset_name = subset_name.rsplit('-', 1)[0]
+
+    name_suffix = '_' + ub.hash_data(src_fpath)[0:8]
 
     outputs = {
         # 'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3' + config['kwcoco_ext']),
@@ -372,7 +375,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
             name=key + name_suffix,
             executable='python -m watch.tasks.landcover.predict',
             in_paths={
-                'dataset': base_fpath,
+                'dataset': src_fpath,
                 'deployed': model_fpaths['dzyne_landcover'],
             },
             out_paths={
@@ -398,11 +401,11 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
             name=key + name_suffix,
             executable='python -m watch.tasks.cold.predict',
             in_paths={
-                'coco_fpath': base_fpath,
+                'coco_fpath': src_fpath,
             },
             out_paths={
                 'mod_coco_fpath': outputs['cold'],
-                'out_dpath': base_fpath.parent,
+                'out_dpath': src_fpath.parent,
             },
             algo_params={
                 'sensors': 'L8',
@@ -456,7 +459,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
             name=key + name_suffix,
             executable='python -m watch.tasks.depth.predict',
             in_paths={
-                'dataset': base_fpath,
+                'dataset': src_fpath,
                 'deployed': model_fpaths['dzyne_depth'],
             },
             out_paths={
@@ -483,7 +486,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
             name=key + name_suffix,
             executable='python -m watch.tasks.rutgers_material_seg_v2.predict',
             in_paths={
-                'kwcoco_fpath': base_fpath,
+                'kwcoco_fpath': src_fpath,
                 'model_fpath': model_fpaths['rutgers_materials_model_v4'],
                 'config_fpath': model_fpaths['rutgers_materials_config_v4'],
             },
@@ -511,7 +514,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 python -m watch.tasks.mae.predict
                 '''),
             in_paths={
-                'input_kwcoco': base_fpath,
+                'input_kwcoco': src_fpath,
                 'mae_ckpt_path': model_fpaths['wu_mae_v1'],
             },
             out_paths={
@@ -544,7 +547,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 python -m watch.tasks.invariants.predict
                 '''),
             in_paths={
-                'input_kwcoco': base_fpath,
+                'input_kwcoco': src_fpath,
                 'pretext_package_path': model_fpaths['uky_pretext2'],
                 'pca_projection_path': model_fpaths['uky_pca'],
             },
@@ -582,7 +585,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 python -m watch.tasks.sam.predict
                 '''),
             in_paths={
-                'input_kwcoco': base_fpath,
+                'input_kwcoco': src_fpath,
                 'weights_fpath': model_fpaths['sam'],
             },
             out_paths={
@@ -617,7 +620,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
         feature_paths.extend(node_features)
 
     # Finalize features by combining them all into combo.kwcoco.json
-    tocombine = [str(base_fpath)] + feature_paths
+    tocombine = [str(src_fpath)] + feature_paths
     combo_code = ''.join(sorted(combo_code_parts))
 
     base_combo_fpath = aligned_bundle_dpath / (f'combo_{subset_name}_{combo_code}' + config['kwcoco_ext'])
@@ -654,7 +657,7 @@ if __name__ == '__main__':
     CommandLine:
         DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
+            --src_kwcocos="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
             --with_depth=0 \
             --run=False --skip_existing=False --virtualenv_cmd "conda activate watch" \
@@ -678,7 +681,7 @@ if __name__ == '__main__':
         # Team Features on Drop2
         DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+            --src_kwcocos=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  \
             --run=0
 
@@ -688,7 +691,7 @@ if __name__ == '__main__':
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --src_kwcocos=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=1 \
             --with_landcover=1 \
@@ -698,7 +701,7 @@ if __name__ == '__main__':
 
         # Simple demo
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=./mydata/data.kwcoco.json \
+            --src_kwcocos=./mydata/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=0 \
             --with_landcover=1 \

@@ -279,6 +279,7 @@ def main(cmdline=True, **kwargs):
             FusedChannelSpec.coerce('red|green|blue'),
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
+            FusedChannelSpec.coerce('ac_salient'),
             FusedChannelSpec.coerce('pan'),
         ]
         from collections import defaultdict, Counter
