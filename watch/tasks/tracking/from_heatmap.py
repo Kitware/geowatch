@@ -697,8 +697,10 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
     # TODO dask gives different results on polys that overlap nodata area, need
     # to debug this. (6% of polygons in KR_R001, so not a huge difference)
-    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True, resolution=resolution)
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False,
+    # USE_DASK = True
+    USE_DASK = False
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
+                                 USE_DASK=USE_DASK,
                                  resolution=config.resolution)
 
     if _TRACKS.empty:
@@ -1352,7 +1354,8 @@ class TimeAggregatedBAS(TrackFnWithSV):
 
 class TimeAggregatedSC(TrackFnWithSV):
     """
-    Wrapper for Site Characterization that looks for phase heatmaps.
+    Wrapper for Activity Characterization / Site Characterization that looks
+    for phase heatmaps.
 
     Alias: class_heatmaps
 
@@ -1360,8 +1363,18 @@ class TimeAggregatedSC(TrackFnWithSV):
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
     """
     thresh: float = 0.01
-    key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
+
+    # key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
+
+    # HACK TO REMEMBER ALL SCORES
+    # TODO: Ensure this does not  break anything and refactor such that the
+    # default behavior is to aggreate the score from all available classes when
+    # only scoring. When refining polygons, a different approach is needed.
+    key: Tuple[str] = tuple(['Site Preparation', 'Active Construction', 'Post Construction', 'No Activity', 'ac_salient'])
+
+    # IS THIS USED?
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
+
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
     time_thresh = None
 
