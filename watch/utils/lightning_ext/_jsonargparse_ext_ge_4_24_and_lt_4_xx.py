@@ -514,7 +514,7 @@ class ArgumentParserPatches:
             if skip_fn and skip_fn(value):
                 continue
 
-            from jsonargparse._common import  parser_context
+            from jsonargparse._common import parser_context
             with parser_context(parent_parser=self, lenient_check=True):
                 value = self._check_value_key(action, value, action_dest, prev_cfg)
             if isinstance(action, _ActionConfigLoad):

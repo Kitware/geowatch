@@ -181,7 +181,7 @@ REGISTERED_EMMISSION_PROBS = {}
 REGISTERED_TRANSITION_PROBS['default'] = np.array([
     [0.7, 0.1, 0.10, 0.10],
     [0.0, 0.7, 0.15, 0.15],
-    [0.0, 0.0,  0.7, 0.05],
+    [0.0, 0.0, 0.7, 0.05],
     [0.0, 0.0, 0.00, 1.00]])
 
 REGISTERED_TRANSITION_PROBS['v1'] = np.array([

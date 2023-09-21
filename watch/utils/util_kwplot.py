@@ -578,6 +578,7 @@ class ArtistManager:
         >>> ax.set_ylim(0, 5)
         >>> ax.autoscale_view()
     """
+
     def __init__(self):
         self.group_to_line_segments = ub.ddict(list)
         self.group_to_patches = ub.ddict(lambda : ub.ddict(list))

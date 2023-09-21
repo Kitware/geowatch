@@ -23,6 +23,7 @@ class PredictCLI(scfg.DataConfig):
         from watch.tasks.fusion import predict
         return predict.main(cmdline=cmdline, **kwargs)
 
+
 __cli__ = PredictCLI
 main = __cli__.main
 

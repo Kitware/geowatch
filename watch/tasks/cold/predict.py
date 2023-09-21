@@ -301,7 +301,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         metadata = None
         for region in os.listdir(out_dpath / 'stacked'):
-            if not region in str(config['coco_fpath']):
+            if region not in str(config['coco_fpath']):
                 pass
             elif region in str(config['coco_fpath']):
                 if os.path.exists(out_dpath / 'reccg' / region):
@@ -321,10 +321,9 @@ def cold_predict_main(cmdline=1, **kwargs):
                 adj_cloud=adj_cloud, method=method, workers=workers,
                 resolution=config.resolution,
             )
-            
+
             with open(meta_fpath, "r") as f:
                 metadata = json.load(f)
-        
 
         main_prog.step()
 

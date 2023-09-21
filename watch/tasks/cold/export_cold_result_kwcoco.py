@@ -216,7 +216,7 @@ def export_cold_main(cmdline=1, **kwargs):
     img_names_L8 = []
     img_dates_S2 = []
     img_names_S2 = []
-    
+
     # read metadata and
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
@@ -225,12 +225,12 @@ def export_cold_main(cmdline=1, **kwargs):
         img_dates.append(ordinal_date)
         img_names.append(img_name)
     for meta in meta_files:
-        meta_config = json.loads((block_folder / meta).read_text())        
+        meta_config = json.loads((block_folder / meta).read_text())
         if '_L8_' in meta_config['image_name']:
             ordinal_date_L8 = meta_config['ordinal_date']
             img_name_L8 = meta_config['image_name'] + '.npy'
             img_dates_L8.append(ordinal_date_L8)
-            img_names_L8.append(img_name_L8)        
+            img_names_L8.append(img_name_L8)
         elif '_S2_' in meta_config['image_name']:
             ordinal_date_S2 = meta_config['ordinal_date']
             img_name_S2 = meta_config['image_name'] + '.npy'
@@ -259,19 +259,19 @@ def export_cold_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if 'L8' in sensors:
         img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates_L8, img_names_L8)))
+                                                 zip(img_dates_L8, img_names_L8)))
         img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                        zip(img_dates_L8, img_names_L8)))
+                                                 zip(img_dates_L8, img_names_L8)))
         img_dates_L8 = sorted(img_dates_L8)
         img_names_L8 = sorted(img_names_L8)
     if 'S2' in sensors:
         img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates_S2, img_names_S2)))
+                                                 zip(img_dates_S2, img_names_S2)))
         img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                        zip(img_dates_S2, img_names_S2)))
+                                                 zip(img_dates_S2, img_names_S2)))
         img_dates_S2 = sorted(img_dates_S2)
-        img_names_S2 = sorted(img_names_S2) 
-           
+        img_names_S2 = sorted(img_names_S2)
+
     if timestamp:
         ordinal_day_list = img_dates
     if not timestamp:
