@@ -1588,6 +1588,58 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
                     fill=False)
             tostack.append(heatmap_canvas)
 
+        if 0:
+            # DEBUG
+            import kwplot
+            kwplot.autompl()
+            heatmap_delayed1 = coco_img.imdelay(channels=AC_SALIENT_CHANNELS, resolution=resolution, nodata_method='float')
+            heatmap_delayed2 = coco_img.imdelay(channels=AC_CHANNELS, resolution=resolution, nodata_method='float')
+
+            im1 = heatmap_delayed1.finalize()
+            im2 = heatmap_delayed2.finalize()
+
+            canvas1 = kwimage.make_heatmask(im1[:, :, 0], cmap='viridis')
+            canvas2 = util_kwimage.perchannel_colorize(im2, channel_colors=channel_colors)
+            canvas1 = kwimage.nodata_checkerboard(canvas1, on_value=0.3)
+            canvas2 = kwimage.nodata_checkerboard(canvas2, on_value=0.3)
+            kwplot.imshow(canvas1, fnum=1)
+            kwplot.imshow(canvas2, fnum=2)
+
+            heatmap_imcrop1 = heatmap_delayed1.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+            heatmap_imcrop2 = heatmap_delayed2.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+            im1 = heatmap_imcrop1.finalize()[:, :, 0]
+            im2 = heatmap_imcrop2.finalize()
+            canvas1 = kwimage.make_heatmask(im1, cmap='viridis')
+            canvas2 = util_kwimage.perchannel_colorize(im2, channel_colors=channel_colors)
+            canvas1 = kwimage.nodata_checkerboard(canvas1, on_value=0.3)
+            canvas2 = kwimage.nodata_checkerboard(canvas2, on_value=0.3)
+            kwplot.imshow(canvas1, fnum=3)
+            kwplot.imshow(canvas2, fnum=4)
+
+            im1 = heatmap_imcrop1.finalize(optimize=False)[:, :, 0]
+            im2 = heatmap_imcrop2.finalize(optimize=False)
+            canvas1 = kwimage.make_heatmask(im1, cmap='viridis')
+            canvas2 = util_kwimage.perchannel_colorize(im2, channel_colors=channel_colors)
+            canvas1 = kwimage.nodata_checkerboard(canvas1, on_value=0.3)
+            canvas2 = kwimage.nodata_checkerboard(canvas2, on_value=0.3)
+            kwplot.imshow(canvas1, fnum=5)
+            kwplot.imshow(canvas2, fnum=6)
+
+            print('AC-SALIENT FULL')
+            heatmap_delayed1.print_graph()
+
+            heatmap_delayed2.print_graph()
+
+            print('AC-SALIENT CROP RAW')
+            heatmap_imcrop1.print_graph(fields=1)
+            print('AC-CLASS CROP RAW')
+            heatmap_imcrop2.print_graph(fields=1)
+
+            print('AC-SALIENT CROP OPT')
+            heatmap_imcrop1.optimize().print_graph(fields=1)
+            print('AC-CLASS CROP OPT')
+            heatmap_imcrop2.optimize().print_graph(fields=1)
+
         if (coco_img.channels & AC_SALIENT_CHANNELS).numel():
             heatmap_delayed = coco_img.imdelay(channels=AC_SALIENT_CHANNELS, resolution=resolution, nodata_method='float')
             heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
@@ -1599,6 +1651,10 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
                 heatmap_canvas = pred_dets.data['segmentations'].draw_on(
                     heatmap_canvas, alpha=0.3, edgecolor='kitware_lightgray',
                     fill=False)
+
+            # if case['name'] == 'KW_C501_0304-vs-KW_C501_0139':
+            #     import xdev
+            #     xdev.embed()
             tostack.append(heatmap_canvas)
 
         if (coco_img.channels & BAS_CHANNELS).numel():
