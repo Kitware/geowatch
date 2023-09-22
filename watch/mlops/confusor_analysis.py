@@ -1520,6 +1520,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
 
     BAS_CHANNELS = kwcoco.FusedChannelSpec.coerce('salient')
     AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
+    AC_SALIENT_CHANNELS = kwcoco.FusedChannelSpec.coerce('ac_salient')
 
     cells = []
     from watch.utils import kwcoco_extensions
@@ -1587,10 +1588,23 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
                     fill=False)
             tostack.append(heatmap_canvas)
 
+        if (coco_img.channels & AC_SALIENT_CHANNELS).numel():
+            heatmap_delayed = coco_img.imdelay(channels=AC_SALIENT_CHANNELS, resolution=resolution, nodata_method='float')
+            heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+            heatmap = heatmap_imcrop.finalize()[:, :, 0]
+            heatmap_canvas = kwimage.make_heatmask(heatmap, cmap='viridis')
+            heatmap_canvas = kwimage.nodata_checkerboard(heatmap_canvas, on_value=0.3)
+            if main_pred_aids:
+                # Draw main polgon in the heatmap
+                heatmap_canvas = pred_dets.data['segmentations'].draw_on(
+                    heatmap_canvas, alpha=0.3, edgecolor='kitware_lightgray',
+                    fill=False)
+            tostack.append(heatmap_canvas)
+
         if (coco_img.channels & BAS_CHANNELS).numel():
             heatmap_delayed = coco_img.imdelay(channels=BAS_CHANNELS, resolution=resolution, nodata_method='float')
             heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
-            heatmap = heatmap_imcrop.finalize().squeeze()
+            heatmap = heatmap_imcrop.finalize()[:, :, 0]
             heatmap_canvas = kwimage.make_heatmask(heatmap, cmap='viridis')
             heatmap_canvas = kwimage.nodata_checkerboard(heatmap_canvas, on_value=0.3)
             if main_pred_aids:
@@ -1703,6 +1717,7 @@ def make_pred_score_timeline(main_pred_site):
     from watch import heuristics
     import kwimage
     name_to_color = {d['name']: d['color'] for d in heuristics.CATEGORIES}
+    name_to_color['ac_salient'] = 'pink'
     name_to_color['salient'] = 'black'
     palette = {k: kwimage.Color.coerce(v).as01() for k, v in name_to_color.items()}
 
