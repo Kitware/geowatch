@@ -926,13 +926,13 @@ REGION_STATUS = [
 
 # Mapping from our sensor names to the official T&E sensor names
 SENSOR_TABLE = [
-    {'te_name': 'WorldView',  'kit_name': 'WV'},
+    {'te_name': 'WorldView', 'kit_name': 'WV'},
     {'te_name': 'Sentinel-2', 'kit_name': 'S2'},
-    {'te_name': 'Landsat 7',  'kit_name': 'LE'},
-    {'te_name': 'Landsat 8',  'kit_name': 'LC'},
-    {'te_name': 'Landsat 8',  'kit_name': 'L8'},
-    {'te_name': 'WorldView',  'kit_name': 'WV1'},
-    {'te_name': 'Planet',     'kit_name': 'PD'},
+    {'te_name': 'Landsat 7', 'kit_name': 'LE'},
+    {'te_name': 'Landsat 8', 'kit_name': 'LC'},
+    {'te_name': 'Landsat 8', 'kit_name': 'L8'},
+    {'te_name': 'WorldView', 'kit_name': 'WV1'},
+    {'te_name': 'Planet', 'kit_name': 'PD'},
 ]
 {r['kit_name']: r['te_name'] for r in SENSOR_TABLE}
 # {r['te_name']: r['kit_name'] for r in SENSOR_TABLE[::-1]}

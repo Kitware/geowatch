@@ -23,6 +23,7 @@ class FitCLI(scfg.DataConfig):
         from watch.tasks.fusion import fit_lightning
         return fit_lightning.main(cmdline=cmdline, **kwargs)
 
+
 __cli__ = FitCLI
 main = __cli__.main
 

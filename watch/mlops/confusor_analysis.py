@@ -258,6 +258,7 @@ class ConfusionAnalysis:
     Note: this class is a refactoring of a large mono-function so its functions
     need to be called in a particular order.
     """
+
     def __init__(self, config):
         self.config = config
 

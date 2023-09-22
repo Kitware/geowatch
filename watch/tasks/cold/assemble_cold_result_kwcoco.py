@@ -50,13 +50,14 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
         a path to a file to combined kwcoco file
         '''))
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
-    write_kwcoco = scfg.Value(False, help='writing kwcoco file based on COLD feature, Default is False')
+    write_kwcoco = scfg.Value(True, help='writing kwcoco file based on COLD feature, Default is False')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the bands for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     combine = scfg.Value(True, help='for temporal combined mode, Default is True')
+    exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     resolution = scfg.Value('30GSD', help=ub.paragraph(
         '''
         the resolution used when preparing the kwcoco data. Note: results will
@@ -122,6 +123,7 @@ def assemble_main(cmdline=1, **kwargs):
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
     combine = config_in['combine']
+    exclude_first = config_in['exclude_first']
     resolution = config_in['resolution']
     sensors = config_in['sensors']
 
@@ -183,6 +185,10 @@ def assemble_main(cmdline=1, **kwargs):
     # sort image files by ordinal dates
     img_dates = []
     img_names = []
+    img_dates_L8 = []
+    img_names_L8 = []
+    img_dates_S2 = []
+    img_names_S2 = []
 
     # read metadata and
     for meta in meta_files:
@@ -192,14 +198,24 @@ def assemble_main(cmdline=1, **kwargs):
         img_dates.append(ordinal_date)
         img_names.append(img_name)
 
+    for meta in meta_files:
+        meta_config = json.loads((block_folder / meta).read_text())
+        ordinal_date = meta_config['ordinal_date']
+        if 'L8' in meta_config['image_name']:
+            img_name_L8 = meta_config['image_name'] + '.npy'
+            img_dates_L8.append(ordinal_date)
+            img_names_L8.append(img_name_L8)
+        elif 'S2' in meta_config['image_name']:
+            img_name_S2 = meta_config['image_name'] + '.npy'
+            img_dates_S2.append(ordinal_date)
+            img_names_S2.append(img_name_S2)
+
     if year_lowbound is None:
         year_low_ordinal = min(img_dates)
         year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
     else:
         year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
 
-    img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                        zip(img_dates, img_names)))
     if year_highbound is None:
         year_high_ordinal = max(img_dates)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
@@ -210,6 +226,22 @@ def assemble_main(cmdline=1, **kwargs):
                                             zip(img_dates, img_names)))
     img_dates = sorted(img_dates)
     img_names = sorted(img_names)
+
+    if 'L8' in sensors:
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                                 zip(img_dates_L8, img_names_L8)))
+        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                                 zip(img_dates_L8, img_names_L8)))
+        img_dates_L8 = sorted(img_dates_L8)
+        img_names_L8 = sorted(img_names_L8)
+    if 'S2' in sensors:
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                                 zip(img_dates_S2, img_names_S2)))
+        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                                 zip(img_dates_S2, img_names_S2)))
+        img_dates_S2 = sorted(img_dates_S2)
+        img_names_S2 = sorted(img_names_S2)
+
     if timestamp:
         ordinal_day_list = img_dates
     if combine:
@@ -237,19 +269,48 @@ def assemble_main(cmdline=1, **kwargs):
         ordinal_day_list = ordinal_dates
     else:
         # Get only the first ordinal date of each year
-        first_ordinal_dates = []
-        first_img_names = []
+        first_ordinal_dates_L8 = []
+        first_img_names_L8 = []
+        first_ordinal_dates_S2 = []
+        first_img_names_S2 = []
         last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
-                last_year = year
+        if 'L8' in sensors:
+            for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
+                year = pd.Timestamp.fromordinal(ordinal_day).year
+                if year != last_year:
+                    first_ordinal_dates_L8.append(ordinal_day)
+                    first_img_names_L8.append(img_name[:-4])
+                    last_year = year
+        if 'S2' in sensors:
+            for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
+                year = pd.Timestamp.fromordinal(ordinal_day).year
+                if year != last_year:
+                    first_ordinal_dates_S2.append(ordinal_day)
+                    first_img_names_S2.append(img_name[:-4])
+                    last_year = year
+        if exclude_first:
+            if 'L8' in sensors and 'S2' in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:],
+                                     first_img_names_L8[1:] + first_img_names_S2[1:]))
+            elif 'L8' in sensors and 'S2' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+            elif 'S2' in sensors and 'L8' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
 
-        ordinal_day_list = first_ordinal_dates
-        img_names = first_img_names
-
+            # ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[:1]
+            # img_names = first_img_names_L8[1:] + first_img_names_S2[1:]
+        else:
+            if 'L8' in sensors and 'S2' in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2,
+                                     first_img_names_L8 + first_img_names_S2))
+            elif 'L8' in sensors and 'S2' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+            elif 'S2' in sensors and 'L8' not in sensors:
+                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
+            # ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+            # img_names = first_img_names_L8 + first_img_names_S2
+        combined_data.sort(key=lambda x: x[0])
+        ordinal_day_list, img_names = zip(*combined_data)
     # assemble
     logger.info('Generating COLD output geotiff')
     if coefs is not None:
@@ -275,6 +336,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdriver_L8 = gdal.GetDriverByName('GTiff')
                         outdata_L8 = outdriver_L8.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
                         outdata_L8.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+                        outdata_L8.GetRasterBand(1).SetNoDataValue(-9999)
                         outdata_L8.FlushCache()
                         outdata_L8.SetGeoTransform(L8_new_gdal_transform)
                         outdata_L8.FlushCache()
@@ -286,6 +348,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdriver_S2 = gdal.GetDriverByName('GTiff')
                         outdata_S2 = outdriver_S2.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
                         outdata_S2.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+                        outdata_S2.GetRasterBand(1).SetNoDataValue(-9999)
                         outdata_S2.FlushCache()
                         outdata_S2.SetGeoTransform(S2_new_gdal_transform)
                         outdata_S2.FlushCache()

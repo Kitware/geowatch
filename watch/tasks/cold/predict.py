@@ -78,33 +78,25 @@ CommandLine:
         --exclude_sensors="S2" \
         --smart=True --skip_aggressive=True
 
-    #######################################################################
-    ### FULL REGION TEST: COLD FEATURES WITH HIGH TEMPORAL RESOLUTION (HTR)
-    #######################################################################
+    ###################################################################################
+    ### FULL REGION TEST: COLD FEATURES WITH HIGH TEMPORAL RESOLUTION (HTR) + L8/S2 ###
+    ###################################################################################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_HTR" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
-        --sensors='L8' \
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop7/_pycold_L8S2_HTR" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly_KR_R001_cold-L8S2-HTR.kwcoco.zip" \
+        --sensors='L8,S2' \
         --coefs=cv,rmse,a0,a1,b1,c1 \
+        --prob=0.99 \
+        --conse=8 \
         --coefs_bands=0,1,2,3,4,5 \
         --combine=False \
         --resolution='10GSD' \
         --workermode='process' \
         --workers=8
-
-    kwcoco stats "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
-    geowatch stats "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
-    kwcoco validate "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
-
-    smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-V1.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
-        --exclude_sensors=WV,PD,S2 \
-        --smart=True
 
     ######################################################################
     ### FULL REGION TEST: TRANSFER COLD FEATURE FROM RAW TO COMBINED INPUT
@@ -219,6 +211,7 @@ class ColdPredictConfig(scfg.DataConfig):
     combine = scfg.Value(False, help='for temporal combined mode, Default is False')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
+    exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     workers = scfg.Value(16, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
@@ -306,16 +299,31 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Step 1: Prepare')
 
-        metadata = read_json_metadata(out_dpath)
+        metadata = None
+        for region in os.listdir(out_dpath / 'stacked'):
+            if region not in str(config['coco_fpath']):
+                pass
+            elif region in str(config['coco_fpath']):
+                if os.path.exists(out_dpath / 'reccg' / region):
+                    logger.info('Skipping step 1 because the stacked image already exists...')
+                    for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
+                        for file in files:
+                            if file.endswith(".json"):
+                                json_path = os.path.join(root, file)
+
+                                with open(json_path, "r") as f:
+                                    metadata = json.load(f)
+                            break
+
         if metadata is None:
-            prepare_kwcoco.prepare_kwcoco_main(
+            meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
                 cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                 adj_cloud=adj_cloud, method=method, workers=workers,
                 resolution=config.resolution,
             )
-            metadata = read_json_metadata(out_dpath)
-        else:
-            logger.info('Skipping step 1 because the stacked image already exists...')
+
+            with open(meta_fpath, "r") as f:
+                metadata = json.load(f)
 
         main_prog.step()
 
@@ -366,6 +374,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['combine'] = config['combine']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
+        export_kwargs['exclude_first'] = config['exclude_first']
         export_kwargs['sensors'] = sensors
         if use_subprogress:
             export_kwargs['pman'] = pman
@@ -400,6 +409,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['coefs_bands'] = config['coefs_bands']
         assemble_kwargs['timestamp'] = config['timestamp']
         assemble_kwargs['combine'] = config['combine']
+        assemble_kwargs['exclude_first'] = config['exclude_first']
         assemble_kwargs['resolution'] = config.resolution
         assemble_kwargs['sensors'] = sensors
 
