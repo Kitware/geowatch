@@ -266,7 +266,6 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
         if img_info['frac_iffy'] > iffy_thresh:
             bad_img_infos.append(img_info)
 
-
     bad_gids = [b['gid'] for b in bad_img_infos]
 
     all_images = dset.images()
