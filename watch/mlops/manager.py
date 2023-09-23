@@ -191,10 +191,6 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
-
-    # if config['dataset_codes'] is None:
-    #     dataset_codes = heuristics.DATASET_CODES
-    # else:
     dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
@@ -299,7 +295,6 @@ class DVCExptManager(ub.NiceRepr):
         if expt_dvc_dpath is None:
             expt_dvc_dpath = watch.find_dvc_dpath()
         dvc_remote = 'aws'
-        # dataset_codes = heuristics.DATASET_CODES
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
                       dataset_codes='*')
         return manager

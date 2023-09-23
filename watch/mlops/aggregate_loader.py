@@ -185,7 +185,7 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
                     region_ids = flat[k]
                 assert region_ids is not None
                 import re
-                region_pat = re.compile(r'[A-Z][A-Z]_[A-Z]\d\d\d')
+                region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
                 region_ids = ','.join(list(region_pat.findall(region_ids)))
 
             resolved_params_keys = list(flat.query_keys('resolved_params'))

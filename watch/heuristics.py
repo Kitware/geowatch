@@ -343,30 +343,24 @@ def ALL(*args):
 
 
 CATEGORIES = [
-    # TODO: clouds
     {
         'name': 'background',
         'color': 'black',
         'scored': False,
         'required': True,
-        'tags': ['background']
     },
 
-    # 'color' lightsalmon
     {
         'name': 'ignore',
         'color': 'violet',
         'scored': False,
         'required': True,
-        'tags': ['ignore']
     },
 
-    # {'name': 'clouds', 'color': 'offwhite', 'scored': False},
     {
         'name': 'Unknown',
         'color': 'blueviolet',
         'scored': False,
-        'tags': ['ignore'],
     },
 
     {
@@ -379,47 +373,40 @@ CATEGORIES = [
         'name': 'negative',
         'color': 'gray',
         'scored': False,
-        'tags': ['background'],
     },
 
     {
         'name': 'Site Preparation',
         'color': 'gold',
         'scored': True,
-        'tags': ['positive'],
     },
     {
         'name': 'Active Construction',
         'color': 'lime',
         'scored': True,
-        'tags': ['positive'],
     },
     # Conditional classes
     {
         'name': 'Post Construction',
         'color': 'darkturquoise',
         'scored': True,
-        'tags': ['positive'],
     },
     {
         'name': 'No Activity',
         'color': 'tomato',
         'scored': True,
-        'tags': ['saliency'],
     },
     # Transient
     {
         'name': 'transient',
         'color': 'steelblue',
         'scored': True,
-        'tags': ['positive'],
     },
     # Transient
     {
         'name': 'transient',
         'color': 'steelblue',
         'scored': True,
-        'tags': ['positive'],
     },
 ]
 
@@ -525,24 +512,11 @@ CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
 
 
 # Might need to split this up into a finer-grained structure
-# IGNORE_CLASSNAMES = {'clouds', 'occluded', 'ignore', 'unknown', 'Unknown'}
-# BACKGROUND_CLASSES = {c['name'] for c in CATEGORIES if 'background' in c.get('tags', {})}
-# UNDISTINGUISHED_CLASSES =  {c['name'] for c in CATEGORIES if 'saliency' in c.get('tags', {})}
 IGNORE_CLASSNAMES = {'ignore', 'Unknown'}
 BACKGROUND_CLASSES = {'background'}
 NEGATIVE_CLASSES = {'negative'}
 UNDISTINGUISHED_CLASSES =  {'positive'}
 CONTEXT_CLASSES = {'No Activity', 'Post Construction'}
-# 'background',
-# 'No Activity',
-# 'Post Construction',
-# 'negative',
-# }
-# SPECIAL_CONTEXT_CLASSES = {
-#     'No Activity',
-#     'Post Construction',
-#     'negative',
-# }
 
 
 # # These classes are used in BAS, but not in AC/SC
@@ -788,43 +762,9 @@ def build_image_header_text(**kwargs):
     return header_lines
 
 
-# NOTES ON QUALITY / CLOUDMASK
-# https://github.com/GERSL/Fmask#46-version
-# The cloudmask band is a class-idx based raster with labels
-# 0 => clear land pixel
-# 1 => clear water pixel
-# 2 => cloud shadow
-# 3 => snow
-# 4 => cloud
-# 255 => no observation
-
-# However, in my data I seem to see:
-# Unique values   8,  16,  65, 128
-
-# These are specs
-# https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
 # TODO: this could be a specially handled frame like ASI.
+# NOTE:
 # QA Information Moved to ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
-QUALITY_BITS = ub.udict({
-    'TnE'           : 1 << 0,  # T&E binary mask
-    'dilated_cloud' : 1 << 1,
-    'cirrus'        : 1 << 2,
-    'cloud'         : 1 << 3,
-    'cloud_shadow'  : 1 << 4,
-    'snow'          : 1 << 5,
-    'clear'         : 1 << 6,
-    'water'         : 1 << 7,
-})
-
-
-# The main dataset codes currently in use.
-DATASET_CODES = [
-    # 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
-    # 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
-    'Drop4-BAS',
-    'Drop4-SC',
-]
-
 
 DVC_FIND_EXPT_KWARGS = {
     'tags': 'phase2_expt', 'envvar': 'DVC_EXPT_DPATH', 'hardware': 'auto'}

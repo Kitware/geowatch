@@ -10,9 +10,9 @@ class CocoRemoveBadImagesConfig(scfg.DataConfig):
     """
     __command__ = 'remove_bad_images'
     __default__ = {
-        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
+        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
 
-        'dst': scfg.Value(None, help='output kwcoco filepath'),
+        'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
 
         'workers': scfg.Value(0, type=str, help='number of io threads'),
 
@@ -24,7 +24,8 @@ class CocoRemoveBadImagesConfig(scfg.DataConfig):
 
         'interactive': scfg.Value(True, isflag=1, help='if true, ask the user to confirm deletion'),
 
-        'overview': scfg.Value(-1, help='set to -1 for fastest method, and 0 for most accurate method'),
+        # 'overview': scfg.Value('coarsest', help='set to "coarsest" for fastest method, and 0 for most accurate method, or a non negative integer for that level of overview'),
+        'overview': scfg.Value(0, help='set to "coarsest" for fastest method, and 0 for most accurate method, or a non negative integer for that level of overview'),
     }
 
 
@@ -68,14 +69,14 @@ def main(cmdline=True, **kwargs):
     if config['interactive']:
         if delete_assets == 'auto':
             total_bytes = compute_asset_disk_usage(dset, bad_gids, mode, workers)
-            msg = 'Total bad space: {} MB'.format(total_bytes / 2 ** 20)
-            print(msg)
+            total_megabytes = total_bytes / 2 ** 20
+            print(f'Total bad space: {total_megabytes:0.4f} MB')
 
-        flag = Confirm.ask('Do you want to delete these empty images?')
+        flag = Confirm.ask('Do you want to remove these empty images from the output kwcoco?')
         if not flag:
             return
         if delete_assets == 'auto':
-            delete_assets = Confirm.ask('Do you want to delete the assets too?')
+            delete_assets = Confirm.ask('[red] Do you want to delete the on-disk assets too? (DESTRUCTIVE)')
 
     if delete_assets:
         bad_fpaths = []
@@ -104,22 +105,28 @@ def main(cmdline=True, **kwargs):
 
 
 def compute_asset_disk_usage(dset, gids, mode, workers):
+    from kwutil import util_progress
+
     calc_jobs = ub.JobPool(mode=mode, max_workers=workers)
 
-    for gid in ub.ProgIter(gids, desc='calc asset space'):
-        coco_img = dset.coco_image(gid)
-        for fpath in coco_img.iter_image_filepaths():
-            fpath = ub.Path(fpath)
-            calc_jobs.submit(fpath.stat)
+    pman = util_progress.ProgressManager()
 
-    total_bytes = 0
-    prog = ub.ProgIter(calc_jobs.as_completed(), desc='collect size jobs',
-                       total=len(calc_jobs))
-    for job in prog:
-        stat = job.result()
-        total_bytes += stat.st_size
-        msg = 'Current size: {} MB'.format(total_bytes / 2 ** 20)
-        prog.set_postfix_str(msg)
+    with pman:
+        for gid in pman.progiter(gids, desc='calc asset space'):
+            coco_img = dset.coco_image(gid)
+            for fpath in coco_img.iter_image_filepaths():
+                fpath = ub.Path(fpath).resolve()
+                calc_jobs.submit(fpath.stat)
+
+        total_bytes = 0
+        prog = pman.progiter(calc_jobs.as_completed(), desc='collect size jobs',
+                             total=len(calc_jobs))
+        for job in prog:
+            stat = job.result()
+            total_bytes += stat.st_size
+            total_megabytes = total_bytes / 2 ** 20
+            msg = f'Current size: {total_megabytes:0.4f} MB'
+            prog.set_postfix_str(msg)
     return total_bytes
 
 
@@ -206,29 +213,36 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
                       workers=0):
     import numpy as np
     import pandas as pd
+    from kwutil import util_progress
+    import rich
+
     gid_to_infos = {}
     pool = ub.JobPool(mode=mode, max_workers=workers)
     all_gids = list(dset.index.imgs.keys())
-    for gid in ub.ProgIter(all_gids, desc='submit find empty image jobs',
-                           freq=1000, adjust=0):
-        if gid not in gid_to_infos:
-            coco_img = dset.coco_image(gid).detach()
-            job = pool.submit(is_image_empty, coco_img,
-                              main_channels=main_channels, overview=overview)
-            job.coco_img = coco_img
 
-    image_infos = []
-    num_bad = 0
-    prog = ub.ProgIter(pool.as_completed(), total=len(pool),
-                       desc='collect find empty images', freq=1000,
-                       adjust=False)
-    for job in prog:
-        coco_img = job.coco_img
-        img_info = job.result()
-        if img_info['is_bad']:
-            num_bad += 1
-            prog.set_postfix_str(f'num_empty = {num_bad} / {len(all_gids)}')
-        image_infos.append(img_info)
+    pman = util_progress.ProgressManager()
+
+    with pman:
+        for gid in pman.progiter(all_gids, desc='submit find empty image jobs',
+                                 freq=1000, adjust=0):
+            if gid not in gid_to_infos:
+                coco_img = dset.coco_image(gid).detach()
+                job = pool.submit(is_image_empty, coco_img,
+                                  main_channels=main_channels, overview=overview)
+                job.coco_img = coco_img
+
+        image_infos = []
+        num_bad = 0
+        prog = pman.progiter(pool.as_completed(), total=len(pool),
+                             desc='collect find empty images', freq=1000,
+                             adjust=False)
+        for job in prog:
+            coco_img = job.coco_img
+            img_info = job.result()
+            if img_info['is_bad']:
+                num_bad += 1
+                pman.update_info(f'num_empty = {num_bad} / {len(all_gids)}')
+            image_infos.append(img_info)
 
     for img_info in image_infos:
         img_iffys = [b['frac_iffy'] for b in img_info['chan_infos'].values()]
@@ -252,8 +266,6 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
         if img_info['frac_iffy'] > iffy_thresh:
             bad_img_infos.append(img_info)
 
-    print('{len(bad_images)=}')
-
     bad_gids = [b['gid'] for b in bad_img_infos]
 
     all_images = dset.images()
@@ -261,15 +273,19 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     sensor_to_num_bad = ub.dict_hist(bad_images.lookup("sensor_coarse"))
     sensor_to_total = ub.dict_hist(all_images.lookup("sensor_coarse"))
     sensor_bad_df = pd.DataFrame({'num_bad': sensor_to_num_bad, 'num_total': sensor_to_total})
+
+    print(f'{len(bad_images)=}')
+
     print('Sensor Versus num bad / total')
-    print(sensor_bad_df.to_string())
+    rich.print(sensor_bad_df.to_string())
 
     vidname_to_num_bad = ub.dict_hist(dset.videos(bad_images.lookup("video_id")).lookup("name"))
     vidname_to_num_total = ub.dict_hist(dset.videos(all_images.lookup("video_id")).lookup("name"))
     vidname_bad_df = pd.DataFrame({'num_bad': vidname_to_num_bad, 'num_total': vidname_to_num_total})
+    vidname_bad_df = vidname_bad_df.fillna(0)
     vidname_bad_df = vidname_bad_df.sort_index()
     print('Video Versus num bad')
-    print(vidname_bad_df.to_string())
+    rich.print(vidname_bad_df.to_string())
     # print('sensor_to_num_bad = {}'.format(ub.urepr(sensor_to_num_bad, nl=1)))
     # print('region_to_num_bad = {}'.format(ub.urepr(region_to_num_bad, nl=1)))
 
@@ -284,7 +300,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
             elif chan_info["max_val"] == 0:
                 bad_stats[f'{sensor}:{chan}.max_zero'] += 1
                 chan_info["num_masked"]
-    print('bad_stats = {}'.format(ub.urepr(bad_stats, nl=1)))
+    rich.print('bad_stats = {}'.format(ub.urepr(bad_stats, nl=1)))
 
     return bad_gids
 

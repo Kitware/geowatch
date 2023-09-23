@@ -437,6 +437,7 @@ def main(cmdline=True, **kwargs):
                 All IARPA visualizations were enabled.  Try setting
                 --enable_viz=regions to get only the useful visualizations
                 '''))
+            chosen = set(key_to_disable_flag)
             to_enable = set(key_to_disable_flag) & chosen
             to_disable = set(key_to_disable_flag) & chosen
         else:

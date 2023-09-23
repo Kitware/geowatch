@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * coco-align now handles overviews correctly for quality bands.
 * fixed issue where dataloader did not relabel post construction to background if all frames post construction.
 * cluster-sites now attempts to fix broken site models before it uses them.
+* Fix `predicted_phase_transition_date` to be a date instead of a datetime.
 
 
 ## Version 0.9.3 - Released 2023-08-31

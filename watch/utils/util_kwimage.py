@@ -134,7 +134,7 @@ def upweight_center_mask(shape):
 
 def perchannel_colorize(data, channel_colors=None):
     """
-    Note: this logic semi-exist in kwimage.Heatmap.
+    Note: this logic semi-exists in kwimage.Heatmap.
     It would be good to consolidate it.
 
     Args:

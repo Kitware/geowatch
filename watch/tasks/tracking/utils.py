@@ -327,15 +327,27 @@ def gpd_len(gdf):
 
 
 @profile
-def gpd_compute_scores(
-        gdf,
-        sub_dset,
-        thrs: Iterable,
-        ks: Dict,
-        USE_DASK=False,
-        resolution=None):
+def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
+                       resolution=None):
     """
     TODO: This needs docs and examples for the BAS and SC/AC cases.
+
+    Args:
+
+        sub_dset (kwcoco.CocoDataset):
+            dataset with reference to images
+
+        thrs (List[float]):
+            thresholds (-1) means take the average response, other values is
+            the fraction of pixels with responses above that value.
+
+        ks (Dict[str, List[str]]):
+            mapping from "fg" to a list of "foreground classes"
+            optionally also
+            mapping from "bg" to a list of "background classes"
+
+        resolution (str | None):
+            resolution spec to compute scores at (e.g. "2GSD").
 
     Calls :func:`_compute_group_scores` on each dataframe row, which will
     execute the read for the image prediction scores for polygons with
@@ -356,12 +368,13 @@ def gpd_compute_scores(
         # npartitions and chunksize are mutually exclusive
         gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
         meta = gdf._meta.join(pd.DataFrame(columns=score_cols, dtype=float))
-        gdf = gdf.groupby('gid', group_keys=False).apply(_compute_group_scores,
-                                                         thrs=thrs,
-                                                         keys=_valid_keys,
-                                                         meta=meta,
-                                                         resolution=resolution,
-                                                         sub_dset=sub_dset)
+        groups = gdf.groupby('gid', group_keys=False)
+        gdf = groups.apply(_compute_group_scores,
+                           thrs=thrs,
+                           keys=_valid_keys,
+                           meta=meta,
+                           resolution=resolution,
+                           sub_dset=sub_dset)
         # raises this, which is probably fine:
         # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
         # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
@@ -374,7 +387,11 @@ def gpd_compute_scores(
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        gdf = grouped.apply(_compute_group_scores, thrs=thrs, keys=_valid_keys,
+        """
+        grp = gdf.iloc[0:1]
+        grp.name = grp.iloc[0].gid
+        """
+        gdf = grouped.apply(_compute_group_scores, thrs=thrs, _valid_keys=_valid_keys,
                             resolution=resolution, sub_dset=sub_dset)
 
     # fill nan scores from nodata pxls
@@ -401,25 +418,49 @@ def gpd_compute_scores(
     return scored_gdf
 
 
-def _compute_group_scores(grp, thrs=[], keys=[], resolution=None, sub_dset=None):
+def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dset=None):
     """
     Helper for :func:`gpd_compute_scores`.
     """
     import kwcoco
     import pandas as pd
+    """
+    Note:
+        "name" is an attribute groupby only seems to give in the apply step.
+
+        We can get a reference to the group object via:
+
+            obj = list(grouped._iterate_slices())[0]
+            ??? not sure if this is right
+
+        The following is a MWE:
+
+    Ignore:
+        # Test groupby
+        import pandas as pd
+        df = pd.DataFrame({'a': [1, 2, 3], 'b': [2, 2, 1]})
+        def foo(grp):
+            print(f'grp.name={grp.name}')
+            print(type(grp))
+            print(f'grp={grp}')
+        groups = df.groupby('b',group_keys=False)
+        grp = list(groups._iterate_slices())[0]
+        groups.apply(foo)
+    """
+
     gid = getattr(grp, 'name', None)
     if gid is None:
         for thr in thrs:
-            grp[[(k, thr) for k in keys]] = 0
+            grp[[(k, thr) for k in _valid_keys]] = 0
     else:
         img = sub_dset.coco_image(gid)
 
         # Load the channels to score
-        channels = kwcoco.FusedChannelSpec.coerce(keys)
+        channels = kwcoco.FusedChannelSpec.coerce(_valid_keys)
         heatmaps_hwc = img.imdelay(channels, space='video', resolution=resolution).finalize()
         heatmaps = heatmaps_hwc.transpose(2, 0, 1)
 
-        score_cols = list(itertools.product(keys, thrs))
+        score_cols = list(itertools.product(_valid_keys, thrs))
 
         # Compute scores for each polygon.
         new_scores_rows = []
@@ -518,9 +559,13 @@ def score_track_polys(coco_dset,
     }, geometry='poly')
 
     if score_chan is not None:
+        # USE_DASK = True
+        USE_DASK = False
         keys = {score_chan.spec: list(score_chan.unique())}
-        # gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=True,
-        gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=False,
+        sub_dset = coco_dset
+        thrs = [-1]
+        ks = keys
+        gdf = gpd_compute_scores(gdf, sub_dset, thrs, ks, USE_DASK=USE_DASK,
                                  resolution=resolution)
     # TODO standard way to access sorted_gids
     sorted_gids = coco_dset.index._set_sorted_by_frame_index(
@@ -765,8 +810,12 @@ def _validate_keys(key, bg_key):
         raise ValueError('must have at least one key')
     if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
         raise ValueError('keys are duplicated')
-    if not set(key).isdisjoint(set(bg_key)):
-        raise ValueError('cannot have a key in foreground and background')
+
+    if 0:
+        # Hack this off
+        if not set(key).isdisjoint(set(bg_key)):
+            raise ValueError('cannot have a key in foreground and background')
+
     return key, bg_key
 
 

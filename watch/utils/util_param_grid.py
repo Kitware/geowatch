@@ -563,17 +563,23 @@ def extended_github_action_matrix(arg):
     # Special submatrices for more cartesian products, it would be good to come
     # up with a solution that does not require hard coded and a fixed number of
     # variables.
-    submatrices1 = matrix.pop('submatrices1', data.pop('submatrices1', []))
-    submatrices2 = matrix.pop('submatrices2', data.pop('submatrices2', []))
-    submatrices3 = matrix.pop('submatrices3', data.pop('submatrices3', []))
+    numbered_submatrices = [
+        matrix.pop('submatrices1', data.pop('submatrices1', [])),
+        matrix.pop('submatrices2', data.pop('submatrices2', [])),
+        matrix.pop('submatrices3', data.pop('submatrices3', [])),
+        matrix.pop('submatrices4', data.pop('submatrices4', [])),
+        matrix.pop('submatrices5', data.pop('submatrices5', [])),
+        matrix.pop('submatrices6', data.pop('submatrices6', [])),
+        matrix.pop('submatrices7', data.pop('submatrices7', [])),
+        matrix.pop('submatrices8', data.pop('submatrices8', [])),
+        matrix.pop('submatrices9', data.pop('submatrices9', [])),
+    ]
 
     MULTI_SUBMATRICES = 1
     if MULTI_SUBMATRICES:
         # Try allowing for more variations. The idea is we effectively
         # want to take the cross product of multiple lists of submatrices.
-        multi_submatrices = [
-            submatrices, submatrices1, submatrices2, submatrices3
-        ]
+        multi_submatrices = [submatrices] + numbered_submatrices
         multi_submatrices_ = []
         for submats in multi_submatrices:
             submats[:] = list(map(ub.udict, submats))
