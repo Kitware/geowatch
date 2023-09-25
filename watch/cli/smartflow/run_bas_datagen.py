@@ -282,8 +282,7 @@ def run_stac_to_cropped_kwcoco(config):
     # Returned as datetime
     current_interval_end_date = region.end_date
 
-    if(current_interval_end_date.month == 1
-       and current_interval_end_date.day == 1):
+    if current_interval_end_date.month == 1 and current_interval_end_date.day == 1:
         # If current interval ends at the start of a year,
         # consider the "current" year to be the previous one
         current_interval_year = current_interval_end_date.year - 1
@@ -498,8 +497,7 @@ def run_stac_to_cropped_kwcoco(config):
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 6.1. Combine previous interval time-combined data for BAS
-    if(config.previous_interval_output is not None
-       and previous_ingressed_assets is not None):
+    if config.previous_interval_output is not None and previous_ingressed_assets is not None:
         combined_timecombined_kwcoco_path =\
             ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
@@ -528,8 +526,7 @@ def run_stac_to_cropped_kwcoco(config):
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
         from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-        if(filtered_previous_timecombined_kwcoco_path.is_file()
-           and len(previous_timecombined_dset.images()) > 0):
+        if filtered_previous_timecombined_kwcoco_path.is_file() and len(previous_timecombined_dset.images()) > 0:
             # Don't bother to concatenate if previous (now filtered)
             # dset is empty (has no images)
             concat_kwcoco_datasets(
