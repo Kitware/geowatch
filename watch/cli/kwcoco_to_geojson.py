@@ -517,25 +517,50 @@ def smooth_curve(ydata, beta):
     return ydata_smooth
 
 
-def smooth_predictions(observations):
+def smooth_predictions(observations, smoothing=0.5):
+    """
+    Add smoothed scores inplace
+
+    Example:
+        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from watch.geoannots import geomodels
+        >>> site = geomodels.SiteModel.random(num_observations=15)
+        >>> observations = list(site.observations())
+        >>> # Add random scores for tests
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng()
+        >>> for obs in observations:
+        >>>     obs['properties']['cache'] = {'raw_multi_scores': [{
+        >>>         'No Activity': rng.rand(),
+        >>>         'Site Preparation': rng.rand(),
+        >>>         'Post Construction': rng.rand(),
+        >>>         'Active Construction': rng.rand(),
+        >>> }]}
+        >>> smooth_predictions(observations)
+        >>> data1 = [obs['properties']['cache']['raw_multi_scores'][0] for obs in observations]
+        >>> data2 = [obs['properties']['cache']['smooth_scores'] for obs in observations]
+        >>> import pandas as pd
+        >>> df1 = pd.DataFrame(data1)
+        >>> df2 = pd.DataFrame(data2)
+        >>> print(df1)
+        >>> print(df2)
+    """
+    import kwarray
     # Consolidate scores over time. Predict start / end dates.
     obs_multi_scores = [obs['properties']['cache']['raw_multi_scores'] for obs in observations]
     assert all(len(ms) == 1 for ms in obs_multi_scores)
     obs_scores = [ms[0] for ms in obs_multi_scores]
-    import kwarray
-    # import numpy as np
     score_df = kwarray.DataFrameLight.from_dict(obs_scores)
     score_df = score_df.pandas()
 
-    smoothing = 0.5
-    smoothed = score_df.ewm(alpha=(1 - smoothing), axis=1).mean()
+    smoothed = score_df.ewm(alpha=(1 - smoothing), axis=0).mean()
     new_labels = smoothed.idxmax(axis=1).values.tolist()
     # old_labels = [o['properties']['current_phase'] for o in observations]
 
     new_scores = smoothed.to_dict('records')
-    for o, scores, label in zip(observations, new_scores, new_labels):
-        o['properties']['current_phase'] = label
-        o['properties']['cache']['smooth_scores'] = scores
+    for obs, scores, label in zip(observations, new_scores, new_labels):
+        obs['properties']['current_phase'] = label
+        obs['properties']['cache']['smooth_scores'] = scores
 
     if 0:
         from watch.tasks.tracking import phase
