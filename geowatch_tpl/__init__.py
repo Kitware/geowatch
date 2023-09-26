@@ -79,16 +79,27 @@ def import_submodule(submod_name):
     dev_submod_dpath = tpl_dpath / 'submodules'
     static_submod_dpath = tpl_dpath / 'submodules_static'
 
-    info = STATIC_SUBMODULES[submod_name]
-    rel_dpath = info['rel_dpath']
-    cand1 = dev_submod_dpath / rel_dpath
-    cand2 = static_submod_dpath / rel_dpath
+    if submod_name in STATIC_SUBMODULES:
+        info = STATIC_SUBMODULES[submod_name]
+        rel_dpath = info['rel_dpath']
+        cand1 = dev_submod_dpath / rel_dpath
+        cand2 = static_submod_dpath / rel_dpath
+    else:
+        # Assume we have a submodule with the same repo name if
+        # it is unregistered here.
+        import warnings
+        warnings.warn('Warning: Unregistered submodule')
+        cand1 = dev_submod_dpath / submod_name / submod_name
+        assert cand1.exists()
+        cand2 = None
 
     if cand1.exists() and not FORCE_STATIC:
         new_module_dpath = cand1
     else:
-        assert cand2.exists()
+        assert cand2 is not None and cand2.exists()
         new_module_dpath = cand2
-    sys.path.append(os.fspath(new_module_dpath.parent))
+
+    new_sys_dpath = os.fspath(new_module_dpath.parent)
+    sys.path.append(new_sys_dpath)
     module = ub.import_module_from_name(submod_name)
     return module

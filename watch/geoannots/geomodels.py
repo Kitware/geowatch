@@ -1030,8 +1030,28 @@ class SiteModel(_Model):
         self.ensure_isodates()
         self.fix_current_phase_salient()
         self.fix_backwards_dates()
+        self.fix_old_schema_properties()
         # self.fix_geom()
         return self
+
+    def fix_old_schema_properties(self):
+        """
+        If an old schema property exists and is not null, move it to
+        the cache.
+        """
+        old_keys = ['comments']
+        for feat in self.features:
+            props = feat['properties']
+            for key in old_keys:
+                if key in props:
+                    old_value = props.pop(key)
+                    if old_value is not None:
+                        if 'cache' not in props:
+                            props['cache'] = {}
+                        # Dont overwrite an existing key with the same name
+                        # in this case we just drop the bad value
+                        if key not in props['cache']:
+                            props['cache'][key] = old_value
 
     def ensure_isodates(self):
         """

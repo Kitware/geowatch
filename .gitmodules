@@ -7,3 +7,6 @@
 [submodule "geowatch_tpl/submodules/segment-anything"]
 	path = geowatch_tpl/submodules/segment-anything
 	url = git@github.com:Erotemic/segment-anything.git
+[submodule "geowatch_tpl/submodules/shapestats"]
+	path = geowatch_tpl/submodules/shapestats
+	url = git@github.com:Erotemic/shapestats.git
