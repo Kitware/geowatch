@@ -238,6 +238,7 @@ def run_stac_to_cropped_kwcoco(config):
     ingress_dir = ub.Path('/tmp/ingress')
 
     ta1_cropped_dir.ensuredir()
+    ingress_dir.ensuredir()
 
     ta1_kwcoco_path = ingress_dir / 'ingress_kwcoco.json'
     ta1_bas_kwcoco_path = ta1_cropped_dir / 'kwcoco_for_bas.json'
