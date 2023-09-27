@@ -183,9 +183,7 @@ def run_sc_fusion_for_baseline(config):
             print('*************************')
             print("* Computing tracks (SC) *")
 
-            # TODO: remove these defaults or replace them with whatever is the
-            # default in tracker. The params should be fully given in the DAG,
-            # not here.
+            # NOTE: These params are fully specified and overwritten in the DAG
             default_sc_track_kwargs = ub.udict({
                 "boundaries_as": "polys",
                 "resolution": 8,
@@ -194,9 +192,15 @@ def run_sc_fusion_for_baseline(config):
             })
             sc_track_kwargs = default_sc_track_kwargs | Yaml.coerce(config.sc_poly_config or {})
 
+            # These args are passed on the top level command line
+            # Rather than in track-kwargs
+            external_args = {'site_score_thresh', 'smoothing'}
+            sc_extra_kwargs = sc_track_kwargs & external_args
+            sc_track_kwargs = sc_track_kwargs - external_args
+            sc_extra_argv = [f'--{k}={v}' for k, v in sc_extra_kwargs.items()]
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-            ub.cmd([
+            tracker_argv = [
                 'python', '-m', 'watch.cli.run_tracker',
                 '--input_kwcoco', sc_fusion_kwcoco_path,
                 '--out_site_summaries_dir', region_models_outdir,
@@ -206,8 +210,9 @@ def run_sc_fusion_for_baseline(config):
                 '--default_track_fn', config.sc_track_fn,
                 '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
                 '--append_mode', 'True',
-                '--track_kwargs', json.dumps(sc_track_kwargs)],
-                check=True, verbose=3, capture=False)
+                '--track_kwargs', json.dumps(sc_track_kwargs)
+            ] + sc_extra_argv
+            ub.cmd(tracker_argv, check=True, verbose=3, capture=False)
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
