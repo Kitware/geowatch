@@ -238,7 +238,7 @@ class PolygonPrediction(ProcessNode):
     def command(self):
         fmtkw = self.final_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        external_args = {'site_summary', 'boundary_region', 'site_score_thresh', 'smoothing'}
+        external_args = {'site_summary', 'boundary_region', 'site_score_thresh', 'smoothing', 'append_mode'}
         track_kwargs = self.final_algo_config.copy() - external_args
         fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
         fmtkw['external_argstr'] = self._make_argstr(self.final_algo_config & external_args)
@@ -247,7 +247,7 @@ class PolygonPrediction(ProcessNode):
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
-                --in_file "{pred_pxl_fpath}" \
+                --input_kwcoco "{pred_pxl_fpath}" \
                 --default_track_fn {default_track_fn} \
                 --track_kwargs {kwargs_str} \
                 --clear_annots=True \

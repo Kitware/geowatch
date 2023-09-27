@@ -29,10 +29,6 @@ class SCFusionConfig(scfg.DataConfig):
             '''))
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
 
-    sc_track_fn = scfg.Value('class_heatmaps', type=str, help=ub.paragraph(
-            '''
-            Tracking function to use for generating sites
-            '''))
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
@@ -71,7 +67,7 @@ def main():
 def run_sc_fusion_for_baseline(config):
     from watch.cli.smartflow_ingress import smartflow_ingress
     from watch.cli.smartflow_egress import smartflow_egress
-    from watch.tasks.fusion.predict import predict
+    from watch.tasks.fusion.predict import predict  # NOQA
     from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
     from watch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
@@ -164,17 +160,29 @@ def run_sc_fusion_for_baseline(config):
         if sc_pxl_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
 
+        from watch.mlops import smart_pipeline
+        sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
+        sc_pxl.configure({
+            'pred_pxl_fpath': sc_fusion_kwcoco_path,
+            'test_dataset': ingressed_assets['cropped_kwcoco_for_sc'],
+        } | sc_pxl_config)
+
         try:
-            predict(devices='0,',
-                    write_preds=False,
-                    write_probs=True,
-                    with_change=False,
-                    with_saliency=False,
-                    with_class=True,
-                    test_dataset=ingressed_assets['cropped_kwcoco_for_sc'],
-                    pred_dataset=sc_fusion_kwcoco_path,
-                    **sc_pxl_config)
+            ub.cmd(sc_pxl.command(), check=True, verbose=3, system=True)
+            # Old explicit invocation doesnt update with mlops
+            # Remove if the new mlops way works.
+            # predict(devices='0,',
+            #         write_preds=False,
+            #         write_probs=True,
+            #         with_change=False,
+            #         with_saliency=False,
+            #         with_class=True,
+            #         test_dataset=ingressed_assets['cropped_kwcoco_for_sc'],
+            #         pred_dataset=sc_fusion_kwcoco_path,
+            #         **sc_pxl_config)
         except TimeSampleError:
+            # FIXME: wont work anymore with mlops. Not sure if needed.
+            # Can always catch a CalledProcessError and inspect stdout
             print("* Error with time sampling during SC Predict "
                   "(shown below) -- attempting to continue anyway")
             traceback.print_exception(*sys.exc_info())
@@ -192,27 +200,46 @@ def run_sc_fusion_for_baseline(config):
             })
             sc_track_kwargs = default_sc_track_kwargs | Yaml.coerce(config.sc_poly_config or {})
 
-            # These args are passed on the top level command line
-            # Rather than in track-kwargs
-            external_args = {'site_score_thresh', 'smoothing'}
-            sc_extra_kwargs = sc_track_kwargs & external_args
-            sc_track_kwargs = sc_track_kwargs - external_args
-            sc_extra_argv = [f'--{k}={v}' for k, v in sc_extra_kwargs.items()]
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-            tracker_argv = [
-                'python', '-m', 'watch.cli.run_tracker',
-                '--input_kwcoco', sc_fusion_kwcoco_path,
-                '--out_site_summaries_dir', region_models_outdir,
-                '--out_sites_dir', site_models_outdir,
-                '--out_sites_fpath', site_models_manifest_outpath,
-                '--out_kwcoco', tracked_sc_kwcoco_path,
-                '--default_track_fn', config.sc_track_fn,
-                '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
-                '--append_mode', 'True',
-                '--track_kwargs', json.dumps(sc_track_kwargs)
-            ] + sc_extra_argv
-            ub.cmd(tracker_argv, check=True, verbose=3, capture=False)
+            region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
+
+            sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
+            sc_poly.configure({
+                'pred_pxl_fpath': sc_fusion_kwcoco_path,
+                'site_summaries_fpath': region_models_manifest_fpath,
+                'site_summaries_dpath': region_models_outdir,
+                'sites_dpath': site_models_outdir,
+                'sites_fpath': site_models_manifest_outpath,
+                'append_mode': True,
+                'poly_kwcoco_fpath': tracked_sc_kwcoco_path,
+                'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',
+            } | sc_track_kwargs)
+            command = sc_poly.command()
+            print(command)
+            ub.cmd(command, check=True, verbose=3, system=True)
+
+            # Old explicit invocation doesnt update with mlops
+            # Remove if the new mlops way works.
+            # These args are passed on the top level command line
+            # Rather than in track-kwargs
+            # external_args = {'site_score_thresh', 'smoothing'}
+            # sc_extra_kwargs = sc_track_kwargs & external_args
+            # sc_track_kwargs = sc_track_kwargs - external_args
+            # sc_extra_argv = [f'--{k}={v}' for k, v in sc_extra_kwargs.items()]
+            # tracker_argv = [
+            #     'python', '-m', 'watch.cli.run_tracker',
+            #     '--input_kwcoco', sc_fusion_kwcoco_path,
+            #     '--out_site_summaries_dir', region_models_outdir,
+            #     '--out_sites_dir', site_models_outdir,
+            #     '--out_sites_fpath', site_models_manifest_outpath,
+            #     '--out_kwcoco', tracked_sc_kwcoco_path,
+            #     '--default_track_fn', 'class_heatmaps',
+            #     '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
+            #     '--append_mode', 'True',
+            #     '--track_kwargs', json.dumps(sc_track_kwargs)
+            # ] + sc_extra_argv
+            # ub.cmd(tracker_argv, check=True, verbose=3, capture=False)
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
