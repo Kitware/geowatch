@@ -218,7 +218,7 @@ def site_score_analysis(sites):
                     legend=False, ax=ax, palette=palette)
 
         scalars = pd.DataFrame(site_rows)
-        if 1:
+        if 0:
             scalars = scalars[scalars['region_id'] == 'KR_R002']
         scalars = scalars.fillna(0)
 

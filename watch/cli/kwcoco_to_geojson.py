@@ -639,7 +639,7 @@ def classify_site(site, config):
             # Hard code to use "ac_salient" score if available.
             obs_score = obs_scores['ac_salient']
         else:
-            active_scores = ub.udict(obs_scores).subdict(ACTIVE_LABELS)
+            active_scores = ub.udict(obs_scores) & ACTIVE_LABELS
             if active_scores:
                 obs_score = max(active_scores.values())
             else:
