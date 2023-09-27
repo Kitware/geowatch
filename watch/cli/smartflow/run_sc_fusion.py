@@ -248,6 +248,7 @@ def run_sc_fusion_for_baseline(config):
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
     cropped_region_models_outdir = ingress_dir / 'cropped_region_models'
+    sc_heatmap_dpath = ingress_dir / '_assets'
     os.makedirs(cropped_region_models_outdir, exist_ok=True)
 
     ub.cmd([
@@ -265,6 +266,10 @@ def run_sc_fusion_for_baseline(config):
         site_dpath=cropped_site_models_outdir,
     )
 
+    print('* Printing current directory contents')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
@@ -275,6 +280,7 @@ def run_sc_fusion_for_baseline(config):
     # Add in intermediate outputs for debugging
     ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
     ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+    ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,
