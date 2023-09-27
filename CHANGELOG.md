@@ -8,6 +8,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added 
 
+* Tracking now assigns a single score to each site model.
+* Added ability to smooth scores in AC tracking
+* Added ability to filter sites by score in AC tracking
 * Added a fork of torchview and loss-of-plasticity to geowatch-tpl
 * Confusion visualization now shows BAS and AC heatmaps if available
 * Experimental Generate & Test algorithm for continual backprop.
