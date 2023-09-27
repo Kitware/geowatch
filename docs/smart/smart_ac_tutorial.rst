@@ -143,7 +143,7 @@ Note: see ../../scripts/prepare_drop7.sh for details on how this dataset was
 initially computed.
 
 
-2. Train an AC Model
+3. Train an AC Model
 --------------------
 
 The following is a training run that I recently ran, and I have no idea if its
@@ -272,7 +272,7 @@ Be sure to grab a pretrained model to start from:
     "
 
 
-2. Evaluate an AC Model with MLOps
+4. Evaluate an AC Model with MLOps
 ----------------------------------
 
 

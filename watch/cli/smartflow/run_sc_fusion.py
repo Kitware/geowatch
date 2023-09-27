@@ -166,9 +166,11 @@ def run_sc_fusion_for_baseline(config):
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
             'test_dataset': ingressed_assets['cropped_kwcoco_for_sc'],
         } | sc_pxl_config)
+        command = sc_pxl.command()
+        print(command)
 
         try:
-            ub.cmd(sc_pxl.command(), check=True, verbose=3, system=True)
+            ub.cmd(command, check=True, verbose=3, system=True)
             # Old explicit invocation doesnt update with mlops
             # Remove if the new mlops way works.
             # predict(devices='0,',
@@ -204,8 +206,7 @@ def run_sc_fusion_for_baseline(config):
                 os.path.splitext(sc_fusion_kwcoco_path))
             region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
 
-            sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
-            sc_poly.configure({
+            final_sc_poly_config = {
                 'pred_pxl_fpath': sc_fusion_kwcoco_path,
                 'site_summaries_fpath': region_models_manifest_fpath,
                 'site_summaries_dpath': region_models_outdir,
@@ -214,7 +215,10 @@ def run_sc_fusion_for_baseline(config):
                 'append_mode': True,
                 'poly_kwcoco_fpath': tracked_sc_kwcoco_path,
                 'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',
-            } | sc_track_kwargs)
+            } | sc_track_kwargs
+
+            sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
+            sc_poly.configure(final_sc_poly_config)
             command = sc_poly.command()
             print(command)
             ub.cmd(command, check=True, verbose=3, system=True)
