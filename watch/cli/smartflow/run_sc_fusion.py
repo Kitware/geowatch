@@ -271,12 +271,14 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
 
     # Add in intermediate outputs for debugging
-    ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
-    ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
-    ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath
-    ingressed_assets['sc_tracking_manifest_dpath'] = site_models_manifest_outdir
-    if region_models_manifest_fpath.exists():
-        ingressed_assets['sc_tracking_manifest_fpath'] = region_models_manifest_fpath
+    EGRESS_FUSION_HEATMAPS = True
+    if EGRESS_FUSION_HEATMAPS:
+        ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
+        ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+        ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath
+        ingressed_assets['sc_tracking_manifest_dpath'] = site_models_manifest_outdir
+        if region_models_manifest_fpath.exists():
+            ingressed_assets['sc_tracking_manifest_fpath'] = region_models_manifest_fpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,

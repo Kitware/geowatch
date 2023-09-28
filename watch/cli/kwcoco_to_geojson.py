@@ -1045,6 +1045,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries)
 
     print('warping site boundaries to pxl space...')
+
     for site_idx, video_id in site_idx_to_vidid:
 
         region_id, site_summary = site_summary_tups[site_idx]
