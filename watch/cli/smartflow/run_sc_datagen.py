@@ -213,7 +213,7 @@ def run_generate_sc_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
     REMOVE_BAD_IMAGES = 1
@@ -235,7 +235,7 @@ def run_generate_sc_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
     else:
         print('Not removing bad images')
