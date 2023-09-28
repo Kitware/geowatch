@@ -78,6 +78,9 @@ except Exception:
     profile = ub.identity
 
 
+USE_NEW_KWCOCO_TRACKS = False
+
+
 class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
@@ -1012,6 +1015,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     import watch
     from watch.utils import kwcoco_extensions
     from kwutil import util_time
+    import kwcoco
     # input validation
     print(f'possible_summaries={possible_summaries}')
     print(f'coco_dset={coco_dset}')
@@ -1045,14 +1049,14 @@ def add_site_summary_to_kwcoco(possible_summaries,
         region_id, site_summary = site_summary_tups[site_idx]
         site_id = site_summary['properties']['site_id']
 
-        track_id = site_id
-
         # get relevant images
         images = coco_dset.images(video_id=video_id)
 
         # and their dates
         image_dates = [util_time.coerce_datetime(d).date()
                        for d in images.lookup('date_captured')]
+
+        assert image_dates == sorted(image_dates), 'images are not in order'
         first_date = image_dates[0]
         last_date = image_dates[-1]
 
@@ -1067,10 +1071,22 @@ def add_site_summary_to_kwcoco(possible_summaries,
         else:
             end_date = end_dt.date()
 
+        assert end_date >= start_date
+
         flags = [start_date <= d <= end_date for d in image_dates]
         images = images.compress(flags)
-        if track_id in images.get('track_id', None):
-            rich.print(f'[yellow]warning: site_summary {track_id} already in dset!')
+
+        if USE_NEW_KWCOCO_TRACKS:
+            try:
+                track_id = coco_dset.add_track(name=site_id)
+            except kwcoco.exceptions.DuplicateAddError:
+                rich.print(f'[yellow]warning: site_summary {site_id} already in dset!')
+                raise
+        else:
+            track_id = site_id
+            # Seems broken
+            if track_id in images.get('track_id', None):
+                rich.print(f'[yellow]warning: site_summary {track_id} already in dset!')
 
         # apply site boundary as polygons
         poly_crs84_geojson = site_summary['geometry']
