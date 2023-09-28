@@ -292,6 +292,13 @@ def run_bas_fusion_for_baseline(config):
                                           cropped_site_models_outdir,
                                           ta2_s3_collation_bucket)
 
+    EGRESS_INTERMEDIATE_OUTPUTS = True
+    if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Add BAS saliency outputs to egressed attributes for debugging
+        ingressed_assets['bas_pred_saliency_assets'] = ingress_dir / '_assets/pred_saliency'
+        ingressed_assets['bas_fusion_kwcoco_path'] = bas_fusion_kwcoco_path
+        ingressed_assets['tracked_bas_kwcoco_path'] = tracked_bas_kwcoco_path
+
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)

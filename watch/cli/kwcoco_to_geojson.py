@@ -660,7 +660,8 @@ def classify_site(site, config):
     if per_obs_scores:
         site_score = max(per_obs_scores)
 
-    if True:
+    FILTER_INACTIVE_SITES = True
+    if FILTER_INACTIVE_SITES:
         # HACKS FOR EVAL 15 to get things done quicky.
         import numpy as np
         curr_labels = [o['properties']['current_phase'] for o in observations]
