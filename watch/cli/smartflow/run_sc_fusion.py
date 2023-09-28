@@ -85,7 +85,7 @@ def run_sc_fusion_for_baseline(config):
         input_path=config.input_path,
         assets=[
             {'key': 'cropped_region_models_bas'},
-            {'key': 'sv_out_region_models', 'allow_missing': True},
+            # {'key': 'sv_out_region_models', 'allow_missing': True},
             {'key': 'cropped_kwcoco_for_sc'},
             {'key': 'cropped_kwcoco_for_sc_assets'}
         ],
