@@ -617,6 +617,7 @@ def classify_site(site, config):
     Given a site with extracted and scored observations, postprocess the raw
     observation scores and make site-level predictions.
     """
+    import numpy as np
 
     site_header = site.header
     observations = list(site.observations())
@@ -663,7 +664,6 @@ def classify_site(site, config):
     FILTER_INACTIVE_SITES = True
     if FILTER_INACTIVE_SITES:
         # HACKS FOR EVAL 15 to get things done quicky.
-        import numpy as np
         curr_labels = [o['properties']['current_phase'] for o in observations]
         flags = [lbl in ACTIVE_LABELS for lbl in curr_labels]
         active_idxs = np.where(flags)[0]
