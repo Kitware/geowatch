@@ -53,7 +53,6 @@ def smartflow_ingress(input_path,
             ``"key": <str>`` item, as well as other options to control
             behavior, like ``"allow_missing": True``.
 
-
         outdir (str | PathLike):
             local path to download to.
 
@@ -107,7 +106,7 @@ def smartflow_ingress(input_path,
         >>> input_path = remote_dpath / 'items.jsonl'
         >>> input_path.write_text(json.dumps(demo_stac_content))
         >>> outdir = (dpath / 'local').ensuredir()
-        >>> assets = ['asset_file1', 'asset_dir1']
+        >>> assets = ['asset_file1', 'asset_dir1', {'key': 'foobar', 'allow_missing': True}]
         >>> kwcoco_stac_item_assets = smartflow_ingress(
         >>>     input_path,
         >>>     assets,

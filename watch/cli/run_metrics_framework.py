@@ -428,21 +428,26 @@ def main(cmdline=True, **kwargs):
         if isinstance(args.enable_viz, str):
             # Allow the user to enable specific visualizations
             chosen = set(args.enable_viz.split(','))
-            to_disable = set(key_to_disable_flag) - chosen
-            to_enable = chosen
         elif args.enable_viz:
             # Enable all visualizations (usually a bad idea)
+            # warnings.warn(ub.paragraph(
+            #     '''
+            #     All IARPA visualizations were enabled.  Try setting
+            #     --enable_viz=region to get only the useful visualizations
+            #     '''))
             warnings.warn(ub.paragraph(
                 '''
-                All IARPA visualizations were enabled.  Try setting
-                --enable_viz=regions to get only the useful visualizations
+                When enable_viz is True, we default to only using "region"
+                Can also set things like --enable_viz="region,slices,detection_table"
+                etc...
                 '''))
-            chosen = set(key_to_disable_flag)
-            to_enable = set(key_to_disable_flag) & chosen
-            to_disable = set(key_to_disable_flag) & chosen
+            # chosen = set(key_to_disable_flag)
+            chosen = {'region'}
         else:
-            to_disable = list(key_to_disable_flag.keys())
-            to_enable = []
+            chosen = set()
+
+        to_disable = set(key_to_disable_flag) - chosen
+        to_enable = set(key_to_disable_flag) & chosen
 
         viz_flags = [key_to_disable_flag[k] for k in sorted(to_disable)]
         viz_flags += [key_to_disable_flag[k].replace('--no-', '--')

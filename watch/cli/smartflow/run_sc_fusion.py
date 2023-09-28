@@ -82,13 +82,24 @@ def run_sc_fusion_for_baseline(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        config.input_path,
-        ['cropped_region_models_bas',
-         'cropped_kwcoco_for_sc',
-         'cropped_kwcoco_for_sc_assets'],
-        ingress_dir,
-        config.aws_profile,
-        config.dryrun)
+        input_path=config.input_path,
+        assets=[
+            {'key': 'cropped_region_models_bas'},
+            {'key': 'sv_out_region_models', 'allow_missing': True},
+            {'key': 'cropped_kwcoco_for_sc'},
+            {'key': 'cropped_kwcoco_for_sc_assets'}
+        ],
+        outdir=ingress_dir,
+        aws_profile=config.aws_profile,
+        dryrun=config.dryrun
+    )
+
+    if 'sv_out_region_models' in ingressed_assets:
+        # Use filtered SV site summaries when possible
+        input_site_summary_dpath = ingressed_assets['sv_out_region_models']
+    else:
+        # Otherwise fallback to bas site summaries
+        input_site_summary_dpath = ingressed_assets['cropped_region_models_bas']
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -105,7 +116,6 @@ def run_sc_fusion_for_baseline(config):
     region_id = determine_region_id(local_region_path)
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
-    cropped_region_models_bas = ingressed_assets['cropped_region_models_bas']
 
     site_models_outdir = ingress_dir / 'sc_out_site_models'
     os.makedirs(site_models_outdir, exist_ok=True)
@@ -210,7 +220,7 @@ def run_sc_fusion_for_baseline(config):
                 'sites_dpath': site_models_outdir,                     # Sets --out_sites_dir
                 'sites_fpath': site_models_manifest_outpath,           # Sets --out_sites_fpath
                 'poly_kwcoco_fpath': tracked_sc_kwcoco_path,           # Sets --out_kwcoco
-                'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',  # Sets --site_summary
+                'site_summary': ub.Path(input_site_summary_dpath) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
             } | sc_track_kwargs
 

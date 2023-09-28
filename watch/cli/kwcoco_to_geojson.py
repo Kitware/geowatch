@@ -1480,6 +1480,7 @@ def main(argv=None, **kwargs):
         site_tracking_output = tracking_output.copy()
         site_tracking_output['files'] = site_fpaths
         out_sites_fpath = ub.Path(args.out_sites_fpath)
+        out_sites_fpath.parent.ensuredir()
         print(f'Write tracked site result to {out_sites_fpath}')
         with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
