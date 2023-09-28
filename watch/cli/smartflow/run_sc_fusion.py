@@ -120,6 +120,8 @@ def run_sc_fusion_for_baseline(config):
     # same bounds as the original)
     shutil.copy(local_region_path, region_models_outdir / f'{region_id}.geojson')
 
+    region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
+
     print('* Printing current directory contents (1/5)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
     print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
@@ -200,17 +202,16 @@ def run_sc_fusion_for_baseline(config):
 
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-            region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
 
             final_sc_poly_config = {
-                'pred_pxl_fpath': sc_fusion_kwcoco_path,
-                'site_summaries_fpath': region_models_manifest_fpath,
-                'site_summaries_dpath': region_models_outdir,
-                'sites_dpath': site_models_outdir,
-                'sites_fpath': site_models_manifest_outpath,
+                'pred_pxl_fpath': sc_fusion_kwcoco_path,               # Sets --input_kwcoco
+                'site_summaries_fpath': region_models_manifest_fpath,  # Sets --out_site_summaries_fpath
+                'site_summaries_dpath': region_models_outdir,          # Sets --out_site_summaries_dir
+                'sites_dpath': site_models_outdir,                     # Sets --out_sites_dir
+                'sites_fpath': site_models_manifest_outpath,           # Sets --out_sites_fpath
+                'poly_kwcoco_fpath': tracked_sc_kwcoco_path,           # Sets --out_kwcoco
+                'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
-                'poly_kwcoco_fpath': tracked_sc_kwcoco_path,
-                'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',
             } | sc_track_kwargs
 
             sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
@@ -263,6 +264,9 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
     ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
     ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath
+    ingressed_assets['sc_tracking_manifest_dpath'] = site_models_manifest_outdir
+    if region_models_manifest_fpath.exists():
+        ingressed_assets['sc_tracking_manifest_fpath'] = region_models_manifest_fpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,
