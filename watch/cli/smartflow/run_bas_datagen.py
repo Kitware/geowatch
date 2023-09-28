@@ -177,6 +177,7 @@ def run_stac_to_cropped_kwcoco(config):
     # from kwcoco import ChannelSpec
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
+    from watch.mlops.pipeline_nodes import ProcessNode
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -283,6 +284,10 @@ def run_stac_to_cropped_kwcoco(config):
     region_id = determine_region_id(local_region_path)
     ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
 
+    print('* Printing current directory contents (1/3)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
     stac_to_kwcoco(ingress_catalog,
@@ -341,7 +346,7 @@ def run_stac_to_cropped_kwcoco(config):
             '--dst', ta1_sc_kwcoco_path,
             '--absolute', 'False',
             '--select_images',
-            '.sensor_coarse == "WV" or .sensor_coarse == "S2"'],
+            '.sensor_coarse == "WV1" or .sensor_coarse == "WV" or .sensor_coarse == "S2"'],
            check=True, verbose=3, capture=False)
 
     # 4. Crop ingress KWCOCO dataset to region for BAS
@@ -357,6 +362,58 @@ def run_stac_to_cropped_kwcoco(config):
                check=True, capture=False, verbose=3)
     else:
         raise KeyError(ALIGN_EXEC_MODE)
+
+    ### Filter / clean geotiffs (probably should be a separate step)
+    CLEAN_GEOTIFFS = 0
+    if CLEAN_GEOTIFFS:
+        # Detect blocky black regions in geotiffs and switch them to NODATA
+        # Modifies geotiffs inplace
+        remove_bad_images_node = ProcessNode(
+            command='geowatch clean_geotiffs',
+            in_paths={
+                'src': ta1_cropped_kwcoco_path,
+            },
+            config={
+                'prefilter_channels': 'red',
+                'channels': 'red|green|blue|nir',
+                'workers': 'avail',
+                'dry': False,
+                'probe_scale': None,
+                'nodata_value': -9999,
+                'min_region_size': 256,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+
+    REMOVE_BAD_IMAGES = 0
+    if REMOVE_BAD_IMAGES:
+        # Remove images that are nearly all nan
+        remove_bad_images_node = ProcessNode(
+            command='geowatch remove_bad_images',
+            in_paths={
+                'src': ta1_cropped_kwcoco_path,
+            },
+            out_paths={
+                'dst': ta1_cropped_kwcoco_path,  # hack: this is inplace, fix it if we enable.
+            },
+            config={
+                'workers': 'avail',
+                'interactive': False,
+                'overview': 0,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+    else:
+        print('Not removing bad images. TODO: add support')
+        # ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
+
+    print('* Printing current directory contents (2/3)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:
@@ -416,6 +473,10 @@ def run_stac_to_cropped_kwcoco(config):
     # to S3
     timecombined_teamfeat_dpath.ensuredir()
     (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
+
+    print('* Printing current directory contents (3/3)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {

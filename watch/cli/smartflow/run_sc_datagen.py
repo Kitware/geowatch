@@ -66,6 +66,7 @@ def run_generate_sc_cropped_kwcoco(config):
     from watch.utils import util_framework
     from watch.cli import coco_align
     from watch.utils import util_fsspec
+    from watch.mlops.pipeline_nodes import ProcessNode
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -82,6 +83,9 @@ def run_generate_sc_cropped_kwcoco(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
+
+    # TODO:
+    # Compute kwcoco-for-sc here rather than in run-bas-datagen
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=['kwcoco_for_sc',
@@ -114,6 +118,10 @@ def run_generate_sc_cropped_kwcoco(config):
               "from BAS *")
         input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
+    print('* Printing current directory contents (1/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     if config.acsc_cluster_config is not None:
         # If specified cluster sites first.
         from watch.mlops import smart_pipeline
@@ -127,6 +135,10 @@ def run_generate_sc_cropped_kwcoco(config):
         ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
     else:
         tocrop_region_fpath = input_region_path
+
+    print('* Printing current directory contents (2/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
@@ -154,17 +166,19 @@ def run_generate_sc_cropped_kwcoco(config):
 
     # 4. Crop ingress KWCOCO dataset to region for SC
     print("* Cropping KWCOCO dataset to region for SC*")
+    ta1_sc_cropped_kwcoco_prefilter_path = ingress_dir / 'cropped_kwcoco_for_sc_prefilter.json'
     ta1_sc_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sc.json'
 
     align_config['src'] = ta1_sc_kwcoco_path
-    align_config['dst'] = ta1_sc_cropped_kwcoco_path
+    align_config['dst'] = ta1_sc_cropped_kwcoco_prefilter_path
     align_config['regions'] = tocrop_region_fpath
     # Validate align config before running anything
     align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
     print('align_config = {}'.format(ub.urepr(align_config, nl=1)))
 
+    # Not sure if one is more stable than the other, but cmd seems fine and
+    # gives us nicer logs. Prefer that one when possible.
     EXEC_MODE = 'cmd'
-    # Not sure if one is more stable than the other
     if EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
@@ -173,6 +187,63 @@ def run_generate_sc_cropped_kwcoco(config):
                check=True, capture=False, verbose=3)
     else:
         raise KeyError(EXEC_MODE)
+
+    print('* Printing current directory contents (3/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
+    ### Filter / clean geotiffs (probably should be a separate step)
+    CLEAN_GEOTIFFS = 0
+    if CLEAN_GEOTIFFS:
+        # Detect blocky black regions in geotiffs and switch them to NODATA
+        # Modifies geotiffs inplace
+        remove_bad_images_node = ProcessNode(
+            command='geowatch clean_geotiffs',
+            in_paths={
+                'src': ta1_sc_cropped_kwcoco_prefilter_path,
+            },
+            config={
+                'prefilter_channels': 'red',
+                'channels': 'red|green|blue|nir',
+                'workers': 'avail',
+                'dry': False,
+                'probe_scale': None,
+                'nodata_value': -9999,
+                'min_region_size': 256,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+
+    REMOVE_BAD_IMAGES = 1
+    if REMOVE_BAD_IMAGES:
+        # Remove images that are nearly all nan
+        remove_bad_images_node = ProcessNode(
+            command='geowatch remove_bad_images',
+            in_paths={
+                'src': ta1_sc_cropped_kwcoco_prefilter_path,
+            },
+            out_paths={
+                'dst': ta1_sc_cropped_kwcoco_path,
+            },
+            config={
+                'channels': 'red|green|blue|pan',
+                'workers': 'avail',
+                'interactive': False,
+                'overview': 0,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+    else:
+        print('Not removing bad images')
+        ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
+
+    print('* Printing current directory contents (4/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

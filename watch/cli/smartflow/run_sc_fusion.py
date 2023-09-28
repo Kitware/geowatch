@@ -120,6 +120,10 @@ def run_sc_fusion_for_baseline(config):
     # same bounds as the original)
     shutil.copy(local_region_path, region_models_outdir / f'{region_id}.geojson')
 
+    print('* Printing current directory contents (1/5)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
     with open(ingressed_assets['cropped_kwcoco_for_sc']) as f:
@@ -167,21 +171,12 @@ def run_sc_fusion_for_baseline(config):
             'test_dataset': ingressed_assets['cropped_kwcoco_for_sc'],
         } | sc_pxl_config)
         command = sc_pxl.command()
-        print(command)
 
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
-            # Old explicit invocation doesnt update with mlops
-            # Remove if the new mlops way works.
-            # predict(devices='0,',
-            #         write_preds=False,
-            #         write_probs=True,
-            #         with_change=False,
-            #         with_saliency=False,
-            #         with_class=True,
-            #         test_dataset=ingressed_assets['cropped_kwcoco_for_sc'],
-            #         pred_dataset=sc_fusion_kwcoco_path,
-            #         **sc_pxl_config)
+            print('* Printing current directory contents (2/5)')
+            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
         except TimeSampleError:
             # FIXME: wont work anymore with mlops. Not sure if needed.
             # Can always catch a CalledProcessError and inspect stdout
@@ -189,6 +184,7 @@ def run_sc_fusion_for_baseline(config):
                   "(shown below) -- attempting to continue anyway")
             traceback.print_exception(*sys.exc_info())
         else:
+
             # 4. Compute tracks (SC)
             print('*************************')
             print("* Computing tracks (SC) *")
@@ -223,27 +219,9 @@ def run_sc_fusion_for_baseline(config):
             print(command)
             ub.cmd(command, check=True, verbose=3, system=True)
 
-            # Old explicit invocation doesnt update with mlops
-            # Remove if the new mlops way works.
-            # These args are passed on the top level command line
-            # Rather than in track-kwargs
-            # external_args = {'site_score_thresh', 'smoothing'}
-            # sc_extra_kwargs = sc_track_kwargs & external_args
-            # sc_track_kwargs = sc_track_kwargs - external_args
-            # sc_extra_argv = [f'--{k}={v}' for k, v in sc_extra_kwargs.items()]
-            # tracker_argv = [
-            #     'python', '-m', 'watch.cli.run_tracker',
-            #     '--input_kwcoco', sc_fusion_kwcoco_path,
-            #     '--out_site_summaries_dir', region_models_outdir,
-            #     '--out_sites_dir', site_models_outdir,
-            #     '--out_sites_fpath', site_models_manifest_outpath,
-            #     '--out_kwcoco', tracked_sc_kwcoco_path,
-            #     '--default_track_fn', 'class_heatmaps',
-            #     '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
-            #     '--append_mode', 'True',
-            #     '--track_kwargs', json.dumps(sc_track_kwargs)
-            # ] + sc_extra_argv
-            # ub.cmd(tracker_argv, check=True, verbose=3, capture=False)
+            print('* Printing current directory contents (3/5)')
+            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
@@ -259,6 +237,10 @@ def run_sc_fusion_for_baseline(config):
         '--new_region_dpath', cropped_region_models_outdir
     ], check=True, verbose=3, capture=False)
 
+    print('* Printing current directory contents (4/5)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     # Validate and fix all outputs
     print('Fixup and validate outputs')
     util_framework.fixup_and_validate_site_and_region_models(
@@ -266,7 +248,7 @@ def run_sc_fusion_for_baseline(config):
         site_dpath=cropped_site_models_outdir,
     )
 
-    print('* Printing current directory contents')
+    print('* Printing current directory contents (5/5)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
     print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
