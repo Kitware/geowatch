@@ -191,6 +191,11 @@ def score_tracks(img_coco_dset, model_fpath):
         except ValueError:
             tq.update(1)
             continue
+        except Exception:
+            # Sample again with more info
+            target['verbose_ndsample'] = True
+            sampler.load_sample(target, with_annots=False)
+            raise
 
         ims = data['im']
 
