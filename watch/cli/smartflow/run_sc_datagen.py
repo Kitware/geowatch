@@ -123,15 +123,15 @@ def run_generate_sc_cropped_kwcoco(config):
     print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     if config.acsc_cluster_config is not None:
+        print('******************')
+        print('Cluster input site summaries')
         # If specified cluster sites first.
         from watch.mlops import smart_pipeline
         site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
         acsc_cluster_config = ub.udict(Yaml.coerce(config.acsc_cluster_config))
-
         cluster_region_dpath = (ingress_dir / 'clustered_regions').ensuredir()
         cluster_region_fpath = cluster_region_dpath / ('clustered_' + input_region_path.name)
-
-        tocrop_region_fpath = input_region_path.augment(prefix='clustered_')
+        tocrop_region_fpath = cluster_region_fpath
         acsc_cluster_config['src'] = input_region_path
         acsc_cluster_config['dst_dpath'] = cluster_region_dpath
         acsc_cluster_config['dst_region_fpath'] = cluster_region_fpath
@@ -170,6 +170,7 @@ def run_generate_sc_cropped_kwcoco(config):
         align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
 
     # 4. Crop ingress KWCOCO dataset to region for SC
+    print('******************')
     print("* Cropping KWCOCO dataset to region for SC*")
     ta1_sc_cropped_kwcoco_prefilter_path = ingress_dir / 'cropped_kwcoco_for_sc_prefilter.json'
     ta1_sc_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sc.json'

@@ -289,7 +289,8 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         '''
         The path to a set of geojson input region or site models.  Can also be
         a strategy for extracting regions, if annots, uses the convex hulls of
-        clustered annotations.
+        clustered annotations (Note: the annots option is old, not well
+        supported, and may be deprecated).
         '''), group='inputs')
 
     site_summary = scfg.Value(False, help=ub.paragraph(
