@@ -78,6 +78,11 @@ def main():
 
 
 def run_dzyne_parallel_site_vali_for_baseline(config):
+    """
+    SeeAlso:
+        ~/code/watch/watch/tasks/depth_pcd/score_tracks.py
+        ~/code/watch/watch/tasks/depth_pcd/filter_tracks.py
+    """
     from watch.cli.smartflow_ingress import smartflow_ingress
     from watch.cli.smartflow_egress import smartflow_egress
     # from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
@@ -96,14 +101,17 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['cropped_kwcoco_for_sv',
-         'cropped_kwcoco_for_sv_assets',
-         'cropped_site_models_bas',
-         'cropped_region_models_bas'],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'cropped_kwcoco_for_sv',
+            'cropped_kwcoco_for_sv_assets',
+            'cropped_site_models_bas',
+            'cropped_region_models_bas'
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun
+    )
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -161,9 +169,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     output_region_dpath = ingress_dir / "depth_filtered_regions"
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
-    score_tracks.main(
-        cmdline=0,
-
+    cmdline = 0
+    score_kwargs = dict(
         **score_config,
 
         # Should be the SV-cropped kwcoco file that contains start and ending
@@ -179,7 +186,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         # are assigned to each track. The next step will use this.
         out_kwcoco=scored_kwcoco_fpath,
     )
+    score_tracks.main(cmdline=cmdline, **score_kwargs)
 
+    cmdline = 0
     filter_kwargs = {
         **filter_config,
 
@@ -205,7 +214,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         # site directory.
         'output_site_manifest_fpath': output_site_manifest_fpath,
     }
-    filter_tracks.main(cmdline=0, **filter_kwargs)
+    filter_tracks.main(cmdline=cmdline, **filter_kwargs)
 
     # Validate and fix all outputs
     from watch.utils import util_framework

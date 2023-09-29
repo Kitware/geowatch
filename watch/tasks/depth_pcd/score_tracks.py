@@ -106,7 +106,7 @@ def score_tracks(img_coco_dset, model_fpath):
         track_obj = {
             'id': track_id,
             'name': track_id,  # add a name for "future-proofing"
-            'score': float(1),
+            'score': 1.0,
             'src': 'sv_depth_pcd'
         }
         tracks.append(track_obj)
@@ -114,9 +114,11 @@ def score_tracks(img_coco_dset, model_fpath):
         video_names = orig_track_group['video_name'].unique()
         if len(video_names) > 1:
             if track_id not in video_names:
-                msg = (
-                    f'track-id {track_id} expected to correspond with video names '
-                    'in site-cropped datasets')
+                msg = ub.paragraph(
+                    f'''
+                    track-id {track_id} expected to correspond with video names
+                    'in site-cropped datasets
+                    ''')
                 warnings.warn(msg)
                 continue
             # take the "main" video for this track
@@ -133,19 +135,21 @@ def score_tracks(img_coco_dset, model_fpath):
         first_image_id = image_ids[0]
         first_coco_img = img_coco_dset.coco_image(first_image_id)
         first_annot = img_coco_dset.anns[first_annot_id]
+
+        # Read the location of the first annotation in "image space"
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
+
+        # Convert the location of the annotation to "video space"
         vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
-        ref_coco_img = first_coco_img
 
         # Because we want a higher resolution, we need to scale the requested
         # videospace region down. Looks like quantization errors may happen
         # here not sure how I deal with in the dataloader, it probably needs to
         # be fixed there too.
-        # res = '2GSD'
-        scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
+        scale_res_from_vidspace = first_coco_img._scalefactor_for_resolution(space='video', resolution=res)
 
-        # cxy = vidspace_annot_box.to_cxywh().data[0:2]
-        # warp_res_from_vidspace = kwimage.Affine.coerce(scale=scale_res_from_vidspace, about=cxy)
+        # This is the transform from video space (i.e. the space we use to talk
+        # to ndsampler) to the final resolution we want to sample.
         warp_res_from_vidspace = kwimage.Affine.scale(scale_res_from_vidspace)
 
         # Convert the video space annotation into requested resolution "window space"
@@ -155,18 +159,30 @@ def score_tracks(img_coco_dset, model_fpath):
         winspace_annot_box = winspace_annot_box.toformat('cxywh')
 
         # Force the box to be a specific size at our window resolution
+        force_dsize = (224, 224)
         # THIS IS THE BUG
-        # winspace_target_box = winspace_annot_box.resize(*force_dsize)
-
-        # Workaround
-        winspace_target_box = winspace_annot_box.copy()
-        winspace_target_box.data[2:4] = (224, 224)
+        # but it should work now.
+        USE_WORKAROUND = 0
+        if USE_WORKAROUND:
+            # Workaround
+            winspace_target_box = winspace_annot_box.copy()
+            winspace_target_box.data[2:4] = force_dsize
+        else:
+            winspace_target_box = winspace_annot_box.resize(*force_dsize)
 
         # Convert the box back to videospace
         vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
 
         # Get the slice for video space
         vidspace_slice = vidspace_target_box.quantize().to_slice()
+        # vidspace_slice = vidspace_target_box.quantize().to_ltrb().quantize().to_slice()
+        # vidspace_slice = vidspace_target_box.to_ltrb().quantize().to_slice()
+
+        # The space slice is specified in video space, so to recover the
+        # requested resolution, we pass the videospace -> samplespace
+        # scalefactor. We could assert that decompose opertion should have
+        # zeros everywhere but scale, but we aren't.
+        scale = warp_res_from_vidspace.decompose()['scale']
 
         target = {
             'vidid': video_id,
@@ -174,13 +190,16 @@ def score_tracks(img_coco_dset, model_fpath):
             'channels': 'blue|green|red',
             'allow_augment': False,
             'space_slice': vidspace_slice,
-            'use_native_scale': True,
+
+            'use_native_scale': False,
+            'scale': scale,
         }
         try:
             data = sampler.load_sample(target, with_annots=False)
         except ValueError:
             tq.update(1)
             continue
+
         ims = data['im']
 
         good_ims = []
@@ -192,7 +211,8 @@ def score_tracks(img_coco_dset, model_fpath):
                 im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
             if np.mean(im == 0) > .2:
                 continue
-            good_ims.append(normalize(im))
+            norm_im = normalize(im)
+            good_ims.append(norm_im)
 
         # a little average at start vs end
         nAvg = 2
