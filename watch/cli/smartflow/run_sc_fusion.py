@@ -72,6 +72,7 @@ def run_sc_fusion_for_baseline(config):
     from watch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
+    from watch.mlops import smart_pipeline
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -80,12 +81,15 @@ def run_sc_fusion_for_baseline(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
+
+    # ingress_dir = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/temp').ensuredir()
     ingress_dir = ub.Path('/tmp/ingress')
+
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=[
-            {'key': 'cropped_region_models_bas'},
-            # {'key': 'sv_out_region_models', 'allow_missing': True},
+            # {'key': 'cropped_region_models_bas'},
+            {'key': 'sv_out_region_models', 'allow_missing': False},
             {'key': 'cropped_kwcoco_for_sc'},
             {'key': 'cropped_kwcoco_for_sc_assets'}
         ],
@@ -94,12 +98,19 @@ def run_sc_fusion_for_baseline(config):
         dryrun=config.dryrun
     )
 
-    if 'sv_out_region_models' in ingressed_assets:
+    # Get the first set of BAS site summaries that are available
+    region_model_key_priority = [
         # Use filtered SV site summaries when possible
-        input_site_summary_dpath = ingressed_assets['sv_out_region_models']
-    else:
         # Otherwise fallback to bas site summaries
-        input_site_summary_dpath = ingressed_assets['cropped_region_models_bas']
+        'sv_out_region_models',
+        'cropped_region_models_bas',
+    ]
+    for key in region_model_key_priority:
+        input_site_summary_dpath = ingressed_assets[key]
+        if os.path.exists(input_site_summary_dpath):
+            break
+    assert os.path.exists(input_site_summary_dpath)
+    print(f'Found input site summary dpath: {input_site_summary_dpath}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -117,13 +128,10 @@ def run_sc_fusion_for_baseline(config):
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
 
-    site_models_outdir = ingress_dir / 'sc_out_site_models'
-    os.makedirs(site_models_outdir, exist_ok=True)
-    region_models_outdir = ingress_dir / 'sc_out_region_models'
-    os.makedirs(region_models_outdir, exist_ok=True)
+    site_models_outdir = (ingress_dir / 'sc_out_site_models').ensuredir()
+    region_models_outdir = (ingress_dir / 'sc_out_region_models').ensuredir()
+    site_models_manifest_outdir = (ingress_dir / 'tracking_manifests_sc').ensuredir()
 
-    site_models_manifest_outdir = ingress_dir / 'tracking_manifests_sc'
-    os.makedirs(site_models_manifest_outdir, exist_ok=True)
     site_models_manifest_outpath = site_models_manifest_outdir / 'site_models_manifest.json'
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
@@ -146,37 +154,11 @@ def run_sc_fusion_for_baseline(config):
         print('*********************')
         print("* Running SC fusion *")
 
-        # TODO: remove these defaults or replace them with whatever is the
-        # default in predict. The params should be fully given in the DAG, not
-        # here.
-        default_sc_pxl_config = ub.udict({
-            # 'tta_fliprot': 0.0,
-            # 'tta_time': 0.0,
-            # 'chip_overlap': 0.3,
-            # 'input_space_scale': '8GSD',
-            # 'window_space_scale': '8GSD',
-            # 'output_space_scale': '8GSD',
-            # 'time_span': '6m',
-            # 'time_sampling': 'auto',
-            # 'time_steps': '12',
-            # 'chip_dims': 'auto',
-            # 'set_cover_algo': None,
-            # 'resample_invalid_frames': 3,
-            # 'observable_threshold': 0.0,
-            # 'mask_low_quality': True,
-            # 'drop_unused_frames': True,
-            # 'num_workers': 2,
-            # 'batch_size': 1,
-            # 'write_workers': 0,
-            # 'package_fpath': None,
-        })
-
-        sc_pxl_config = default_sc_pxl_config | Yaml.coerce(config.sc_pxl_config or {})
-
+        # The params should be fully given in the DAG.
+        sc_pxl_config = Yaml.coerce(config.sc_pxl_config or {})
         if sc_pxl_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
 
-        from watch.mlops import smart_pipeline
         sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
         sc_pxl.configure({
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
@@ -201,18 +183,10 @@ def run_sc_fusion_for_baseline(config):
             print('*************************')
             print("* Computing tracks (SC) *")
 
-            # NOTE: These params are fully specified and overwritten in the DAG
-            default_sc_track_kwargs = ub.udict({
-                "boundaries_as": "polys",
-                "resolution": 8,
-                "min_area_square_meters": 7200,
-                "thresh": 0.07,
-            })
-            sc_track_kwargs = default_sc_track_kwargs | Yaml.coerce(config.sc_poly_config or {})
-
+            # Params are fully specified in the DAG
+            sc_track_kwargs = Yaml.coerce(config.sc_poly_config or {})
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-
             final_sc_poly_config = {
                 'pred_pxl_fpath': sc_fusion_kwcoco_path,               # Sets --input_kwcoco
                 'site_summaries_fpath': region_models_manifest_fpath,  # Sets --out_site_summaries_fpath
@@ -223,11 +197,9 @@ def run_sc_fusion_for_baseline(config):
                 'site_summary': ub.Path(input_site_summary_dpath) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
             } | sc_track_kwargs
-
             sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
             sc_poly.configure(final_sc_poly_config)
             command = sc_poly.command()
-            print(command)
             ub.cmd(command, check=True, verbose=3, system=True)
 
             print('* Printing current directory contents (3/5)')

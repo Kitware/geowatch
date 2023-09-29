@@ -127,13 +127,18 @@ def run_generate_sc_cropped_kwcoco(config):
         from watch.mlops import smart_pipeline
         site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
         acsc_cluster_config = ub.udict(Yaml.coerce(config.acsc_cluster_config))
+
+        cluster_region_dpath = (ingress_dir / 'clustered_regions').ensuredir()
+        cluster_region_fpath = cluster_region_dpath / ('clustered_' + input_region_path.name)
+
         tocrop_region_fpath = input_region_path.augment(prefix='clustered_')
         acsc_cluster_config['src'] = input_region_path
-        acsc_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
-        acsc_cluster_config['dst_region_fpath'] = tocrop_region_fpath
+        acsc_cluster_config['dst_dpath'] = cluster_region_dpath
+        acsc_cluster_config['dst_region_fpath'] = cluster_region_fpath
         site_clustering.configure(acsc_cluster_config)
         ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
     else:
+        cluster_region_dpath = None
         tocrop_region_fpath = input_region_path
 
     print('* Printing current directory contents (2/4)')
@@ -251,6 +256,10 @@ def run_generate_sc_cropped_kwcoco(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_kwcoco_for_sc'] = ta1_sc_cropped_kwcoco_path
     ingressed_assets['cropped_kwcoco_for_sc_assets'] = ingress_dir / f'{region_id}'
+
+    if cluster_region_dpath is not None:
+        ingressed_assets['clustered_region_dpath'] = cluster_region_dpath
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,
