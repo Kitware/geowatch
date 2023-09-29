@@ -559,6 +559,8 @@ def run_stac_to_cropped_kwcoco(config):
     (timecombined_rawband_dpath / 'dummy').write_text('dummy')
     timecombined_teamfeat_dpath.ensuredir()
     (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
+    ta1_cropped_rawband_dpath.ensuredir()
+    (ta1_cropped_rawband_dpath / 'dummy').write_text('dummy')
 
     print('* Printing current directory contents (3/3)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
