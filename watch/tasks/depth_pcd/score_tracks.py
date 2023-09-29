@@ -160,15 +160,7 @@ def score_tracks(img_coco_dset, model_fpath):
 
         # Force the box to be a specific size at our window resolution
         force_dsize = (224, 224)
-        # THIS IS THE BUG
-        # but it should work now.
-        USE_WORKAROUND = 0
-        if USE_WORKAROUND:
-            # Workaround
-            winspace_target_box = winspace_annot_box.copy()
-            winspace_target_box.data[2:4] = force_dsize
-        else:
-            winspace_target_box = winspace_annot_box.resize(*force_dsize)
+        winspace_target_box = winspace_annot_box.resize(*force_dsize)
 
         # Convert the box back to videospace
         vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
