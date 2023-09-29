@@ -125,7 +125,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
+    # ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
@@ -141,21 +141,17 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     if score_config.get('model_fpath', None) is None:
         raise ValueError('Requires model_fpath')
 
-    default_filter_config = ub.udict({
-        'threshold': 0.4,
-    })
-    filter_config = (default_filter_config
-                     | Yaml.coerce(config.depth_filter_config or {}))
+    filter_config = (Yaml.coerce(config.depth_filter_config or {}))
 
     # 3.3 Run DZYNE depth_pcd
     print("* Running DZYNE depth_pcd *")
 
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
-    input_kwcoco_fpath = ingressed_assets['cropped_kwcoco_for_sv']
-    input_sites_dpath = ingressed_assets['cropped_site_models_bas']
-    input_region_dpath = ingressed_assets['cropped_region_models_bas']
-    input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
+    input_kwcoco_fpath = ub.Path(ingressed_assets['cropped_kwcoco_for_sv'])
+    input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+    input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_bas'])
+    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
     # input_region_fpath = local_region_path  # is this right?
 
     scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"
@@ -183,33 +179,33 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         # are assigned to each track. The next step will use this.
         out_kwcoco=scored_kwcoco_fpath,
     )
-    filter_tracks.main(
-        cmdline=0,
 
+    filter_kwargs = {
         **filter_config,
 
         # The kwcoco file contining depth scores that this step will use to
         # filter the input sites / site summaries.
-        input_kwcoco=scored_kwcoco_fpath,
+        'input_kwcoco': scored_kwcoco_fpath,
 
         # Should be the region models containing the current site summaries
         # from the previous step.
-        input_region=input_region_fpath,
+        'input_region': input_region_fpath,
 
         # Should be the folder containing all of the sites corresponding to the
         # sites in the input_region
-        input_sites=input_sites_dpath,
+        'input_sites': input_sites_dpath,
 
         # The output region model to be used by the next step
-        output_region_fpath=output_region_fpath,
+        'output_region_fpath': output_region_fpath,
 
         # The output directory of corresponding site models that should be used by the next step
-        output_sites_dpath=output_sites_dpath,
+        'output_sites_dpath': output_sites_dpath,
 
         # A single file that registers all of the sites writen to the output
         # site directory.
-        output_site_manifest_fpath=output_site_manifest_fpath,
-    )
+        'output_site_manifest_fpath': output_site_manifest_fpath,
+    }
+    filter_tracks.main(cmdline=0, **filter_kwargs)
 
     # Validate and fix all outputs
     from watch.utils import util_framework
