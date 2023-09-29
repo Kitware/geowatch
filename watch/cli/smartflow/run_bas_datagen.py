@@ -347,7 +347,12 @@ def run_stac_to_cropped_kwcoco(config):
             selected_stac_items = []
             with open(combined_stac_path) as f:
                 for line in f:
-                    stac_item = json.loads(line)
+                    try:
+                        stac_item = json.loads(line)
+                    except json.decoder.JSONDecodeError:
+                        print("** Warning: Couldn't parse STAC item from "
+                              "'combined_stac_input', skipping!")
+                        continue
 
                     if stac_item['properties']['datetime'].startswith(
                             str(current_interval_year)):
