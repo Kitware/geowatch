@@ -166,9 +166,9 @@ def score_tracks(img_coco_dset, model_fpath):
         vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
 
         # Get the slice for video space
-        vidspace_slice = vidspace_target_box.quantize().to_slice()
+        # vidspace_slice = vidspace_target_box.quantize().to_slice()
         # vidspace_slice = vidspace_target_box.quantize().to_ltrb().quantize().to_slice()
-        # vidspace_slice = vidspace_target_box.to_ltrb().quantize().to_slice()
+        vidspace_slice = vidspace_target_box.to_ltrb().quantize().to_slice()
 
         # The space slice is specified in video space, so to recover the
         # requested resolution, we pass the videospace -> samplespace
