@@ -46,7 +46,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
     # depth_model_fpath = scfg.Value("/models/depthPCD/basicModel2.h5", type=str, position=4, required=True, help='path to depth model weights')
 
-    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+    aws_profile = scfg.Value(None, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
