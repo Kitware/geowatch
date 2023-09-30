@@ -189,13 +189,17 @@ def score_tracks(img_coco_dset, model_fpath):
         try:
             data = sampler.load_sample(target, with_annots=False)
         except ValueError:
+            print('warning: failed to sample with value error')
             tq.update(1)
             continue
         except Exception:
-            # Sample again with more info
+            # Sample again with more info or debugging and then
             target['verbose_ndsample'] = True
             sampler.load_sample(target, with_annots=False)
-            raise
+            print('warning: failed to sample with unknown exception')
+            tq.update(1)
+            continue
+            # raise
 
         ims = data['im']
 
