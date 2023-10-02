@@ -79,6 +79,13 @@ def run_sc_fusion_for_baseline(config):
         from watch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
 
@@ -88,7 +95,7 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=[
-            # {'key': 'cropped_region_models_bas'},
+            {'key': 'cropped_region_models_bas'},
             {'key': 'sv_out_region_models', 'allow_missing': False},
             {'key': 'cropped_kwcoco_for_sc'},
             {'key': 'cropped_kwcoco_for_sc_assets'}

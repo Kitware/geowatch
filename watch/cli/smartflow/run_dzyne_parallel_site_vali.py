@@ -142,7 +142,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    # ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
