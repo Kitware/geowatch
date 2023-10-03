@@ -152,13 +152,15 @@ def smartflow_ingress(input_path,
         else:
             asset_info = _asset
         asset_key = asset_info['key']
+        allow_missing = asset_info.get('allow_missing', dont_error_on_missing_asset)
+
         try:
             asset_href = kwcoco_stac_item_assets[asset_key]
         except KeyError:
             missing_asset_str = (
                 f"Expecting asset named {asset_key!r} in input KWCOCO STAC item"
             )
-            if asset_info.get('allow_missing', dont_error_on_missing_asset):
+            if allow_missing:
                 print(f"* Warning: {missing_asset_str!r}")
                 continue
             else:
@@ -171,6 +173,14 @@ def smartflow_ingress(input_path,
             try:
                 asset_href.copy(asset_outpath)
             except FileNotFoundError:
+                missing_asset_str = (
+                    f"Missing file for asset named {asset_key!r}"
+                )
+                if allow_missing:
+                    print(f"* Warning: {missing_asset_str!r}")
+                    continue
+                print('!!!')
+                print('!!!')
                 print('ERROR: occured while trying to ingress asset')
                 print('Printing debug information and then re-raising')
                 print('asset_href = {}'.format(ub.urepr(asset_href, nl=1)))

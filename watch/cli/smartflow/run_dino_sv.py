@@ -87,8 +87,10 @@ def run_dino_sv(config):
     ingressed_assets = smartflow_ingress(
         input_path=input_path,
         assets=[
-            'depth_filtered_sites',
-            'depth_filtered_regions',
+            'cropped_site_models_bas',
+            'cropped_region_models_bas',
+            {'key': 'depth_filtered_sites', 'allow_missing': True},
+            {'key': 'depth_filtered_regions', 'allow_missing': True},
             'cropped_kwcoco_for_sv',
             'cropped_kwcoco_for_sv_assets'
         ],
@@ -118,8 +120,16 @@ def run_dino_sv(config):
     # site validation, the path to the region / sites directories should be
     # parameters passed to us from the DAG (so we can shift the order in
     # which operations are applied at the DAG level)
-    input_region_dpath = ingressed_assets['depth_filtered_regions']
+    input_region_dpath = ub.Path(ingressed_assets['depth_filtered_regions'])
     input_sites_dpath = ub.Path(ingressed_assets['depth_filtered_sites'])
+
+    # Hack around the depth filter not populating its outputs
+    # as we would expect here
+    missing_inputs = not input_region_dpath.exists() or not input_sites_dpath.exists()
+    if missing_inputs:
+        input_region_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+        input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+
     input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
@@ -159,7 +169,6 @@ def run_dino_sv(config):
         # here to guarentee the region with site summaries is passed forward
         # TODO: the dino code should just be robust to this.
         input_sites_dpath.copy(output_sites_dpath)
-
         output_region_fpath.parent.ensuredir()
         input_region_fpath.copy(output_region_fpath)
     else:

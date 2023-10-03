@@ -193,10 +193,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     input_coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
     print('input_coco_dset = {}'.format(ub.urepr(input_coco_dset, nl=1)))
     num_videos = input_coco_dset.n_videos
-    # Note: cant open with json here because kwcoco will save compressed files
-    # with open(input_kwcoco_fpath) as f:
-    #     ingress_kwcoco_data = json.load(f)
-    # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
 
     if num_videos == 0:
