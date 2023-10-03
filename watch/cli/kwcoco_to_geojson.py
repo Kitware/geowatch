@@ -78,6 +78,9 @@ except Exception:
     profile = ub.identity
 
 
+USE_NEW_KWCOCO_TRACKS = False
+
+
 class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
@@ -199,6 +202,23 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     #         '''), group='behavior')
 
     sensor_warnings = scfg.Value(True, help='if False, disable sensor warnings')
+
+    #### New Eval 16 params
+
+    smoothing = scfg.Value(None, help=ub.paragraph(
+        '''
+        if True specify a number between 0 and 1 to smooth the observation
+        scores over time.
+        '''))
+
+    site_score_thresh = scfg.Value(None, help=ub.paragraph(
+        '''
+        if specified, then the final a site will be rejected if its site score
+        is less than this threshold.
+        NOTE: In the future we should separate the steps that assign scores to
+        polygons / define polygons and those that postprocess / threshold them
+        into another stage. For now we are putting it here.
+        '''))
 
 
 __config__ = KWCocoToGeoJSONConfig
@@ -505,37 +525,80 @@ def predict_phase_changes(site_id, observations):
         return {}
 
 
-def smooth_curve(ydata, beta):
+def smooth_observation_scores(observations, smoothing=0.5, smooth_mode='ewma'):
     """
-    Curve smoothing algorithm used by tensorboard
+    Add smoothed scores inplace
+
+    Example:
+        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from watch.geoannots import geomodels
+        >>> site = geomodels.SiteModel.random(num_observations=15)
+        >>> observations = list(site.observations())
+        >>> # Add random scores for tests
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng()
+        >>> for obs in observations:
+        >>>     obs['properties']['cache'] = {'raw_multi_scores': [{
+        >>>         'No Activity': rng.rand(),
+        >>>         'Site Preparation': rng.rand(),
+        >>>         'Post Construction': rng.rand(),
+        >>>         'Active Construction': rng.rand(),
+        >>> }]}
+        >>> data1 = [obs['properties']['cache']['raw_multi_scores'][0] for obs in observations]
+        >>> smooth_observation_scores(observations, smooth_mode='ewma')
+        >>> data2 = [obs['properties']['cache']['smooth_scores'].copy() for obs in observations]
+        >>> smooth_observation_scores(observations, smooth_mode='conv3')
+        >>> data3 = [obs['properties']['cache']['smooth_scores'].copy() for obs in observations]
+        >>> import pandas as pd
+        >>> df1 = pd.DataFrame(data1)
+        >>> df2 = pd.DataFrame(data2)
+        >>> df3 = pd.DataFrame(data3)
+        >>> print(df1)
+        >>> print(df2)
+        >>> print(df3)
     """
-    import pandas as pd
-    alpha = 1.0 - beta
-    if alpha <= 0:
-        return ydata
-    ydata_smooth = pd.Series(ydata).ewm(alpha=alpha).mean().values
-    return ydata_smooth
-
-
-def smooth_predictions(observations):
+    import kwarray
     # Consolidate scores over time. Predict start / end dates.
     obs_multi_scores = [obs['properties']['cache']['raw_multi_scores'] for obs in observations]
     assert all(len(ms) == 1 for ms in obs_multi_scores)
     obs_scores = [ms[0] for ms in obs_multi_scores]
-    import kwarray
-    # import numpy as np
     score_df = kwarray.DataFrameLight.from_dict(obs_scores)
     score_df = score_df.pandas()
 
-    smoothing = 0.5
-    smoothed = score_df.ewm(alpha=(1 - smoothing), axis=1).mean()
-    new_labels = smoothed.idxmax(axis=1).values.tolist()
+    if smooth_mode == 'ewma':
+        alpha = (1 - smoothing)
+        smoothed = score_df
+        smoothed = smoothed.ewm(alpha=alpha, axis=0).mean()
+    elif smooth_mode == 'conv3':
+        # This didn't do that well in tests, we may be able to remove it.
+        import scipy.ndimage
+        import numpy as np
+        kernel = np.empty(3)
+        middle = 2 * (1 - smoothing) / 3 + (1 / 3)
+        side = (1 - middle) / 2
+        kernel[1] = middle
+        kernel[0] = side
+        kernel[2] = side
+        new_values = scipy.ndimage.convolve1d(score_df.values, kernel, axis=1, mode='constant', cval=0)
+        smoothed = score_df.copy()
+        smoothed.values[:] = new_values
+    else:
+        raise KeyError(smooth_mode)
+
+    # HACK: Our score dict mixes scores of different types, but we need to just
+    # predict activity phase labels here.
+    if 'ac_salient' in smoothed.columns:
+        phase_candidates = smoothed.drop(['ac_salient'], axis=1)
+    else:
+        phase_candidates = smoothed
+
+    new_labels = phase_candidates.idxmax(axis=1).values.tolist()
     # old_labels = [o['properties']['current_phase'] for o in observations]
 
     new_scores = smoothed.to_dict('records')
-    for o, scores, label in zip(observations, new_scores, new_labels):
-        o['properties']['current_phase'] = label
-        o['properties']['cache']['smooth_scores'] = scores
+    for obs, scores, label in zip(observations, new_scores, new_labels):
+        obs['properties']['current_phase'] = label
+        obs['properties']['cache']['smooth_scores'] = scores
 
     if 0:
         from watch.tasks.tracking import phase
@@ -545,6 +608,93 @@ def smooth_predictions(observations):
     # phase.REGISTERED_EMMISSION_PROBS['default']
     # phase.REGISTERED_TRANSITION_PROBS['default']
     # phase.viterbi(new_labels, )
+
+
+def classify_site(site, config):
+    """
+    Modify a site inplace with classifications.
+
+    Given a site with extracted and scored observations, postprocess the raw
+    observation scores and make site-level predictions.
+    """
+    import numpy as np
+
+    site_header = site.header
+    observations = list(site.observations())
+
+    if config.smoothing is not None and config.smoothing > 0:
+        smooth_observation_scores(observations, smoothing=config.smoothing)
+
+    ACTIVE_LABELS = {'Site Preparation', 'Active Construction'}
+
+    # Score each observation
+    per_obs_scores = []
+    for obs in observations:
+        obs_cache = obs['properties']['cache']
+        if 'smooth_scores' in obs_cache:
+            obs_scores = obs_cache['smooth_scores']
+        elif 'raw_multi_scores' in obs_cache:
+            obs_scores = obs_cache['raw_multi_scores'][0]
+        else:
+            # fallback to hard classifications
+            obs_scores = {obs['properties']['current_phase']: 1.0}
+
+        if 'ac_salient' in obs_scores:
+            # Hard code to use "ac_salient" score if available.
+            obs_score = obs_scores['ac_salient']
+        else:
+            active_scores = ub.udict(obs_scores) & ACTIVE_LABELS
+            if active_scores:
+                obs_score = max(active_scores.values())
+            else:
+                # final fallback
+                obs_score = obs['properties'].get('score', 1.0)
+        per_obs_scores.append(obs_score)
+
+    # Site score is the maximum observation score.
+    site_score = site_header['properties'].get('score', 1.0)
+    status = site_header['properties'].get('status', 'system_confirmed')
+    start_date = site_header['properties']['start_date']
+    end_date = site_header['properties']['end_date']
+    site_header['properties'].setdefault('cache', {})
+
+    if per_obs_scores:
+        site_score = max(per_obs_scores)
+
+    FILTER_INACTIVE_SITES = True
+    if FILTER_INACTIVE_SITES:
+        # HACKS FOR EVAL 15 to get things done quicky.
+        curr_labels = [o['properties']['current_phase'] for o in observations]
+        flags = [lbl in ACTIVE_LABELS for lbl in curr_labels]
+        active_idxs = np.where(flags)[0]
+        if len(active_idxs):
+            first_idx = active_idxs[0]
+            last_idx = active_idxs[-1]
+            start_date = observations[first_idx].observation_date.date().isoformat()
+            end_date = observations[last_idx].observation_date.date().isoformat()
+        else:
+            # Check to make sure we are in AC/SC. Otherwise use old logic
+            if any(c in {'No Activity', 'Post Construction'} for c in curr_labels):
+                # Throw out items with no start / end
+                status = 'system_rejected'
+                site_header['properties']['cache']['reject_reason'] = 'no_active_observations'
+
+    if config.site_score_thresh is not None:
+        # Reject sites if we have a threshold here.
+        if site_score < config.site_score_thresh:
+            status = 'system_rejected'
+            site_header['properties']['cache']['reject_reason'] = 'failed_site_score_thresh'
+
+    site_header['properties'].update({
+        'score': site_score,
+        'status': status,
+        'start_date': start_date,
+        'end_date': end_date,
+    })
+
+    site_id = site.site_id
+    pred_transition = predict_phase_changes(site_id, observations)
+    site_header['properties'].update(pred_transition)
 
 
 def coco_create_site_header(region_id, site_id, trackid, observations):
@@ -581,31 +731,9 @@ def coco_create_site_header(region_id, site_id, trackid, observations):
     assert len(status_set) == 1, f'inconsistent {status_set=} for {trackid=}'
     status = status_set.pop()
 
-    if 0:
-        # Needs to be enabled via a flag.
-        smooth_predictions(observations)
-
     dates = sorted([obs.observation_date for obs in observations])
     start_date = dates[0].date().isoformat()
     end_date = dates[-1].date().isoformat()
-
-    if True:
-        # HACKS FOR EVAL 15 to get things done quicky.
-        import numpy as np
-        curr_labels = [o['properties']['current_phase'] for o in observations]
-        active_labels = {'Site Preparation', 'Active Construction'}
-        flags = [lbl in active_labels for lbl in curr_labels]
-        active_idxs = np.where(flags)[0]
-        if len(active_idxs):
-            first_idx = active_idxs[0]
-            last_idx = active_idxs[-1]
-            start_date = observations[first_idx].observation_date.date().isoformat()
-            end_date = observations[last_idx].observation_date.date().isoformat()
-        else:
-            # Check to make sure we are in AC/SC. Otherwise use old logic
-            if any(c in {'No Activity', 'Post Construction'} for c in curr_labels):
-                # Throw out items with no start / end
-                status = 'system_rejected'
 
     PERFORMER_ID = 'kit'
 
@@ -628,9 +756,6 @@ def coco_create_site_header(region_id, site_id, trackid, observations):
         'validated': 'False'
     })
     site_header.infer_mgrs()
-
-    pred_transition = predict_phase_changes(site_id, observations)
-    site_header['properties'].update(pred_transition)
     return site_header
 
 
@@ -891,6 +1016,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     import watch
     from watch.utils import kwcoco_extensions
     from kwutil import util_time
+    import kwcoco
     # input validation
     print(f'possible_summaries={possible_summaries}')
     print(f'coco_dset={coco_dset}')
@@ -919,12 +1045,11 @@ def add_site_summary_to_kwcoco(possible_summaries,
     site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries)
 
     print('warping site boundaries to pxl space...')
+
     for site_idx, video_id in site_idx_to_vidid:
 
         region_id, site_summary = site_summary_tups[site_idx]
         site_id = site_summary['properties']['site_id']
-
-        track_id = site_id
 
         # get relevant images
         images = coco_dset.images(video_id=video_id)
@@ -932,6 +1057,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
         # and their dates
         image_dates = [util_time.coerce_datetime(d).date()
                        for d in images.lookup('date_captured')]
+
+        assert image_dates == sorted(image_dates), 'images are not in order'
         first_date = image_dates[0]
         last_date = image_dates[-1]
 
@@ -946,10 +1073,22 @@ def add_site_summary_to_kwcoco(possible_summaries,
         else:
             end_date = end_dt.date()
 
+        assert end_date >= start_date
+
         flags = [start_date <= d <= end_date for d in image_dates]
         images = images.compress(flags)
-        if track_id in images.get('track_id', None):
-            rich.print(f'[yellow]warning: site_summary {track_id} already in dset!')
+
+        if USE_NEW_KWCOCO_TRACKS:
+            try:
+                track_id = coco_dset.add_track(name=site_id)
+            except kwcoco.exceptions.DuplicateAddError:
+                rich.print(f'[yellow]warning: site_summary {site_id} already in dset!')
+                raise
+        else:
+            track_id = site_id
+            # Seems broken
+            if track_id in images.get('track_id', None):
+                rich.print(f'[yellow]warning: site_summary {track_id} already in dset!')
 
         # apply site boundary as polygons
         poly_crs84_geojson = site_summary['geometry']
@@ -1323,10 +1462,24 @@ def main(argv=None, **kwargs):
 
     verbose = 1
 
-    # Convert kwcoco to sites models
+    # Convert scored kwcoco tracks to sites models
     all_sites = convert_kwcoco_to_iarpa(
         coco_dset, default_region_id=args.region_id)
     print(f'{len(all_sites)=}')
+
+    # Postprocess / classify sites
+    config = args
+
+    # for site in all_sites:
+    #     site.header['properties'].setdefault('cache', {})
+    #     print(site.header['properties']['status'], site.header['properties']['score'], site.header['properties']['cache'].get('reject_reason'))
+
+    for site in ub.ProgIter(all_sites, desc='classify sites'):
+        classify_site(site, config)
+
+    # for site in all_sites:
+    #     site.header['properties'].setdefault('cache', {})
+    #     print(site.header['properties']['status'], site.header['properties']['score'], site.header['properties']['cache'].get('reject_reason'))
 
     if args.out_sites_dir is not None:
         # write sites to disk
@@ -1345,6 +1498,7 @@ def main(argv=None, **kwargs):
         site_tracking_output = tracking_output.copy()
         site_tracking_output['files'] = site_fpaths
         out_sites_fpath = ub.Path(args.out_sites_fpath)
+        out_sites_fpath.parent.ensuredir()
         print(f'Write tracked site result to {out_sites_fpath}')
         with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')

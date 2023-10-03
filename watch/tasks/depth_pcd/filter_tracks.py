@@ -101,6 +101,7 @@ def main(cmdline=1, **kwargs):
         sites_with_paths = set(keep_summaries)
         sites_with_summary = set(keep_site_fpaths)
         if sites_with_paths != sites_with_summary:
+            print('')
             print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
             print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
             raise AssertionError(

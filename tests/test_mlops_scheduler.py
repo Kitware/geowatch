@@ -35,7 +35,7 @@ def test_bas_pipline_schedule_default_params():
 
     assert bas_poly_job is not None
     assert bas_poly_eval_job is not None
-    assert "--boundary_region 'None'" in bas_poly_job.command
+    assert "--boundary_region=None" in bas_poly_job.command
 
 
 def test_bas_pipline_schedule1():

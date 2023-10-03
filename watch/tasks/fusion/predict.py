@@ -169,6 +169,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         quantize=config['quantize'],
         expected_minmax=(0, 1),
         writer_queue=writer_queue,
+        assets_dname='_assets',
     )
 
     # If we only care about some predictions from the model, then keep track of

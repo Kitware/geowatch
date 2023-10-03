@@ -347,6 +347,9 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             cand_keys = key
         else:
             cand_keys = bg_key
+        if 1:
+            # HACK for eval16, need to be nicer about what we do here
+            cand_keys = ub.oset(cand_keys) - {'ac_salient'}
         if len(cand_keys) > 1:
             # TODO ensure bg classes are scored if there are >1 of them
             cat_name = ub.argmax(ub.udict.subdict(scores_dct, cand_keys))

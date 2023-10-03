@@ -334,20 +334,30 @@ def normalize_phases(coco_dset,
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)
     baseline_keys = set(baseline_keys)
-    unknown_cnames = coco_dset.name_to_cat.keys() - (
-        {cat['name']
-         for cat in CATEGORIES} | {SITE_SUMMARY_CNAME} | baseline_keys)
-    if unknown_cnames:
-        print(f'removing unknown categories {unknown_cnames}')
-        coco_dset.remove_categories(unknown_cnames, keep_annots=False)
 
-    cnames_to_remove = set(
-        # negative examples, no longer needed
-        #CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
-        CNAMES_DCT['negative']['unscored'] +
-        # should have been consumed by track_fn, TODO more robust check
-        [SITE_SUMMARY_CNAME])
-    coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
+    # Hack
+    # baseline_keys.add('ac_salient')
+
+    REMOVE_UNKNOWN_CATEGORIES = True
+    if REMOVE_UNKNOWN_CATEGORIES:
+        # Let's not do this here, and leave this for postprocessing.
+        unknown_cnames = coco_dset.name_to_cat.keys() - (
+            {cat['name']
+             for cat in CATEGORIES} | {SITE_SUMMARY_CNAME} | baseline_keys)
+
+        if unknown_cnames:
+            print(f'removing unknown categories {unknown_cnames}')
+            removed = coco_dset.remove_categories(unknown_cnames, keep_annots=False)
+            print('removed = {}'.format(ub.urepr(removed, nl=1)))
+
+        cnames_to_remove = set(
+            # negative examples, no longer needed
+            #CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
+            CNAMES_DCT['negative']['unscored'] +
+            # should have been consumed by track_fn, TODO more robust check
+            [SITE_SUMMARY_CNAME])
+        removed = coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
+        print('removed = {}'.format(ub.urepr(removed, nl=1)))
 
     cnames_to_replace = (
         # 'positive'
@@ -366,6 +376,7 @@ def normalize_phases(coco_dset,
 
     # Hack: add transient
     allowed_cnames.add('transient')
+    # allowed_cnames.add('ac_salient')
 
     have_cnames = set(coco_dset.name_to_cat)
     if not have_cnames.issubset(allowed_cnames):
@@ -716,6 +727,7 @@ def run_tracking_pipeline(
         else:
             k = {k}
         phase_kw['baseline_keys'] = k
+
     out_dset = normalize_phases(out_dset, **phase_kw)
 
     if DEBUG_JSON_SERIALIZABLE:

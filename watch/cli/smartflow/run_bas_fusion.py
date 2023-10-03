@@ -102,16 +102,18 @@ def run_bas_fusion_for_baseline(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['enriched_bas_kwcoco_file',
-         'enriched_bas_kwcoco_teamfeats',
-         'enriched_bas_kwcoco_rawbands',
-         {"key": 'hacked_cold_assets', "allow_missing": True},
-         {"key": 'landcover_assets', "allow_missing": True},
-         ],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'enriched_bas_kwcoco_file',
+            'enriched_bas_kwcoco_teamfeats',
+            'enriched_bas_kwcoco_rawbands',
+            {"key": 'hacked_cold_assets', "allow_missing": True},
+            {"key": 'landcover_assets', "allow_missing": True},
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun
+    )
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -201,22 +203,16 @@ def run_bas_fusion_for_baseline(config):
 
     # 4. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
-    region_models_outdir = ingress_dir / 'region_models'
-    os.makedirs(region_models_outdir, exist_ok=True)
-
-    bas_site_models_outdir = ingress_dir / 'site_models_bas'
-    os.makedirs(bas_site_models_outdir, exist_ok=True)
-
-    region_models_manifest_outdir = ingress_dir / 'tracking_manifests_bas'
-    os.makedirs(region_models_manifest_outdir, exist_ok=True)
+    bas_region_models_outdir = (ingress_dir / 'region_models').ensuredir()
+    bas_site_models_outdir = (ingress_dir / 'site_models_bas').ensuredir()
+    region_models_manifest_outdir = (ingress_dir / 'tracking_manifests_bas').ensuredir()
     region_models_manifest_outpath = region_models_manifest_outdir / 'region_models_manifest.json'
-
     site_models_manifest_outpath = region_models_manifest_outdir / 'site_models_manifest.json'
 
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
-    shutil.copy(local_region_path, region_models_outdir / f'{region_id}.geojson')
+    shutil.copy(local_region_path, bas_region_models_outdir / f'{region_id}.geojson')
 
     # TODO: remove these defaults or replace them with whatever is the
     # default in tracker. The params should be fully given in the DAG,
@@ -239,7 +235,7 @@ def run_bas_fusion_for_baseline(config):
         combined_bas_fusion_kwcoco_path,
         '--out_sites_dir', bas_site_models_outdir,
         '--out_sites_fpath', site_models_manifest_outpath,
-        '--out_site_summaries_dir', region_models_outdir,
+        '--out_site_summaries_dir', bas_region_models_outdir,
         '--out_site_summaries_fpath',
         region_models_manifest_outpath,
         '--out_kwcoco', tracked_bas_kwcoco_path,
@@ -251,16 +247,13 @@ def run_bas_fusion_for_baseline(config):
         check=True, verbose=3)
 
     # Remove after boundary_region here
-    cropped_region_models_outdir = ingress_dir / 'cropped_region_models_bas'
-    os.makedirs(cropped_region_models_outdir, exist_ok=True)
-
-    cropped_site_models_outdir = ingress_dir / 'cropped_site_models_bas'
-    os.makedirs(cropped_site_models_outdir, exist_ok=True)
+    cropped_region_models_outdir = (ingress_dir / 'cropped_region_models_bas').ensuredir()
+    cropped_site_models_outdir = (ingress_dir / 'cropped_site_models_bas').ensuredir()
 
     crop_cmd = [
         'python', '-m', 'watch.cli.crop_sites_to_regions',
         '--site_models', bas_site_models_outdir / '*.geojson',
-        '--region_models', region_models_outdir / '*.geojson',
+        '--region_models', bas_region_models_outdir / '*.geojson',
         '--new_site_dpath', cropped_site_models_outdir,
         '--new_region_dpath', cropped_region_models_outdir,
         '--min_area_square_meters', str(min_area_square_meters)
@@ -282,6 +275,16 @@ def run_bas_fusion_for_baseline(config):
         cropped_site_models_outdir.copy(debug_s3_outdir, recursive=True)
         raise
 
+    if __debug__:
+        from watch.geoannots import geomodels
+        all_regions_models = list(geomodels.RegionModel.coerce_multiple(cropped_region_models_outdir))
+        all_site_models = list(geomodels.SiteModel.coerce_multiple(cropped_site_models_outdir))
+        assert len(all_regions_models) == 1, 'should only be 1 output region model'
+        out_region_model = all_regions_models[0]
+        num_site_summaries = len(list(out_region_model.site_summaries()))
+        num_sites = len(all_site_models)
+        assert num_sites == num_site_summaries, 'number of site summaries should be the same as the number of sites'
+
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
         # only used if we are going to submit our BAS predictions as the final
@@ -291,6 +294,15 @@ def run_bas_fusion_for_baseline(config):
                                           cropped_region_models_outdir,
                                           cropped_site_models_outdir,
                                           ta2_s3_collation_bucket)
+
+    EGRESS_INTERMEDIATE_OUTPUTS = True
+    if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Add BAS saliency outputs to egressed attributes for debugging
+        ingressed_assets['bas_pred_saliency_assets'] = ingress_dir / '_assets/pred_saliency'
+        ingressed_assets['bas_fusion_kwcoco_path'] = bas_fusion_kwcoco_path
+        ingressed_assets['bas_original_site_models_outdir'] = bas_site_models_outdir
+        ingressed_assets['bas_original_region_models_outdir'] = bas_region_models_outdir
+        ingressed_assets['tracked_bas_kwcoco_path'] = tracked_bas_kwcoco_path
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

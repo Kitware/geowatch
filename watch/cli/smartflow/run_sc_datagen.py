@@ -66,6 +66,7 @@ def run_generate_sc_cropped_kwcoco(config):
     from watch.utils import util_framework
     from watch.cli import coco_align
     from watch.utils import util_fsspec
+    from watch.mlops.pipeline_nodes import ProcessNode
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -82,6 +83,9 @@ def run_generate_sc_cropped_kwcoco(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
+
+    # TODO:
+    # Compute kwcoco-for-sc here rather than in run-bas-datagen
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=['kwcoco_for_sc',
@@ -114,19 +118,32 @@ def run_generate_sc_cropped_kwcoco(config):
               "from BAS *")
         input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
+    print('* Printing current directory contents (1/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     if config.acsc_cluster_config is not None:
+        print('******************')
+        print('Cluster input site summaries')
         # If specified cluster sites first.
         from watch.mlops import smart_pipeline
         site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
         acsc_cluster_config = ub.udict(Yaml.coerce(config.acsc_cluster_config))
-        tocrop_region_fpath = input_region_path.augment(prefix='clustered_')
+        cluster_region_dpath = (ingress_dir / 'clustered_regions').ensuredir()
+        cluster_region_fpath = cluster_region_dpath / ('clustered_' + input_region_path.name)
+        tocrop_region_fpath = cluster_region_fpath
         acsc_cluster_config['src'] = input_region_path
-        acsc_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
-        acsc_cluster_config['dst_region_fpath'] = tocrop_region_fpath
+        acsc_cluster_config['dst_dpath'] = cluster_region_dpath
+        acsc_cluster_config['dst_region_fpath'] = cluster_region_fpath
         site_clustering.configure(acsc_cluster_config)
         ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
     else:
+        cluster_region_dpath = None
         tocrop_region_fpath = input_region_path
+
+    print('* Printing current directory contents (2/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
@@ -153,18 +170,21 @@ def run_generate_sc_cropped_kwcoco(config):
         align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
 
     # 4. Crop ingress KWCOCO dataset to region for SC
+    print('******************')
     print("* Cropping KWCOCO dataset to region for SC*")
+    ta1_sc_cropped_kwcoco_prefilter_path = ingress_dir / 'cropped_kwcoco_for_sc_prefilter.json'
     ta1_sc_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sc.json'
 
     align_config['src'] = ta1_sc_kwcoco_path
-    align_config['dst'] = ta1_sc_cropped_kwcoco_path
+    align_config['dst'] = ta1_sc_cropped_kwcoco_prefilter_path
     align_config['regions'] = tocrop_region_fpath
     # Validate align config before running anything
     align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
     print('align_config = {}'.format(ub.urepr(align_config, nl=1)))
 
+    # Not sure if one is more stable than the other, but cmd seems fine and
+    # gives us nicer logs. Prefer that one when possible.
     EXEC_MODE = 'cmd'
-    # Not sure if one is more stable than the other
     if EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
@@ -174,12 +194,80 @@ def run_generate_sc_cropped_kwcoco(config):
     else:
         raise KeyError(EXEC_MODE)
 
+    print('* Printing current directory contents (3/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
+    ### Filter / clean geotiffs (probably should be a separate step)
+    CLEAN_GEOTIFFS = 0
+    if CLEAN_GEOTIFFS:
+        # Detect blocky black regions in geotiffs and switch them to NODATA
+        # Modifies geotiffs inplace
+        remove_bad_images_node = ProcessNode(
+            command='geowatch clean_geotiffs',
+            in_paths={
+                'src': ta1_sc_cropped_kwcoco_prefilter_path,
+            },
+            config={
+                'prefilter_channels': 'red',
+                'channels': 'red|green|blue|nir',
+                'workers': 'avail',
+                'dry': False,
+                'probe_scale': None,
+                'nodata_value': -9999,
+                'min_region_size': 256,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.final_command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+
+    REMOVE_BAD_IMAGES = 1
+    if REMOVE_BAD_IMAGES:
+        # Remove images that are nearly all nan
+        remove_bad_images_node = ProcessNode(
+            command='geowatch remove_bad_images',
+            in_paths={
+                'src': ta1_sc_cropped_kwcoco_prefilter_path,
+            },
+            out_paths={
+                'dst': ta1_sc_cropped_kwcoco_path,
+            },
+            config={
+                'channels': 'red|green|blue|pan',
+                'workers': 'avail',
+                'interactive': False,
+                'overview': 0,
+            },
+            node_dpath='.'
+        )
+        command = remove_bad_images_node.final_command()
+        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+    else:
+        print('Not removing bad images')
+        ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
+
+    print('* Printing current directory contents (4/4)')
+    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
+    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+    sc_cropped_assets_dir = ingress_dir / f'{region_id}'
+    sc_cropped_assets_dir.ensuredir()
+    # Put a dummy file in this directory so we can upload a nearly-empty folder
+    # to S3
+    (sc_cropped_assets_dir / 'dummy').write_text('dummy')
+
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_kwcoco_for_sc'] = ta1_sc_cropped_kwcoco_path
-    ingressed_assets['cropped_kwcoco_for_sc_assets'] = ingress_dir / f'{region_id}'
+
+    if cluster_region_dpath is not None:
+        ingressed_assets['clustered_region_dpath'] = cluster_region_dpath
+
+    ingressed_assets['cropped_kwcoco_for_sc_assets'] = sc_cropped_assets_dir
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,

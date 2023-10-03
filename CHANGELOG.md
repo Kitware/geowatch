@@ -8,6 +8,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added 
 
+* Tracking now assigns a single score to each site model.
+* Added ability to smooth scores in AC tracking
+* Added ability to filter sites by score in AC tracking
 * Added a fork of torchview and loss-of-plasticity to geowatch-tpl
 * Confusion visualization now shows BAS and AC heatmaps if available
 * Experimental Generate & Test algorithm for continual backprop.
@@ -15,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add `fix_backwards_dates` to site / region geomodels `fixup` method.
 
 ### Changed
+* Add remove-bad-images to smartflow datagen pipeline.
 * STAC metadata is now preserved by coco-align.
 * Selection of images when picking 1 image per time window in coco-align is now influenced by STAC metadata for `eo:cloud_cover` and `quality_info:contaminated_percentage`
 * prepare ta2 dataset now outputs per-region kwcoco files inside their region directories and adds the -rawbands suffix.
