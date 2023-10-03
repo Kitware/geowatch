@@ -6,6 +6,10 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
+import sys
+import traceback
+import shutil
+
 import scriptconfig as scfg
 import ubelt as ub
 from watch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
@@ -42,6 +46,10 @@ class DinoSVConfig(scfg.DataConfig):
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
             config for SV_DinoFilter.
+            '''))
+    skip_on_fail = scfg.Value(False, help=ub.paragraph(
+            '''
+            If an error occurs, pass through input region / sites unchanged.
             '''))
 
 
@@ -167,34 +175,44 @@ def run_dino_sv(config):
             'out_coco_fpath': dino_boxes_kwcoco_path,
             **dino_detect_config})
 
-        ub.cmd(dino_box_detector.command(), check=True, verbose=3, system=True)
+        try:
+            ub.cmd(dino_box_detector.command(), check=True, verbose=3, system=True)
 
-        # 3.3 Run SV_DinoFilter
-        print("* Running Dino Building Filter *")
+            # 3.3 Run SV_DinoFilter
+            print("* Running Dino Building Filter *")
 
-        default_dino_filter_config = ub.udict({})
-        dino_filter_config = (default_dino_filter_config
-                              | Yaml.coerce(config.dino_filter_config or {}))
+            default_dino_filter_config = ub.udict({})
+            dino_filter_config = (default_dino_filter_config
+                                  | Yaml.coerce(config.dino_filter_config or {}))
 
-        dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
+            dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
 
-        dino_building_filter.configure({
-            'input_kwcoco': dino_boxes_kwcoco_path,
-            'input_region': input_region_fpath,
-            'input_sites': input_sites_dpath,
-            'output_region_fpath': output_region_fpath,
-            'output_sites_dpath': output_sites_dpath,
-            'output_site_manifest_fpath': output_site_manifest_fpath,
-            **dino_filter_config,
-        })
+            dino_building_filter.configure({
+                'input_kwcoco': dino_boxes_kwcoco_path,
+                'input_region': input_region_fpath,
+                'input_sites': input_sites_dpath,
+                'output_region_fpath': output_region_fpath,
+                'output_sites_dpath': output_sites_dpath,
+                'output_site_manifest_fpath': output_site_manifest_fpath,
+                **dino_filter_config,
+            })
 
-        ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
+            ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
+        except Exception:
+            if config.skip_on_fail:
+                print("WARNING: Exception occurred (printed below), passing input sites / region models as output")
+                traceback.print_exception(*sys.exc_info())
 
-    # Validate and fix all outputs
-    util_framework.fixup_and_validate_site_and_region_models(
-        region_dpath=output_region_fpath.parent,
-        site_dpath=output_sites_dpath,
-    )
+                shutil.copytree(input_sites_dpath, output_sites_dpath, dirs_exist_ok=True)
+                shutil.copytree(input_region_dpath, output_region_dpath, dirs_exist_ok=True)
+            else:
+                raise
+        else:
+            # Validate and fix all outputs
+            util_framework.fixup_and_validate_site_and_region_models(
+                region_dpath=output_region_fpath.parent,
+                site_dpath=output_sites_dpath,
+            )
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
@@ -202,7 +220,6 @@ def run_dino_sv(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['sv_out_site_models'] = output_sites_dpath
     ingressed_assets['sv_out_region_models'] = output_region_dpath
-
     if dino_boxes_kwcoco_path.exists():
         ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
 

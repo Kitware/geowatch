@@ -79,6 +79,13 @@ def run_sc_fusion_for_baseline(config):
         from watch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
 
@@ -88,7 +95,7 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=[
-            # {'key': 'cropped_region_models_bas'},
+            {'key': 'cropped_region_models_bas'},
             {'key': 'sv_out_region_models', 'allow_missing': False},
             {'key': 'cropped_kwcoco_for_sc'},
             {'key': 'cropped_kwcoco_for_sc_assets'}
@@ -127,6 +134,9 @@ def run_sc_fusion_for_baseline(config):
     region_id = determine_region_id(local_region_path)
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
+
+    tracked_sc_kwcoco_path = '_tracked'.join(
+        os.path.splitext(sc_fusion_kwcoco_path))
 
     site_models_outdir = (ingress_dir / 'sc_out_site_models').ensuredir()
     region_models_outdir = (ingress_dir / 'sc_out_region_models').ensuredir()
@@ -205,6 +215,10 @@ def run_sc_fusion_for_baseline(config):
             print('* Printing current directory contents (3/5)')
             cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
             print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+
+            # Add in intermediate outputs for debugging
+            ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
+            ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)

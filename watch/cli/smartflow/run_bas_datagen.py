@@ -3,6 +3,8 @@
 See Old Script:
     ~/code/watch/scripts/run_stac_to_cropped_kwcoco.py
 """
+import sys
+import traceback
 import os
 import json
 import shutil
@@ -71,14 +73,9 @@ class BASDatasetConfig(scfg.DataConfig):
             Will not recompute if output_path already exists
             '''))
 
-    previous_input_path = scfg.Value(None, type=str, help=ub.paragraph(
+    previous_interval_output = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            STAC json input file for previous interval
-            '''))
-
-    previous_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Outbucket for previous interval BAS DatasetGen
+            Output path for previous interval BAS DatasetGen step
             '''))
 
     bas_align_config = scfg.Value(None, type=str, help=ub.paragraph(
@@ -91,6 +88,11 @@ class BASDatasetConfig(scfg.DataConfig):
         If specified, perform time combine on BAS dataset. The special key
         enabled will disable the computation.
         '''), alias=['time_combine'])
+
+    skip_timecombine_on_fail = scfg.Value(False, help=ub.paragraph(
+            '''
+            If an error occurs during the timecombine call, output empty KWCOCO.
+            '''))
 
     def __post_init__(self):
         if self.time_combine_config in {False, None, 'False', 'None'}:
@@ -105,49 +107,38 @@ def main():
     run_stac_to_cropped_kwcoco(config)
 
 
-def build_combined_kwcoco(input_path,
-                          previous_input_path,
-                          aws_profile,
-                          ta1_cropped_dir,
-                          dryrun=False,
-                          requester_pays=False,
-                          jobs=1,
-                          virtual=False,
-                          from_collated=False):
+def build_combined_stac(previous_stac_input_path,
+                        stac_input_path,
+                        combined_stac_output_path):
+    previous_stac_items = load_input_stac_items(previous_stac_input_path, None)
+    current_stac_items = load_input_stac_items(stac_input_path, None)
 
-    from watch.utils import util_fsspec
-    if aws_profile is not None:
-        # This should be sufficient, but it is not tested.
-        util_fsspec.S3Path._new_fs(profile=aws_profile)
+    combined_stac_items = previous_stac_items.copy()
+    combined_stac_items.extend(current_stac_items)
 
-    input_stac_items = load_input_stac_items(input_path, None)
-
-    combined_stac_items_path = os.path.join(
-        ta1_cropped_dir, 'combined_input_stac_items.jsonl')
-
-    # Confirm that the previous interval input path actually exists on
-    # S3 (for first iteration it will not)
-    previous_input_path = util_fsspec.FSPath.corece(previous_input_path)
-    if not previous_input_path.exists():
-        # If we don't have previous interval input path, set the input
-        # as the "combined" for next interval
-        with open(combined_stac_items_path, 'w') as f:
-            print('\n'.join((json.dumps(item)
-                             for item in input_stac_items)), file=f)
-        return
-
-    previous_input_stac_items = load_input_stac_items(previous_input_path, None)
-    input_stac_items.extend(previous_input_stac_items)
-
-    with open(combined_stac_items_path, 'w') as f:
+    with open(combined_stac_output_path, 'w') as f:
         print('\n'.join((json.dumps(item)
-                         for item in input_stac_items)), file=f)
+                         for item in combined_stac_items)), file=f)
 
-    combined_working_dir = ub.Path('/tmp/combined')
-    os.makedirs(combined_working_dir, exist_ok=True)
-    combined_ingress_catalog = baseline_framework_ingress(
-        combined_stac_items_path,
-        combined_working_dir,
+    return combined_stac_output_path
+
+
+def input_stac_to_kwcoco(stac_items_path,
+                         working_dir,
+                         out_kwcoco_filename,
+                         target_gsd,
+                         aws_profile=None,
+                         dryrun=False,
+                         requester_pays=False,
+                         jobs=1,
+                         virtual=False,
+                         from_collated=False):
+    working_dir = ub.Path(working_dir)
+    os.makedirs(working_dir, exist_ok=True)
+    print("* Running baseline framework ingress *")
+    ingressed_catalog = baseline_framework_ingress(
+        stac_items_path,
+        working_dir,
         aws_profile=aws_profile,
         dryrun=dryrun,
         requester_pays=requester_pays,
@@ -157,16 +148,23 @@ def build_combined_kwcoco(input_path,
 
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
-    ta1_kwcoco_path_for_sc = combined_working_dir / 'combined_ingress_kwcoco.json'
-    stac_to_kwcoco(combined_ingress_catalog,
-                   ta1_kwcoco_path_for_sc,
+    out_kwcoco_path = working_dir / out_kwcoco_filename
+    stac_to_kwcoco(ingressed_catalog,
+                   out_kwcoco_path,
                    assume_relative=False,
-                   populate_watch_fields=True,
+                   populate_watch_fields=False,
                    jobs=jobs,
                    from_collated=from_collated,
                    ignore_duplicates=True)
 
-    return ta1_kwcoco_path_for_sc
+    print("* Adding watch fields *")
+    coco_add_watch_fields.main(cmdline=False,
+                               src=out_kwcoco_path,
+                               inplace=True,
+                               target_gsd=target_gsd,
+                               workers=jobs)
+
+    return out_kwcoco_path
 
 
 def run_stac_to_cropped_kwcoco(config):
@@ -178,6 +176,8 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
     from watch.mlops.pipeline_nodes import ProcessNode
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    import kwcoco
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -238,6 +238,7 @@ def run_stac_to_cropped_kwcoco(config):
     ingress_dir = ub.Path('/tmp/ingress')
 
     ta1_cropped_dir.ensuredir()
+    ingress_dir.ensuredir()
 
     ta1_kwcoco_path = ingress_dir / 'ingress_kwcoco.json'
     ta1_bas_kwcoco_path = ta1_cropped_dir / 'kwcoco_for_bas.json'
@@ -259,18 +260,6 @@ def run_stac_to_cropped_kwcoco(config):
         time_combine_config = coco_time_combine.TimeCombineConfig(**time_combine_config)
         print('time_combine_config = {}'.format(ub.urepr(time_combine_config, nl=1)))
 
-    # 1. Ingress data
-    print("* Running baseline framework ingress *")
-    ingress_catalog = baseline_framework_ingress(
-        config.input_path,
-        ingress_dir,
-        aws_profile=config.aws_profile,
-        dryrun=config.dryrun,
-        requester_pays=config.requester_pays,
-        relative=False,
-        jobs=config.jobs,
-        virtual=config.virtual)
-
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
     local_region_path = download_region(config.input_region_path,
@@ -288,61 +277,128 @@ def run_stac_to_cropped_kwcoco(config):
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
     print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
-    # 3. Convert ingressed STAC catalog to KWCOCO
-    print("* Converting STAC to KWCOCO *")
-    stac_to_kwcoco(ingress_catalog,
-                       ta1_kwcoco_path,
-                       assume_relative=False,
-                       populate_watch_fields=False,
-                       jobs=config.jobs,
-                       from_collated=config.from_collated,
-                       ignore_duplicates=True)
-    # Add watch fields
-    print("* Adding watch fields *")
-    coco_add_watch_fields.main(cmdline=False,
-                               src=ta1_kwcoco_path,
-                               inplace=True,
-                               target_gsd=target_gsd,
-                               workers=config.jobs)
+    from watch.geoannots.geomodels import RegionModel
+    region = RegionModel.coerce(local_region_path)
+
+    # Returned as datetime
+    current_interval_end_date = region.end_date
+
+    if current_interval_end_date.month == 1 and current_interval_end_date.day == 1:
+        # If current interval ends at the start of a year,
+        # consider the "current" year to be the previous one
+        current_interval_year = current_interval_end_date.year - 1
+    else:
+        current_interval_year = current_interval_end_date.year
+
+    # Download STAC input file locally
+    local_stac_path = ingress_dir / 'input_stac.jsonl'
+    input_stac_path = util_fsspec.FSPath.coerce(config.input_path)
+    input_stac_path.copy(util_fsspec.FSPath.coerce(local_stac_path))
+
+    # 3. Generate KWCOCO dataset from input STAC
+    current_interval_kwcoco_path = input_stac_to_kwcoco(
+        config.input_path,
+        ingress_dir,
+        ta1_kwcoco_path,
+        target_gsd,
+        aws_profile=config.aws_profile,
+        dryrun=config.dryrun,
+        requester_pays=config.requester_pays,
+        jobs=config.jobs,
+        virtual=config.virtual,
+        from_collated=config.from_collated)
+
+    # Overwritten if incremental mode (and not first interval)
+    combined_kwcoco_path = current_interval_kwcoco_path
+
+    # Setting 'combined_stac_input' here to ensure we have something
+    # from the first interval.  Gets overwritten if not the first
+    # interval
+    incremental_assets_for_egress = {'combined_stac_input': local_stac_path}
+    previous_ingressed_assets = None
+    if config.previous_interval_output is not None:
+        print('* Combining previous interval time combined kwcoco with '
+              'current *')
+        previous_ingress_dir = ub.Path('/tmp/ingress_previous')
+        try:
+            previous_ingressed_assets = smartflow_ingress(
+                config.previous_interval_output,
+                ['combined_stac_input',
+                 'timecombined_kwcoco_file_for_bas',
+                 'timecombined_kwcoco_file_for_bas_assets'],
+                previous_ingress_dir,
+                config.aws_profile,
+                config.dryrun)
+        except FileNotFoundError:
+            print("** Warning: Couldn't ingress previous interval output; "
+                  "assuming this is the first interval **")
+        else:
+            combined_stac_path = ingress_dir / 'combined_stac_items.jsonl'
+
+            build_combined_stac(
+                previous_ingressed_assets['combined_stac_input'],
+                local_stac_path,
+                combined_stac_path)
+
+            incremental_assets_for_egress['combined_stac_input'] =\
+                combined_stac_path
+
+            # Perform the filtering
+            selected_stac_items = []
+            with open(combined_stac_path) as f:
+                for line in f:
+                    try:
+                        stac_item = json.loads(line)
+                    except json.decoder.JSONDecodeError:
+                        print("** Warning: Couldn't parse STAC item from "
+                              "'combined_stac_input', skipping!")
+                        continue
+
+                    if stac_item['properties']['datetime'].startswith(
+                            str(current_interval_year)):
+                        selected_stac_items.append(stac_item)
+
+            filtered_stac_items_path = ingress_dir / 'filtered_stac_items.jsonl'
+            with open(filtered_stac_items_path, 'w') as f:
+                print('\n'.join((json.dumps(item)
+                                 for item in selected_stac_items)), file=f)
+
+            incremental_assets_for_egress['filtered_stac_input'] =\
+                filtered_stac_items_path
+
+            combined_kwcoco_path = ingress_dir / 'combined_timecombined_kwcoco.json'
+
+            combined_kwcoco_path = input_stac_to_kwcoco(
+                filtered_stac_items_path,
+                ingress_dir,
+                combined_kwcoco_path,
+                target_gsd,
+                aws_profile=config.aws_profile,
+                dryrun=config.dryrun,
+                requester_pays=config.requester_pays,
+                jobs=config.jobs,
+                virtual=config.virtual,
+                from_collated=config.from_collated)
 
     # 3a. Filter KWCOCO dataset by sensors used for BAS
+    # Will use either the combined KWCOCO dataset (for incremental
+    # mode) or strictly the input STAC items
     print("* Filtering KWCOCO dataset for BAS")
     ub.cmd([
         'kwcoco', 'subset',
-        '--src', ta1_kwcoco_path,
+        '--src', combined_kwcoco_path,
         '--dst', ta1_bas_kwcoco_path,
         '--absolute', 'False',
         # '--select_images',
         # '.sensor_coarse == "L8" or .sensor_coarse == "S2"'
     ], check=True, verbose=3, capture=False)
 
-    # 3.1. Combine previous interval `kwcoco_for_sc.json` if provided
-    # such that SC has full time range of data to work with
-    if config.previous_input_path is not None:
-        combined_kwcoco_path = build_combined_kwcoco(
-            config.input_path,
-            config.previous_input_path,
-            config.aws_profile,
-            ta1_cropped_dir,
-            dryrun=config.dryrun,
-            requester_pays=config.requester_pays,
-            jobs=config.jobs,
-            virtual=config.virtual,
-            from_collated=config.from_collated)
-
-        if combined_kwcoco_path is None:
-            ta1_kwcoco_path_for_sc = ta1_kwcoco_path
-        else:
-            ta1_kwcoco_path_for_sc = combined_kwcoco_path
-    else:
-        ta1_kwcoco_path_for_sc = ta1_kwcoco_path
-
-    # 3a. Filter KWCOCO dataset by sensors used for BAS
+    # 3b. Filter KWCOCO dataset by sensors used for SC
     # TODO: move this to run_sc_datagen
     print("* Filtering KWCOCO dataset for SC")
     ta1_sc_kwcoco_path = ta1_cropped_dir / 'kwcoco_for_sc.json'
     ub.cmd(['kwcoco', 'subset',
-            '--src', ta1_kwcoco_path_for_sc,
+            '--src', ta1_kwcoco_path,
             '--dst', ta1_sc_kwcoco_path,
             '--absolute', 'False',
             '--select_images',
@@ -417,38 +473,71 @@ def run_stac_to_cropped_kwcoco(config):
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:
-        coco_time_combine.main(
-            cmdline=0,
-            **time_combine_config
-        )
-        # Add watch fields
-        print("* Adding watch fields to time combined data *")
-        coco_add_watch_fields.main(cmdline=False,
-                                   src=preproc_kwcoco_fpath,
-                                   dst=preproc_kwcoco_fpath,
-                                   target_gsd=target_gsd,
-                                   workers=config.jobs)
-        final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
+        try:
+            coco_time_combine.main(
+                cmdline=0,
+                **time_combine_config
+            )
+        except Exception:
+            if config.skip_timecombine_on_fail:
+                print("WARNING: Exception occurred (printed below), generating empty KWCOCO for time-combined output")
+                traceback.print_exception(*sys.exc_info())
+
+                empty_dset_path = ta1_cropped_dir / 'empty.json'
+                empty_dset = kwcoco.CocoDataset()
+                empty_dset.dump(empty_dset_path)
+
+                final_interval_bas_kwcoco_path = empty_dset_path
+            else:
+                raise
+        else:
+            # Add watch fields
+            print("* Adding watch fields to time combined data *")
+            coco_add_watch_fields.main(cmdline=False,
+                                       src=preproc_kwcoco_fpath,
+                                       dst=preproc_kwcoco_fpath,
+                                       target_gsd=target_gsd,
+                                       workers=config.jobs)
+            final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
     else:
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 6.1. Combine previous interval time-combined data for BAS
-    if config.previous_outbucket is not None:
-        print('* Combining previous interval time combined kwcoco with'
-              'current *')
-        combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
-        previous_ingress_dir = ub.Path('/tmp/ingress_previous')
-        previous_outbucket = util_fsspec.FSPath.coerce(config.previous_outbucket)
-        previous_outbucket.copy(previous_ingress_dir, recursive=True)
+    if config.previous_interval_output is not None and previous_ingressed_assets is not None:
+        combined_timecombined_kwcoco_path =\
+            ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
-        previous_timecombined_kwcoco_path = previous_ingress_dir / 'combined_timecombined_kwcoco.json'
+        previous_timecombined_kwcoco_path = ub.Path(
+            previous_ingressed_assets['timecombined_kwcoco_file_for_bas'])
+
+        import kwcoco
+        previous_timecombined_dset = kwcoco.CocoDataset(
+            previous_timecombined_kwcoco_path)
+
+        image_ids_to_remove =\
+            [o["id"] for o in previous_timecombined_dset.images().objs
+             if o['date_captured'].startswith(str(current_interval_year))]
+
+        previous_timecombined_dset.remove_images(image_ids_to_remove)
+
+        filtered_previous_timecombined_kwcoco_path =\
+            previous_ingress_dir / 'filtered_combined_timecombined_kwcoco.json'
+
+        incremental_assets_for_egress['filtered_combined_timecombined_kwcoco'] =\
+            filtered_previous_timecombined_kwcoco_path
+
+        previous_timecombined_dset.dump(
+            filtered_previous_timecombined_kwcoco_path)
 
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
         from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-        if previous_timecombined_kwcoco_path.is_file():
+        if filtered_previous_timecombined_kwcoco_path.is_file() and len(previous_timecombined_dset.images()) > 0:
+            # Don't bother to concatenate if previous (now filtered)
+            # dset is empty (has no images)
             concat_kwcoco_datasets(
-                (previous_timecombined_kwcoco_path, final_interval_bas_kwcoco_path),
+                (filtered_previous_timecombined_kwcoco_path,
+                 final_interval_bas_kwcoco_path),
                 combined_timecombined_kwcoco_path)
             # Copy saliency assets from previous bas fusion
             shutil.copytree(
@@ -456,10 +545,10 @@ def run_stac_to_cropped_kwcoco(config):
                 ta1_cropped_dir / 'raw_bands',
                 dirs_exist_ok=True)
         else:
-            # Copy current bas_fusion_kwcoco_path to combined path as
-            # this is the first interval
-            shutil.copy(final_interval_bas_kwcoco_path,
-                        combined_timecombined_kwcoco_path)
+            # This is either the first interval, or previous
+            # interval(s) only contain images from the current
+            # interval year
+            combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
     else:
         combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
 
@@ -469,10 +558,14 @@ def run_stac_to_cropped_kwcoco(config):
 
     timecombined_rawband_dpath = ta1_cropped_dir / 'raw_bands'
     timecombined_teamfeat_dpath = ta1_cropped_dir / '_teamfeats'
-    # Put a dummy file in this directory so we can upload a nearly-empty folder
+    # Put a dummy file in these directories so we can upload a nearly-empty folder
     # to S3
+    timecombined_rawband_dpath.ensuredir()
+    (timecombined_rawband_dpath / 'dummy').write_text('dummy')
     timecombined_teamfeat_dpath.ensuredir()
     (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
+    ta1_cropped_rawband_dpath.ensuredir()
+    (ta1_cropped_rawband_dpath / 'dummy').write_text('dummy')
 
     print('* Printing current directory contents (3/3)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
@@ -495,6 +588,7 @@ def run_stac_to_cropped_kwcoco(config):
         # We need to egress the temporally dense dataset for COLD
         'timedense_bas_kwcoco_file': ta1_cropped_kwcoco_path,
         'timedense_bas_kwcoco_rawbands': ta1_cropped_rawband_dpath,
+        **incremental_assets_for_egress
     }
     smartflow_egress(assets_to_egress,
                      local_region_path,

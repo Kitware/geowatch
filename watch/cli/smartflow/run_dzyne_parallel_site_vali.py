@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import sys
+import traceback
+import shutil
+
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -70,6 +74,11 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
             config for the depth filter.
             '''))
 
+    skip_on_fail = scfg.Value(False, help=ub.paragraph(
+            '''
+            If an error occurs, pass through input region / sites unchanged.
+            '''))
+
 
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
@@ -133,7 +142,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    # ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
@@ -151,9 +162,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     filter_config = (Yaml.coerce(config.depth_filter_config or {}))
 
-    # 3.3 Run DZYNE depth_pcd
-    print("* Running DZYNE depth_pcd *")
-
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
     input_kwcoco_fpath = ub.Path(ingressed_assets['cropped_kwcoco_for_sv'])
@@ -169,66 +177,109 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     output_region_dpath = ingress_dir / "depth_filtered_regions"
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
-    cmdline = 0
-    score_kwargs = dict(
-        **score_config,
+    output_region_dpath.ensuredir()
+    output_sites_dpath.ensuredir()
 
-        # Should be the SV-cropped kwcoco file that contains start and ending
-        # high resolution images where videos correspond to proposed sites for
-        # this region.
-        input_kwcoco=input_kwcoco_fpath,
+    # 3.3. Check that we have at least one "video" (BAS identified
+    # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
+    import kwcoco
+    input_coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
+    print('input_coco_dset = {}'.format(ub.urepr(input_coco_dset, nl=1)))
+    num_videos = input_coco_dset.n_videos
+    # Note: cant open with json here because kwcoco will save compressed files
+    # with open(input_kwcoco_fpath) as f:
+    #     ingress_kwcoco_data = json.load(f)
+    # num_videos = len(ingress_kwcoco_data.get('videos', ()))
+    print(f'num_videos={num_videos}')
 
-        # Should be the region models containing the current site summaries
-        # from the previous step.
-        input_region=input_region_fpath,
+    if num_videos == 0:
+        # Copy input region model into region_models outdir to be updated
+        # (rather than generated from tracking, which may not have the
+        # same bounds as the original)
 
-        # This is a kwcoco file used internally in this step where scores
-        # are assigned to each track. The next step will use this.
-        out_kwcoco=scored_kwcoco_fpath,
-    )
-    score_tracks.main(cmdline=cmdline, **score_kwargs)
+        # Not sure if the above case is the right comment, but leaving this
+        # here to guarentee the region with site summaries is passed forward
+        # TODO: the dino code should just be robust to this.
+        input_region_fpath.copy(output_region_fpath)
+    else:
+        # 3.4 Run DZYNE depth_pcd
+        print("* Running DZYNE depth_pcd *")
 
-    cmdline = 0
-    filter_kwargs = {
-        **filter_config,
+        try:
+            cmdline = 0
+            score_kwargs = dict(
+                **score_config,
+                # Should be the SV-cropped kwcoco file that contains start and ending
+                # high resolution images where videos correspond to proposed sites for
+                # this region.
+                input_kwcoco=input_kwcoco_fpath,
 
-        # The kwcoco file contining depth scores that this step will use to
-        # filter the input sites / site summaries.
-        'input_kwcoco': scored_kwcoco_fpath,
+                # Should be the region models containing the current site summaries
+                # from the previous step.
+                input_region=input_region_fpath,
 
-        # Should be the region models containing the current site summaries
-        # from the previous step.
-        'input_region': input_region_fpath,
+                # This is a kwcoco file used internally in this step where scores
+                # are assigned to each track. The next step will use this.
+                out_kwcoco=scored_kwcoco_fpath,
+            )
+            score_tracks.main(cmdline=cmdline, **score_kwargs)
 
-        # Should be the folder containing all of the sites corresponding to the
-        # sites in the input_region
-        'input_sites': input_sites_dpath,
+            cmdline = 0
+            filter_kwargs = {
+                **filter_config,
 
-        # The output region model to be used by the next step
-        'output_region_fpath': output_region_fpath,
+                # The kwcoco file contining depth scores that this step will use to
+                # filter the input sites / site summaries.
+                'input_kwcoco': scored_kwcoco_fpath,
 
-        # The output directory of corresponding site models that should be used by the next step
-        'output_sites_dpath': output_sites_dpath,
+                # Should be the region models containing the current site summaries
+                # from the previous step.
+                'input_region': input_region_fpath,
 
-        # A single file that registers all of the sites writen to the output
-        # site directory.
-        'output_site_manifest_fpath': output_site_manifest_fpath,
-    }
-    filter_tracks.main(cmdline=cmdline, **filter_kwargs)
+                # Should be the folder containing all of the sites corresponding to the
+                # sites in the input_region
+                'input_sites': input_sites_dpath,
 
-    # Validate and fix all outputs
-    from watch.utils import util_framework
-    util_framework.fixup_and_validate_site_and_region_models(
-        region_dpath=output_region_fpath.parent,
-        site_dpath=output_sites_dpath,
-    )
+                # The output region model to be used by the next step
+                'output_region_fpath': output_region_fpath,
+
+                # The output directory of corresponding site models that should be used by the next step
+                'output_sites_dpath': output_sites_dpath,
+
+                # A single file that registers all of the sites writen to the output
+                # site directory.
+                'output_site_manifest_fpath': output_site_manifest_fpath,
+            }
+            filter_tracks.main(cmdline=cmdline, **filter_kwargs)
+
+        except Exception:
+            if config.skip_on_fail:
+                print("WARNING: Exception occurred (printed below), passing input sites / region models as output")
+                traceback.print_exception(*sys.exc_info())
+                ingressed_assets['depth_filtered_sites'] = input_sites_dpath
+                ingressed_assets['depth_filtered_regions'] = input_region_dpath
+                shutil.copytree(input_sites_dpath, output_sites_dpath, dirs_exist_ok=True)
+                shutil.copytree(input_region_dpath, output_region_dpath, dirs_exist_ok=True)
+            else:
+                raise
+        else:
+            # Validate and fix all outputs
+            from watch.utils import util_framework
+            util_framework.fixup_and_validate_site_and_region_models(
+                region_dpath=output_region_fpath.parent,
+                site_dpath=output_sites_dpath,
+            )
+
+    # HACK: Only egress sites and models if there was data to
+    # generate them; with the intent of skipping the downstream
+    # tasks in the DAG if there's no site output here
+    ingressed_assets['depth_filtered_sites'] = output_sites_dpath
+    ingressed_assets['depth_filtered_regions'] = output_region_dpath
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    ingressed_assets['depth_filtered_sites'] = output_sites_dpath
-    ingressed_assets['depth_filtered_regions'] = output_region_dpath
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      output_path,

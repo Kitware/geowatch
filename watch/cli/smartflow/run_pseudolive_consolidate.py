@@ -8,18 +8,24 @@ import subprocess
 import ubelt as ub
 import scriptconfig as scfg
 
+from watch.utils.util_framework import download_region
+
 
 class PseudoliveConsolidateConfig(scfg.DataConfig):
     """
     Run pseudolive consolidation script for TA-2 region / site model outputs
     """
     region_id = scfg.Value(None, type=str, position=1, required=True, help='Region ID')
-    previous_consolidated_output = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
+    input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework Region definition JSON
+            '''))
+    previous_consolidated_output = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
             '''
             S3 path to consolidated regions / sites from previous
             iteration
             '''))
-    current_output = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+    current_output = scfg.Value(None, type=str, position=4, required=True, help=ub.paragraph(
             '''
             S3 path to regions / sites from current iteration
             '''))
@@ -58,6 +64,12 @@ def run_pseudolive_consolidate(config):
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
+    local_region_path = ub.Path('/tmp/region.json')
+    local_region_path = download_region(config.input_region_path,
+                                        local_region_path,
+                                        aws_profile=config.aws_profile,
+                                        strip_nonregions=True)
+
     local_previous_dir = os.path.join('/tmp', 'previous_data')
     local_current_dir = os.path.join('/tmp', 'current_data')
 
@@ -79,6 +91,7 @@ def run_pseudolive_consolidate(config):
 
     local_consolidated_dir = os.path.join('/tmp', 'consolidated_out')
     pseudolive_consolidate(config.region_id,
+                           local_region_path,
                            local_previous_dir,
                            local_current_dir,
                            local_consolidated_dir,
