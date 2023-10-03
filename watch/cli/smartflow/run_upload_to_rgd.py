@@ -164,6 +164,7 @@ def upload_to_rgd(input_site_models_s3,
             if result.status_code != 201:
                 print(f"Error uploading site, status "
                       f"code: [{result.status_code}]")
+                print(result.text)
 
 
 def post_site(post_site_url, site_filepath):
