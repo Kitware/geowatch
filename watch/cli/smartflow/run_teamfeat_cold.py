@@ -41,6 +41,14 @@ def main():
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
     from watch.mlops.pipeline_nodes import ProcessNode
+
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')

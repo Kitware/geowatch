@@ -84,6 +84,13 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils import util_framework
     from watch.utils import util_fsspec
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     input_path = config.input_path
     input_region_path = config.input_region_path
     outbucket = config.outbucket

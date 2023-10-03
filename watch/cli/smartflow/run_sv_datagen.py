@@ -70,6 +70,13 @@ def run_generate_sv_cropped_kwcoco(input_path,
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=aws_profile)
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     if dont_recompute:
         output_path = util_fsspec.FSPath.coerce(output_path)
         if output_path.exists():

@@ -179,6 +179,13 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli.smartflow_ingress import smartflow_ingress
     import kwcoco
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    import watch
+    print('Print current version of the code')
+    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
