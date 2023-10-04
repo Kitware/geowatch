@@ -127,10 +127,12 @@ def run_dino_sv(config):
     # as we would expect here
     missing_inputs = not input_region_dpath.exists() or not input_sites_dpath.exists()
     if missing_inputs:
-        input_region_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+        # Fallback to pre-depth filter outputs if that is failing
+        input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_bas'])
         input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
 
     input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
+    assert input_region_fpath.exists()
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
     # dzyne output referenced by ingress_kwcoco_path
@@ -159,6 +161,7 @@ def run_dino_sv(config):
     #     ingress_kwcoco_data = json.load(f)
     # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
+    output_region_dpath.ensuredir()
 
     if num_videos == 0:
         # Copy input region model into region_models outdir to be updated
@@ -169,10 +172,8 @@ def run_dino_sv(config):
         # here to guarentee the region with site summaries is passed forward
         # TODO: the dino code should just be robust to this.
         input_sites_dpath.copy(output_sites_dpath)
-        output_region_fpath.parent.ensuredir()
         input_region_fpath.copy(output_region_fpath)
     else:
-        output_region_dpath.ensuredir()
         output_site_manifest_dpath.ensuredir()
         output_sites_dpath.ensuredir()
         # 3.2 Run DinoBoxDetector
