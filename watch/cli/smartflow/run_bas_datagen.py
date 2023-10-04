@@ -168,7 +168,6 @@ def input_stac_to_kwcoco(stac_items_path,
 
 
 def run_stac_to_cropped_kwcoco(config):
-    from watch.utils import util_framework
     from watch.utils import util_fsspec
     from kwutil.util_yaml import Yaml
     from delayed_image.channel_spec import ChannelSpec
@@ -420,9 +419,12 @@ def run_stac_to_cropped_kwcoco(config):
     if ALIGN_EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif ALIGN_EXEC_MODE == 'cmd':
-        align_arglist = util_framework._make_arglist(align_config)
-        ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
-               check=True, capture=False, verbose=3)
+        align_node = ProcessNode(
+            command='python -m watch.cli.coco_align',
+            config=align_config,
+        )
+        command = align_node.final_command()
+        ub.cmd(command, check=True, capture=False, verbose=3)
     else:
         raise KeyError(ALIGN_EXEC_MODE)
 
@@ -447,7 +449,7 @@ def run_stac_to_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
     REMOVE_BAD_IMAGES = 0
@@ -468,7 +470,7 @@ def run_stac_to_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
     else:
         print('Not removing bad images. TODO: add support')

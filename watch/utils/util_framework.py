@@ -780,18 +780,3 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
         site.fixup()
         fpath.write_text(site.dumps(indent='    '))
         site.validate()
-
-
-def _make_arglist(config) -> list:
-    """
-    Helper to make the invocation
-    """
-    # Make argstring
-    arglist = []
-    for k, v in config.items():
-        arglist.append('--' + str(k))
-        if isinstance(v, list):
-            arglist.extend(list(map(str, v)))
-        else:
-            arglist.append(str(v))
-    return arglist

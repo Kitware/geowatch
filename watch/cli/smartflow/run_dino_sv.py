@@ -28,7 +28,7 @@ class DinoSVConfig(scfg.DataConfig):
             Path to input T&E Baseline Framework Region definition JSON
             '''))
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
-    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+    aws_profile = scfg.Value(None, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
@@ -85,14 +85,17 @@ def run_dino_sv(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['depth_filtered_sites',
-         'depth_filtered_regions',
-         'cropped_kwcoco_for_sv',
-         'cropped_kwcoco_for_sv_assets'],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'depth_filtered_sites',
+            'depth_filtered_regions',
+            'cropped_kwcoco_for_sv',
+            'cropped_kwcoco_for_sv_assets'
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun
+    )
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")

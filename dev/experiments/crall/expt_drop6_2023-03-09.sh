@@ -8497,7 +8497,7 @@ data:
     weight_dilate          : 10
     use_centered_positives : True
     use_grid_positives     : False
-    use_grid_negatives     : False
+    use_grid_negatives     : 'cleared'
     normalize_inputs       : 1024
     balance_areas          : False
     sqlview                : sqlite
@@ -8559,5 +8559,6 @@ torch_globals:
     float32_matmul_precision: auto
 
 initializer:
-    init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_4GSD_split6_V88/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_4GSD_split6_V88_epoch334_step10720.pt
+    #init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_4GSD_split6_V88/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_4GSD_split6_V88_epoch334_step10720.pt
+    init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop7-Cropped2GSD-V2/runs/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/lightning_logs/version_0/checkpoints/epoch=18-step=152-val_loss=3.508.ckpt.ckpt
 "

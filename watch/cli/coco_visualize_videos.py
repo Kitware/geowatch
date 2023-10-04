@@ -470,7 +470,7 @@ def main(cmdline=True, **kwargs):
             assert space == 'video'
             tid_to_info = video_track_info(coco_dset, vidid)
             for tid, track_info in tid_to_info.items():
-                track_dpath = sub_dpath / '_tracks' / 'tid_{:04d}'.format(tid)
+                track_dpath = sub_dpath / '_tracks' / 'tid_{}'.format(tid)
                 track_dpath.ensuredir()
                 vid_crop_box = track_info['full_vid_box']
 

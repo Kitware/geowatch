@@ -195,9 +195,12 @@ def run_generate_sc_cropped_kwcoco(config):
     if EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
-        align_arglist = util_framework._make_arglist(align_config)
-        ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
-               check=True, capture=False, verbose=3)
+        align_node = ProcessNode(
+            command='python -m watch.cli.coco_align',
+            config=align_config,
+        )
+        command = align_node.final_command()
+        ub.cmd(command, check=True, capture=False, verbose=3)
     else:
         raise KeyError(EXEC_MODE)
 
