@@ -424,7 +424,7 @@ def run_stac_to_cropped_kwcoco(config):
             config=align_config,
         )
         command = align_node.final_command()
-        ub.cmd(command, check=True, capture=False, verbose=3)
+        ub.cmd(command, check=True, capture=False, verbose=3, shell=True)
     else:
         raise KeyError(ALIGN_EXEC_MODE)
 
