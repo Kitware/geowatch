@@ -874,6 +874,58 @@ class ProcessNode(Node):
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
         >>> print('self.final = {}'.format(ub.urepr(self.final, nl=2)))
         >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
+
+    Example:
+        >>> # How to use a ProcessNode to handle an arbitrary process call
+        >>> # First let's write a program to disk
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> import stat
+        >>> dpath = ub.Path.appdir('watch/test/pipeline/TestProcessNode2')
+        >>> dpath.delete().ensuredir()
+        >>> pycode = ub.codeblock(
+                '''
+                #!/usr/bin/env python3
+                import scriptconfig as scfg
+                import ubelt as ub
+
+                class MyCLI(scfg.DataConfig):
+                    src = None
+                    dst = None
+                    foo = None
+                    bar = None
+
+                    @classmethod
+                    def main(cls, cmdline=1, **kwargs):
+                        config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+                        print('config = ' + ub.urepr(config, nl=1))
+
+                if __name__ == '__main__':
+                    MyCLI.main()
+        ...     ''')
+        >>> fpath = dpath / 'mycli.py'
+        >>> fpath.write_text(pycode)
+        >>> fpath.chmod(fpath.stat().st_mode | stat.S_IXUSR)
+        >>> # Now that we have a script that accepts some cli arguments
+        >>> # Create a process node to represent it. We assume that
+        >>> # everything is passed as key/val style params, which you *should*
+        >>> # use for new programs, but this doesnt apply to a lot of programs
+        >>> # out there, so we will show how to handle non key/val arguments
+        >>> # later (todo).
+        >>> mynode = ProcessNode(command=str(fpath))
+        >>> # Get the invocation by runnning
+        >>> command = mynode.final_command()
+        >>> print(command)
+        >>> # Use a dictionary to configure key/value pairs
+        >>> mynode.configure({'src': 'a.txt', 'dst': 'b.txt'})
+        >>> command = mynode.final_command()
+        >>> # Note: currently because of backslash formatting
+        >>> # we need to use shell=1 or system=1 with ub.cmd
+        >>> # in the future we will fix this in ubelt (todo).
+        >>> # Similarly this class should be able to provide the arglist
+        >>> # style of invocation.
+        >>> print(command)
+        >>> ub.cmd(command, verbose=3, shell=1)
+
     """
     __node_type__ = 'process'
 
