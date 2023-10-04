@@ -168,7 +168,15 @@ def smartflow_ingress(input_path,
         asset_href = FSPath.coerce(asset_href)
         asset_outpath = outdir / asset_href.name
         if asset_outpath not in seen:
-            asset_href.copy(asset_outpath)
+            try:
+                asset_href.copy(asset_outpath)
+            except FileNotFoundError:
+                print('ERROR: occured while trying to ingress asset')
+                print('Printing debug information and then re-raising')
+                print('asset_href = {}'.format(ub.urepr(asset_href, nl=1)))
+                print('asset_outpath = {}'.format(ub.urepr(asset_outpath, nl=1)))
+                raise
+
         seen.add(asset_outpath)
 
         kwcoco_stac_item_assets[asset_key] = str(asset_outpath)
