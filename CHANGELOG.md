@@ -26,12 +26,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Selection of images when picking 1 image per time window in coco-align is now influenced by STAC metadata for `eo:cloud_cover` and `quality_info:contaminated_percentage`
 * prepare ta2 dataset now outputs per-region kwcoco files inside their region directories and adds the -rawbands suffix.
 * Can now change the name of the predicted salient channel.
+* Merged changes for incremental mode into the main branch
+* Bumped versions of ndsampler, kwimage, and delayed-image to fix an issue in delayed image sampling.
 
 ### Fixed
 * coco-align now handles overviews correctly for quality bands.
 * fixed issue where dataloader did not relabel post construction to background if all frames post construction.
 * cluster-sites now attempts to fix broken site models before it uses them.
 * Fix `predicted_phase_transition_date` to be a date instead of a datetime.
+* Added workaround for issue when a classifier can predict more than the 4 main categories
+* Fix issue where SV output was not passed to AC input in smartflow
+
+### Removed
+* Moved unused cli scripts to "dev"
 
 
 ## Version 0.9.3 - Released 2023-08-31

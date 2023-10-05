@@ -27,6 +27,11 @@ def disk_info_of_path(path):
         >>> path = '.'
         >>> disk_info_of_path(path)
 
+    TODO:
+        - [ ] Handle btrfs
+        - [ ] Handle whatever AWS uses
+        - [ ] Use udisksctl or udevadm
+
     Ignore:
         lsblk  /dev/nvme1n1
         lsblk -afs /dev/mapper/vgubuntu-root
@@ -37,8 +42,11 @@ def disk_info_of_path(path):
         df $HOME/data/dvc-repos/smart_watch_dvc-hdd --output=source,fstype
 
         df . --output=source,fstype,itotal,iused,iavail,ipcent,size,used,avail,pcent,file,target
+
+    References:
+        https://askubuntu.com/questions/609708/how-to-find-hard-drive-brand-name-or-model
+        https://stackoverflow.com/questions/38615464/how-to-get-device-name-on-which-a-file-is-located-from-its-path-in-c
     """
-    # https://stackoverflow.com/questions/38615464/how-to-get-device-name-on-which-a-file-is-located-from-its-path-in-c
     import ubelt as ub
     path = ub.Path(path)
     path = path.resolve()
