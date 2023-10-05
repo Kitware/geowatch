@@ -68,7 +68,7 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         '''))
 
     src_kwcoco = scfg.Value(None, help='the input kwcoco file to project onto')
-    dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write')
+    dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write. Will default based on out_dpath')
 
     bas_kwcoco = scfg.Value(None, help='path to kwcoco files containing bas heatmap predictions')
     ac_kwcoco = scfg.Value(None, help='path to kwcoco files containing AC heatmap predictions')
@@ -156,6 +156,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
                 return job_config
 
             if self.true_region_dpath is None:
+                # TODO: also read in things like model names and hashids if
+                # possible.
                 job_config = get_job_config()
                 self.true_region_dpath = job_config['bas_poly_eval.true_region_dpath']
 
@@ -165,6 +167,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
             if self.out_dpath is None:
                 self.out_dpath = (self.metrics_node_dpath / 'confusion_analysis')
+
+        if self.dst_kwcoco is None and self.out_dpath is not None:
             self.dst_kwcoco = self.out_dpath / 'confusion_kwcoco' / 'confusion.kwcoco.zip'
 
         if self.bas_metric_dpath is not None:
@@ -593,7 +597,8 @@ class ConfusionAnalysis:
         if VALIDATE:
             all_models = SiteModelCollection(pred_sites + true_sites)
             all_models.fixup()
-            all_models.validate(workers=0)
+            all_models.validate(stop_on_failure=False, strict=False)
+            # all_models.validate(workers=0)
 
         # Group by confusion type
         true_type_to_sites = ub.ddict(list)
@@ -965,11 +970,13 @@ class ConfusionAnalysis:
         from kwutil import util_progress
         pman = util_progress.ProgressManager()
 
-        link_dpath = viz_dpath / '_flat'
+        bytrueid_dpath = (viz_dpath / '_by_true_id')
+        bypredid_dpath = (viz_dpath / '_by_pred_id')
 
         with pman:
             total = 0
             for case in pman.progiter(cases, desc='dump cases', verbose=3):
+                ...
                 # if 'CH_R001_0076' in case['name']:
                 #     raise Exception
                 #     import xdev
@@ -984,7 +991,6 @@ class ConfusionAnalysis:
                 #     continue
 
                 fpath = dpath / fname
-                link_fpath = link_dpath / fname
 
                 try:
                     canvas = visualize_case(
@@ -1005,8 +1011,13 @@ class ConfusionAnalysis:
                 # print(f'fpath={fpath}')
                 # print(f'canvas.shape={canvas.shape}')
                 kwimage.imwrite(fpath, canvas)
-                link_fpath.parent.ensuredir()
-                ub.symlink(real_path=fpath, link_path=link_fpath)
+
+                bytrue_link_fpath = bytrueid_dpath / (case['bytrue_name'] + '.jpg')
+                bypred_link_fpath = bypredid_dpath / (case['bypred_name'] + '.jpg')
+                bytrue_link_fpath.parent.ensuredir()
+                bypred_link_fpath.parent.ensuredir()
+                ub.symlink(real_path=fpath, link_path=bytrue_link_fpath)
+                ub.symlink(real_path=fpath, link_path=bypred_link_fpath)
 
         if errors:
             rich.print(f'[red]There were {len(errors)} errors in viz')
@@ -1255,7 +1266,8 @@ def make_case(pred_sites,
         true_duration = true_dates[-1] - true_dates[0]
         pred_duration = pred_dates[-1] - pred_dates[0]
 
-        case['name'] = f'{main_pred_site.site_id}-vs-{main_true_site.site_id}'
+        main_true_name = main_true_site.site_id
+        main_pred_name = main_pred_site.site_id
 
         case.update({
             'space_iou': space_iou,
@@ -1268,12 +1280,19 @@ def make_case(pred_sites,
         })
     else:
         if has_pred:
-            case['name'] = f'{main_pred_site.site_id}-vs-null'
+            main_pred_name = main_pred_site.site_id
+            main_true_name = 'null'
         elif has_true:
-            case['name'] = f'null-vs-{main_true_site.site_id}'
+            main_true_name = main_true_site.site_id
+            main_pred_name = 'null'
         else:
             raise AssertionError('no pred or true')
 
+    case['name'] = f'{main_pred_name}-vs-{main_true_name}'
+
+    # Additional names for symlinks
+    case['bytrue_name'] = f'bytrue-{main_true_name}-vs-{main_pred_name}'
+    case['bypred_name'] = f'bypred-{main_pred_name}-vs-{main_true_name}'
     case['type'] = type_
 
     case.update({

@@ -476,6 +476,10 @@ def run_stac_to_cropped_kwcoco(config):
         print('Not removing bad images. TODO: add support')
         # ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
 
+    # Reroot the kwcoco files to be relative and make it easier to work with
+    # downloaded results
+    ub.cmd(['kwcoco', 'reroot', f'--src={ta1_cropped_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
     print('* Printing current directory contents (2/3)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
     print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
@@ -508,6 +512,11 @@ def run_stac_to_cropped_kwcoco(config):
                                        target_gsd=target_gsd,
                                        workers=config.jobs)
             final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
+
+        # Reroot the kwcoco files to be relative and make it easier to work with
+        # downloaded results
+        ub.cmd(['kwcoco', 'reroot', f'--src={final_interval_bas_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
     else:
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 

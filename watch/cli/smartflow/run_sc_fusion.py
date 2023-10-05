@@ -257,8 +257,8 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
 
     # Add in intermediate outputs for debugging
-    EGRESS_FUSION_HEATMAPS = True
-    if EGRESS_FUSION_HEATMAPS:
+    EGRESS_INTERMEDIATE_OUTPUTS = True
+    if EGRESS_INTERMEDIATE_OUTPUTS:
         ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
         ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
         ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath

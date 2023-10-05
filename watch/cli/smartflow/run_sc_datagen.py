@@ -95,13 +95,16 @@ def run_generate_sc_cropped_kwcoco(config):
     # Compute kwcoco-for-sc here rather than in run-bas-datagen
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
-        assets=['kwcoco_for_sc',
-                'sv_out_region_models',
-                'cropped_region_models_bas'],
+        assets=[
+            'kwcoco_for_sc',
+            'sv_out_region_models',
+            'cropped_region_models_bas'
+        ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
         dryrun=config.dryrun,
-        dont_error_on_missing_asset=True)
+        dont_error_on_missing_asset=True
+    )
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -203,6 +206,10 @@ def run_generate_sc_cropped_kwcoco(config):
         ub.cmd(command, check=True, capture=False, verbose=3, shell=True)
     else:
         raise KeyError(EXEC_MODE)
+
+    # Reroot the kwcoco files to be relative and make it easier to work with
+    # downloaded results
+    ub.cmd(['kwcoco', 'reroot', f'--src={ta1_sc_cropped_kwcoco_prefilter_path}', '--inplace=1', '--absolute=0'])
 
     print('* Printing current directory contents (3/4)')
     cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])

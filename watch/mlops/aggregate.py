@@ -162,6 +162,8 @@ class AggregateEvluationConfig(AggregateLoader):
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
+    symlink_results = Value(True, isflag=True, help='if True make symlinks based on region and param hashids')
+
     rois = Value('auto', help='Comma separated regions of interest')
 
     inspect = Value(None, help='param hashid to look at')
@@ -280,6 +282,11 @@ def main(cmdline=True, **kwargs):
                     agg.analyze()
                 if report_config.get('macro_analysis', False):
                     agg.macro_analysis()
+
+    if config.symlink_results:
+        for type, agg in eval_type_to_aggregator.items():
+            if len(agg):
+                agg.make_result_node_symlinks()
 
     if config.resource_report:
         for type, agg in eval_type_to_aggregator.items():
@@ -1425,7 +1432,8 @@ class AggregatorAnalysisMixin:
             #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
             # new_models_fpath.write_text(shortlist_text)
 
-        return TopResultsReport(region_id_to_summary, top_param_lut)
+        report = TopResultsReport(region_id_to_summary, top_param_lut)
+        return report
 
     def resource_summary_table(agg):
         import pandas as pd
@@ -2159,6 +2167,26 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 inspect_node(subagg, id, row, group_agg, agg_group_dpath)
 
         rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+    def make_result_node_symlinks(agg):
+        """
+        Builds symlinks to results node paths based on region and param hashids
+        """
+        base_dpath = (agg.output_dpath / 'param_links' / agg.type)
+        byregion_dpath = (base_dpath / 'by_region').ensuredir()
+        byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
+
+        for row in agg.table.to_dict('records'):
+            region_id = row['region_id']
+            param_hashid = row['param_hashid']
+            eval_fpath = ub.Path(row['fpath'])
+            node_dpath = eval_fpath.parent
+            node_byregion_dpath = (byregion_dpath / region_id / param_hashid)
+            node_byparamid_dpath = (byparamid_dpath / param_hashid / region_id)
+            node_byregion_dpath.parent.ensuredir()
+            node_byparamid_dpath.parent.ensuredir()
+            ub.symlink(real_path=node_dpath, link_path=node_byparamid_dpath, overwrite=1)
+            ub.symlink(real_path=node_dpath, link_path=node_byregion_dpath, overwrite=1)
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):

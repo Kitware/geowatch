@@ -1431,6 +1431,20 @@ def main(argv=None, **kwargs):
         print('restricting dset to videos with site_summary annots: ',
               set(coco_dset.index.name_to_video))
         assert coco_dset.n_images > 0, 'no valid videos!'
+    else:
+        # Note: this may be a warning if we use this in a pipeline where the
+        # inputed kwcoco files already have polygons reprojected (and in that
+        # case if there are legidimately no sites to score!) But in our main
+        # use case where site_summary should be specified, this is an error so
+        # we are treating it that way for now.
+        if track_kwargs.get('boundaries_as') == 'polys' and coco_dset.n_annots:
+            raise Exception(ub.codeblock(
+                '''
+                You requested scoring boundaries as polygons, but the dataset
+                does not have any annotations and no site summaries were
+                specified to add them.  You probably forgot to specify the site
+                summaries that should be scored!
+                '''))
 
     print(f'track_fn={track_fn}')
     """

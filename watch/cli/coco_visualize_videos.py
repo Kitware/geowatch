@@ -548,8 +548,7 @@ def main(cmdline=True, **kwargs):
         import scriptconfig as scfg
         from kwutil import util_yaml
 
-        @scfg.dataconf
-        class AnimateConfig:
+        class AnimateConfig(scfg.DataConfig):
             # TODO: should be able to load from an alias
             frames_per_second = scfg.Value(0.7, alias=['fps'])
         animate_config = dict(AnimateConfig())

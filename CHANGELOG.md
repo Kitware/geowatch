@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.11.0 - Released 2023-11-xx
 
+### Added
+* mlops can now make symlinks to results nodes by region and param-hashids 
+
 
 ## Version 0.10.0 - Released 2023-10-01
 
@@ -19,6 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Experimental Generate & Test algorithm for continual backprop.
 * Shrink & Perterb Algorithm for regularization.
 * Add `fix_backwards_dates` to site / region geomodels `fixup` method.
+
 
 ### Changed
 * Add remove-bad-images to smartflow datagen pipeline.
