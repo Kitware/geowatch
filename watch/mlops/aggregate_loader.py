@@ -119,7 +119,7 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
                 'resolved_params': pd.DataFrame(cols['resolved_params'], dtype=object),
                 'other': pd.DataFrame(cols['other']),
             }
-            print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
+            # print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
             eval_type_to_results[node_name] = results
 
     return eval_type_to_results
