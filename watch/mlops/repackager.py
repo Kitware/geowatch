@@ -1,3 +1,7 @@
+"""
+Script for converting a checkpoint (that lives in a training directory) into a
+pytorch package with appropriate metadata.
+"""
 import ubelt as ub
 import os
 import scriptconfig as scfg

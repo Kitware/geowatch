@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 r"""
+This is a SMART-specific analysis of TP/FP/TN/FN site cases with
+visualizations.
+
 #### LORES
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)

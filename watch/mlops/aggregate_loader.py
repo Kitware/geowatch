@@ -1,5 +1,7 @@
 """
 Logic for loading raw results from the MLops DAG root dir.
+
+Used by ./aggregate.py
 """
 import ubelt as ub
 from kwutil import util_pattern

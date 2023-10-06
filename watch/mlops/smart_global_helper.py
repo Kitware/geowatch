@@ -1,3 +1,9 @@
+"""
+Quick and dirty project specific stuff that ideally wont get in the way of
+general use-cases but should eventually be factored out.
+
+Special heuristics. Used by ./aggregate.py and ./aggregate_plots.py
+"""
 import kwarray
 import ubelt as ub
 from kwutil.util_yaml import Yaml

@@ -1,5 +1,10 @@
 r"""
-Helper for scheduling a set of prediction + evaluation jobs
+Helper for scheduling a set of prediction + evaluation jobs.
+
+This is the main entrypoint for running a bunch of evaluation jobs over a grid
+of parameters. We currently expect that pipelines are predefined in
+smart_pipeline.py but in the future they will likely be an external resource
+file.
 
 TODO:
     - [ ] Differentiate between pixel models for different tasks.

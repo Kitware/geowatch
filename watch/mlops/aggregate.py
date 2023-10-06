@@ -1,5 +1,19 @@
 r"""
-Loads results from an evaluation and aggregates them
+Loads results from an evaluation, aggregates them, and reports text or visual
+results.
+
+This is the main entry point for the mlops.aggregate CLI. It contains the logic
+to consolidate rows of results into macro averages and compute a parameter
+hashid (param_hashid) for each row. It also contains the basic text report
+logic (although maybe that should be moved out?). It relies on several other
+files in this directory
+
+* aggregate_loader.py - handles the loading of individual rows from mlops output
+
+* aggregate_plots.py - handles plotting relationships between parameters and metrics
+
+* smart_global_helper.py - quick and dirty project specific stuff that ideally wont
+    get in the way of general use-cases but should eventually be factored out.
 
 Ignore:
 

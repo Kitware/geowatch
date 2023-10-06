@@ -2,13 +2,7 @@
 This is a very task-specific file containing logic to parse fusion pipeline
 metrics for BAS and SC.
 
-
-Generate:
-    import liberator
-    lib = liberator.Liberator()
-    import networkx as nx
-    lib.add_dynamic(nx.DiGraph)
-    print(ub.highlight_code(lib.current_sourcecode()))
+Used by ./aggregate_loader.py
 """
 
 import numpy as np

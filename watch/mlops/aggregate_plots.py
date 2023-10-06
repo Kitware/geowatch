@@ -1,5 +1,8 @@
 """
-Plotting logic for :class:`Aggregator`
+Plotting logic for :class:`Aggregator`. These plots illustrate the relationshp
+between parameters and metrics from various vantage points.
+
+Used by ./aggregate.py
 """
 import ubelt as ub
 
