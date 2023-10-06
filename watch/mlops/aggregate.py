@@ -1959,6 +1959,24 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             from watch.utils.result_analysis import varied_value_counts
             varied_value_counts(effective_params, min_variations=2)
 
+        if 0:
+            # check behavior of groupby with None:
+            df = pd.DataFrame([
+                {'a': None, 'b': 4, 'c': 1},
+                {'a': None, 'b': 1, 'c': 1},
+                {'a': None, 'b': 1, 'c': 2},
+                {'a': 1, 'b': 2, 'c': 2},
+                {'a': 1, 'b': 3, 'c': 2},
+            ], dtype=object)
+            group_keys = ['a', 'c']
+            grouped = df.groupby(group_keys, dropna=False)
+            for group_vals, group in grouped:
+                group_key1 = dict(zip(group_keys, group_vals))
+                group_key2 = group.iloc[0][group_keys].to_dict()
+                print('---')
+                print(f'group_key1={group_key1}')
+                print(f'group_key2={group_key2}')
+
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
         hashid_to_params = {}
@@ -1966,12 +1984,22 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             is_group_included = is_param_included.loc[group.index]
+
+            # NOTE: groupby will replace None with NaN in the returned
+            # iteration values
+            # Work around this by choosing the first item from the group
+            # itself.
+            unique_params = group.iloc[0][param_cols]
+
             for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
-                valid_param_cols = list(ub.compress(param_cols, param_flags))
-                valid_param_vals = list(ub.compress(param_vals, param_flags))
-                unique_params = ub.dzip(valid_param_cols, valid_param_vals)
-                hashid = hash_param(unique_params, version=1)
-                hashid_to_params[hashid] = unique_params
+                # valid_param_cols = list(ub.compress(param_cols, param_flags))
+                # valid_param_vals = list(ub.compress(param_vals, param_flags))
+                # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
+
+                valid_unique_params = unique_params[list(param_flags)].to_dict()
+
+                hashid = hash_param(valid_unique_params, version=1)
+                hashid_to_params[hashid] = valid_unique_params
                 hashids_v1.loc[subgroup.index] = hashid
 
         # Update the index with an effective parameter hashid
