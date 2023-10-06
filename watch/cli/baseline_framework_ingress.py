@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os
 import scriptconfig as scfg
@@ -8,11 +9,11 @@ class BaselineFrameworkIngressConfig(scfg.DataConfig):
     """
     Ingress data from T&E baseline framework input file. The output will be stored as a json catalog
     """
-    input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
+    input_path = scfg.Value(None, type=str, position=1, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework JSON
             '''))
-    outdir = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
+    outdir = scfg.Value(None, type=str, short_alias=['o'], help=ub.paragraph(
             '''
             Output directory for ingressed assets an output STAC Catalog
             '''))
@@ -50,6 +51,13 @@ def main():
     config = BaselineFrameworkIngressConfig.cli(strict=True)
     import rich
     rich.print(ub.urepr(config))
+
+    if config.outdir is None:
+        raise ValueError('outdir is required')
+
+    if config.input_path is None:
+        raise ValueError('input_path is required')
+
     baseline_framework_ingress(**config)
 
 

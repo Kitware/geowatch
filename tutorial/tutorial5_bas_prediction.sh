@@ -1,3 +1,4 @@
+#!/bin/bash
 __doc__="
 BAS Prediciton
 ==============

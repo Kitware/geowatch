@@ -118,7 +118,7 @@ class PrepareTA2Config(CMDQueueConfig):
             maximum cloud cover percentage (ignored if s3_fpath given)
             '''))
 
-    sensors = scfg.Value('L2', help='(ignored if s3_fpath given)')
+    sensors = scfg.Value('L2', type=str, help='(ignored if s3_fpath given)')
 
     max_products_per_region = scfg.Value(None, help=ub.paragraph(
             '''
