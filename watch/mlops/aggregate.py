@@ -119,12 +119,20 @@ class AggregateLoader(DataConfig):
         for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
             if target.is_dir():
                 # Assume Pipeline Output dir
+                root_dpath = target
+                pipeline = config.pipeline
+                eval_nodes = config.eval_nodes
+                io_workers = config.io_workers
+                cache_resolved_results = config.cache_resolved_results
                 eval_type_to_results = build_tables(
-                    target, config.pipeline, config.io_workers,
-                    config.eval_nodes,
-                    cache_resolved_results=config.cache_resolved_results)
+                    root_dpath, pipeline, io_workers, eval_nodes,
+                    cache_resolved_results=cache_resolved_results)
                 for type, results in eval_type_to_results.items():
+                    print('GOT RESULTS')
+                    print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
                     table = pd.concat(list(results.values()), axis=1)
+                    print('TABLE')
+                    print(table['resolved_params.sc_poly.smoothing'])
                     eval_type_to_tables[type].append(table)
             if target.is_file():
                 # Assume CSV file
@@ -136,8 +144,12 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
+            print('TABLE2')
+            print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table)
             agg.build()
+            print('agg.TABLE')
+            print(agg.table['resolved_params.sc_poly.smoothing'])
             eval_type_to_aggregator[type] = agg
         return eval_type_to_aggregator
 
