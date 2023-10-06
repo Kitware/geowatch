@@ -114,12 +114,20 @@ def upload_to_rgd(input_site_models_s3,
 
     existing_model_run = None
     for model_run in model_runs_result.json().get('results', ()):
-        flag = (model_run['title'] == title and
-                model_run['performer']['short_code'] == performer_shortcode and
-                'region' in model_run and
-                model_run['region'] is not None and
-                model_run['region'].get('name') == region_id)
-        if flag:
+        if(model_run['title'] != title or
+           model_run['performer']['short_code'] != performer_shortcode):
+            continue
+
+        model_region = model_run.get('region')
+        if model_region is None:
+            continue
+
+        if(isinstance(model_region, dict) and
+           model_run['region'].get('name') == region_id):
+            existing_model_run = model_run
+            break
+        elif(isinstance(model_region, str) and
+             model_region == region_id):  # noqa
             existing_model_run = model_run
             break
 
@@ -164,6 +172,7 @@ def upload_to_rgd(input_site_models_s3,
             if result.status_code != 201:
                 print(f"Error uploading site, status "
                       f"code: [{result.status_code}]")
+                print(result.text)
 
 
 def post_site(post_site_url, site_filepath):
