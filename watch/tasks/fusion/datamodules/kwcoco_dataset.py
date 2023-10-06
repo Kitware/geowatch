@@ -3092,6 +3092,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
+                  classes=None,
                   **kw):
         """
         Visualize an item produced by this DataSet.
@@ -3122,6 +3123,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     saliency_probs
                     class_probs
                     pred_ltrb
+
+            classes (kwcoco.CategoryTree | None):
+                Classes any "class_probs" in the 'item_output' dictionary
+                corresponds to.  If unspecified uses the classes from the
+                datamodule.
 
         Note:
             The ``self.requested_tasks`` controls the task labels returned by

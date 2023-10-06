@@ -533,9 +533,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return datamodule_vars
 
     def draw_batch(self, batch, stage='train', outputs=None, max_items=2,
-                   overlay_on_image=False, **kwargs):
+                   overlay_on_image=False, classes=None, **kwargs):
         r"""
-        Visualize a batch produced by this DataSet.
+        Visualize a batch produced by a KWCocoVideoDataset.
 
         Args:
             batch (Dict[str, List[Tensor]]): dictionary of uncollated lists of Dataset Items
@@ -687,7 +687,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             else:
                 item_output = {}
 
-            part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
+            part = dataset.draw_item(
+                item, item_output=item_output,
+                overlay_on_image=overlay_on_image, classes=classes, **kwargs)
 
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(
@@ -695,9 +697,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         with_legend = True
         if with_legend:
+            if classes is None:
+                classes = dataset.classes
             label_to_color = {
                 node: data['color']
-                for node, data in dataset.classes.graph.nodes.items()}
+                for node, data in classes.graph.nodes.items()}
             label_to_color = ub.sorted_keys(label_to_color)
             legend_img = utils._memo_legend(label_to_color)
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)

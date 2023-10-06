@@ -160,11 +160,46 @@ def show_affinity_sample_process(chosen, info, fnum=1):
 def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidths=0):
     """
     Visualization helper
+
+    Args:
+        sample_idxs (List[List[int]] | ArrayLike[ndim=2]):
+            A list of frame indexes that index into unixtimes.
+            I.e. multiple samples of frame index groups.
+
+        unixtimes (List | ArrayLike[ndim=1] | None):[
+            An array of unix timestamps corresonding to frame indexes.
+            If unspecified, then frame indexes are shown directly.
+
+    Example:
+        >>> unixtimes = None
+        >>> sample_idxs = [
+        >>>     [0, 1, 2],
+        >>>     [3, 5, 6],
+        >>>     [2, 3, 6],
+        >>> ]
+        >>> plot_dense_sample_indices(sample_idxs, unixtimes)
     """
     import seaborn as sns
     import pandas as pd
 
-    dense_sample = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+    use_datetimes = unixtimes is not None
+    if not use_datetimes:
+        max_frame = max([max(s) for s in sample_idxs])
+        unixtimes = np.arange(max_frame + 1)
+
+    num_keyframes = len(unixtimes)
+    try:
+        # Fast homogeneous path
+        dense_sample = kwarray.one_hot_embedding(sample_idxs, num_keyframes, dim=1).sum(axis=2)
+    except AttributeError:
+        # Slower heterogeneous path
+        rows = []
+        for frame_idxs in sample_idxs:
+            frame_idxs = np.array(frame_idxs)
+            row = kwarray.one_hot_embedding(frame_idxs, num_keyframes, dim=0).sum(axis=1)
+            rows.append(row)
+        dense_sample = np.array(rows)
+
     unixtimes = guess_missing_unixtimes(unixtimes)
 
     # =====================
@@ -173,8 +208,9 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
     # dates = np.array([datetime_cls.fromtimestamp(t).date() for t in unixtimes])
     df = pd.DataFrame(dense_sample)
     df.index.name = 'index'
-    df.columns = pd.to_datetime(datetimes).date
-    df.columns.name = 'date'
+    if use_datetimes:
+        df.columns = pd.to_datetime(datetimes).date
+        df.columns.name = 'date'
     ax = sns.heatmap(data=df, cbar=False, linewidths=linewidths, linecolor='darkgray')
     ax.set_title('Sample Indexes' + title_suffix)
     ax.set_xlabel('Observation Index')
@@ -182,18 +218,43 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
     return ax
 
 
-def plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=None, title_suffix=''):
+def plot_temporal_sample_indices(sample_idxs, unixtimes=None, sensors=None, title_suffix=''):
     """
     Visualization helper
+
+    Args:
+        sample_idxs (List[List[int]]):
+            A list of frame indexes that index into unixtimes.
+            I.e. multiple samples of frame index groups.
+
+        unixtimes (List | None):
+            An array of unix timestamps corresonding to frame indexes.
+            If unspecified, then frame indexes are shown directly.
+
+    Example:
+        >>> unixtimes = None
+        >>> sample_idxs = [
+        >>>     [0, 1, 2],
+        >>>     [3, 5, 6],
+        >>>     [2, 3, 6],
+        >>> ]
+        >>> plot_temporal_sample_indices(sample_idxs, unixtimes)
     """
     import matplotlib.pyplot as plt
-    unixtimes = guess_missing_unixtimes(unixtimes)
-    datetimes = np.array([datetime_cls.fromtimestamp(t) for t in unixtimes])
+    import kwimage
+
+    if unixtimes is None:
+        xlabel = 'Frame Index'
+        max_frame = max([max(s) for s in sample_idxs])
+        datetimes = np.arange(max_frame + 1)
+    else:
+        xlabel = 'Time'
+        unixtimes = guess_missing_unixtimes(unixtimes)
+        datetimes = np.array([datetime_cls.fromtimestamp(t) for t in unixtimes])
     # =====================
     # Show Sample Pattern WRT to time
     ax = plt.gca()
 
-    import kwimage
     if sensors:
         unique_sensors = set(sensors)
         unique_colors = kwimage.Color.distinct(len(unique_sensors))
@@ -224,7 +285,7 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=None, title_suf
         ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-', marker='.')
 
     ax.set_title('Sample Times' + title_suffix)
-    ax.set_xlabel('Time')
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Sample Index')
     return ax
     # import matplotlib.dates as mdates

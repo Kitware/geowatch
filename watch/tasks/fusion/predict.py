@@ -89,7 +89,13 @@ class PredictConfig(DataModuleConfigMixin):
     with_change = scfg.Value('auto', help=None)
     with_class = scfg.Value('auto', help=None)
     with_saliency = scfg.Value('auto', help=None)
-    track_emissions = scfg.Value(True, help=ub.paragraph(
+
+    draw_batches = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, then draw batch visualizations as they are predicted.
+        '''))
+
+    track_emissions = scfg.Value(True, isflag=True, help=ub.paragraph(
             '''
             set to false to disable emission tracking
             '''))
@@ -148,7 +154,7 @@ class PredictConfig(DataModuleConfigMixin):
         '''))
 
 
-def build_stitching_managers(config, method, result_dataset, writer_queue=None):
+def build_stitching_managers(config, model, result_dataset, writer_queue=None):
     # could be torch on-device stitching
     stitch_managers = {}
     stitch_device = 'numpy'
@@ -202,15 +208,15 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
 
     if config['with_class']:
         task_name = 'class'
-        if hasattr(method, 'foreground_classes'):
-            foreground_classes = method.foreground_classes
+        if hasattr(model, 'foreground_classes'):
+            foreground_classes = model.foreground_classes
         else:
             from watch import heuristics
             not_foreground = (heuristics.BACKGROUND_CLASSES |
                               heuristics.IGNORE_CLASSNAMES |
                               heuristics.NEGATIVE_CLASSES)
-            foreground_classes = ub.oset(method.classes) - not_foreground
-        head_classes = method.classes
+            foreground_classes = ub.oset(model.classes) - not_foreground
+        head_classes = model.classes
         head_keep_idxs = [
             idx for idx, catname in enumerate(head_classes)
             if catname not in ignore_classes]
@@ -262,7 +268,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
     return stitch_managers
 
 
-def resolve_datamodule(config, method, datamodule_defaults):
+def resolve_datamodule(config, model, datamodule_defaults):
     """
     TODO: refactor / cleanup.
 
@@ -278,23 +284,23 @@ def resolve_datamodule(config, method, datamodule_defaults):
     need_infer = ub.udict({
         k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
     # Try and infer what data we were given at train time
-    if hasattr(method, 'config_cli_yaml'):
-        traintime_params = method.config_cli_yaml["data"]
-    elif hasattr(method, 'fit_config'):
-        traintime_params = method.fit_config
-    elif hasattr(method, 'datamodule_hparams'):
-        traintime_params = method.datamodule_hparams
+    if hasattr(model, 'config_cli_yaml'):
+        traintime_params = model.config_cli_yaml["data"]
+    elif hasattr(model, 'fit_config'):
+        traintime_params = model.fit_config
+    elif hasattr(model, 'datamodule_hparams'):
+        traintime_params = model.datamodule_hparams
     else:
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
             print('Warning have to make assumptions. Might not always work')
             raise NotImplementedError('TODO: needs to be sensorchan if we do this')
-            if hasattr(method, 'input_channels'):
+            if hasattr(model, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
-                traintime_params['channels'] = method.input_channels.spec
+                traintime_params['channels'] = model.input_channels.spec
             else:
-                traintime_params['channels'] = list(method.input_norms.keys())[0]
+                traintime_params['channels'] = list(model.input_norms.keys())[0]
 
     def get_scriptconfig_compatible(config_cls, other):
         """
@@ -348,12 +354,12 @@ def resolve_datamodule(config, method, datamodule_defaults):
         # current logic (whch we need to fix) will happilly just take a subset
         # of those channels, which means the recorded channels disagree with
         # what the model was actually trained with.
-        if hasattr(method, 'sensor_channel_tokenizers'):
+        if hasattr(model, 'sensor_channel_tokenizers'):
             from watch.tasks.fusion.methods.network_modules import RobustModuleDict
             datamodule_sensorchan_spec = datamodule_vars['channels']
             unique_channel_streams = ub.oset()
             model_sensorchan_stem_parts = []
-            for sensor, tokenizers in method.sensor_channel_tokenizers.items():
+            for sensor, tokenizers in model.sensor_channel_tokenizers.items():
                 sensor = RobustModuleDict._unnormalize_key(sensor)
                 if ':' in sensor:
                     # full sensorchan already exists (sequence aware model)
@@ -622,48 +628,48 @@ def predict(cmdline=False, **kwargs):
 
     # try:
     # Ideally we have a package, everything is defined there
-    method = utils.load_model_from_package(package_fpath)
+    model = utils.load_model_from_package(package_fpath)
     # fix einops bug
-    for _name, mod in method.named_modules():
+    for _name, mod in model.named_modules():
         if 'Rearrange' in mod.__class__.__name__:
             try:
                 mod._recipe = mod.recipe()
             except AttributeError:
                 pass
     # hack: dont load the metrics
-    method.class_metrics = None
-    method.saliency_metrics = None
-    method.change_metrics = None
-    method.head_metrics = None
+    model.class_metrics = None
+    model.saliency_metrics = None
+    model.change_metrics = None
+    model.head_metrics = None
     # except Exception as ex:
     #     print('ex = {!r}'.format(ex))
     #     print(f'Failed to read {package_fpath=!r} attempting workaround')
     #     # If we have a checkpoint path we can load it if we make assumptions
-    #     # init method from checkpoint.
+    #     # init model from checkpoint.
     #     raise
 
     # Hack to fix GELU issue
-    monkey_torch.fix_gelu_issue(method)
+    monkey_torch.fix_gelu_issue(model)
 
     # Fix issue with pre-2023-02 heterogeneous models
-    if method.__class__.__name__ == 'HeterogeneousModel':
-        if not hasattr(method, 'magic_padding_value'):
+    if model.__class__.__name__ == 'HeterogeneousModel':
+        if not hasattr(model, 'magic_padding_value'):
             from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
             new_method = HeterogeneousModel(
-                **method.hparams,
-                position_encoder=method.position_encoder
+                **model.hparams,
+                position_encoder=model.position_encoder
             )
-            old_state = method.state_dict()
+            old_state = model.state_dict()
             new_method.load_state_dict(old_state)
-            new_method.config_cli_yaml = method.config_cli_yaml
-            method = new_method
+            new_method.config_cli_yaml = model.config_cli_yaml
+            model = new_method
 
-    method.eval()
-    method.freeze()
+    model.eval()
+    model.freeze()
 
     # TODO: perhaps we should enforce that that packaged model
     # knows how to construct the appropriate test dataset?
-    config, traintime_params, datamodule = resolve_datamodule(config, method, datamodule_defaults)
+    config, traintime_params, datamodule = resolve_datamodule(config, model, datamodule_defaults)
 
     # TODO: if TTA=True, disable deterministic time sampling
     datamodule.setup('test')
@@ -738,22 +744,22 @@ def predict(cmdline=False, **kwargs):
 
     UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
-        # unpackage method hack
+        # unpackage model hack
         from watch.tasks.fusion import methods
-        unpackged_method = methods.MultimodalTransformer(**method.hparams)
-        unpackged_method.load_state_dict(method.state_dict())
-        method = unpackged_method
+        unpackged_method = methods.MultimodalTransformer(**model.hparams)
+        unpackged_method.load_state_dict(model.state_dict())
+        model = unpackged_method
 
-    method = method.to(device)
+    model = model.to(device)
 
     # Resolve what tasks are requested by looking at what heads are available.
-    global_head_weights = getattr(method, 'global_head_weights', {})
+    global_head_weights = getattr(model, 'global_head_weights', {})
     if config['with_change'] == 'auto':
-        config['with_change'] = getattr(method, 'global_change_weight', 1.0) or global_head_weights.get('change', 1)
+        config['with_change'] = getattr(model, 'global_change_weight', 1.0) or global_head_weights.get('change', 1)
     if config['with_class'] == 'auto':
-        config['with_class'] = getattr(method, 'global_class_weight', 1.0) or global_head_weights.get('class', 1)
+        config['with_class'] = getattr(model, 'global_class_weight', 1.0) or global_head_weights.get('class', 1)
     if config['with_saliency'] == 'auto':
-        config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0) or global_head_weights.get('saliency', 1)
+        config['with_saliency'] = getattr(model, 'global_saliency_weight', 0.0) or global_head_weights.get('saliency', 1)
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
@@ -776,7 +782,7 @@ def predict(cmdline=False, **kwargs):
     print('result_fpath = {!r}'.format(result_fpath))
 
     stitch_managers = build_stitching_managers(
-        config, method, result_dataset,
+        config, model, result_dataset,
         writer_queue=writer_queue
     )
 
@@ -795,33 +801,76 @@ def predict(cmdline=False, **kwargs):
     DEBUG_GRID = 0
     if DEBUG_GRID:
         # Check to see if the grid will cover all images
-        image_id_to_target_space_slices = ub.ddict(list)
+        image_id_to_space_boxes = ub.ddict(list)
         seen_gids = set()
         primary_gids = set()
+        seen_video_ids = set()
+        coco_dset = test_dataloader.dataset.sampler.dset
+
+        # Can use this to build a visualization of spacetime coverage
+        vid_to_box_to_timesamples = {}
+
         for target in test_dataloader.dataset.new_sample_grid['targets']:
-            target['video_id']
+            video_id = target['video_id']
+            seen_video_ids.add(video_id)
             # Denote we have seen this vidspace slice in this image.
+            space_slice = target['space_slice']
+            space_box = kwimage.Box.from_slice(space_slice)
             for gid in target['gids']:
-                image_id_to_target_space_slices[gid].append(target['space_slice'])
+                image_id_to_space_boxes[gid].append(space_box)
             primary_gids.add(target['main_gid'])
             seen_gids.update(target['gids'])
-        all_gids = list(test_dataloader.dataset.sampler.dset.images())
+
+            coco_box = tuple(space_box.to_coco())
+            requested_timestamps = coco_dset.images(target['gids']).lookup('date_captured')
+            requested_timestamps = coco_dset.images(target['gids']).lookup('frame_index')
+            if video_id not in vid_to_box_to_timesamples:
+                vid_to_box_to_timesamples[video_id] = {}
+            if coco_box not in vid_to_box_to_timesamples[video_id]:
+                vid_to_box_to_timesamples[video_id][coco_box] = []
+            vid_to_box_to_timesamples[video_id][coco_box].append(requested_timestamps)
+
+        VIZ_SPACETIME_COV = 0
+        if VIZ_SPACETIME_COV:
+            from watch.utils.util_kwplot import time_sample_arcplot
+            for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
+                fig = kwplot.figure(fnum=videoid)
+                ax = fig.gca()
+                ax.cla()
+                yloc = 0
+                ytick_labels = []
+                for box, time_samples in sorted(box_to_timesample.items()):
+                    time_samples = list(map(sorted, time_samples))
+                    time_sample_arcplot(time_samples, yloc, ax=ax)
+                    yloc += 1
+                    ytick_labels.append(box)
+                ax.set_yticks(np.arange(len(ytick_labels)))
+                ax.set_yticklabels(ytick_labels)
+                video = coco_dset.index.videos[videoid]
+                ax.set_title(f'Time Sampling For Video {video["name"]}')
+                ax.set_ylabel('space location')
+                ax.set_xlabel('frame index')
+
+        all_video_ids = list(coco_dset.videos())
+        all_gids = list(coco_dset.images())
         from xdev import set_overlaps
-        img_overlaps = set_overlaps(all_gids, seen_gids)
+        img_overlaps = set_overlaps(all_gids, seen_gids, s1='all_gids', s2='seen_gids')
         print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
+
+        vid_overlaps = set_overlaps(all_video_ids, seen_video_ids, s1='seen_video_ids', s2='seen_video_ids')
+        print('vid_overlaps = {}'.format(ub.urepr(vid_overlaps, nl=1)))
         # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
         # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
 
         # Check to see how much of each image is covered in video space
         # import kwimage
-        coco_dset = test_dataloader.dataset.sampler.dset
         gid_to_iou = {}
-        print('image_id_to_target_space_slices = {}'.format(ub.urepr(image_id_to_target_space_slices, nl=2)))
-        for gid, slices in image_id_to_target_space_slices.items():
+        print('image_id_to_space_boxes = {}'.format(ub.urepr(image_id_to_space_boxes, nl=2)))
+        for gid, space_boxes in image_id_to_space_boxes.items():
             vidid = coco_dset.index.imgs[gid]['video_id']
             video = coco_dset.index.videos[vidid]
             video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
-            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            boxes = kwimage.Boxes.concatenate(space_boxes)
             polys = boxes.to_polygons()
             covered = polys.unary_union().simplify(0.01)
             iou = covered.iou(video_poly)
@@ -839,6 +888,8 @@ def predict(cmdline=False, **kwargs):
 
     # add hyperparam info to "info" section
     info = result_dataset.dataset.get('info', [])
+
+    pred_dpath = ub.Path(result_dataset.fpath).parent
 
     def jsonify(data):
         # This will be serailized in kwcoco, so make sure it can be coerced to json
@@ -882,9 +933,11 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(model, 'input_norms')
+
         # prog.set_extra(' <will populate stats after first video>')
         # pman.start()
+
         prog = pman.progiter(batch_iter, desc='fusion predict')
         _batch_iter = iter(prog)
         if 0:
@@ -895,7 +948,10 @@ def predict(cmdline=False, **kwargs):
             item['target']
             frame = item['frames'][0]
             ub.peek(frame['modes'].values()).shape
+
+        batch_idx = 0
         for orig_batch in _batch_iter:
+            batch_idx += 1
             batch_trs = []
             # Move data onto the prediction device, grab spacetime region info
             fixed_batch = []
@@ -929,7 +985,7 @@ def predict(cmdline=False, **kwargs):
                     sensor = frame['sensor']
                     if EMERGENCY_INPUT_AGREEMENT_HACK:
                         try:
-                            known_sensor_modes = method.input_norms[sensor]
+                            known_sensor_modes = model.input_norms[sensor]
                         except KeyError:
                             known_sensor_modes = None
                             continue
@@ -956,7 +1012,7 @@ def predict(cmdline=False, **kwargs):
 
             # Predict on the batch: todo: rename to predict_step
             try:
-                outputs = method.forward_step(batch, with_loss=False)
+                outputs = model.forward_step(batch, with_loss=False)
             except RuntimeError as ex:
                 msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
                 print(msg)
@@ -968,6 +1024,16 @@ def predict(cmdline=False, **kwargs):
                 if util_environ.envflag('WATCH_STRICT_PREDICT'):
                     raise
                 continue
+
+            DRAW_BATCHES = 1 or config.draw_batches
+            if DRAW_BATCHES:
+                viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
+                canvas = datamodule.draw_batch(batch, stage='test',
+                                               outputs=outputs,
+                                               classes=model.classes)
+                fname = f'batch_{batch_idx:04d}.jpg'
+                fpath = viz_batch_dpath / fname
+                kwimage.imwrite(fpath, canvas)
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
@@ -1147,7 +1213,6 @@ def predict(cmdline=False, **kwargs):
     if 0:
         print(result_dataset.validate())
 
-    pred_dpath = ub.Path(result_dataset.fpath).parent
     rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
     print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)

@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * mlops can now make symlinks to results nodes by region and param-hashids 
+* Ability to draw batches at predict time for debugging.
 
 
 ## Version 0.10.0 - Released 2023-10-01
