@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * mlops can now make symlinks to results nodes by region and param-hashids 
 * Ability to draw batches at predict time for debugging.
 
+### Changed
+* Batch outputs weights are new members of a frame item and are factored into
+  stitching weights in fusion.predict
+
 
 ## Version 0.10.0 - Released 2023-10-01
 
