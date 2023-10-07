@@ -374,16 +374,11 @@ class CocoStitchingManager(object):
         """
         from watch.utils import util_kwimage
 
-        center_weights = util_kwimage.upweight_center_mask(data.shape[0:2])
-
-        if weights is not None:
+        if weights is None:
+            weights = util_kwimage.upweight_center_mask(data.shape[0:2])
+        else:
             import kwarray
             weights = kwarray.ArrayAPI.numpy(weights)
-            if center_weights.shape == weights.shape:
-                # print('yay: output / center weight match')
-                center_weights *= weights
-            else:
-                print('warn: output / center weight mistmatch')
 
         is_2d = len(data.shape) == 2
         is_3d = len(data.shape) == 3
@@ -394,7 +389,7 @@ class CocoStitchingManager(object):
             asset_space_slice = kwimage.Box.from_dsize((w, h)).to_slice()
 
         if is_3d:
-            center_weights = center_weights[..., None]
+            weights = weights[..., None]
 
         shapes_disagree = (
             stitcher.shape[0] < asset_space_slice[0].stop or
@@ -417,7 +412,7 @@ class CocoStitchingManager(object):
                 slice(padding[1][0], slice_w - padding[1][1]),
             )
             subdata = data[_fixup_slice]
-            subweights = center_weights[_fixup_slice]
+            subweights = weights[_fixup_slice]
 
             asset_slice = subslice
             asset_data = subdata
@@ -426,7 +421,7 @@ class CocoStitchingManager(object):
             # Normal case
             asset_slice = asset_space_slice
             asset_data = data
-            asset_weights = center_weights
+            asset_weights = weights
 
         # Handle stitching nan values
         invalid_output_mask = np.isnan(asset_data)
