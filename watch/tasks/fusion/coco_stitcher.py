@@ -249,7 +249,7 @@ class CocoStitchingManager(object):
 
     def accumulate_image(self, gid, space_slice, data, asset_dsize=None,
                          scale_asset_from_stitchspace=None, is_ready='auto',
-                         **kwargs):
+                         weights=None, **kwargs):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -365,15 +365,25 @@ class CocoStitchingManager(object):
         stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
         asset_space_slice = space_slice
-        self._stitcher_center_weighted_add(stitcher, asset_space_slice, data)
+        self._stitcher_center_weighted_add(stitcher, asset_space_slice, data, weights)
 
     @staticmethod
-    def _stitcher_center_weighted_add(stitcher, asset_space_slice, data):
+    def _stitcher_center_weighted_add(stitcher, asset_space_slice, data, weights=None):
         """
         TODO: refactor
         """
         from watch.utils import util_kwimage
-        weights = util_kwimage.upweight_center_mask(data.shape[0:2])
+
+        center_weights = util_kwimage.upweight_center_mask(data.shape[0:2])
+
+        if weights is not None:
+            import kwarray
+            weights = kwarray.ArrayAPI.numpy(weights)
+            if center_weights.shape == weights.shape:
+                # print('yay: output / center weight match')
+                center_weights *= weights
+            else:
+                print('warn: output / center weight mistmatch')
 
         is_2d = len(data.shape) == 2
         is_3d = len(data.shape) == 3
@@ -384,7 +394,7 @@ class CocoStitchingManager(object):
             asset_space_slice = kwimage.Box.from_dsize((w, h)).to_slice()
 
         if is_3d:
-            weights = weights[..., None]
+            center_weights = center_weights[..., None]
 
         shapes_disagree = (
             stitcher.shape[0] < asset_space_slice[0].stop or
@@ -407,7 +417,7 @@ class CocoStitchingManager(object):
                 slice(padding[1][0], slice_w - padding[1][1]),
             )
             subdata = data[_fixup_slice]
-            subweights = weights[_fixup_slice]
+            subweights = center_weights[_fixup_slice]
 
             asset_slice = subslice
             asset_data = subdata
@@ -416,7 +426,7 @@ class CocoStitchingManager(object):
             # Normal case
             asset_slice = asset_space_slice
             asset_data = data
-            asset_weights = weights
+            asset_weights = center_weights
 
         # Handle stitching nan values
         invalid_output_mask = np.isnan(asset_data)

@@ -432,6 +432,7 @@ def _prepare_predict_data(config):
         Tuple[PredictConfig, LightningModule, LightningDataModule]:
             modified config, network, and dataloader
     """
+    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
     datamodule_defaults = config.datamodule_defaults
     package_fpath = ub.Path(config['package_fpath']).expand()
 
@@ -518,7 +519,6 @@ def _prepare_predict_data(config):
 
 
 def _debug_grid(test_dataloader):
-
     DEBUG_GRID = 0
     if DEBUG_GRID:
         # Check to see if the grid will cover all images
@@ -602,9 +602,423 @@ def _debug_grid(test_dataloader):
         print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
 
 
+def _jsonify(data):
+    # This will be serailized in kwcoco, so make sure it can be coerced to json
+    from kwcoco.util import util_json
+    jsonified = util_json.ensure_json_serializable(data)
+    walker = ub.IndexableWalker(jsonified)
+    for problem in util_json.find_json_unserializable(jsonified):
+        bad_data = problem['data']
+        if hasattr(bad_data, 'spec'):
+            walker[problem['loc']] = bad_data.spec
+        if isinstance(bad_data, kwcoco.CocoDataset):
+            fixed_fpath = getattr(bad_data, 'fpath', None)
+            if fixed_fpath is not None:
+                walker[problem['loc']] = fixed_fpath
+            else:
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                    bad_data._build_hashid())
+    return jsonified
+
+
+def _predict_critical_loop(config, model, datamodule, result_dataset, device):
+    import rich
+
+    print('Predict on device = {!r}'.format(device))
+
+    UNPACKAGE_METHOD_HACK = 0
+    if UNPACKAGE_METHOD_HACK:
+        # unpackage model hack
+        from watch.tasks.fusion import methods
+        unpackged_method = methods.MultimodalTransformer(**model.hparams)
+        unpackged_method.load_state_dict(model.state_dict())
+        model = unpackged_method
+
+    model = model.to(device)
+
+    # Resolve what tasks are requested by looking at what heads are available.
+    global_head_weights = getattr(model, 'global_head_weights', {})
+    if config['with_change'] == 'auto':
+        config['with_change'] = getattr(model, 'global_change_weight', 1.0) or global_head_weights.get('change', 1)
+    if config['with_class'] == 'auto':
+        config['with_class'] = getattr(model, 'global_class_weight', 1.0) or global_head_weights.get('class', 1)
+    if config['with_saliency'] == 'auto':
+        config['with_saliency'] = getattr(model, 'global_saliency_weight', 0.0) or global_head_weights.get('saliency', 1)
+
+    # Start background procs before we make threads
+    test_dataloader = datamodule.test_dataloader()
+    batch_iter = iter(test_dataloader)
+
+    from kwutil import util_progress
+    pman = util_progress.ProgressManager(backend='rich')
+
+    # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
+
+    # Make threads after starting background proces.
+    if config.write_workers == 'datamodule':
+        config.write_workers = datamodule.num_workers
+    writer_queue = util_parallel.BlockingJobQueue(
+        mode='thread',
+        # mode='serial',
+        max_workers=config.write_workers
+    )
+
+    result_fpath = ub.Path(result_dataset.fpath)
+    result_fpath.parent.ensuredir()
+    print('result_fpath = {!r}'.format(result_fpath))
+
+    stitch_managers = build_stitching_managers(
+        config, model, result_dataset,
+        writer_queue=writer_queue
+    )
+
+    expected_outputs = set(stitch_managers.keys())
+    got_outputs = None
+    writable_outputs = None
+
+    print('Expected outputs: ' + str(expected_outputs))
+
+    head_key_mapping = {
+        'saliency_probs': 'saliency',
+        'class_probs': 'class',
+        'change_probs': 'change',
+    }
+
+    _debug_grid(test_dataloader)
+
+    DEBUG_PRED_SPATIAL_COVERAGE = 0
+    if DEBUG_PRED_SPATIAL_COVERAGE:
+        # Enable debugging to ensure the dataloader actually passed
+        # us the targets that cover the entire image.
+        image_id_to_video_space_slices = ub.ddict(list)
+        image_id_to_output_space_slices = ub.ddict(list)
+
+    # add hyperparam info to "info" section
+    info = result_dataset.dataset.get('info', [])
+
+    pred_dpath = ub.Path(result_dataset.fpath).parent
+    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
+
+    config_resolved = _jsonify(config.asdict())
+    traintime_params = _jsonify(config.traintime_params)
+
+    from kwcoco.util import util_json
+    assert not list(util_json.find_json_unserializable(config_resolved))
+    assert not list(util_json.find_json_unserializable(traintime_params))
+
+    if config['record_context']:
+        from watch.utils import process_context
+        proc_context = process_context.ProcessContext(
+            name='watch.tasks.fusion.predict',
+            type='process',
+            config=config_resolved,
+            track_emissions=config['track_emissions'],
+            extra={'fit_config': traintime_params}
+        )
+        # assert not list(util_json.find_json_unserializable(proc_context.obj))
+        info.append(proc_context.obj)
+        proc_context.start()
+        test_coco_dataset = datamodule.coco_datasets['test']
+        proc_context.add_disk_info(test_coco_dataset.fpath)
+    with torch.set_grad_enabled(False), pman:
+        # FIXME: that data loader should not be producing incorrect sensor/mode
+        # pairs in the first place!
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(model, 'input_norms')
+
+        # prog.set_extra(' <will populate stats after first video>')
+        # pman.start()
+
+        prog = pman.progiter(batch_iter, desc='fusion predict')
+        _batch_iter = iter(prog)
+        if 0:
+            item = test_dataloader.dataset[0]
+
+            orig_batch = next(_batch_iter)
+            item = orig_batch[0]
+            item['target']
+            frame = item['frames'][0]
+            ub.peek(frame['modes'].values()).shape
+
+        batch_idx = 0
+        for orig_batch in _batch_iter:
+            batch_idx += 1
+            batch_trs = []
+            # Move data onto the prediction device, grab spacetime region info
+            fixed_batch = []
+            for item in orig_batch:
+                if item is None:
+                    continue
+                item = item.copy()
+                batch_gids = [frame['gid'] for frame in item['frames']]
+                frame_infos = [ub.udict(f) & {
+                    'gid',
+                    'output_space_slice',
+                    'output_image_dsize',
+                    'output_weights',
+                    'scale_outspace_from_vid',
+                } for f in item['frames']]
+                batch_trs.append({
+                    'space_slice': tuple(item['target']['space_slice']),
+                    # 'scale': item['target']['scale'],
+                    'scale': item['target'].get('scale', None),
+                    'gids': batch_gids,
+                    'frame_infos': frame_infos,
+                    'fliprot_params': item['target'].get('fliprot_params', None)
+                })
+                position_tensors = item.get('positional_tensors', None)
+                if position_tensors is not None:
+                    for k, v in position_tensors.items():
+                        position_tensors[k] = v.to(device)
+
+                filtered_frames = []
+                for frame in item['frames']:
+                    frame = frame.copy()
+                    sensor = frame['sensor']
+                    if EMERGENCY_INPUT_AGREEMENT_HACK:
+                        try:
+                            known_sensor_modes = model.input_norms[sensor]
+                        except KeyError:
+                            known_sensor_modes = None
+                            continue
+                    filtered_modes = {}
+                    modes = frame['modes']
+                    for key, mode in modes.items():
+                        if EMERGENCY_INPUT_AGREEMENT_HACK:
+                            if key not in known_sensor_modes:
+                                continue
+                        filtered_modes[key] = mode.to(device)
+                    frame['modes'] = filtered_modes
+                    filtered_frames.append(frame)
+                item['frames'] = filtered_frames
+                fixed_batch.append(item)
+
+            if len(fixed_batch) == 0:
+                continue
+
+            batch = fixed_batch
+
+            if 0:
+                import netharn as nh
+                print(nh.data.collate._debug_inbatch_shapes(batch))
+
+            # Predict on the batch: todo: rename to predict_step
+            try:
+                outputs = model.forward_step(batch, with_loss=False)
+            except RuntimeError as ex:
+                msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
+                print(msg)
+                import warnings
+                warnings.warn(msg)
+                from kwutil import util_environ
+                # import xdev
+                # xdev.embed()
+                if util_environ.envflag('WATCH_STRICT_PREDICT'):
+                    raise
+                continue
+
+            DRAW_BATCHES = config.draw_batches
+            if DRAW_BATCHES:
+                viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
+                canvas = datamodule.draw_batch(batch, stage='test',
+                                               outputs=outputs,
+                                               classes=model.classes)
+                fname = f'batch_{batch_idx:04d}.jpg'
+                fpath = viz_batch_dpath / fname
+                kwimage.imwrite(fpath, canvas)
+
+            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+
+            if got_outputs is None:
+                got_outputs = list(outputs.keys())
+                prog.ensure_newline()
+                writable_outputs = set(got_outputs) & expected_outputs
+                print('got_outputs = {!r}'.format(got_outputs))
+                print('writable_outputs = {!r}'.format(writable_outputs))
+
+            # For each item in the batch, process the results
+            for head_key in writable_outputs:
+                head_probs = outputs[head_key]
+                head_stitcher = stitch_managers[head_key]
+                chan_keep_idxs = head_stitcher.head_keep_idxs
+
+                # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
+                # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
+                if head_key == 'change':
+                    predicted_frame_slice = slice(1, None)
+                else:
+                    predicted_frame_slice = slice(None)
+
+                # TODO: if the predictions are downsampled wrt to the input
+                # images, we need to determine what that transform is so we can
+                # correctly (i.e with crops) warp the predictions back into
+                # image space.
+
+                num_batches = len(batch_trs)
+
+                for bx in range(num_batches):
+                    target: dict = batch_trs[bx]
+                    item_head_probs: list[torch.Tensor] | torch.Tensor = head_probs[bx]
+                    # Keep only the channels we want to write to disk
+                    item_head_relevant_probs = [p[..., chan_keep_idxs] for p in item_head_probs]
+                    bin_probs = [p.detach().cpu().numpy() for p in item_head_relevant_probs]
+
+                    # Get the spatio-temporal subregion this prediction belongs to
+                    # out_gids: list[int] = target['gids'][predicted_frame_slice]
+                    # space_slice: tuple[slice, slice] = target['space_slice']
+                    frame_infos: list[dict] = target['frame_infos'][predicted_frame_slice]
+
+                    fliprot_params: dict = target['fliprot_params']
+                    # Update the stitcher with this windowed prediction
+                    for probs, frame_info in zip(bin_probs, frame_infos):
+                        if fliprot_params is not None:
+                            # Undo fliprot TTA
+                            probs = data_utils.inv_fliprot(probs, **fliprot_params)
+
+                        gid = frame_info['gid']
+                        output_image_dsize = frame_info['output_image_dsize']
+                        output_space_slice = frame_info['output_space_slice']
+                        scale_outspace_from_vid = frame_info['scale_outspace_from_vid']
+                        # print(f'output_image_dsize={output_image_dsize}')
+                        # print(f'output_space_slice={output_space_slice}')
+
+                        if DEBUG_PRED_SPATIAL_COVERAGE:
+                            image_id_to_video_space_slices[gid].append(target['space_slice'])
+                            image_id_to_output_space_slices[gid].append(output_space_slice)
+
+                        # print(f'output_space_slice={output_space_slice}')
+                        # print(f'gid={gid}')
+                        # print(f'output_image_dsize={output_image_dsize}')
+                        # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
+                        output_weights = frame_info.get('output_weights', None)
+                        head_stitcher.accumulate_image(
+                            gid, output_space_slice, probs,
+                            dsize=output_image_dsize,
+                            scale=scale_outspace_from_vid,
+                            weights=output_weights,
+                        )
+
+                # Free up space for any images that have been completed
+                for gid in head_stitcher.ready_image_ids():
+                    head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
+                    head_stitcher.submit_finalize_image(gid)
+
+        writer_queue.wait_until_finished()  # hack to avoid race condition
+
+        # Prediction is completed, finalize all remaining images.
+        for _head_key, head_stitcher in stitch_managers.items():
+            for gid in head_stitcher.managed_image_ids():
+                head_stitcher.submit_finalize_image(gid)
+        writer_queue.wait_until_finished()
+        # pman.stop()
+
+    if DEBUG_PRED_SPATIAL_COVERAGE:
+        coco_dset = test_dataloader.dataset.sampler.dset
+        gid_to_vidspace_iou = {}
+        gid_to_vidspace_iooa = {}
+        for gid, slices in image_id_to_video_space_slices.items():
+            vidid = coco_dset.index.imgs[gid]['video_id']
+            video = coco_dset.index.videos[vidid]
+            vidspace_gsd = video['target_gsd']
+            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            # output_poly = video_poly.scale(scale)
+            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            gid_to_vidspace_iooa[gid] = covered.iooa(video_poly)
+            gid_to_vidspace_iou[gid] = covered.iou(video_poly)
+
+        outspace_areas = []
+        gid_to_outspace_iou = {}
+        gid_to_outspace_iooa = {}
+        for gid, slices in image_id_to_output_space_slices.items():
+            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            outspace_areas.append(covered.area)
+
+            output_space_scale = datamodule.config['output_space_scale']
+            if output_space_scale != 'native':
+                vidid = coco_dset.index.imgs[gid]['video_id']
+                video = coco_dset.index.videos[vidid]
+                vidspace_gsd = video['target_gsd']
+                resolved_scale = data_utils.resolve_scale_request(
+                    request=output_space_scale, data_gsd=vidspace_gsd)
+                scale = resolved_scale['scale']
+                video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+                output_poly = video_poly.scale(scale)
+                boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+                polys = boxes.to_polygons()
+                covered = polys.unary_union().simplify(0.01)
+                gid_to_outspace_iooa[gid] = covered.iooa(output_poly)
+                gid_to_outspace_iou[gid] = covered.iou(output_poly)
+
+        print('outspace_rt_areas ' + repr(ub.dict_hist(np.sqrt(np.array(outspace_areas)))))
+        vidspace_iou_stats = kwarray.stats_dict(
+            list(gid_to_vidspace_iou.values()), n_extreme=True)
+        vidspace_iooa_stats = kwarray.stats_dict(
+            list(gid_to_vidspace_iooa.values()), n_extreme=True)
+
+        outspace_iou_stats = kwarray.stats_dict(
+            list(gid_to_outspace_iou.values()), n_extreme=True)
+        outspace_iooa_stats = kwarray.stats_dict(
+            list(gid_to_outspace_iooa.values()), n_extreme=True)
+        print('vidspace_iou_stats = {}'.format(ub.urepr(vidspace_iou_stats, nl=1)))
+        print('vidspace_iooa_stats = {}'.format(ub.urepr(vidspace_iooa_stats, nl=1)))
+        print('outspace_iou_stats = {}'.format(ub.urepr(outspace_iou_stats, nl=1)))
+        print('outspace_iooa_stats = {}'.format(ub.urepr(outspace_iooa_stats, nl=1)))
+
+    if config['record_context']:
+        proc_context.add_device_info(device)
+        proc_context.stop()
+
+    # Print logs about what we predicted on
+    all_video_ids = list(result_dataset.videos())
+    print(f'Requested predictions for {len(all_video_ids)} videos')
+    stitched_video_histogram = ub.ddict(lambda: 0)
+    stitched_video_patch_histogram = ub.ddict(lambda: 0)
+    for _head_key, head_stitcher in stitch_managers.items():
+        _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id'))
+        print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
+
+        for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
+            vidid = result_dataset.index.imgs[gid]['video_id']
+            stitched_video_patch_histogram[vidid] += v
+
+        for k, v in _histo.items():
+            stitched_video_histogram[k] += v
+
+    print('stitched_video_histogram = {}'.format(ub.urepr(stitched_video_histogram, nl=1)))
+    print('stitched_video_patch_histogram = {}'.format(ub.urepr(stitched_video_patch_histogram, nl=1)))
+    missing_vidids = set(all_video_ids) - set(stitched_video_histogram)
+    if missing_vidids:
+        print(f'missing_vidids={missing_vidids}')
+    else:
+        print('Made at least one prediction on each video')
+
+    if config.drop_unused_frames:
+        keep_gids = set()
+        for manager in stitch_managers.values():
+            keep_gids.update(manager.seen_image_ids)
+        drop_gids = set(result_dataset.images()) - keep_gids
+        print(f'Dropping {len(drop_gids)} unused frames')
+        result_dataset.remove_images(drop_gids)
+
+    # validate and save results
+    if 0:
+        print(result_dataset.validate())
+
+    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
+    print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
+    result_dataset.dump(result_dataset.fpath)
+    print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
+    return result_dataset
+
+
 @profile
 def predict(cmdline=False, **kwargs):
     """
+    Predict entry point and doctests
+
     CommandLine:
         xdoctest -m watch.tasks.fusion.predict predict:0
 
@@ -803,10 +1217,9 @@ def predict(cmdline=False, **kwargs):
     # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
     rich.print('config = {}'.format(ub.urepr(config, nl=2)))
 
-    model, datamodule = _prepare_predict_data(config)
+    config, model, datamodule = _prepare_predict_data(config)
 
     test_coco_dataset = datamodule.coco_datasets['test']
-    test_dataloader = datamodule.test_dataloader()
 
     # test_torch_dataset = datamodule.torch_datasets['test']
     # T, H, W = test_torch_dataset.window_dims
@@ -832,7 +1245,6 @@ def predict(cmdline=False, **kwargs):
             f'Must specify path to the output (predicted) kwcoco file. '
             f'Got {config["pred_dataset"]=}')
     result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
-    result_fpath = ub.Path(result_dataset.fpath)
 
     from watch.utils.lightning_ext import util_device
     print('devices = {!r}'.format(config['devices']))
@@ -842,407 +1254,7 @@ def predict(cmdline=False, **kwargs):
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
 
-    print('Predict on device = {!r}'.format(device))
-
-    UNPACKAGE_METHOD_HACK = 0
-    if UNPACKAGE_METHOD_HACK:
-        # unpackage model hack
-        from watch.tasks.fusion import methods
-        unpackged_method = methods.MultimodalTransformer(**model.hparams)
-        unpackged_method.load_state_dict(model.state_dict())
-        model = unpackged_method
-
-    model = model.to(device)
-
-    # Resolve what tasks are requested by looking at what heads are available.
-    global_head_weights = getattr(model, 'global_head_weights', {})
-    if config['with_change'] == 'auto':
-        config['with_change'] = getattr(model, 'global_change_weight', 1.0) or global_head_weights.get('change', 1)
-    if config['with_class'] == 'auto':
-        config['with_class'] = getattr(model, 'global_class_weight', 1.0) or global_head_weights.get('class', 1)
-    if config['with_saliency'] == 'auto':
-        config['with_saliency'] = getattr(model, 'global_saliency_weight', 0.0) or global_head_weights.get('saliency', 1)
-
-    # Start background procs before we make threads
-    batch_iter = iter(test_dataloader)
-
-    from kwutil import util_progress
-    pman = util_progress.ProgressManager(backend='rich')
-
-    # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
-
-    # Make threads after starting background proces.
-    if config.write_workers == 'datamodule':
-        config.write_workers = datamodule.num_workers
-    writer_queue = util_parallel.BlockingJobQueue(
-        mode='thread',
-        # mode='serial',
-        max_workers=config.write_workers
-    )
-
-    result_fpath.parent.ensuredir()
-    print('result_fpath = {!r}'.format(result_fpath))
-
-    stitch_managers = build_stitching_managers(
-        config, model, result_dataset,
-        writer_queue=writer_queue
-    )
-
-    expected_outputs = set(stitch_managers.keys())
-    got_outputs = None
-    writable_outputs = None
-
-    print('Expected outputs: ' + str(expected_outputs))
-
-    head_key_mapping = {
-        'saliency_probs': 'saliency',
-        'class_probs': 'class',
-        'change_probs': 'change',
-    }
-
-    _debug_grid(test_dataloader)
-
-    DEBUG_PRED_SPATIAL_COVERAGE = 0
-    if DEBUG_PRED_SPATIAL_COVERAGE:
-        # Enable debugging to ensure the dataloader actually passed
-        # us the targets that cover the entire image.
-        image_id_to_video_space_slices = ub.ddict(list)
-        image_id_to_output_space_slices = ub.ddict(list)
-
-    # add hyperparam info to "info" section
-    info = result_dataset.dataset.get('info', [])
-
-    pred_dpath = ub.Path(result_dataset.fpath).parent
-
-    config_resolved = _jsonify(config.asdict())
-    traintime_params = _jsonify(config.traintime_params)
-
-    from kwcoco.util import util_json
-    assert not list(util_json.find_json_unserializable(config_resolved))
-    assert not list(util_json.find_json_unserializable(traintime_params))
-
-    if config['record_context']:
-        from watch.utils import process_context
-        proc_context = process_context.ProcessContext(
-            name='watch.tasks.fusion.predict',
-            type='process',
-            config=config_resolved,
-            track_emissions=config['track_emissions'],
-            extra={'fit_config': traintime_params}
-        )
-        # assert not list(util_json.find_json_unserializable(proc_context.obj))
-        info.append(proc_context.obj)
-        proc_context.start()
-        proc_context.add_disk_info(test_coco_dataset.fpath)
-
-    with torch.set_grad_enabled(False), pman:
-        # FIXME: that data loader should not be producing incorrect sensor/mode
-        # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(model, 'input_norms')
-
-        # prog.set_extra(' <will populate stats after first video>')
-        # pman.start()
-
-        prog = pman.progiter(batch_iter, desc='fusion predict')
-        _batch_iter = iter(prog)
-        if 0:
-            item = test_dataloader.dataset[0]
-
-            orig_batch = next(_batch_iter)
-            item = orig_batch[0]
-            item['target']
-            frame = item['frames'][0]
-            ub.peek(frame['modes'].values()).shape
-
-        batch_idx = 0
-        for orig_batch in _batch_iter:
-            batch_idx += 1
-            batch_trs = []
-            # Move data onto the prediction device, grab spacetime region info
-            fixed_batch = []
-            for item in orig_batch:
-                if item is None:
-                    continue
-                item = item.copy()
-                batch_gids = [frame['gid'] for frame in item['frames']]
-                frame_infos = [ub.udict(f) & {
-                    'gid',
-                    'output_space_slice',
-                    'output_image_dsize',
-                    'scale_outspace_from_vid',
-                } for f in item['frames']]
-                batch_trs.append({
-                    'space_slice': tuple(item['target']['space_slice']),
-                    # 'scale': item['target']['scale'],
-                    'scale': item['target'].get('scale', None),
-                    'gids': batch_gids,
-                    'frame_infos': frame_infos,
-                    'fliprot_params': item['target'].get('fliprot_params', None)
-                })
-                position_tensors = item.get('positional_tensors', None)
-                if position_tensors is not None:
-                    for k, v in position_tensors.items():
-                        position_tensors[k] = v.to(device)
-
-                filtered_frames = []
-                for frame in item['frames']:
-                    frame = frame.copy()
-                    sensor = frame['sensor']
-                    if EMERGENCY_INPUT_AGREEMENT_HACK:
-                        try:
-                            known_sensor_modes = model.input_norms[sensor]
-                        except KeyError:
-                            known_sensor_modes = None
-                            continue
-                    filtered_modes = {}
-                    modes = frame['modes']
-                    for key, mode in modes.items():
-                        if EMERGENCY_INPUT_AGREEMENT_HACK:
-                            if key not in known_sensor_modes:
-                                continue
-                        filtered_modes[key] = mode.to(device)
-                    frame['modes'] = filtered_modes
-                    filtered_frames.append(frame)
-                item['frames'] = filtered_frames
-                fixed_batch.append(item)
-
-            if len(fixed_batch) == 0:
-                continue
-
-            batch = fixed_batch
-
-            if 0:
-                import netharn as nh
-                print(nh.data.collate._debug_inbatch_shapes(batch))
-
-            # Predict on the batch: todo: rename to predict_step
-            try:
-                outputs = model.forward_step(batch, with_loss=False)
-            except RuntimeError as ex:
-                msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
-                print(msg)
-                import warnings
-                warnings.warn(msg)
-                from kwutil import util_environ
-                # import xdev
-                # xdev.embed()
-                if util_environ.envflag('WATCH_STRICT_PREDICT'):
-                    raise
-                continue
-
-            DRAW_BATCHES = 1 or config.draw_batches
-            if DRAW_BATCHES:
-                viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
-                canvas = datamodule.draw_batch(batch, stage='test',
-                                               outputs=outputs,
-                                               classes=model.classes)
-                fname = f'batch_{batch_idx:04d}.jpg'
-                fpath = viz_batch_dpath / fname
-                kwimage.imwrite(fpath, canvas)
-
-            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
-
-            if got_outputs is None:
-                got_outputs = list(outputs.keys())
-                prog.ensure_newline()
-                writable_outputs = set(got_outputs) & expected_outputs
-                print('got_outputs = {!r}'.format(got_outputs))
-                print('writable_outputs = {!r}'.format(writable_outputs))
-
-            # For each item in the batch, process the results
-            for head_key in writable_outputs:
-                head_probs = outputs[head_key]
-                head_stitcher = stitch_managers[head_key]
-                chan_keep_idxs = head_stitcher.head_keep_idxs
-
-                # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
-                # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
-                if head_key == 'change':
-                    predicted_frame_slice = slice(1, None)
-                else:
-                    predicted_frame_slice = slice(None)
-
-                # TODO: if the predictions are downsampled wrt to the input
-                # images, we need to determine what that transform is so we can
-                # correctly (i.e with crops) warp the predictions back into
-                # image space.
-
-                num_batches = len(batch_trs)
-
-                for bx in range(num_batches):
-                    target: dict = batch_trs[bx]
-                    item_head_probs: list[torch.Tensor] | torch.Tensor = head_probs[bx]
-                    # Keep only the channels we want to write to disk
-                    item_head_relevant_probs = [p[..., chan_keep_idxs] for p in item_head_probs]
-                    bin_probs = [p.detach().cpu().numpy() for p in item_head_relevant_probs]
-
-                    # Get the spatio-temporal subregion this prediction belongs to
-                    # out_gids: list[int] = target['gids'][predicted_frame_slice]
-                    # space_slice: tuple[slice, slice] = target['space_slice']
-                    frame_infos: list[dict] = target['frame_infos'][predicted_frame_slice]
-
-                    fliprot_params: dict = target['fliprot_params']
-                    # Update the stitcher with this windowed prediction
-                    for probs, frame_info in zip(bin_probs, frame_infos):
-                        if fliprot_params is not None:
-                            # Undo fliprot TTA
-                            probs = data_utils.inv_fliprot(probs, **fliprot_params)
-
-                        gid = frame_info['gid']
-                        output_image_dsize = frame_info['output_image_dsize']
-                        output_space_slice = frame_info['output_space_slice']
-                        scale_outspace_from_vid = frame_info['scale_outspace_from_vid']
-                        # print(f'output_image_dsize={output_image_dsize}')
-                        # print(f'output_space_slice={output_space_slice}')
-
-                        if DEBUG_PRED_SPATIAL_COVERAGE:
-                            image_id_to_video_space_slices[gid].append(target['space_slice'])
-                            image_id_to_output_space_slices[gid].append(output_space_slice)
-
-                        # print(f'output_space_slice={output_space_slice}')
-                        # print(f'gid={gid}')
-                        # print(f'output_image_dsize={output_image_dsize}')
-                        # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
-                        head_stitcher.accumulate_image(
-                            gid, output_space_slice, probs,
-                            dsize=output_image_dsize,
-                            scale=scale_outspace_from_vid
-                        )
-
-                # Free up space for any images that have been completed
-                for gid in head_stitcher.ready_image_ids():
-                    head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
-                    head_stitcher.submit_finalize_image(gid)
-
-        writer_queue.wait_until_finished()  # hack to avoid race condition
-
-        # Prediction is completed, finalize all remaining images.
-        for _head_key, head_stitcher in stitch_managers.items():
-            for gid in head_stitcher.managed_image_ids():
-                head_stitcher.submit_finalize_image(gid)
-        writer_queue.wait_until_finished()
-        # pman.stop()
-
-    if DEBUG_PRED_SPATIAL_COVERAGE:
-        coco_dset = test_dataloader.dataset.sampler.dset
-        gid_to_vidspace_iou = {}
-        gid_to_vidspace_iooa = {}
-        for gid, slices in image_id_to_video_space_slices.items():
-            vidid = coco_dset.index.imgs[gid]['video_id']
-            video = coco_dset.index.videos[vidid]
-            vidspace_gsd = video['target_gsd']
-            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
-            # output_poly = video_poly.scale(scale)
-            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
-            polys = boxes.to_polygons()
-            covered = polys.unary_union().simplify(0.01)
-            gid_to_vidspace_iooa[gid] = covered.iooa(video_poly)
-            gid_to_vidspace_iou[gid] = covered.iou(video_poly)
-
-        outspace_areas = []
-        gid_to_outspace_iou = {}
-        gid_to_outspace_iooa = {}
-        for gid, slices in image_id_to_output_space_slices.items():
-            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
-            polys = boxes.to_polygons()
-            covered = polys.unary_union().simplify(0.01)
-            outspace_areas.append(covered.area)
-
-            output_space_scale = datamodule.config['output_space_scale']
-            if output_space_scale != 'native':
-                vidid = coco_dset.index.imgs[gid]['video_id']
-                video = coco_dset.index.videos[vidid]
-                vidspace_gsd = video['target_gsd']
-                resolved_scale = data_utils.resolve_scale_request(
-                    request=output_space_scale, data_gsd=vidspace_gsd)
-                scale = resolved_scale['scale']
-                video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
-                output_poly = video_poly.scale(scale)
-                boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
-                polys = boxes.to_polygons()
-                covered = polys.unary_union().simplify(0.01)
-                gid_to_outspace_iooa[gid] = covered.iooa(output_poly)
-                gid_to_outspace_iou[gid] = covered.iou(output_poly)
-
-        print('outspace_rt_areas ' + repr(ub.dict_hist(np.sqrt(np.array(outspace_areas)))))
-        vidspace_iou_stats = kwarray.stats_dict(
-            list(gid_to_vidspace_iou.values()), n_extreme=True)
-        vidspace_iooa_stats = kwarray.stats_dict(
-            list(gid_to_vidspace_iooa.values()), n_extreme=True)
-
-        outspace_iou_stats = kwarray.stats_dict(
-            list(gid_to_outspace_iou.values()), n_extreme=True)
-        outspace_iooa_stats = kwarray.stats_dict(
-            list(gid_to_outspace_iooa.values()), n_extreme=True)
-        print('vidspace_iou_stats = {}'.format(ub.urepr(vidspace_iou_stats, nl=1)))
-        print('vidspace_iooa_stats = {}'.format(ub.urepr(vidspace_iooa_stats, nl=1)))
-        print('outspace_iou_stats = {}'.format(ub.urepr(outspace_iou_stats, nl=1)))
-        print('outspace_iooa_stats = {}'.format(ub.urepr(outspace_iooa_stats, nl=1)))
-
-    if config['record_context']:
-        proc_context.add_device_info(device)
-        proc_context.stop()
-
-    # Print logs about what we predicted on
-    all_video_ids = list(result_dataset.videos())
-    print(f'Requested predictions for {len(all_video_ids)} videos')
-    stitched_video_histogram = ub.ddict(lambda: 0)
-    stitched_video_patch_histogram = ub.ddict(lambda: 0)
-    for _head_key, head_stitcher in stitch_managers.items():
-        _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id'))
-        print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
-
-        for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
-            vidid = result_dataset.index.imgs[gid]['video_id']
-            stitched_video_patch_histogram[vidid] += v
-
-        for k, v in _histo.items():
-            stitched_video_histogram[k] += v
-
-    print('stitched_video_histogram = {}'.format(ub.urepr(stitched_video_histogram, nl=1)))
-    print('stitched_video_patch_histogram = {}'.format(ub.urepr(stitched_video_patch_histogram, nl=1)))
-    missing_vidids = set(all_video_ids) - set(stitched_video_histogram)
-    if missing_vidids:
-        print(f'missing_vidids={missing_vidids}')
-    else:
-        print('Made at least one prediction on each video')
-
-    if config.drop_unused_frames:
-        keep_gids = set()
-        for manager in stitch_managers.values():
-            keep_gids.update(manager.seen_image_ids)
-        drop_gids = set(result_dataset.images()) - keep_gids
-        print(f'Dropping {len(drop_gids)} unused frames')
-        result_dataset.remove_images(drop_gids)
-
-    # validate and save results
-    if 0:
-        print(result_dataset.validate())
-
-    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
-    print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
-    result_dataset.dump(result_dataset.fpath)
-    print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
-    return result_dataset
-
-
-def _jsonify(data):
-    # This will be serailized in kwcoco, so make sure it can be coerced to json
-    from kwcoco.util import util_json
-    jsonified = util_json.ensure_json_serializable(data)
-    walker = ub.IndexableWalker(jsonified)
-    for problem in util_json.find_json_unserializable(jsonified):
-        bad_data = problem['data']
-        if hasattr(bad_data, 'spec'):
-            walker[problem['loc']] = bad_data.spec
-        if isinstance(bad_data, kwcoco.CocoDataset):
-            fixed_fpath = getattr(bad_data, 'fpath', None)
-            if fixed_fpath is not None:
-                walker[problem['loc']] = fixed_fpath
-            else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
-                    bad_data._build_hashid())
-    return jsonified
+    _predict_critical_loop(config, model, datamodule, result_dataset, device)
 
 
 def main(cmdline=True, **kwargs):

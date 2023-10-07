@@ -1707,6 +1707,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         ###
         # Process sampled data
+        meta_info = self._prepare_meta_info(num_frames)
+
         if not self.inference_only:
             truth_info = self._prepare_truth_info(final_gids, gid_to_sample,
                                                   num_frames, target, target_)
@@ -1714,7 +1716,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             truth_info = None
 
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
-                                              truth_info, resolution_info)
+                                              truth_info, meta_info,
+                                              resolution_info)
 
         # if self.config['prenormalize_inputs'] is not None:
         #     raise NotImplementedError
@@ -1818,7 +1821,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         pixelwise_truth_keys = [
             'change', 'class_idxs',
             'saliency', 'class_weights',
-            'saliency_weights', 'change_weights'
+            'saliency_weights', 'change_weights',
+            'output_weights',
         ]
         annotwise_truth_keys = [
             'box_ltrb',
@@ -2265,7 +2269,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
         if self.upweight_centers or self.upweight_time is not None:
-
             if self.upweight_time is None:
                 upweight_time = 0.5
             else:
@@ -2285,9 +2288,27 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return truth_info
 
+    def _prepare_meta_info(self, num_frames):
+        if self.upweight_centers or self.upweight_time is not None:
+            if self.upweight_time is None:
+                upweight_time = 0.5
+            else:
+                upweight_time = self.upweight_time
+
+            # Learn more from the center of the space-time patch
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
+
+            time_weights = time_weights / time_weights.max()
+            time_weights = time_weights.clip(0, 1)
+            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+        meta_info = {
+            'time_weights': time_weights,
+        }
+        return meta_info
+
     @profile
     def _build_frame_items(self, final_gids, gid_to_sample,
-                           truth_info, resolution_info):
+                           truth_info, meta_info, resolution_info):
         """
         Returns:
             List[Dict]:
@@ -2393,14 +2414,58 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # Build single-frame truth
                 self._populate_frame_labels(
                     frame_item, gid, output_dsize, time_idx,
-                    mode_to_invalid_mask, resolution_info, truth_info)
+                    mode_to_invalid_mask, resolution_info, truth_info,
+                    meta_info)
+                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+                frame_item['output_weights'] = output_weights
+            else:
+                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+                frame_item['output_weights'] = output_weights
 
             frame_items.append(frame_item)
         return frame_items
 
+    def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
+        time_weights = meta_info['time_weights']
+
+        frame_target_shape = output_dsize[::-1]
+        space_shape = frame_target_shape
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        if self.upweight_centers:
+            space_weights = _space_weights(space_shape)
+            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+            spacetime_weights = space_weights * time_weights[time_idx]
+        else:
+            spacetime_weights = 1
+
+        # Note: ensure this is resampled into target output space
+        # Module the pixelwise weights by the 1 - the fraction of modes
+        # that have nodata.
+        if self.config['downweight_nan_regions']:
+            nodata_total = 0.0
+            for mask in mode_to_invalid_mask.values():
+                if mask is not None:
+                    if len(mask.shape) == 3:
+                        mask_ = mask.mean(axis=2)
+                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
+                    else:
+                        mask_ = mask.astype(float)
+                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
+                    nodata_total += mask_
+            total_bands = len(mode_to_invalid_mask)
+            nodata_frac = nodata_total / total_bands
+            nodata_weight = 1 - nodata_frac
+        else:
+            nodata_weight = 1
+            # frame_weights = frame_weights * nodata_weight
+
+        generic_frame_weight = nodata_weight * spacetime_weights
+        return generic_frame_weight
+
     @profile
     def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
-                               mode_to_invalid_mask, resolution_info, truth_info):
+                               mode_to_invalid_mask, resolution_info, truth_info, meta_info):
         """
         Enrich a ``frame_item`` with rasterized truth-labels.
 
@@ -2422,7 +2487,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # of each window are in correspondence)
 
         task_tid_to_cnames = truth_info['task_tid_to_cnames']
-        time_weights = truth_info['time_weights']
         gid_to_dets = truth_info['gid_to_dets']
 
         input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
@@ -2681,36 +2745,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     task_target_weight['class'] /= max_weight
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-
-        if self.upweight_centers:
-            space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
-            spacetime_weights = space_weights * time_weights[time_idx]
-        else:
-            spacetime_weights = 1
-
-        # Note: ensure this is resampled into target output space
-        # Module the pixelwise weights by the 1 - the fraction of modes
-        # that have nodata.
-        if self.config['downweight_nan_regions']:
-            nodata_total = 0.0
-            for mask in mode_to_invalid_mask.values():
-                if mask is not None:
-                    if len(mask.shape) == 3:
-                        mask_ = mask.mean(axis=2)
-                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
-                    else:
-                        mask_ = mask.astype(float)
-                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
-                    nodata_total += mask_
-            total_bands = len(mode_to_invalid_mask)
-            nodata_frac = nodata_total / total_bands
-            nodata_weight = 1 - nodata_frac
-        else:
-            nodata_weight = 1
-            # frame_weights = frame_weights * nodata_weight
-
-        generic_frame_weight = nodata_weight * spacetime_weights
+        generic_frame_weight = self._build_generic_frame_weights(output_dsize,
+                                                                 mode_to_invalid_mask,
+                                                                 meta_info,
+                                                                 time_idx)
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
@@ -2745,6 +2783,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             )
             frame_item['saliency'] = task_target_ohe['saliency']
             frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
+
+        frame_item['output_weights'] = generic_frame_weight
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):
@@ -3247,7 +3287,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> mode = 'fit'
             >>> mode = 'test'
             >>> coco_dset.clear_annotations()
-            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels)
+            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
             >>> #index = len(self) // 4
             >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
             >>> index = self.new_sample_grid['targets'][0]
@@ -3266,7 +3306,38 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.show_if_requested()
 
         Ignore:
-            ...
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> import watch
+            >>> import rich
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+            >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
+            >>> from watch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
+            >>> config = PredictConfig(**{
+            >>>     'key': 'set_cover_algo',
+            >>>     'test_dataset': coco_fpath,
+            >>>     'mask_low_quality': True,
+            >>>     'pred_dataset': expt_dvc_dpath / '_demo_khq_doctest/pred.kwcoco.zip',
+            >>>     'package_fpath': expt_dvc_dpath / 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt',
+            >>>     'devices': [0],
+            >>> })
+            >>> config, model, datamodule = _prepare_predict_data(config)
+            >>> self = datamodule.torch_datasets['test']
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
+            >>> combinable_extra = None
+            >>> item = self[index]
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+            >>> kwplot.show_if_requested()
         """
         if rescale == 'auto':
             rescale = self.config['input_space_scale'] != 'native'
@@ -3319,7 +3390,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
             label_keys = [
                 'class_idxs', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights'
+                'class_weights', 'saliency_weights', 'change_weights',
+                'output_weights',
                 'box_ltrb',
                 # 'box_weights', 'box_tids', 'box_cidxs',
             ]
@@ -3334,7 +3406,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             cids = annots.lookup('category_id')
             class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
             frame_summary['class_hist'] = class_hist
-            frame_summary['num_annots'] = len(frame['ann_aids'])
+            if frame.get('ann_aids') is not None:
+                frame_summary['num_annots'] = len(frame['ann_aids'])
 
         item_summary['video_name'] = item['video_name']
         if timestamps:
