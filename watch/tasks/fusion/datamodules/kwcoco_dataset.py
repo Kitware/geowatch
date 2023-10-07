@@ -1136,8 +1136,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def _init_balance(self, new_sample_grid):
         """
+        Build data structure used for balanced sampling.
+
         Helper for __init__ which constructs a NestedPool to balance sampling
         across input domains.
+
+        TODO:
+            HELP WANTED: We would like to configure the distribution in some
+            easy to specify way. We should be domain aware, or rather accept
+            some encoding of the domain. We want to oversample underrepresented
+            or important batch items and undersample overrepresented or
+            unimportant easy batch items. The "batch item" part is what makes
+            this hard because we need the notation of goodness, easiness, etc
+            at the batch level, which can contain multiple annotations.
         """
         # TODO: each video should be able to have some sort of group
         # attribute we can use to balance over similar videos.
@@ -1178,8 +1189,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Hack, because we didn't encode the region in the cropped site
         # (rookie move)
-        import watch
-        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
         vidname_to_region_name = {}
         for vidname in set(vidnames):
             if pat.match(vidname):
@@ -1239,6 +1250,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def reseed(self):
         """
         Reinitialize the random number generator
+
+        TODO:
+            HELP WANTED: Lack of determenism likely comes from this module and
+            the order it gives data to predict. It would be very nice if we
+            could fix that.
         """
         # Randomize across DDP workers
         if hasattr(self, 'nested_pool'):
@@ -1469,6 +1485,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def __getitem__(self, index):
         """
+        Build an input batch. Standard pytorch Dataset API.
+
+        Args:
+            index (int | Dict):
+                This can be an integer index between ``[0, len(self)]``.
+                In test mode this will correspond to the index in the sample
+                grid, but at train time it is randomized and you will usually
+                get a different item each time. You can pass a "target"
+                dictionary (e.g. an item from the sample grid). Note that the
+                subset of a target needed to rebuild a specific batch is
+                returned with each batch.
+
+        Returns:
+            Dict | None :
+                In this system an item is always a dictionary it is up to the
+                calling process to do any final collation. (avoiding collation
+                makes writing this module a lot simpler). If the sample fails
+                we return None, and the caller should also handle that.
+
         Example:
             >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -1587,6 +1622,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         This is just the same thing as `__getitem__` but it raises an error
         when it fails, which is handled by `__getitem__`.
+
+        Args:
+            index (int | Dict): index or target
+
+        Returns:
+            Dict
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -1627,10 +1669,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
-
-        Ignore:
-            import xdev
-            _ = xdev.profile_now(self.getitem)(target)
         """
         target = self._coerce_target(index)
 
@@ -1718,6 +1756,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 valid_mask = np.isfinite(chan_data)
                                 needs_norm[(sensor, chan_name)].append((chan_data, valid_mask, parent_data, chan_sl))
 
+            # TODO: we could do data augmentation with these or let the user
+            # specify a better way.
             peritem_normalizer_params = {
                 'high': 0.95,
                 # 'mid': 0.5,
@@ -1823,70 +1863,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if data is not None:
                     frame_item[key] = kwarray.ArrayAPI.tensor(data)
 
-        positional_tensors = None
-
-        if True:
-            # TODO: what is the standard way to do the learned embedding
-            # "input vector"?
-
-            # TODO: preprocess any auxiliary learnable information into a
-            # Tensor. It is likely ideal to pre-stack whenever possible, but we
-            # need to keep the row-form data to make visualization
-            # straight-forward. We could use a flag to toggle it depending on
-            # if we need to visualize or not.
-            permode_datas = ub.ddict(list)
-            prev_timestamp = None
-
-            # TODO: this should be part of the model.
-            # The dataloader should know nothing about positional encodings
-            # except what is needed in order to pass the data to the model.
-            time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
-
-            for frame_item in frame_items:
-
-                k = 'timestamp'
-                frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
-
-                for mode_code in frame_item['modes'].keys():
-                    # Maybe this should be a model responsibility.
-                    # I dont like defining the positional encoding in the
-                    # dataset
-                    key_tensor = data_utils._string_to_hashvec(mode_code)
-                    permode_datas['mode_tensor'].append(key_tensor)
-                    #
-                    k = 'time_index'
-                    time_index = frame_item[k]
-                    # v = np.array([frame_item[k]]).astype(np.float32)
-                    v = time_index_encoding[time_index]
-                    permode_datas[k].append(v)
-
-                    if prev_timestamp is None:
-                        time_offset = np.array([0]).astype(np.float32)
-                    else:
-                        time_offset = frame_timestamp - prev_timestamp
-
-                    # TODO: add seasonal positional encoding
-
-                    permode_datas['time_offset'].append(time_offset)
-
-                    k = 'sensor'
-                    key_tensor = data_utils._string_to_hashvec(k)
-                    permode_datas[k].append(key_tensor)
-
-                frame_item['time_offset'] = time_offset
-                prev_timestamp = frame_timestamp
-
-            positional_arrays = ub.map_vals(np.stack, permode_datas)
-            time_offset = positional_arrays.pop('time_offset', None)
-            if time_offset is not None:
-                scaled_time_offset = data_utils.abslog_scaling(time_offset)
-                positional_arrays['time_offset'] = scaled_time_offset
-            else:
-                print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
-
-            # This is flattened for each frame for each mode.
-            # A bit hacky, not in love with it.
-            positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+        positional_tensors = self._populate_positional_information(frame_items)
 
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
@@ -1924,6 +1901,87 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'target': tr_subset,
         }
         return item
+
+    def _populate_positional_information(self, frame_items):
+        """
+        Enrich each frame with information the model can use to build its
+        positional encodings. It currently returns these, but it shouldn't
+
+        Args:
+            frame_items (List[Dict]):
+
+        NOTE:
+            There is a part of this where we actually compute a sinusoidal
+            positional encoding, but that should be part of the model, not the
+            dataset.
+
+            The dataset can provide metadata to tell the model what it can use
+            to build positional encodings, but it should never tell it how to
+            use them!
+        """
+        ...
+        # TODO: what is the standard way to do the learned embedding
+        # "input vector"?
+
+        # TODO: preprocess any auxiliary learnable information into a
+        # Tensor. It is likely ideal to pre-stack whenever possible, but we
+        # need to keep the row-form data to make visualization
+        # straight-forward. We could use a flag to toggle it depending on
+        # if we need to visualize or not.
+        permode_datas = ub.ddict(list)
+        prev_timestamp = None
+
+        # TODO: this should be part of the model.
+        # The dataloader should know nothing about positional encodings
+        # except what is needed in order to pass the data to the model.
+        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
+
+        for frame_item in frame_items:
+
+            k = 'timestamp'
+            frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
+
+            for mode_code in frame_item['modes'].keys():
+                # Maybe this should be a model responsibility.
+                # I dont like defining the positional encoding in the
+                # dataset
+                key_tensor = data_utils._string_to_hashvec(mode_code)
+                permode_datas['mode_tensor'].append(key_tensor)
+                #
+                k = 'time_index'
+                time_index = frame_item[k]
+                # v = np.array([frame_item[k]]).astype(np.float32)
+                v = time_index_encoding[time_index]
+                permode_datas[k].append(v)
+
+                if prev_timestamp is None:
+                    time_offset = np.array([0]).astype(np.float32)
+                else:
+                    time_offset = frame_timestamp - prev_timestamp
+
+                # TODO: add seasonal positional encoding
+
+                permode_datas['time_offset'].append(time_offset)
+
+                k = 'sensor'
+                key_tensor = data_utils._string_to_hashvec(k)
+                permode_datas[k].append(key_tensor)
+
+            frame_item['time_offset'] = time_offset
+            prev_timestamp = frame_timestamp
+
+        positional_arrays = ub.map_vals(np.stack, permode_datas)
+        time_offset = positional_arrays.pop('time_offset', None)
+        if time_offset is not None:
+            scaled_time_offset = data_utils.abslog_scaling(time_offset)
+            positional_arrays['time_offset'] = scaled_time_offset
+        else:
+            print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
+
+        # This is flattened for each frame for each mode.
+        # A bit hacky, not in love with it.
+        positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+        return positional_tensors
 
     def _coerce_target(self, index):
         """
@@ -3089,6 +3147,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return dataset_stats
 
+    def _build_demo_outputs(self, item):
+        """
+        Construct dummy outputs that we would expect a network to generate.
+
+        Note:
+            The ability to construct this method is a motivating factor behind
+            the design decision that "a batch item should describe what its
+            expected output should look like".
+        """
+        fliprot_params = item['target'].get('fliprot_params', None)
+        rng = kwarray.ensure_rng(None)
+        #
+        # Generate random predicted change probabilities for each frame
+        item_output = {}
+        change_prob_list = []
+        for frame in item['frames'][1:]:  # first frame does not have change
+            change_prob = kwimage.Heatmap.random(
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
+            if fliprot_params:
+                change_prob = data_utils.fliprot(change_prob, **fliprot_params)
+            change_prob_list += [change_prob]
+        change_probs = np.stack(change_prob_list)
+        item_output['change_probs'] = change_probs
+        #
+        # Generate random predicted class probabilities for each frame
+        class_prob_list = []
+        frame_pred_ltrb_list = []
+        for frame in item['frames']:
+            class_prob = kwimage.Heatmap.random(
+                dims=frame['output_dims'], classes=list(self.classes), rng=rng).data['class_probs']
+            class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
+            if fliprot_params:
+                class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)
+            class_prob_list += [class_prob_]
+            # Also generate a predicted box for each frame
+            frame_output_dsize = frame['output_dims'][::-1]
+            num_pred_boxes = rng.randint(0, 8)
+            pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
+            frame_pred_ltrb_list.append(pred_boxes.to_ltrb().data)
+        class_probs = np.stack(class_prob_list)
+        item_output['class_probs'] = class_probs
+        item_output['pred_ltrb'] = frame_pred_ltrb_list
+        return item_output
+
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
@@ -3137,53 +3239,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import kwarray
+            >>> import rich
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> channels = 'B10|B8a|B1|B8|B11'
             >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
             >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5, window_dims=(530, 610), channels=channels)
+            >>> mode = 'fit'
+            >>> mode = 'test'
+            >>> coco_dset.clear_annotations()
+            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels)
             >>> #index = len(self) // 4
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
-            >>> if 1:
-            >>>     # More controlled settings for debug
-            >>>     self.disable_augmenter = True
+            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
             >>> item = self[index]
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> fliprot_params = item['target'].get('fliprot_params', None)
-            >>> rng = kwarray.ensure_rng(None)
-            >>> #
-            >>> # Generate random predicted change probabilities for each frame
-            >>> item_output = {}
-            >>> change_prob_list = []
-            >>> for frame in item['frames'][1:]:  # first frame does not have change
-            >>>     change_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
-            >>>     if fliprot_params:
-            >>>         change_prob = data_utils.fliprot(change_prob, **fliprot_params)
-            >>>     change_prob_list += [change_prob]
-            >>> change_probs = np.stack(change_prob_list)
-            >>> item_output['change_probs'] = change_probs
-            >>> #
-            >>> # Generate random predicted class probabilities for each frame
-            >>> class_prob_list = []
-            >>> frame_pred_ltrb_list = []
-            >>> for frame in item['frames']:
-            >>>     class_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=list(self.classes), rng=rng).data['class_probs']
-            >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
-            >>>     if fliprot_params:
-            >>>         class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)
-            >>>     class_prob_list += [class_prob_]
-            >>>     # Also generate a predicted box for each frame
-            >>>     frame_output_dsize = frame['output_dims'][::-1]
-            >>>     num_pred_boxes = rng.randint(0, 8)
-            >>>     pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
-            >>>     frame_pred_ltrb_list.append(pred_boxes.to_ltrb().data)
-            >>> class_probs = np.stack(class_prob_list)
-            >>> item_output['class_probs'] = class_probs
-            >>> item_output['pred_ltrb'] = frame_pred_ltrb_list
-            >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
             >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
@@ -3192,6 +3264,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
             >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            ...
         """
         if rescale == 'auto':
             rescale = self.config['input_space_scale'] != 'native'

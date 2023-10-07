@@ -421,6 +421,187 @@ def resolve_datamodule(config, model, datamodule_defaults):
     #### real diff part
 
 
+def _prepare_predict_data(config):
+    """
+    Build the data needed to run prediction.
+
+    Args:
+        config (PredictConfig):
+
+    Returns:
+        Tuple[PredictConfig, LightningModule, LightningDataModule]:
+            modified config, network, and dataloader
+    """
+    datamodule_defaults = config.datamodule_defaults
+    package_fpath = ub.Path(config['package_fpath']).expand()
+
+    # try:
+    # Ideally we have a package, everything is defined there
+    model = utils.load_model_from_package(package_fpath)
+    # fix einops bug
+    for _name, mod in model.named_modules():
+        if 'Rearrange' in mod.__class__.__name__:
+            try:
+                mod._recipe = mod.recipe()
+            except AttributeError:
+                pass
+    # hack: dont load the metrics
+    model.class_metrics = None
+    model.saliency_metrics = None
+    model.change_metrics = None
+    model.head_metrics = None
+    # except Exception as ex:
+    #     print('ex = {!r}'.format(ex))
+    #     print(f'Failed to read {package_fpath=!r} attempting workaround')
+    #     # If we have a checkpoint path we can load it if we make assumptions
+    #     # init model from checkpoint.
+    #     raise
+
+    # Hack to fix GELU issue
+    monkey_torch.fix_gelu_issue(model)
+
+    # Fix issue with pre-2023-02 heterogeneous models
+    if model.__class__.__name__ == 'HeterogeneousModel':
+        if not hasattr(model, 'magic_padding_value'):
+            from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+            new_method = HeterogeneousModel(
+                **model.hparams,
+                position_encoder=model.position_encoder
+            )
+            old_state = model.state_dict()
+            new_method.load_state_dict(old_state)
+            new_method.config_cli_yaml = model.config_cli_yaml
+            model = new_method
+
+    model.eval()
+    model.freeze()
+
+    # TODO: perhaps we should enforce that that packaged model
+    # knows how to construct the appropriate test dataset?
+    config, traintime_params, datamodule = resolve_datamodule(config, model, datamodule_defaults)
+
+    # TODO: if TTA=True, disable deterministic time sampling
+    datamodule.setup('test')
+    print('Finished dataset setup')
+
+    if config['tta_time']:
+        print('Expanding time samples')
+        # Expand targets to include time augmented samples
+        n_time_expands = config['tta_time']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_time(n_time_expands)
+
+    if config['tta_fliprot']:
+        print('Expanding fliprot samples')
+        n_fliprot = config['tta_fliprot']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_fliprot(n_fliprot)
+
+    if ub.argflag('--debug-timesample'):
+        import kwplot
+        plt = kwplot.autoplt()
+        # TODO Could
+        test_torch_dset = datamodule.torch_datasets['test']
+        vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
+        vidid = ub.peek(vidid_to_time_sampler.keys())
+        time_sampler = vidid_to_time_sampler[vidid]
+        time_sampler.show_summary()
+        plt.show()
+
+    print('Construct dataloader')
+    test_torch_dataset = datamodule.torch_datasets['test']
+    # hack this setting
+    test_torch_dataset.inference_only = True
+
+    config.traintime_params = traintime_params
+    return config, model, datamodule
+
+
+def _debug_grid(test_dataloader):
+
+    DEBUG_GRID = 0
+    if DEBUG_GRID:
+        # Check to see if the grid will cover all images
+        image_id_to_space_boxes = ub.ddict(list)
+        seen_gids = set()
+        primary_gids = set()
+        seen_video_ids = set()
+        coco_dset = test_dataloader.dataset.sampler.dset
+
+        # Can use this to build a visualization of spacetime coverage
+        vid_to_box_to_timesamples = {}
+
+        for target in test_dataloader.dataset.new_sample_grid['targets']:
+            video_id = target['video_id']
+            seen_video_ids.add(video_id)
+            # Denote we have seen this vidspace slice in this image.
+            space_slice = target['space_slice']
+            space_box = kwimage.Box.from_slice(space_slice)
+            for gid in target['gids']:
+                image_id_to_space_boxes[gid].append(space_box)
+            primary_gids.add(target['main_gid'])
+            seen_gids.update(target['gids'])
+
+            coco_box = tuple(space_box.to_coco())
+            requested_timestamps = coco_dset.images(target['gids']).lookup('date_captured')
+            requested_timestamps = coco_dset.images(target['gids']).lookup('frame_index')
+            if video_id not in vid_to_box_to_timesamples:
+                vid_to_box_to_timesamples[video_id] = {}
+            if coco_box not in vid_to_box_to_timesamples[video_id]:
+                vid_to_box_to_timesamples[video_id][coco_box] = []
+            vid_to_box_to_timesamples[video_id][coco_box].append(requested_timestamps)
+
+        VIZ_SPACETIME_COV = 0
+        if VIZ_SPACETIME_COV:
+            import kwplot
+            from watch.utils.util_kwplot import time_sample_arcplot
+            for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
+                fig = kwplot.figure(fnum=videoid)
+                ax = fig.gca()
+                ax.cla()
+                yloc = 0
+                ytick_labels = []
+                for box, time_samples in sorted(box_to_timesample.items()):
+                    time_samples = list(map(sorted, time_samples))
+                    time_sample_arcplot(time_samples, yloc, ax=ax)
+                    yloc += 1
+                    ytick_labels.append(box)
+                ax.set_yticks(np.arange(len(ytick_labels)))
+                ax.set_yticklabels(ytick_labels)
+                video = coco_dset.index.videos[videoid]
+                ax.set_title(f'Time Sampling For Video {video["name"]}')
+                ax.set_ylabel('space location')
+                ax.set_xlabel('frame index')
+
+        all_video_ids = list(coco_dset.videos())
+        all_gids = list(coco_dset.images())
+        from xdev import set_overlaps
+        img_overlaps = set_overlaps(all_gids, seen_gids, s1='all_gids', s2='seen_gids')
+        print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
+
+        vid_overlaps = set_overlaps(all_video_ids, seen_video_ids, s1='seen_video_ids', s2='seen_video_ids')
+        print('vid_overlaps = {}'.format(ub.urepr(vid_overlaps, nl=1)))
+        # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
+        # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
+
+        # Check to see how much of each image is covered in video space
+        # import kwimage
+        gid_to_iou = {}
+        print('image_id_to_space_boxes = {}'.format(ub.urepr(image_id_to_space_boxes, nl=2)))
+        for gid, space_boxes in image_id_to_space_boxes.items():
+            vidid = coco_dset.index.imgs[gid]['video_id']
+            video = coco_dset.index.videos[vidid]
+            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            boxes = kwimage.Boxes.concatenate(space_boxes)
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            iou = covered.iou(video_poly)
+            gid_to_iou[gid] = iou
+        ious = list(gid_to_iou.values())
+        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
+        print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
+
+
 @profile
 def predict(cmdline=False, **kwargs):
     """
@@ -617,96 +798,17 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     import rich
-    args = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    args.datamodule_defaults = args.__DATAMODULE_DEFAULTS__
-    config = args
-    datamodule_defaults = args.datamodule_defaults
+    config = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
     # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-    rich.print('config = {}'.format(ub.urepr(args, nl=2)))
+    rich.print('config = {}'.format(ub.urepr(config, nl=2)))
 
-    package_fpath = ub.Path(config['package_fpath']).expand()
+    model, datamodule = _prepare_predict_data(config)
 
-    # try:
-    # Ideally we have a package, everything is defined there
-    model = utils.load_model_from_package(package_fpath)
-    # fix einops bug
-    for _name, mod in model.named_modules():
-        if 'Rearrange' in mod.__class__.__name__:
-            try:
-                mod._recipe = mod.recipe()
-            except AttributeError:
-                pass
-    # hack: dont load the metrics
-    model.class_metrics = None
-    model.saliency_metrics = None
-    model.change_metrics = None
-    model.head_metrics = None
-    # except Exception as ex:
-    #     print('ex = {!r}'.format(ex))
-    #     print(f'Failed to read {package_fpath=!r} attempting workaround')
-    #     # If we have a checkpoint path we can load it if we make assumptions
-    #     # init model from checkpoint.
-    #     raise
-
-    # Hack to fix GELU issue
-    monkey_torch.fix_gelu_issue(model)
-
-    # Fix issue with pre-2023-02 heterogeneous models
-    if model.__class__.__name__ == 'HeterogeneousModel':
-        if not hasattr(model, 'magic_padding_value'):
-            from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
-            new_method = HeterogeneousModel(
-                **model.hparams,
-                position_encoder=model.position_encoder
-            )
-            old_state = model.state_dict()
-            new_method.load_state_dict(old_state)
-            new_method.config_cli_yaml = model.config_cli_yaml
-            model = new_method
-
-    model.eval()
-    model.freeze()
-
-    # TODO: perhaps we should enforce that that packaged model
-    # knows how to construct the appropriate test dataset?
-    config, traintime_params, datamodule = resolve_datamodule(config, model, datamodule_defaults)
-
-    # TODO: if TTA=True, disable deterministic time sampling
-    datamodule.setup('test')
-    print('Finished dataset setup')
-
-    if config['tta_time']:
-        print('Expanding time samples')
-        # Expand targets to include time augmented samples
-        n_time_expands = config['tta_time']
-        test_torch_dset = datamodule.torch_datasets['test']
-        test_torch_dset._expand_targets_time(n_time_expands)
-
-    if config['tta_fliprot']:
-        print('Expanding fliprot samples')
-        n_fliprot = config['tta_fliprot']
-        test_torch_dset = datamodule.torch_datasets['test']
-        test_torch_dset._expand_targets_fliprot(n_fliprot)
-
-    if ub.argflag('--debug-timesample'):
-        import kwplot
-        plt = kwplot.autoplt()
-        # TODO Could
-        test_torch_dset = datamodule.torch_datasets['test']
-        vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
-        vidid = ub.peek(vidid_to_time_sampler.keys())
-        time_sampler = vidid_to_time_sampler[vidid]
-        time_sampler.show_summary()
-        plt.show()
-
-    print('Construct dataloader')
     test_coco_dataset = datamodule.coco_datasets['test']
-
-    test_torch_dataset = datamodule.torch_datasets['test']
-    # hack this setting
-    test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
+    # test_torch_dataset = datamodule.torch_datasets['test']
     # T, H, W = test_torch_dataset.window_dims
 
     # Create the results dataset as a copy of the test CocoDataset
@@ -770,12 +872,12 @@ def predict(cmdline=False, **kwargs):
     # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
 
     # Make threads after starting background proces.
-    if args.write_workers == 'datamodule':
-        args.write_workers = datamodule.num_workers
+    if config.write_workers == 'datamodule':
+        config.write_workers = datamodule.num_workers
     writer_queue = util_parallel.BlockingJobQueue(
         mode='thread',
         # mode='serial',
-        max_workers=args.write_workers
+        max_workers=config.write_workers
     )
 
     result_fpath.parent.ensuredir()
@@ -798,86 +900,7 @@ def predict(cmdline=False, **kwargs):
         'change_probs': 'change',
     }
 
-    DEBUG_GRID = 0
-    if DEBUG_GRID:
-        # Check to see if the grid will cover all images
-        image_id_to_space_boxes = ub.ddict(list)
-        seen_gids = set()
-        primary_gids = set()
-        seen_video_ids = set()
-        coco_dset = test_dataloader.dataset.sampler.dset
-
-        # Can use this to build a visualization of spacetime coverage
-        vid_to_box_to_timesamples = {}
-
-        for target in test_dataloader.dataset.new_sample_grid['targets']:
-            video_id = target['video_id']
-            seen_video_ids.add(video_id)
-            # Denote we have seen this vidspace slice in this image.
-            space_slice = target['space_slice']
-            space_box = kwimage.Box.from_slice(space_slice)
-            for gid in target['gids']:
-                image_id_to_space_boxes[gid].append(space_box)
-            primary_gids.add(target['main_gid'])
-            seen_gids.update(target['gids'])
-
-            coco_box = tuple(space_box.to_coco())
-            requested_timestamps = coco_dset.images(target['gids']).lookup('date_captured')
-            requested_timestamps = coco_dset.images(target['gids']).lookup('frame_index')
-            if video_id not in vid_to_box_to_timesamples:
-                vid_to_box_to_timesamples[video_id] = {}
-            if coco_box not in vid_to_box_to_timesamples[video_id]:
-                vid_to_box_to_timesamples[video_id][coco_box] = []
-            vid_to_box_to_timesamples[video_id][coco_box].append(requested_timestamps)
-
-        VIZ_SPACETIME_COV = 0
-        if VIZ_SPACETIME_COV:
-            from watch.utils.util_kwplot import time_sample_arcplot
-            for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
-                fig = kwplot.figure(fnum=videoid)
-                ax = fig.gca()
-                ax.cla()
-                yloc = 0
-                ytick_labels = []
-                for box, time_samples in sorted(box_to_timesample.items()):
-                    time_samples = list(map(sorted, time_samples))
-                    time_sample_arcplot(time_samples, yloc, ax=ax)
-                    yloc += 1
-                    ytick_labels.append(box)
-                ax.set_yticks(np.arange(len(ytick_labels)))
-                ax.set_yticklabels(ytick_labels)
-                video = coco_dset.index.videos[videoid]
-                ax.set_title(f'Time Sampling For Video {video["name"]}')
-                ax.set_ylabel('space location')
-                ax.set_xlabel('frame index')
-
-        all_video_ids = list(coco_dset.videos())
-        all_gids = list(coco_dset.images())
-        from xdev import set_overlaps
-        img_overlaps = set_overlaps(all_gids, seen_gids, s1='all_gids', s2='seen_gids')
-        print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
-
-        vid_overlaps = set_overlaps(all_video_ids, seen_video_ids, s1='seen_video_ids', s2='seen_video_ids')
-        print('vid_overlaps = {}'.format(ub.urepr(vid_overlaps, nl=1)))
-        # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
-        # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
-
-        # Check to see how much of each image is covered in video space
-        # import kwimage
-        gid_to_iou = {}
-        print('image_id_to_space_boxes = {}'.format(ub.urepr(image_id_to_space_boxes, nl=2)))
-        for gid, space_boxes in image_id_to_space_boxes.items():
-            vidid = coco_dset.index.imgs[gid]['video_id']
-            video = coco_dset.index.videos[vidid]
-            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
-            boxes = kwimage.Boxes.concatenate(space_boxes)
-            polys = boxes.to_polygons()
-            covered = polys.unary_union().simplify(0.01)
-            iou = covered.iou(video_poly)
-            gid_to_iou[gid] = iou
-        ious = list(gid_to_iou.values())
-        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
-        print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
+    _debug_grid(test_dataloader)
 
     DEBUG_PRED_SPATIAL_COVERAGE = 0
     if DEBUG_PRED_SPATIAL_COVERAGE:
@@ -891,26 +914,8 @@ def predict(cmdline=False, **kwargs):
 
     pred_dpath = ub.Path(result_dataset.fpath).parent
 
-    def jsonify(data):
-        # This will be serailized in kwcoco, so make sure it can be coerced to json
-        from kwcoco.util import util_json
-        jsonified = util_json.ensure_json_serializable(data)
-        walker = ub.IndexableWalker(jsonified)
-        for problem in util_json.find_json_unserializable(jsonified):
-            bad_data = problem['data']
-            if hasattr(bad_data, 'spec'):
-                walker[problem['loc']] = bad_data.spec
-            if isinstance(bad_data, kwcoco.CocoDataset):
-                fixed_fpath = getattr(bad_data, 'fpath', None)
-                if fixed_fpath is not None:
-                    walker[problem['loc']] = fixed_fpath
-                else:
-                    walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
-                        bad_data._build_hashid())
-        return jsonified
-
-    config_resolved = jsonify(config.asdict())
-    traintime_params = jsonify(traintime_params)
+    config_resolved = _jsonify(config.asdict())
+    traintime_params = _jsonify(config.traintime_params)
 
     from kwcoco.util import util_json
     assert not list(util_json.find_json_unserializable(config_resolved))
@@ -1101,7 +1106,8 @@ def predict(cmdline=False, **kwargs):
                         head_stitcher.accumulate_image(
                             gid, output_space_slice, probs,
                             dsize=output_image_dsize,
-                            scale=scale_outspace_from_vid)
+                            scale=scale_outspace_from_vid
+                        )
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
@@ -1201,7 +1207,7 @@ def predict(cmdline=False, **kwargs):
     else:
         print('Made at least one prediction on each video')
 
-    if args.drop_unused_frames:
+    if config.drop_unused_frames:
         keep_gids = set()
         for manager in stitch_managers.values():
             keep_gids.update(manager.seen_image_ids)
@@ -1218,6 +1224,25 @@ def predict(cmdline=False, **kwargs):
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     return result_dataset
+
+
+def _jsonify(data):
+    # This will be serailized in kwcoco, so make sure it can be coerced to json
+    from kwcoco.util import util_json
+    jsonified = util_json.ensure_json_serializable(data)
+    walker = ub.IndexableWalker(jsonified)
+    for problem in util_json.find_json_unserializable(jsonified):
+        bad_data = problem['data']
+        if hasattr(bad_data, 'spec'):
+            walker[problem['loc']] = bad_data.spec
+        if isinstance(bad_data, kwcoco.CocoDataset):
+            fixed_fpath = getattr(bad_data, 'fpath', None)
+            if fixed_fpath is not None:
+                walker[problem['loc']] = fixed_fpath
+            else:
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                    bad_data._build_hashid())
+    return jsonified
 
 
 def main(cmdline=True, **kwargs):
@@ -1239,76 +1264,6 @@ if __name__ == '__main__':
         --num_workers=5 \
         --devices=0, \
         --batch_size=1
-
-    Develop TTA:
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-    (cd $DVC_DPATH && dvc pull -r aws $DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt.dvc)
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-    MODEL_FNAME=models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-    MODEL_FPATH=$DVC_DPATH/$MODEL_FNAME
-    smartwatch model_info $MODEL_FPATH
-    (cd $DVC_DPATH && dvc pull -r aws $MODEL_FNAME)
-
-    # Small datset for testing
-    kwcoco subset \
-        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
-        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json \
-        --select_images '.frame_index < 100' \
-        --select_videos '.name == "KR_R001"'
-
-    # Small datset for testing
-    kwcoco subset \
-        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
-        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json \
-        --select_videos '.name == "KR_R001"'
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
-    python -m watch.tasks.fusion.predict \
-        --write_probs=True \
-        --with_class=auto \
-        --with_saliency=auto \
-        --with_change=False \
-        --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
-        --num_workers=5 \
-        --devices=0, \
-        --batch_size=1 \
-        --exclude_sensors=L8 \
-        --pred_dataset=$PRED_DATASET \
-        --test_dataset=$TEST_DATASET \
-        --tta_fliprot=0 \
-        --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
-
-
-    # Testing first heterogeneous model
-
-    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags='phase2_expt')
-    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags=phase2_data --hardware=ssd)
-    PACKAGE_FPATH=$DVC_EXPT_DPATH/package_epoch10_step200000.pt
-    TEST_DATASET=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json
-    PRED_DATASET=$DVC_EXPT_DPATH/_testing/hg_kr1/pred.kwcoco.json
-    echo "
-    DVC_EXPT_DPATH = $DVC_EXPT_DPATH
-    DVC_DATA_DPATH = $DVC_DATA_DPATH
-    PACKAGE_FPATH = $PACKAGE_FPATH
-    TEST_DATASET = $TEST_DATASET
-    PRED_DATASET = $PRED_DATASET
-    "
-
-    smartwatch model_stats "$PACKAGE_FPATH"
-
-    python -m watch.tasks.fusion.predict \
-        --with_class=auto \
-        --with_saliency=auto \
-        --package_fpath=$PACKAGE_FPATH \
-        --num_workers=5 \
-        --devices=0, \
-        --batch_size=1 \
-        --pred_dataset=$PRED_DATASET \
-        --test_dataset=$TEST_DATASET
-
     """
     if ub.argflag('--warntb'):
         import xdev

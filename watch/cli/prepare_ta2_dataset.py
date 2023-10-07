@@ -178,6 +178,12 @@ class PrepareTA2Config(CMDQueueConfig):
             threads per align process (typically set this to 0)
             '''))
 
+    align_tries = scfg.Value(2, help=ub.paragraph(
+            '''
+            The maximum number of times to retry failed gdal warp
+            commands before stopping.
+            '''))
+
     ignore_duplicates = scfg.Value(1, help='workers for align script')
 
     visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
@@ -687,6 +693,7 @@ def main(cmdline=False, **kwargs):
                     --target_gsd={config.target_gsd} \
                     --force_min_gsd={config.force_min_gsd} \
                     --workers={config.align_workers} \
+                    --tries={config.align_tries} \
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths=_justkeys({

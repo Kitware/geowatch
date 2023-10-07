@@ -586,3 +586,11 @@ def demo_smart_region_fpath():
         site_fpath.write_text(json.dumps(site))
         print(f'wrote site_fpath={site_fpath}')
     return region_fpath
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/demo/demo_region.py
+    """
+    demo_khq_region_fpath()
