@@ -50,6 +50,8 @@ class StacToCocoConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     config = StacToCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     stac_to_kwcoco(**config)
     return 0
 
@@ -579,6 +581,7 @@ def stac_to_kwcoco(input_stac_catalog,
         sensorasset_hist = ub.ddict(lambda: 0)
         for stac_item in all_items:
             summary = summarize_stac_item(stac_item)
+            print('summary = {}'.format(ub.urepr(summary, nl=1)))
             sensor = summary['sensor']
             eo_bands = summary['eo_bands']
             asset_names = summary['asset_names']

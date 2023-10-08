@@ -380,6 +380,11 @@ class CocoStitchingManager(object):
             import kwarray
             weights = kwarray.ArrayAPI.numpy(weights)
 
+            # Hack, the dataloader should always provide weights aligned with
+            # the output, but we have offbyone errors, so just force things to
+            # work while we figure those out.
+            data, weights = _force_shape_agreement_by_cropping2d(data, weights)
+
         is_2d = len(data.shape) == 2
         is_3d = len(data.shape) == 3
 
@@ -943,3 +948,33 @@ def _fix_slice(d):
 
 def _fix_slice_tup(sl):
     return tuple(map(_fix_slice, sl))
+
+
+def _force_shape_agreement_by_cropping2d(data1, data2):
+    """
+    I feel like I've written this before.
+
+    Args:
+        data1 (ndarray): data with ndim >= 2, first two dims are height / width
+        data2 (ndarray): data with ndim >= 2, first two dims are height / width
+    """
+    if data1.shape[0:2] != data2.shape[0:2]:
+        h1, w1 = data1.shape[0:2]
+        h2, w2 = data2.shape[0:2]
+
+        dh = abs(h1 - h2)
+        dw = abs(w1 - w2)
+
+        if dh > 10 or dw > 10:
+            raise AssertionError(
+                'This function is for hacking away off-by-one-errors, '
+                'but the difference in shapes was too large: '
+                f'{data1.shape}, {data2.shape}')
+        h3 = min(h1, h2)
+        w3 = min(w1, w2)
+        new_data1 = data1[0:h3, 0:w3]
+        new_data2 = data2[0:h3, 0:w3]
+    else:
+        new_data1 = data1
+        new_data2 = data2
+    return new_data1, new_data2

@@ -263,7 +263,6 @@ def debug_cloudmasks():
     import kwarray
 
     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
-
     bundle_dpath = dvc_dpath / 'Aligned-Drop7'
 
     coco_dataset_fpaths = [
@@ -271,6 +270,10 @@ def debug_cloudmasks():
         # bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
         bundle_dpath / 'CH_R001/imgonly-CH_R001.kwcoco.zip',
         # bundle_dpath / 'NZ_R001/imgonly-NZ_R001.kwcoco.zip',
+    ]
+
+    coco_dataset_fpaths = [
+        '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
     ]
 
     # Directory to write debugging visualizations to
@@ -287,7 +290,9 @@ def debug_cloudmasks():
         'crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1',
     ]
 
-    image_per_group = 0
+    interest_names = []
+
+    image_per_group = 1
 
     import numpy as np
     def choices_without_replacement(rng, arr, k):
@@ -316,11 +321,14 @@ def debug_cloudmasks():
         rng = kwarray.ensure_rng(48942398243, api='numpy')
 
         for sensor, imgs in group_to_images.items():
-            if 'WV' not in sensor:
-                continue
+            # if 'WV' not in sensor:
+            #     continue
             # Randomly pick one image for each sensor
             name_to_img = {g['name']: g for g in imgs}
-            found = set(name_to_img) & set(interest_names)
+            if not interest_names:
+                found = set(name_to_img)
+            else:
+                found = set(name_to_img) & set(interest_names)
             coco_imgs = choices_without_replacement(rng, imgs, image_per_group)
             images_of_interest.extend(coco_imgs)
 
@@ -330,6 +338,7 @@ def debug_cloudmasks():
                     images_of_interest.append(coco_img)
 
     for coco_img in ub.ProgIter(images_of_interest, desc='draw cloudmask debug image', verbose=3):
+        ...
         debug_single_cloudmask(coco_img, out_dpath)
 
     # import kwplot
@@ -354,9 +363,16 @@ def debug_single_cloudmask(coco_img, out_dpath):
     ]
     tci_channels = kwcoco_extensions.pick_channels(coco_img, tci_channel_priority)
 
+    if 'quality' in coco_img.channels:
+        qa_band = 'quality'
+    elif 'scl' in coco_img.channels:
+        qa_band = 'scl'
+    elif 'qa_pixel' in coco_img.channels:
+        qa_band = 'qa_pixel'
+
     # Load quality and visual bands in image space
     space = 'image'
-    qa_delayed = coco_img.imdelay('quality', interpolation='nearest', antialias=False, space=space)
+    qa_delayed = coco_img.imdelay(qa_band, interpolation='nearest', antialias=False, space=space)
     tci_delayed = coco_img.imdelay(tci_channels, space=space)
 
     qa_fpath = list(qa_delayed.leafs())[0].fpath
@@ -423,9 +439,20 @@ def debug_single_cloudmask(coco_img, out_dpath):
     print(f'sensor={sensor}')
 
     # Lookup the correct QA spec for the image type.
-    spec_name = 'ACC-1'
-    sensor = coco_img['sensor_coarse']
-    table = QA_SPECS.find_table(spec_name, sensor)
+    if qa_band == 'quality':
+        spec_name = 'ACC-1'
+        sensor = coco_img['sensor_coarse']
+        table = QA_SPECS.find_table(spec_name, sensor)
+    elif qa_band == 'scl':
+        spec_name = 'SCL'
+        sensor = coco_img['sensor_coarse']
+        table = QA_SPECS.find_table(spec_name, sensor)
+    elif qa_band == 'qa_pixel':
+        spec_name = 'qa_pixel'
+        sensor = coco_img['sensor_coarse']
+        table = QA_SPECS.find_table(spec_name, sensor)
+    else:
+        raise NotImplementedError
 
     drawings = table.draw_labels(quality_im, legend_dpi=300, verbose=1)
     drawings['tci_canvas'] = tci_canvas

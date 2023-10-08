@@ -430,7 +430,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         )
         WITH_S2 = 1  # hard coded
         if WITH_S2:
-            node.update({
+            node.algo_params.update({
                 'sensors': 'L8,S2',
                 'conse': 8,
                 'resolution': '10GSD',

@@ -81,7 +81,7 @@ class AggregateLoader(DataConfig):
         The input to the aggregator, which can take several forms:
         (1) the root directory of an mlops evaluation,
         (2) one or more pre-aggregated files,
-        '''), nargs='+')
+        '''), nargs='+', position=1)
 
     pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
 
@@ -158,12 +158,12 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
-            print('TABLE2')
-            print(table['resolved_params.sc_poly.smoothing'])
+            # print('TABLE2')
+            # print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table)
             agg.build()
-            print('agg.TABLE')
-            print(agg.table['resolved_params.sc_poly.smoothing'])
+            # print('agg.TABLE')
+            # print(agg.table['resolved_params.sc_poly.smoothing'])
             eval_type_to_aggregator[type] = agg
         return eval_type_to_aggregator
 
@@ -184,7 +184,7 @@ class AggregateEvluationConfig(AggregateLoader):
 
     plot_params = Value(False, isflag=True, help='if True, param plots will be drawn')
 
-    stdout_report = Value(False, isflag=True, help='if True, print a report to stdout')
+    stdout_report = Value(True, isflag=True, help='if True, print a report to stdout')
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
@@ -438,7 +438,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=None, verbose=1,
+    def report_best(agg, top_k=100, shorten=True, per_group=None, verbose=1,
                     reference_region=None, print_models=False, concise=False,
                     show_csv=False) -> TopResultsReport:
         """
@@ -692,9 +692,13 @@ class AggregatorAnalysisMixin:
                         lut = summary_table.set_index('param_hashid')
                         if 'fpath' in lut.columns:
                             for param_hashid in _summary_table['param_hashid']:
-                                fpath = ub.Path(lut.loc[param_hashid]['fpath'])
-                                if fpath.exists():
-                                    text = text.replace(param_hashid, f'[link={fpath.parent}]{param_hashid}[/link]')
+                                try:
+                                    fpath = ub.Path(lut.loc[param_hashid]['fpath'])
+                                    if fpath.exists():
+                                        text = text.replace(param_hashid, f'[link={fpath.parent}]{param_hashid}[/link]')
+                                except TypeError:
+                                    # can happen if lut has multiple results for the same hashid
+                                    ...
 
                     rich.print(text)
 

@@ -196,20 +196,24 @@ def qa_decoding_no_boundary(qa_array):
     """
     unpacked = np.full(qa_array.shape, QA_INTERPRETATIONS['FMASK']['clear'])
 
-    QA_CLOUD_unpacked = geek.bitwise_and(qa_array, QA_BIT['cloud'])
-    QA_CLOUD_ADJ = geek.bitwise_and(qa_array, QA_BIT['cloud_adj'])
-    QA_SHADOW_unpacked = geek.bitwise_and(qa_array, QA_BIT['shadow'])
-    QA_SNOW_unpacked = geek.bitwise_and(qa_array, QA_BIT['snow'])
-    QA_WATER_unpacked = geek.bitwise_and(qa_array, QA_BIT['water'])
+    try:
+        QA_CLOUD_unpacked = geek.bitwise_and(qa_array, QA_BIT['cloud'])
+        QA_CLOUD_ADJ = geek.bitwise_and(qa_array, QA_BIT['cloud_adj'])
+        QA_SHADOW_unpacked = geek.bitwise_and(qa_array, QA_BIT['shadow'])
+        QA_SNOW_unpacked = geek.bitwise_and(qa_array, QA_BIT['snow'])
+        QA_WATER_unpacked = geek.bitwise_and(qa_array, QA_BIT['water'])
 
-    unpacked[QA_WATER_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['water']
-    unpacked[QA_SNOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['snow']
-    unpacked[QA_SHADOW_unpacked >
-             0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
-    unpacked[QA_CLOUD_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud']
-    unpacked[QA_CLOUD_ADJ > 0] = QA_INTERPRETATIONS['FMASK']['clear']
-    unpacked[qa_array == QA_INTERPRETATIONS['FMASK']
-             ['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
+        unpacked[QA_WATER_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['water']
+        unpacked[QA_SNOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['snow']
+        unpacked[QA_SHADOW_unpacked >
+                 0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
+        unpacked[QA_CLOUD_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud']
+        unpacked[QA_CLOUD_ADJ > 0] = QA_INTERPRETATIONS['FMASK']['clear']
+        unpacked[qa_array == QA_INTERPRETATIONS['FMASK']
+                 ['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
+    except TypeError as ex:
+        import warnings
+        warnings.warn(f'WARNING: COLD PREPARE KWCOCO Failed to qa decode ex={ex}')
 
     return unpacked
 
@@ -421,17 +425,31 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     quality_bits = QA_INTERPRETATIONS[quality_interpretation]
     # Specify how we are going to handle spatial resampling and nodata
     delay_kwargs = {
-        'nodata_method': None,
         'space': 'video',
         'resolution': resolution,
     }
+
+    # FIXME:
+    # We need to lookup the correct quality interpretation here
+    HACK_QA = 1
+    if HACK_QA:
+        # TODO: use
+        # from watch.tasks.fusion.datamodules import qa_bands
+        # if 'qa_pixel' in coco_image.channels:
+        #     quality_channels = 'qa_pixel'
+        ...
 
     # Construct delayed images. These represent a tree of image
     # operations that will resample the image at the desired resolution
     # as well as align it with other images in the sequence.
     # NOTE: Issue occurs when setting resolution argument in imdelay
-    delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)
-    delayed_qa = coco_image.imdelay(channels=quality_channels, **delay_kwargs)
+    delayed_im = coco_image.imdelay(channels=intensity_channels, nodata_method=None, **delay_kwargs)
+
+    # FIXME:
+    # nodata_method=ma should returned a masked images instead of nans when
+    # underlying data doesn't exist. Will be fixed in next kwcoco / delayed
+    # image
+    delayed_qa = coco_image.imdelay(channels=quality_channels, nodata_method=None, **delay_kwargs)
 
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
