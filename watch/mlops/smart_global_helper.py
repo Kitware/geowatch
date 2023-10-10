@@ -129,6 +129,13 @@ class SmartGlobalHelper:
         'params.sc_poly.site_summary',
     ]
 
+    # Mark columns that are typically paths. Used when building effective params.
+    EXTRA_PATH_COLUMNS = [
+        'params.bas_poly_eval.true_site_dpath',
+        'params.bas_poly_eval.true_region_dpath',
+        'params.bas_poly.boundary_region',
+    ]
+
     def shared_palettes(self, macro_table):
         """
         For each key in a hard code set (relevant to SMART), assign a

@@ -143,7 +143,8 @@ def pandas_shorten_columns(summary_table, return_mapping=False):
 
 def pandas_condense_paths(colvals):
     """
-    Condense a column of paths
+    Condense a column of paths to keep only the shortest distinguishing
+    suffixes
     """
     is_valid = ~pd.isnull(colvals)
     valid_vals = colvals[is_valid].apply(os.fspath)

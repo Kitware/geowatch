@@ -1271,7 +1271,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         mappings : Dict[str, Dict[Any, str]] = {}
         path_colnames = model_cols + test_dset_cols
-        for colname in path_colnames:
+        path_colnames = path_colnames + SMART_HELPER.EXTRA_PATH_COLUMNS
+        existing_path_colnames = params.columns.intersection(path_colnames)
+
+        for colname in existing_path_colnames:
             colvals = params[colname]
             condensed, mapper = util_pandas.pandas_condense_paths(colvals)
             mappings[colname] = mapper
@@ -1543,23 +1546,32 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     def make_result_node_symlinks(agg):
         """
-        Builds symlinks to results node paths based on region and param hashids
+        Builds symlinks to results node paths based on region and param
+        hashids.
         """
         base_dpath = (agg.output_dpath / 'param_links' / agg.type)
         byregion_dpath = (base_dpath / 'by_region').ensuredir()
         byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
 
-        for row in agg.table.to_dict('records'):
-            region_id = row['region_id']
-            param_hashid = row['param_hashid']
-            eval_fpath = ub.Path(row['fpath'])
-            node_dpath = eval_fpath.parent
-            node_byregion_dpath = (byregion_dpath / region_id / param_hashid)
-            node_byparamid_dpath = (byparamid_dpath / param_hashid / region_id)
-            node_byregion_dpath.parent.ensuredir()
-            node_byparamid_dpath.parent.ensuredir()
-            ub.symlink(real_path=node_dpath, link_path=node_byparamid_dpath, overwrite=1)
-            ub.symlink(real_path=node_dpath, link_path=node_byregion_dpath, overwrite=1)
+        grouped = agg.table.groupby(['param_hashid', 'region_id'])
+        for group_vals, group in grouped:
+            # handle the fact that there can be multiple runs of the same param hashid.
+            # TODO: sort the groups in a consistent way if possible
+            for group_idx, row in enumerate(group.to_dict('records'), start=1):
+                region_id = row['region_id']
+                param_hashid = row['param_hashid']
+                version_id = f'version_{group_idx}'
+                eval_fpath = ub.Path(row['fpath'])
+                node_dpath = eval_fpath.parent
+                node_byregion_dpath = (byregion_dpath / region_id / param_hashid / version_id)
+                node_byparamid_dpath = (byparamid_dpath / param_hashid / region_id / version_id)
+                node_byregion_dpath.parent.ensuredir()
+                node_byparamid_dpath.parent.ensuredir()
+                ub.symlink(real_path=node_dpath, link_path=node_byparamid_dpath, overwrite=1)
+                ub.symlink(real_path=node_dpath, link_path=node_byregion_dpath, overwrite=1)
+
+        import rich
+        rich.print(f'Made Param Links: [link={base_dpath}]{base_dpath}[/link]')
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
