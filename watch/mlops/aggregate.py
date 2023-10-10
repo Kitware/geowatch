@@ -1357,6 +1357,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.hashid_to_params = ub.udict(hashid_to_params)
         agg.mappings = mappings
         agg.effective_params = effective_params
+
+        if 1:
+            import rich
+            rich.print(hashid_to_params)
         # return effective_params, mappings, hashid_to_params
 
     def find_macro_comparable(agg, verbose=0):
