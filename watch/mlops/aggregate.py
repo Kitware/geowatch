@@ -283,10 +283,12 @@ def main(cmdline=True, **kwargs):
 
     timestamp = ub.timestamp()
     if config.export_tables:
+        import platform
+        hostname = platform.node()
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 agg.output_dpath.ensuredir()
-                fname = f'{agg.type}_{timestamp}.csv.zip'
+                fname = f'{agg.type}_{hostname}_{timestamp}.csv.zip'
                 csv_fpath = agg.output_dpath / fname
                 print(f'csv_fpath={csv_fpath}')
                 agg.table.to_csv(csv_fpath, index_label=False)
@@ -1242,7 +1244,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def resolved_params(self):
         return self.subtables['resolved_params']
 
-    def build_effective_params(agg):
+    def build_effective_params(self):
         """
         Consolodate / cleanup / expand information
 
@@ -1252,11 +1254,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         can compute more consistent param_hashid. This is done by condensing
         paths (which is a debatable design decision) as well as mapping
         non-hashable data to strings.
+
+        Populates:
+
+            * ``self.hashid_to_params``
+
+            * ``self.mappings``
+
+            * ``self.effective_params``
+
         """
         import pandas as pd
         from watch.utils import util_pandas
         from watch.mlops.smart_global_helper import SMART_HELPER
-        params = agg.params
+        params = self.params
         effective_params = params.copy()
 
         HACK_FIX_JUNK_PARAMS = True
@@ -1266,8 +1277,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             junk_cols = util_pandas.pandas_suffix_columns(effective_params, junk_suffixes)
             effective_params = effective_params.drop(junk_cols, axis=1)
 
-        model_cols = agg.model_cols
-        test_dset_cols = agg.test_dset_cols
+        model_cols = self.model_cols
+        test_dset_cols = self.test_dset_cols
 
         mappings : Dict[str, Dict[Any, str]] = {}
         path_colnames = model_cols + test_dset_cols
@@ -1283,13 +1294,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
             effective_params[colname] = 'ignore'
 
-        _specified = util_pandas.DotDictDataFrame(agg.specified_params)
+        _specified = util_pandas.DotDictDataFrame(self.specified_params)
         _specified_params = _specified.subframe('specified')
         is_param_included = _specified_params > 0
 
         # For each unique set of effective parameters compute a hashid
         # TODO: better mechanism for user-specified ignore param columns
-        hashid_ignore_columns = list(agg.test_dset_cols)
+        hashid_ignore_columns = list(self.test_dset_cols)
         hashid_ignore_columns += SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS
 
         param_cols = ub.oset(effective_params.columns).difference(hashid_ignore_columns)
@@ -1326,7 +1337,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 print(f'group_key2={group_key2}')
 
         # Preallocate a series with the appropriate index
-        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
+        hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
         hashid_to_params = {}
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
@@ -1351,17 +1362,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 hashids_v1.loc[subgroup.index] = hashid
 
         # Update the index with an effective parameter hashid
-        agg.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-        agg.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-
-        agg.hashid_to_params = ub.udict(hashid_to_params)
-        agg.mappings = mappings
-        agg.effective_params = effective_params
-
-        if 1:
-            import rich
-            rich.print(hashid_to_params)
-        # return effective_params, mappings, hashid_to_params
+        self.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
+        self.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
+        self.hashid_to_params = ub.udict(hashid_to_params)
+        self.mappings = mappings
+        self.effective_params = effective_params
 
     def find_macro_comparable(agg, verbose=0):
         """
