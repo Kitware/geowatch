@@ -286,11 +286,12 @@ def main(cmdline=True, **kwargs):
         import platform
         hostname = platform.node()
         for type, agg in eval_type_to_aggregator.items():
-            if len(agg):
+            num_results = len(agg)
+            if num_results > 0:
                 agg.output_dpath.ensuredir()
-                fname = f'{agg.type}_{hostname}_{timestamp}.csv.zip'
+                fname = f'{agg.type}_{hostname}_{num_results:05d}_{timestamp}.csv.zip'
                 csv_fpath = agg.output_dpath / fname
-                print(f'csv_fpath={csv_fpath}')
+                print(f'Exported tables to: {csv_fpath}')
                 agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
