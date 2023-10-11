@@ -53,8 +53,9 @@ except ImportError:
     profile = ub.identity
 
 
-# Bump this if the cache is breaking things
-SPACETIME_CACHE_VERSION = 'cache_v15'
+# Bump this if the process for sampling the spacetime grid changes and old
+# caches are no longer valid.
+SPACETIME_CACHE_VERSION = 'cache_v16'
 
 
 class SpacetimeGridBuilder:

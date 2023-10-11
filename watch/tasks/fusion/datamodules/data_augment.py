@@ -105,7 +105,6 @@ class SpacetimeAugmentMixin:
             >>> print('target  = {!r}'.format(target))
             >>> print('target_ = {!r}'.format(target_))
         """
-
         # TODO: make a nice "augmenter" pipeline
         augment_time_resample_rate = self.config['augment_time_resample_rate']
         augment_space_shift_rate = self.config['augment_space_shift_rate']
@@ -153,18 +152,18 @@ class SpacetimeAugmentMixin:
             if rng.rand() < augment_time_resample_rate:
                 self._augment_target_time(target_)
 
-            temporal_dropout_rate = self.temporal_dropout
+            # Temporal dropout
+            temporal_dropout_rate = self.config.temporal_dropout_rate
+            frame_dropout_thresh = self.config.temporal_dropout
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
-            if do_temporal_dropout:
-                # Temporal dropout
+            if do_temporal_dropout and frame_dropout_thresh > 0:
                 gids = target_['gids']
                 main_gid = target_['main_gid']
                 main_frame_idx = gids.index(main_gid)
-                flags = rng.rand(len(gids)) > 0.5
-                flags[main_frame_idx] = True
-                flags[0] = True
-                flags[-1] = True
-                gids = list(ub.compress(gids, flags))
+                keep_score = rng.rand(len(gids))
+                keep_score[main_frame_idx] = 1.0
+                keep_flags = keep_score >= frame_dropout_thresh
+                gids = list(ub.compress(gids, keep_flags))
                 # target_['main_idx'] = gids.index(main_gid)
                 target_['gids'] = gids
 

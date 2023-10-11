@@ -9,10 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * mlops can now make symlinks to results nodes by region and param-hashids 
 * Ability to draw batches at predict time for debugging.
+* Add `channel_dropout` to KWCocoVideoDataset
 
 ### Changed
 * Batch outputs weights are new members of a frame item and are factored into
   stitching weights in fusion.predict
+
+* Changed the semantics of temporal dropout to be more natural. There is now a
+  `temporal_dropout_rate` for the probability a batch item will have temporal
+  dropout applied, and `temporal_dropout` itself now is the probability a frame
+  is dropped within a given batch.
 
 
 ## Version 0.10.0 - Released 2023-10-01

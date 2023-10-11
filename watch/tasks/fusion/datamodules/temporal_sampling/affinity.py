@@ -447,6 +447,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
             kernel entry.
 
     Example:
+        >>> # Generates the time kernel visualization
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
         >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
         >>> relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
@@ -495,9 +496,21 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         >>> ax.set_title('discrete observations')
         >>> plt.subplots_adjust(top=0.9, hspace=.3)
         >>> kwplot.show_if_requested()
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
+        >>> relative_unixtimes = [np.nan] * 10
+        >>> # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+        >>> kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+
     """
     if len(time_kernel) == 1:
         raise Exception(f'Time kernel has a length of 1: time_kernel={time_kernel!r}')
+
+    # Fix any possible missing values
+    from watch.tasks.fusion.datamodules.temporal_sampling.utils import guess_missing_unixtimes
+    relative_unixtimes = guess_missing_unixtimes(relative_unixtimes)
 
     first = time_kernel[0]
     second = time_kernel[1]

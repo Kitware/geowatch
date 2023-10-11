@@ -10,7 +10,7 @@ Example:
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
     >>> channels = 'B10,B8a|B1,B8'
-    >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(300, 300),
+    >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300),
     >>>                           channels=channels,
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
@@ -20,9 +20,11 @@ Example:
     >>>                           use_centered_positives=True,
     >>>                           absolute_weighting=True,
     >>>                           time_sampling='uniform',
-    >>>                           time_kernel='-1y,0,1y',
+    >>>                           time_kernel='-1year,0,1month,1year',
     >>>                           modality_dropout=0.5,
-    >>>                           temporal_dropout=0.5)
+    >>>                           channel_dropout=0.5,
+    >>>                           temporal_dropout=0.7,
+    >>>                           temporal_dropout_rate=1.0)
     >>> # Add weights to annots
     >>> annots = self.sampler.dset.annots()
     >>> annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
@@ -662,8 +664,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
             '''
-            In fit mode, perform translation augmentations this fraction of the
-            time.
+            In fit mode, perform translation augmentations in this fraction of
+            batch items.
             '''), group=AUGMENTATION_GROUP),
 
         'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
@@ -677,12 +679,19 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
             '''
-            In fit mode, perform temporal jitter this fraction of the time.
+            In fit mode, perform temporal jitter this fraction of batch items.
+            '''), group=AUGMENTATION_GROUP),
+
+        'temporal_dropout_rate': scfg.Value(1.0, type=float, help=ub.paragraph(
+            '''
+            Drops frames in a fraction of batch items.
             '''), group=AUGMENTATION_GROUP),
 
         'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
-            Drops frames in a fraction of training batches
+            Given that a batch item is selected for temporal dropout, this is
+            the probability that each frame is dropped out. The main frame is
+            never removed.
             '''), group=AUGMENTATION_GROUP),
 
         'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
@@ -690,6 +699,25 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             Drops late-fused modalities in each frame with this probability,
             except if the frame only has one modality left.
             '''), group=AUGMENTATION_GROUP),
+
+        # TODO: specify channels that are allowed to be dropped out?
+        'channel_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            Drops early-fused channels within each modality with this
+            probability except if it is the last channel within a modality.
+            '''), group=AUGMENTATION_GROUP),
+
+        # TODO:
+        # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+        #     '''
+        #     Drops extra metadata provided to the model for positional encodings.
+        #     '''), group=AUGMENTATION_GROUP),
+
+        # TODO:
+        # 'augment_scale': scfg.Value(0.0, type=float, help=ub.paragraph(
+        #     '''
+        #     Train at multiple scales.
+        #     '''), group=AUGMENTATION_GROUP),
 
         'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
             '''
@@ -1407,6 +1435,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     force_bad = 'failed observable threshold'
                     if stop_on_bad_image:
                         break
+
+            if self.config.channel_dropout:
+                num_bands = sample['im'].shape[3]
+                if num_bands > 1:
+                    keep_score = self.augment_rng.rand(num_bands)
+                    keep_idxs = util_kwarray.argsort_threshold(
+                        keep_score, self.config.channel_dropout, num_top=1)
+                    drop_flags = ~kwarray.boolmask(keep_idxs, num_bands)
+                    if np.any(drop_flags):
+                        sample['im'][:, :, :, drop_flags] = np.nan
 
             sample_streams[stream.spec] = sample
             if 'annots' in sample:
