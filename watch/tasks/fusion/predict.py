@@ -858,6 +858,15 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                 for bx in range(num_batches):
                     target: dict = batch_trs[bx]
                     item_head_probs: list[torch.Tensor] | torch.Tensor = head_probs[bx]
+
+                    if head_key == 'change':
+                        # The change output doesnt seem to have have a
+                        # channel. Only used in tests, so just hacking it.
+                        # It should be fixed in the model output or there
+                        # should be some general shape rectification.
+                        if len(item_head_probs.shape) == 3:
+                            item_head_probs = item_head_probs[:, :, :, None]
+
                     # Keep only the channels we want to write to disk
                     item_head_relevant_probs = [p[..., chan_keep_idxs] for p in item_head_probs]
                     bin_probs = [p.detach().cpu().numpy() for p in item_head_relevant_probs]
@@ -890,6 +899,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                         # print(f'output_image_dsize={output_image_dsize}')
                         # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
                         output_weights = frame_info.get('output_weights', None)
+
                         head_stitcher.accumulate_image(
                             gid, output_space_slice, probs,
                             dsize=output_image_dsize,
@@ -1076,6 +1086,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
         >>>     'devices': devices,
+        >>>     'draw_batches': 1,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -1254,7 +1265,8 @@ def predict(cmdline=False, **kwargs):
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
 
-    _predict_critical_loop(config, model, datamodule, result_dataset, device)
+    result_dataset = _predict_critical_loop(config, model, datamodule, result_dataset, device)
+    return result_dataset
 
 
 def main(cmdline=True, **kwargs):
