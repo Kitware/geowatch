@@ -8714,6 +8714,8 @@ data:
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout_rate  : 0.5
+    channel_dropout_rate   : 0.5
+    modality_dropout_rate  : 0.5
     temporal_dropout       : 0.1
     channel_dropout        : 0.1
     modality_dropout       : 0.1
