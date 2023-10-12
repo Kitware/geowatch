@@ -1213,7 +1213,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     def compress(agg, flags):
         new_table = agg.table[flags].copy()
-        new_agg = Aggregator(new_table, type=agg.type, **agg.config)
+        new_agg = Aggregator(new_table, type=agg.type,
+                             output_dpath=agg.output_dpath, **agg.config)
         new_agg.build()
         return new_agg
 
