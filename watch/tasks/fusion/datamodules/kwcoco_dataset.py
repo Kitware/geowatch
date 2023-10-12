@@ -1436,7 +1436,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     if stop_on_bad_image:
                         break
 
-            if self.config.channel_dropout:
+            if target_['allow_augment'] and self.config.channel_dropout:
                 num_bands = sample['im'].shape[3]
                 if num_bands > 1:
                     keep_score = self.augment_rng.rand(num_bands)
