@@ -296,9 +296,18 @@ def schedule_evaluation(config):
             for bas_fpath in param_arg['matrix']['bas_pxl.test_dataset']:
                 region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
                 region_dpath = (smart_highres_bundle / region_id)
-                hires_coco_fpath = region_dpath / f'imgonly-{region_id}.kwcoco.zip'
-                if not hires_coco_fpath.exists():
-                    raise Exception(f'Expected hires path does not exist: {hires_coco_fpath}')
+                hires_coco_candidates = [
+                    region_dpath / f'imgonly-{region_id}.kwcoco.zip',
+                    region_dpath / f'imgonly-{region_id}-rawbands.kwcoco.zip',
+                ]
+                hires_coco_fpath = None
+                for cand_fpath in hires_coco_candidates:
+                    if cand_fpath.exists():
+                        hires_coco_fpath = cand_fpath
+                        break
+                if hires_coco_fpath is None:
+                    raise Exception(f'Expected hires path, but no candidates exist: {hires_coco_candidates}')
+
                 submatrices.append({
                     'bas_pxl.test_dataset': bas_fpath,
                     'sv_crop.crop_src_fpath': hires_coco_fpath,
