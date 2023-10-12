@@ -114,20 +114,20 @@ def upload_to_rgd(input_site_models_s3,
 
     existing_model_run = None
     for model_run in model_runs_result.json().get('results', ()):
-        if(model_run['title'] != title or
-           model_run['performer']['short_code'] != performer_shortcode):
+        if (model_run['title'] != title or
+             model_run['performer']['short_code'] != performer_shortcode):
             continue
 
         model_region = model_run.get('region')
         if model_region is None:
             continue
 
-        if(isinstance(model_region, dict) and
-           model_run['region'].get('name') == region_id):
+        if (isinstance(model_region, dict) and
+             model_run['region'].get('name') == region_id):
             existing_model_run = model_run
             break
-        elif(isinstance(model_region, str) and
-             model_region == region_id):  # noqa
+        elif (isinstance(model_region, str) and
+               model_region == region_id):  # noqa
             existing_model_run = model_run
             break
 

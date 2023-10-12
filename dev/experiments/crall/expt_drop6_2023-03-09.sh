@@ -8752,7 +8752,7 @@ model:
         global_saliency_weight : 1.00
         multimodal_reduce      : learned_linear
         continual_learning     : true
-        perterb_scale          : 1e-8
+        perterb_scale          : 1e-7
 optimizer:
     class_path: torch.optim.AdamW
     init_args:

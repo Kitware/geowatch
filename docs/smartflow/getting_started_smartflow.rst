@@ -59,6 +59,10 @@ Test that you can reach the service with:
 
    kubectl get svc
 
+   # or
+
+   kubectl get nodes
+
 
 Troubleshooting
 ---------------
@@ -111,3 +115,65 @@ Next Steps
 * `Copy large files to EFS <smartflow_copying_large_files_to_efs.md>`_
 
 * `Training fusion models on AWS <smartflow_training_fusion_models.md>`_
+
+
+SeeAlso
+-------
+
+k9s TUI - https://k9scli.io/topics/install/
+
+
+https://smartgitlab.com/blacksky/smartflow
+
+
+To upgrade smartflow
+
+
+export ENVIRONMENT_NAME="kw-v3-0-0"
+export AWS_PROFILE="iarpa"
+export AWS_REGION=us-west-2
+export AWS_ACCOUNT_ID=$(aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text)
+
+.. code:: bash
+
+    # Clone smartflow
+
+    export AWS_PROFILE="iarpa"
+    export SMARTFLOW_ENVIRONMENT_NAME="kw-v3-0-0"
+    export SMARTFLOW_AWS_ACCOUNT_ID=$(aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text)
+
+    echo $SMARTFLOW_AWS_ACCOUNT_ID
+    python3 scripts/env_update.py \
+        --aws_account_id $SMARTFLOW_AWS_ACCOUNT_ID \
+        --environment_name $SMARTFLOW_ENVIRONMENT_NAME
+
+
+# Can monitor progress in the cloud formation dashboard
+https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2
+
+To tune a parameter go to parameter store,
+
+https://us-west-2.console.aws.amazon.com/systems-manager/parameters/?region=us-west-2&tab=Table
+
+
+change it and then re-run the update script
+
+To monitor EC2:
+
+https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:instanceState=running;search=:smartflow;v=3;$case=tags:true%5C,client:false;$regex=tags:false%5C,client:false;sort=desc:tag:Name
+
+
+To remove an old environment
+
+.. code:: bash
+
+    export AWS_PROFILE="iarpa"
+    export TEARDOWN_SMARTFLOW_ENVIRONMENT_NAME="kitware-prod-v4-eks"
+    export SMARTFLOW_AWS_ACCOUNT_ID=$(aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text)
+
+    echo "SMARTFLOW_AWS_ACCOUNT_ID=$SMARTFLOW_AWS_ACCOUNT_ID"
+    echo "TEARDOWN_SMARTFLOW_ENVIRONMENT_NAME=$TEARDOWN_SMARTFLOW_ENVIRONMENT_NAME"
+    echo "AWS_PROFILE=$AWS_PROFILE"
+    python3 scripts/env_teardown.py \
+        --aws_account_id $SMARTFLOW_AWS_ACCOUNT_ID \
+        --environment_name "$TEARDOWN_SMARTFLOW_ENVIRONMENT_NAME"
