@@ -1559,6 +1559,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         Builds symlinks to results node paths based on region and param
         hashids.
         """
+        assert agg.output_dpath is not None
+        assert agg.type is not None
         base_dpath = (agg.output_dpath / 'param_links' / agg.type)
         byregion_dpath = (base_dpath / 'by_region').ensuredir()
         byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
