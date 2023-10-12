@@ -686,7 +686,6 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             '''
             Drops frames in a fraction of batch items.
             '''), group=AUGMENTATION_GROUP),
-
         'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Given that a batch item is selected for temporal dropout, this is
@@ -694,6 +693,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             never removed.
             '''), group=AUGMENTATION_GROUP),
 
+        'modality_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            The fraction of batch-items modality dropout is applied to.
+            '''), group=AUGMENTATION_GROUP),
         'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Drops late-fused modalities in each frame with this probability,
@@ -701,6 +704,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             '''), group=AUGMENTATION_GROUP),
 
         # TODO: specify channels that are allowed to be dropped out?
+        'channel_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            The fraction of batch-items channel dropout is applied to.
+            '''), group=AUGMENTATION_GROUP),
         'channel_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Drops early-fused channels within each modality with this
@@ -1382,11 +1389,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         modality_streams = sensor_channels.streams()
         if target_['allow_augment']:
             # Augment by dropping out modalities, but always keep at least one.
-            if self.config.modality_dropout:
-                keep_score = self.augment_rng.rand(len(modality_streams))
-                keep_idxs = util_kwarray.argsort_threshold(
-                    keep_score, self.config.modality_dropout, num_top=1)
-                modality_streams = list(ub.take(modality_streams, keep_idxs))
+            if self.config.modality_dropout_rate > self.augment_rng.rand():
+                if self.config.modality_dropout:
+                    keep_score = self.augment_rng.rand(len(modality_streams))
+                    keep_idxs = util_kwarray.argsort_threshold(
+                        keep_score, self.config.modality_dropout, num_top=1)
+                    modality_streams = list(ub.take(modality_streams, keep_idxs))
 
         # Sample information from each stream (each stream is a separate mode)
         sample_streams = {}
@@ -1437,14 +1445,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         break
 
             if target_['allow_augment'] and self.config.channel_dropout:
-                num_bands = sample['im'].shape[3]
-                if num_bands > 1:
-                    keep_score = self.augment_rng.rand(num_bands)
-                    keep_idxs = util_kwarray.argsort_threshold(
-                        keep_score, self.config.channel_dropout, num_top=1)
-                    drop_flags = ~kwarray.boolmask(keep_idxs, num_bands)
-                    if np.any(drop_flags):
-                        sample['im'][:, :, :, drop_flags] = np.nan
+                if self.config.channel_dropout_rate > self.augment_rng.rand():
+                    num_bands = sample['im'].shape[3]
+                    if num_bands > 1:
+                        keep_score = self.augment_rng.rand(num_bands)
+                        keep_idxs = util_kwarray.argsort_threshold(
+                            keep_score, self.config.channel_dropout, num_top=1)
+                        drop_flags = ~kwarray.boolmask(keep_idxs, num_bands)
+                        if np.any(drop_flags):
+                            sample['im'][:, :, :, drop_flags] = np.nan
 
             sample_streams[stream.spec] = sample
             if 'annots' in sample:
