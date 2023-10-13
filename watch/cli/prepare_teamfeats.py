@@ -24,9 +24,10 @@ Example:
     >>> #
     >>>     'virtualenv_cmd': 'conda activate watch',
     >>> #
-    >>>     'with_landcover': 1,
-    >>>     'with_materials': 1,
-    >>>     'with_invariants2': 1,
+    >>>     #'with_landcover': 1,
+    >>>     #'with_materials': 1,
+    >>>     #'with_invariants2': 1,
+    >>>     'with_mae': 1,
     >>> #
     >>>     'run': 0,
     >>>     'check': False,

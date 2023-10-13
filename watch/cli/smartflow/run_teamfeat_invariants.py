@@ -105,6 +105,9 @@ def run_uky_invariants_for_baseline(config):
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
 
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={invariants_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
     ingressed_assets['enriched_bas_kwcoco_file'] = invariants_kwcoco_path
     ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
 

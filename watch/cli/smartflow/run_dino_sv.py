@@ -241,6 +241,8 @@ def run_dino_sv(config):
     ingressed_assets['sv_out_site_models'] = output_sites_dpath
     ingressed_assets['sv_out_region_models'] = output_region_dpath
     if dino_boxes_kwcoco_path.exists():
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={dino_boxes_kwcoco_path}', '--inplace=1', '--absolute=0'])
         ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
 
     smartflow_egress(ingressed_assets,

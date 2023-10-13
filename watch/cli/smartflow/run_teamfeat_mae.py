@@ -5,7 +5,7 @@ from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
 
 
-class TeamFeatColdConfig(scfg.DataConfig):
+class TeamFeatMAE(scfg.DataConfig):
     """
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
@@ -37,10 +37,11 @@ class TeamFeatColdConfig(scfg.DataConfig):
 def main():
     import os
     os.environ['NO_COLOR'] = '1'
-    config = TeamFeatColdConfig.cli(strict=True)
+    config = TeamFeatMAE.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
-    from watch.mlops.pipeline_nodes import ProcessNode
+    from watch.cli import watch_coco_stats
+    from kwcoco.cli import coco_stats
 
     ####
     # DEBUGGING:
@@ -51,18 +52,17 @@ def main():
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
+
+    # TODO: these input output bucket names need to be configurable so they can
+    # be run at BAS or at ACSC time and composed at the DAG level.
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
         config.input_path,
         [
             # Pull the current teamfeature-enriched dataset to modify
-            'enriched_bas_kwcoco_file',
-            'enriched_bas_kwcoco_teamfeats',
-            'enriched_bas_kwcoco_rawbands',
-
-            # Pull the dense temporal data needed by COLD
-            'timedense_bas_kwcoco_file',
-            'timedense_bas_kwcoco_rawbands'
+            'enriched_acsc_kwcoco_file',
+            'enriched_acsc_kwcoco_teamfeats',
+            'enriched_acsc_kwcoco_rawbands',
         ],
         ingress_dir,
         config.aws_profile,
@@ -80,102 +80,57 @@ def main():
         strip_nonregions=True,
     )
 
-    # NOTE:
-    # For COLD we need to compute on the full non-time-combined data,
-    # and then transfer the features to the time-combined data.
     ingress_dir_contents1 = list(ingress_dir.ls())
     print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
 
-    full_input_kwcoco_fpath = ingressed_assets['timedense_bas_kwcoco_file']
-    timecombined_input_kwcoco_fpath = ingressed_assets['enriched_bas_kwcoco_file']
+    input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
 
-    timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
-        stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
-
-    from watch.cli import watch_coco_stats
-    from kwcoco.cli import coco_stats
-    watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
+    output_kwcoco_fpath = ub.Path(input_kwcoco_fpath).augment(
+        stemsuffix='_mae', ext='.kwcoco.zip', multidot=True)
 
     # TOOD: better passing of configs
 
-    # Quick and dirty, just the existing prepare teamfeat script to get the
-    # cold invocation. This has a specific output pattern that we hard code
-    # here.
+    # Use the existing prepare teamfeat script to get the features invocation.
+    # This has a specific output pattern that we hard code here.
     from watch.cli import prepare_teamfeats
-    base_fpath = ub.Path(full_input_kwcoco_fpath)
+    base_fpath = ub.Path(input_kwcoco_fpath)
+
+    watch_coco_stats.main(cmdline=0, src=base_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[base_fpath])
+
     prepare_teamfeats.main(
         cmdline=0,
-        with_cold=1,
+        with_mae=1,
         expt_dvc_dpath=config.expt_dvc_dpath,
-        base_fpath=full_input_kwcoco_fpath,
-        cold_workers=4,
+        base_fpath=base_fpath,
         assets_dname='_teamfeats',
-        cold_workermode='process',
         run=1,
         backend='serial',
     )
     # Hard coded-specific output pattern.
     subset_name = base_fpath.name.split('.')[0]
-    combo_code = 'C'
+    combo_code = 'E'
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
     ingress_dir_contents2 = list(ingress_dir.ls())
     print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
 
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={full_output_kwcoco_fpath}', '--inplace=1', '--absolute=0'])
+
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
-
-    watch_coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=[timecombined_input_kwcoco_fpath])
-
-    ###
-    # Execute the transfer of COLD features to the time-combined dataset
-    transfer_node = ProcessNode(
-        command=ub.codeblock(
-            r'''
-            python -m watch.tasks.cold.transfer_features
-            '''),
-        in_paths={
-            'coco_fpath': full_output_kwcoco_fpath,
-            'combine_fpath': timecombined_input_kwcoco_fpath,
-        },
-        out_paths={
-            'new_coco_fpath': timecombined_output_kwcoco_fpath,
-        },
-        config={
-            'copy_assets': True,
-            'io_workers': 4,
-        },
-        node_dpath='.',
-    )
-    command = transfer_node.final_command()
-    ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
-
-    # Reroot kwcoco files to make downloaded results easier to work with
-    ub.cmd(['kwcoco', 'reroot', f'--src={timecombined_output_kwcoco_fpath}', '--inplace=1', '--absolute=0'])
-
-    watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
-
-    ingress_dir_contents3 = list(ingress_dir.ls())
-    print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
 
     # This is the location that COLD features will be written to.
-    (ingress_dir / '_teamfeats').ensuredir()
-    (ingress_dir / '_teamfeats/dummy').touch()
-    ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
-
-    # HACK: teamfeats is not ACTUALLY where the features were written. They are
-    # in the reccg folder, we should fix this, but for now lets just get an
-    # end-to-end run.
-    ingressed_assets['hacked_cold_assets'] = ingress_dir / 'reccg'
+    teamfeat_dpath = (ingress_dir / '_teamfeats').ensuredir()
+    (teamfeat_dpath / 'dummy').touch()
+    ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = teamfeat_dpath
     # This is the kwcoco file with the all teamfeature outputs (i.e. previous
-    # team features + COLD)
-    ingressed_assets['enriched_bas_kwcoco_file'] = timecombined_output_kwcoco_fpath
+    # team features + MAE)
+    ingressed_assets['enriched_acsc_kwcoco_file'] = output_kwcoco_fpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,

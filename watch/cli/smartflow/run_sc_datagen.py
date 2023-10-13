@@ -285,6 +285,16 @@ def run_generate_sc_cropped_kwcoco(config):
 
     ingressed_assets['cropped_kwcoco_for_sc_assets'] = sc_cropped_assets_dir
 
+    # This is an alias to the ACSC dataset and assets that team feature
+    # scripts will update.
+    assc_kwcoco_rawband_dpath = sc_cropped_assets_dir
+    assc_kwcoco_teamfeat_dpath = (ingress_dir / '_teamfeats').ensuredir()
+    (assc_kwcoco_rawband_dpath / 'dummy').write_text('dummy')
+    (assc_kwcoco_teamfeat_dpath / 'dummy').write_text('dummy')
+    ingressed_assets['enriched_acsc_kwcoco_file'] = ta1_sc_cropped_kwcoco_path
+    ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = assc_kwcoco_teamfeat_dpath
+    ingressed_assets['enriched_acsc_kwcoco_rawbands'] = assc_kwcoco_rawband_dpath
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,

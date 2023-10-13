@@ -101,6 +101,9 @@ def run_landcover_for_baseline(config):
         '--dst', combo_features_kwcoco_path,
     ], check=True, verbose=3, capture=False)
 
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={combo_features_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)

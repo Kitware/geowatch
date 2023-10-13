@@ -97,8 +97,11 @@ def run_sc_fusion_for_baseline(config):
         assets=[
             {'key': 'cropped_region_models_bas'},
             {'key': 'sv_out_region_models', 'allow_missing': False},
-            {'key': 'cropped_kwcoco_for_sc'},
-            {'key': 'cropped_kwcoco_for_sc_assets'}
+            # {'key': 'cropped_kwcoco_for_sc'},
+            # {'key': 'cropped_kwcoco_for_sc_assets'}
+            {'key': 'enriched_acsc_kwcoco_file'},
+            {'key': 'enriched_acsc_kwcoco_teamfeats'},
+            {'key': 'enriched_acsc_kwcoco_rawbands'},
         ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
@@ -156,7 +159,7 @@ def run_sc_fusion_for_baseline(config):
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
-    with open(ingressed_assets['cropped_kwcoco_for_sc']) as f:
+    with open(ingressed_assets['enriched_acsc_kwcoco_file']) as f:
         ingress_kwcoco_data = json.load(f)
 
     if len(ingress_kwcoco_data.get('videos', ())) > 0:
@@ -172,7 +175,7 @@ def run_sc_fusion_for_baseline(config):
         sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
         sc_pxl.configure({
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
-            'test_dataset': ingressed_assets['cropped_kwcoco_for_sc'],
+            'test_dataset': ingressed_assets['enriched_acsc_kwcoco_file'],
         } | sc_pxl_config)
         command = sc_pxl.command()
 
@@ -259,6 +262,9 @@ def run_sc_fusion_for_baseline(config):
     # Add in intermediate outputs for debugging
     EGRESS_INTERMEDIATE_OUTPUTS = True
     if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+        ub.cmd(['kwcoco', 'reroot', f'--src={tracked_sc_kwcoco_path}', '--inplace=1', '--absolute=0'])
         ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
         ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
         ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath

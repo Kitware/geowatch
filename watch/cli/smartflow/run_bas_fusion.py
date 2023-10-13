@@ -304,6 +304,9 @@ def run_bas_fusion_for_baseline(config):
 
     EGRESS_INTERMEDIATE_OUTPUTS = True
     if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={bas_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+        ub.cmd(['kwcoco', 'reroot', f'--src={tracked_bas_kwcoco_path}', '--inplace=1', '--absolute=0'])
         # Add BAS saliency outputs to egressed attributes for debugging
         ingressed_assets['bas_pred_saliency_assets'] = ingress_dir / '_assets/pred_saliency'
         ingressed_assets['bas_fusion_kwcoco_path'] = bas_fusion_kwcoco_path
