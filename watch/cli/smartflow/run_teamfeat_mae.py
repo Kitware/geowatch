@@ -122,8 +122,6 @@ def main():
 
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
-    from watch.cli import watch_coco_stats
-    from kwcoco.cli import coco_stats
 
     ####
     # DEBUGGING:

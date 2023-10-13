@@ -73,6 +73,7 @@ def run_sc_fusion_for_baseline(config):
     from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
     from watch.mlops import smart_pipeline
+    import kwcoco
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -159,10 +160,13 @@ def run_sc_fusion_for_baseline(config):
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
-    with open(ingressed_assets['enriched_acsc_kwcoco_file']) as f:
-        ingress_kwcoco_data = json.load(f)
 
-    if len(ingress_kwcoco_data.get('videos', ())) > 0:
+    # TODO: could use kwcoco info to get lazy loading of just the header.
+    ingress_dset = kwcoco.CocoDataset(
+        ingressed_assets['enriched_acsc_kwcoco_file'],
+        autobuild=False
+    )
+    if ingress_dset.n_videos > 0:
         # 3. Run fusion
         print('*********************')
         print("* Running SC fusion *")
