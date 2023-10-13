@@ -167,8 +167,8 @@ def main():
 
     input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
 
-    output_kwcoco_fpath = ub.Path(input_kwcoco_fpath).augment(
-        stemsuffix='_mae', ext='.kwcoco.zip', multidot=True)
+    # output_kwcoco_fpath = ub.Path(input_kwcoco_fpath).augment(
+    #     stemsuffix='_mae', ext='.kwcoco.zip', multidot=True)
 
     # TOOD: better passing of configs
 
@@ -179,7 +179,7 @@ def main():
     # watch_coco_stats.main(cmdline=0, src=base_fpath)
     # coco_stats._CLI.main(cmdline=0, src=[base_fpath])
 
-    ub.cmd(f'kwcoco validate {base_fpath}', verbose=3)
+    # ub.cmd(f'kwcoco validate {base_fpath}', verbose=3)
     ub.cmd(f'kwcoco stats {base_fpath}', verbose=3)
     ub.cmd(f'geowatch stats {base_fpath}', verbose=3)
 
@@ -204,8 +204,8 @@ def main():
     # Reroot kwcoco files to make downloaded results easier to work with
     ub.cmd(['kwcoco', 'reroot', f'--src={full_output_kwcoco_fpath}', '--inplace=1', '--absolute=0'])
 
-    watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
+    ub.cmd(f'kwcoco stats {full_output_kwcoco_fpath}', verbose=3)
+    ub.cmd(f'geowatch stats {full_output_kwcoco_fpath}', verbose=3)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
 
@@ -215,7 +215,7 @@ def main():
     ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = teamfeat_dpath
     # This is the kwcoco file with the all teamfeature outputs (i.e. previous
     # team features + MAE)
-    ingressed_assets['enriched_acsc_kwcoco_file'] = output_kwcoco_fpath
+    ingressed_assets['enriched_acsc_kwcoco_file'] = full_output_kwcoco_fpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,
