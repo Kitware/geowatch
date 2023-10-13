@@ -21,6 +21,8 @@ docker run \
     -it "$IMAGE_NAME" bash
 
 (cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
+(cd /root/code/watch && git fetch tmp)
+(cd /root/code/watch && git checkout dev/0.11.0)
 (cd /root/code/watch && git pull tmp)
 
 (cd /root/data/smart_expt_dvc && dvc remote add tmp /extern_data/dvc-repos/smart_expt_dvc/.dvc/cache)

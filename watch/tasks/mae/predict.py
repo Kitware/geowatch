@@ -671,7 +671,7 @@ class Predict():
         return
 
 
-def main(cmdline=0, **kwargs):
+def main(cmdline=1, **kwargs):
     args = MAEPredictConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
     rich.print('config = ' + ub.urepr(args))
