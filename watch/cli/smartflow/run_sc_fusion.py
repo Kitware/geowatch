@@ -6,13 +6,56 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import json
 import os
 import shutil
 import sys
 import traceback
 import scriptconfig as scfg
 import ubelt as ub
+
+
+
+__debugging__ = r"""
+
+
+IMAGE_NAME=watch:0.11.0-431640169-strict-pyenv3.11.2-20231013T170828-0400-from-86ab77d4
+
+docker run \
+    --runtime=nvidia \
+    --volume "$HOME/temp/debug_smartflow/ingress":/tmp/ingress \
+    --volume $HOME/.aws:/root/.aws:ro \
+    --volume "$HOME/code":/extern_code:ro \
+    --volume "$HOME/data":/extern_data:ro \
+    --volume "$HOME"/.cache/pip:/pip_cache \
+    --env AWS_PROFILE=iarpa \
+    -it "$IMAGE_NAME" bash
+
+(cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
+(cd /root/code/watch && git fetch tmp)
+(cd /root/code/watch && git checkout dev/0.11.0)
+(cd /root/code/watch && git pull tmp)
+
+ipython
+
+from watch.cli.smartflow.run_sc_fusion import *  # NOQA
+
+
+# Copied from a smartflow run that failed,
+cmdline = 0
+kwargs = {
+    'input_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/acsc_mae/items.jsonl',
+    'input_region_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/input/mono/region_models/NZ_R001.geojson',
+    'output_path'            : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion/items.jsonl',
+    'aws_profile'            : None,
+    'dryrun'                 : False,
+    'outbucket'              : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion',
+    'ta2_s3_collation_bucket': None,
+    'sc_pxl_config'          : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 12\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/wu/acsc/wu_mae_epoch=125-step=2772.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
+    'sc_poly_config'         : 'boundaries_as: polys\nmin_area_square_meters: 7200\nresolution: 8GSD\nsite_score_thresh: 0.375\nsmoothing: null\nthresh: 0.07',
+}
+
+
+"""
 
 
 class SCFusionConfig(scfg.DataConfig):
@@ -58,8 +101,8 @@ class SCFusionConfig(scfg.DataConfig):
             '''))
 
 
-def main():
-    config = SCFusionConfig.cli(strict=True)
+def main(cmdline=1, **kwargs):
+    config = SCFusionConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_sc_fusion_for_baseline(config)
 
@@ -162,14 +205,15 @@ def run_sc_fusion_for_baseline(config):
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
 
     # TODO: could use kwcoco info to get lazy loading of just the header.
-    ingress_dset = kwcoco.CocoDataset(
-        ingressed_assets['enriched_acsc_kwcoco_file'],
-        autobuild=False
-    )
+    input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
+    ingress_dset = kwcoco.CocoDataset(input_kwcoco_fpath, autobuild=False)
     if ingress_dset.n_videos > 0:
         # 3. Run fusion
         print('*********************')
         print("* Running SC fusion *")
+
+        ub.cmd(f'kwcoco stats {input_kwcoco_fpath}', verbose=3)
+        ub.cmd(f'geowatch stats {input_kwcoco_fpath}', verbose=3)
 
         # The params should be fully given in the DAG.
         sc_pxl_config = Yaml.coerce(config.sc_pxl_config or {})
@@ -182,6 +226,9 @@ def run_sc_fusion_for_baseline(config):
             'test_dataset': ingressed_assets['enriched_acsc_kwcoco_file'],
         } | sc_pxl_config)
         command = sc_pxl.command()
+
+        ub.cmd(f'kwcoco stats {sc_fusion_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {sc_fusion_kwcoco_path}', verbose=3)
 
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
@@ -226,6 +273,9 @@ def run_sc_fusion_for_baseline(config):
             # Add in intermediate outputs for debugging
             ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
             ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+
+            ub.cmd(f'kwcoco stats {tracked_sc_kwcoco_path}', verbose=3)
+            ub.cmd(f'geowatch stats {tracked_sc_kwcoco_path}', verbose=3)
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
