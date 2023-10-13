@@ -262,6 +262,7 @@ class WatchDataset(Dataset):
 
         sample = self.sampler.load_sample(tr, nodata='float')
         images : np.ndarray = sample['im']
+        images = images.astype(np.float32)
         std = np.nanstd(images)
         mean = np.nanmean(images)
         if std != 0:
@@ -670,8 +671,8 @@ class Predict():
         return
 
 
-def main():
-    args = MAEPredictConfig.cli()
+def main(cmdline=0, **kwargs):
+    args = MAEPredictConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
     rich.print('config = ' + ub.urepr(args))
     predict = Predict(args)
