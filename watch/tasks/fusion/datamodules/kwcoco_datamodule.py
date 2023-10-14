@@ -546,6 +546,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             outputs (Dict[str, Tensor]):
                 maybe-collated list of network outputs?
 
+            max_items (int):
+                Maximum number of items within this batch to draw in a single
+                figure. Defaults to 2.
+
+            overlay_on_image (bool):
+                if True overlay annotations on image data for a more compact
+                view. if False separate annotations / images for a less
+                cluttered view.
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
@@ -692,8 +701,64 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 overlay_on_image=overlay_on_image, classes=classes, **kwargs)
 
             canvas_list.append(part)
+
+        num_images = len(canvas_list)
+        # import xdev
+        # xdev.embed()
+        if 1:
+            # Choose a sensible chunksize for the grid based on the input image
+            # aspect ratios
+
+            # TODO: could add this as a grid heuristic.
+            import numpy as np
+            hs = np.array([c.shape[0] for c in canvas_list])
+            ws = np.array([c.shape[1] for c in canvas_list])
+
+            h_majorness = hs > (ws * 1.2)
+            w_majorness = ws > (hs * 1.2)
+            if h_majorness.sum() >= w_majorness.sum():
+                majors, minors = hs, ws
+                stack_axis = 0
+            else:
+                majors, minors = ws, hs
+                stack_axis = 1
+
+            majors_per_minor = (majors / minors).mean()
+            # Not sure if this is quite right
+            chunksize = int(np.ceil(np.sqrt(majors_per_minor * num_images)))
+
+            """
+            import sympy as sym
+            majors_per_minor, num_imgs = sym.symbols('majors_per_minor, num_imgs')
+            real_grid_major, real_grid_minor = sym.symbols('real_grid_w, real_grid_h')
+            ideal_grid_dim = sym.symbols('ideal_grid_dim')
+            sym.sqrt(num_imgs)
+            vars = (majors_per_minor, num_imgs, real_grid_major, real_grid_minor, ideal_grid_dim)
+
+            # TODO: get the system that solves for the number of images we
+            # stack across the minor dimension such that we roughly get a
+            # square image in the end.
+
+            equations = [
+                sym.Eq(ideal_grid_dim * ideal_grid_dim, num_imgs * majors_per_minor),
+                sym.Eq(majors_per_minor * ideal_grid_dim, real_grid_minor),
+                sym.Eq(ideal_grid_dim, real_grid_major),
+            ]
+            print('equations = {}'.format(ub.urepr(equations, nl=1)))
+            from sympy import solve
+            solutions = solve(equations, *vars, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            solutions = solve(equations, real_grid_major, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            solutions = solve(equations, real_grid_minor, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            """
+        else:
+            stack_axis = 1
+            chunksize = int(np.ceil(np.sqrt(num_images)))
+
         canvas = kwimage.stack_images_grid(
-            canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])
+            canvas_list, chunksize=chunksize, axis=stack_axis, overlap=-12, bg_value=[64, 60, 60])
 
         with_legend = True
         if with_legend:

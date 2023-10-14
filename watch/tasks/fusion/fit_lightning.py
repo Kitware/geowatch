@@ -53,6 +53,13 @@ class SmartTrainer(pl.Trainer):
             import rich
             dpath = self.logger.log_dir
             rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+
+        if hasattr(self.datamodule, '_notify_about_tasks'):
+            # Not sure if this is the best place, but we want datamodule to be
+            # able to determine what tasks it should be producing data for.
+            # We currently infer this from information in the model.
+            self.datamodule._notify_about_tasks(model=self.model)
+
         super()._run_stage(*args, **kwargs)
 
 

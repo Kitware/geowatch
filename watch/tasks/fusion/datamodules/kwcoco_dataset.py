@@ -1115,7 +1115,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'change': True,
             'class': True,
             'saliency': True,
-            'boxes': True,
+            # 'boxes': True,
+            'boxes': False,
+            'outputs': mode != 'fit',  # for predict-time-stitching
         }
 
         # Hacks: combinable channels can be visualized as RGB images.
@@ -2478,9 +2480,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame_item, gid, output_dsize, time_idx,
                     mode_to_invalid_mask, resolution_info, truth_info,
                     meta_info)
-                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
-                frame_item['output_weights'] = output_weights
-            else:
+
+            wants_outputs = self.requested_tasks['outputs']
+            if wants_outputs and 'output_weights' not in frame_item:
                 output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
                 frame_item['output_weights'] = output_weights
 
@@ -2846,7 +2848,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             frame_item['saliency'] = task_target_ohe['saliency']
             frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
 
-        frame_item['output_weights'] = generic_frame_weight
+        wants_outputs = self.requested_tasks['outputs']
+        if wants_outputs:
+            frame_item['output_weights'] = generic_frame_weight
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):

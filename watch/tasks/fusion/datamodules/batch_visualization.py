@@ -242,7 +242,8 @@ class BatchVisualizationBuilder:
         if builder.requested_tasks['change']:
             truth_keys.append('change')
             weight_keys.append('change_weights')
-        weight_keys.append('output_weights')
+        if builder.requested_tasks['outputs']:
+            weight_keys.append('output_weights')
 
         # Prepare metadata on each frame
         frame_metas = []

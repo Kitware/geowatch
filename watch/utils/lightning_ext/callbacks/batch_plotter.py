@@ -1,17 +1,12 @@
+import kwimage
+import numpy as np
 import pytorch_lightning as pl
 import ubelt as ub
-import numpy as np
-import kwimage
-from watch.utils import util_kwimage
-from kwutil.slugify_ext import smart_truncate
 import warnings
-from watch.utils.lightning_ext import util_model
 from kwutil import util_time
-# import pytimeparse
-# import numbers
-# import datetime
-
-# from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from kwutil.slugify_ext import smart_truncate
+from watch.utils import util_kwimage
+from watch.utils.lightning_ext import util_model
 
 try:
     import xdev
@@ -38,6 +33,15 @@ class BatchPlotter(pl.callbacks.Callback):
             item within an epoch. Can be given as a timedelta, a string
             parsable by `coerce_timedelta` (e.g.  '1M') or a numeric number of
             seconds.
+
+        max_items (int):
+            Maximum number of items within this batch to draw in a single
+            figure. Defaults to 2.
+
+        overlay_on_image (bool):
+            if True overlay annotations on image data for a more compact
+            view. if False separate annotations / images for a less
+            cluttered view.
 
     TODO:
         - [ ] Doctest
@@ -71,10 +75,10 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
 
     References:
-        https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
+        .. [LightningCallbacks] https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
 
-    def __init__(self, num_draw=2, draw_interval='5minutes'):
+    def __init__(self, num_draw=2, draw_interval='5minutes', max_items=2, overlay_on_image=False):
         super().__init__()
         self.num_draw = num_draw
 
@@ -90,6 +94,12 @@ class BatchPlotter(pl.callbacks.Callback):
         #     num_seconds = pytimeparse.parse(draw_interval)
         #     if num_seconds is None:
         #         raise ValueError(f'{draw_interval} is not a parsable delta')
+
+        # Keyword arguments passed to the datamodule draw batch function
+        self.draw_batch_kwargs = {
+            'max_items': max_items,
+            'overlay_on_image': overlay_on_image,
+        }
 
         self.draw_interval_seconds = num_seconds
         self.draw_timer = None
@@ -148,9 +158,13 @@ class BatchPlotter(pl.callbacks.Callback):
         datamodule = trainer.datamodule
         if datamodule is None:
             # must have datamodule to draw batches
-            canvas = kwimage.draw_text_on_image({'width': 512, 'height': 512}, 'Implement draw_batch in your datamodule', org=(1, 1))
+            canvas = kwimage.draw_text_on_image(
+                {'width': 512, 'height': 512},
+                'Implement draw_batch in your datamodule',
+                org=(1, 1))
         else:
-            canvas = datamodule.draw_batch(batch, outputs=outputs)
+            canvas = datamodule.draw_batch(batch, outputs=outputs,
+                                           **self.draw_batch_kwargs)
 
         canvas = np.nan_to_num(canvas)
 
@@ -193,6 +207,8 @@ class BatchPlotter(pl.callbacks.Callback):
         if self.draw_interval_seconds > 0:
             do_draw |= self.draw_timer.toc() > self.draw_interval_seconds
         if trainer.log_dir is not None:
+            # UNDOCUMENTED HIDDEN DEVELOPER SUPER HACK:
+            # (very useful if you know about it)
             # By making this file we can let the user see a lot of batches
             # quickly.
             if (ub.Path(trainer.log_dir) / 'please_draw').exists():
