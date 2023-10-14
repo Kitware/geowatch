@@ -8,6 +8,35 @@ import ubelt as ub
 import warnings
 
 try:
+    from packaging.version import parse as Version
+except ImportError:
+    from distutils.version import LooseVersion as Version
+
+
+try:
+    import importlib.metadata
+    try:
+        _TORCH_VERSION = Version(importlib.metadata.version('torch'))
+    except importlib.metadata.PackageNotFoundError:
+        _TORCH_VERSION = None
+except ImportError:
+    import pkg_resources
+    try:
+        _TORCH_VERSION = Version(pkg_resources.get_distribution('torch').version)
+    except pkg_resources.DistributionNotFound:
+        _TORCH_VERSION = None
+
+if _TORCH_VERSION is None:
+    _TORCH_LT_1_7_0 = None
+    _TORCH_LT_2_1_0 = None
+    _TORCH_HAS_MAX_BUG = None
+else:
+    _TORCH_LT_1_7_0 = _TORCH_VERSION < Version('1.7')
+    _TORCH_LT_2_1_0 = _TORCH_VERSION < Version('2.1')
+    _TORCH_HAS_MAX_BUG = _TORCH_LT_1_7_0
+
+
+try:
     # The math variant only exists in Python 3+ but is faster for scalars
     # so try and use it
     from math import isclose
@@ -668,6 +697,8 @@ def torch_array_equal(data1, data2, equal_nan=False) -> bool:
         >>> assert result1 is False
         >>> assert result3 is True
     """
+    # TODO: just use
+    # return kwarray.ArrayAPI.coerce('torch').array_equal(data1, data2, equal_nan)
     import torch
     if equal_nan:
         val_flags = torch.eq(data1, data2)
@@ -675,7 +706,14 @@ def torch_array_equal(data1, data2, equal_nan=False) -> bool:
         flags = val_flags | nan_flags
         return bool(flags.all())
     else:
-        return torch.equal(data1, data2)
+        if _TORCH_LT_2_1_0:
+            return torch.equal(data1, data2)
+        else:
+            # Torch 2.1 introduced a bug so we need an alternate
+            # implementation.
+            # References:
+            #     https://github.com/pytorch/pytorch/issues/111251
+            return bool(torch.eq(data1, data2).all())
 
 
 def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,

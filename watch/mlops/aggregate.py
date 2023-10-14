@@ -188,7 +188,7 @@ class AggregateEvluationConfig(AggregateLoader):
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
-    symlink_results = Value(True, isflag=True, help='if True make symlinks based on region and param hashids')
+    symlink_results = Value(False, isflag=True, help='if True make symlinks based on region and param hashids')
 
     rois = Value('auto', help='Comma separated regions of interest')
 
@@ -1565,9 +1565,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         base_dpath = (agg.output_dpath / 'param_links' / agg.type)
         byregion_dpath = (base_dpath / 'by_region').ensuredir()
         byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
-
+        print('base_dpath = {}'.format(ub.urepr(base_dpath, nl=1)))
+        print('byregion_dpath = {}'.format(ub.urepr(byregion_dpath, nl=1)))
+        print('byparamid_dpath = {}'.format(ub.urepr(byparamid_dpath, nl=1)))
         grouped = agg.table.groupby(['param_hashid', 'region_id'])
-        for group_vals, group in grouped:
+        for group_vals, group in ub.ProgIter(list(grouped), desc='symlink nodes'):
             # handle the fact that there can be multiple runs of the same param hashid.
             # TODO: sort the groups in a consistent way if possible
             for group_idx, row in enumerate(group.to_dict('records'), start=1):
