@@ -288,6 +288,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * chip_dims / window_space_dims
     """
     __default__ = {
+
+        # TODO:
+        # 'positive_labels': scfg.Value(None, help=ub.paragraph(
+        #     '''
+        #     Labels to consider positive (in addition to infered labels)
+        #     ''')),
+
         ###############
         # SPACE OPTIONS
         ###############
@@ -882,6 +889,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if exists_flag:
                 graph.nodes[name].update(**_catinfo)
 
+        # from kwutil import util_yaml
+        # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
+
         self.classes = kwcoco.CategoryTree(graph)
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
@@ -946,6 +956,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         else:
             negative_classes = (
                 self.ignore_classes | self.background_classes | self.negative_classes)
+
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 sampler.dset,
                 negative_classes=negative_classes,
@@ -1328,6 +1339,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
                           gid_to_isbad, gid_to_sample):
+        """
+        Core logic that uses the target dictionary to sample a single frame at
+        a time via ndsampler. Some post-loading augmentation is also done here.
+        """
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', '*')
