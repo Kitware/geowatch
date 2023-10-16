@@ -79,6 +79,12 @@ Update your AWS CLI and then reconfigure kubernetes by removing the previous
 context and rerunning the configuration step.
 
 
+If you need permissions for something, it is helpful to send your account info which can be queried with:
+
+.. code:: bash
+
+   aws sts get-caller-identity
+
 
 Running the Webserver
 ---------------------

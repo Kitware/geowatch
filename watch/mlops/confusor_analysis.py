@@ -51,7 +51,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         A path to an IARPA metrics MLops output directory node.
 
         Use this in the special case that you have an mlops or smartflow output
-        directory.
+        directory. This is only used to infer other values.  Not needed if
+        other values are specified.
         '''))
 
     detections_fpath = scfg.Value(None, help=ub.paragraph(

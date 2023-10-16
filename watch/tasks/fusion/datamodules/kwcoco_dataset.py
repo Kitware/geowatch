@@ -1819,7 +1819,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.normalize_peritem not in {None, False}:
+        if self.normalize_peritem is not None and self.normalize_peritem is not False:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:

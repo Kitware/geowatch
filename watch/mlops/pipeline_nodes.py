@@ -120,10 +120,6 @@ class Pipeline:
     @profile
     def build_nx_graphs(self):
         node_dict = self.node_dict
-        # if __debug__:
-        #     for name, node in node_dict.values():
-        #         assert node.name == name, (
-        #             'node instances require unique consistent names')
 
         self.proc_graph = nx.DiGraph()
         for name, node in node_dict.items():
@@ -284,7 +280,6 @@ class Pipeline:
             'ProcessNode': 'yellow',
             'InputNode': 'bright_cyan',
             'OutputNode': 'bright_yellow',
-
         }
 
         def labelize_graph(graph, color_procs=0):

@@ -53,8 +53,6 @@ kwargs = {
     'sc_pxl_config'          : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 12\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/wu/acsc/wu_mae_epoch=125-step=2772.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
     'sc_poly_config'         : 'boundaries_as: polys\nmin_area_square_meters: 7200\nresolution: 8GSD\nsite_score_thresh: 0.375\nsmoothing: null\nthresh: 0.07',
 }
-
-
 """
 
 
