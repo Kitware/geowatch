@@ -1117,7 +1117,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'saliency': True,
             # 'boxes': True,
             'boxes': False,
-            'outputs': mode != 'fit',  # for predict-time-stitching
+
+            # ouputs is not really a task, it requests the weights needed for
+            # predict-time stitching.
+            'outputs': mode != 'fit',
         }
 
         # Hacks: combinable channels can be visualized as RGB images.

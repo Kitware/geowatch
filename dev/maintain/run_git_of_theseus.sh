@@ -40,9 +40,6 @@ run_hercules(){
     hercules --burndown . > burndown_output
     cat burndown_output | labours -m burndown-project -o git_git.png
 
-    docker run --rm srcd/hercules hercules --burndown --pb https://github.com/git/git | docker run --rm -i -v $(pwd):/io srcd/hercules labours -f pb -m burndown-project -o /io/git_git.png
-    docker run -v $(pwd):/io --rm srcd/hercules hercules --burndown /io/.git | docker run --rm -i -v $(pwd):/io srcd/hercules labours -f pb -m burndown-project -o /io/git_git.png
-
-
-
+    docker run --rm srcd/hercules hercules --burndown --pb https://github.com/git/git | docker run --rm -i -v "$(pwd):/io" srcd/hercules labours -f pb -m burndown-project -o /io/git_git.png
+    docker run -v "$(pwd):/io" --rm srcd/hercules hercules --burndown /io/.git | docker run --rm -i -v "$(pwd):/io" srcd/hercules labours -f pb -m burndown-project -o /io/git_git.png
 }

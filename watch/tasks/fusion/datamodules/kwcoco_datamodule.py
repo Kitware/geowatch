@@ -770,7 +770,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         canvas = kwimage.stack_images_grid(
             canvas_list, chunksize=chunksize, axis=stack_axis, overlap=-12, bg_value=[64, 60, 60])
 
-        with_legend = self.requested_tasks.get('class', True)
+        with_legend = self.requested_tasks is None or self.requested_tasks.get('class', True)
         # with_legend = True
         if with_legend:
             if classes is None:

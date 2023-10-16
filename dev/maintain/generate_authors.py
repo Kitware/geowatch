@@ -50,10 +50,33 @@ KNOWN_ENTITIES = [
 
     {'email': 'jon.crall@kitware.com' , 'keyname': 'Jon Crall'},
     {'email': 'erotemic@gmail.com', 'keyname': 'Jon Crall'},
+
+    {'email': 'dennis.melamed@kitware.com', 'keyname': 'Dennis Melamed'},
+    {'email': 'ben.boeckel@kitware.com', 'keyname': 'Ben Boeckel'},
+    {'email': 'christopher.funk@kitware.com', 'keyname': 'Christopher Funk'},
+    {'email': 'paul.tunison@kitware.com', 'keyname': 'Paul Tunison'},
+    {'email': 'alex.mankowski@kitware.com', 'keyname': 'Alex Mankowski'},
+
+    {'email': 'crallj@rpi.edu', 'keyname': 'Jon Crall'},
+    {'email': '49699333+dependabot[bot]@users.noreply.github.com', 'keyname': 'dependabot[bot]'},
+    {'email': 'mgorny@gentoo.org', 'keyname': 'Michał Górny'},
+    {'email': 'erezshin@gmail.com', 'keyname': 'Erez Shinan'},
+
+    {'email': 'ci@circleci.com', 'keyname': 'CircleCI'},
+    {'email': 'gaphor@gmail.com', 'keyname': 'Arjan Molenaar'},
+    {'email': 'dirk@dmllr.de', 'keyname': 'Dirk Mueller'},
+    {'email': 'edgarrm358@gmail.com', 'keyname': 'Edgar Ramírez Mondragón'},
+    {'email': 'jayvdb@gmail.com', 'keyname': 'John Vandenberg'},
+    {'email': 'mats.lan.pod@googlemail.com', 'keyname': 'Matthias Lambrecht'},
 ]
 
 
 def generate_mailmap():
+    """
+    import sys, ubelt
+    sys.path.append(ubelt.expandpath('~/code/watch/dev/maintain'))
+    from generate_authors import *  # NOQA
+    """
 
     existing_name_email_pairs = []
     for line in ub.cmd('git shortlog --summary --numbered --email').stdout.split('\n'):
@@ -68,6 +91,7 @@ def generate_mailmap():
     email_to_keyname = {r['email']: r['keyname'] for r in KNOWN_ENTITIES}
 
     mailmap_lines = []
+    unknown_candidates = []
     for name, email in existing_name_email_pairs:
         if email in email_to_keyname:
             keyname = email_to_keyname[email]
@@ -80,11 +104,17 @@ def generate_mailmap():
                     new_line = f'{part1} {part2}'
                     mailmap_lines.append(new_line)
         else:
-            print(f'Unknown entity: {name} {email}')
+            candidate = {'email': email, 'keyname': name}
+            unknown_candidates.append(candidate)
+    print('unknown_candidates = {}'.format(ub.urepr(unknown_candidates, nl=1)))
 
     text = '\n'.join(sorted(mailmap_lines)) + '\n'
     mailmap_fpath = ub.Path('.mailmap')
     mailmap_fpath.write_text(text)
+
+    if 0:
+        ub.cmd('git add .mailmap', check=1)
+        ub.cmd('git commit -m "Add mailmap"', check=1)
 
 
 def main(cmdline=1, **kwargs):
