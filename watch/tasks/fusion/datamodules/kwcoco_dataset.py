@@ -1333,7 +1333,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         if model is not None:
             assert requested_tasks is None
-            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'global_head_weight'):
+                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            else:
+                import warnings
+                warnings.warn(ub.paragraph(
+                    f'''
+                    Model {model.__class__} does not have the structure needed
+                    to notify the dataset about tasks. A better design to make
+                    specifying tasks easier is needed without relying on the
+                    ``global_head_weights``.
+                    '''))
         print(f'dataset notified: requested_tasks={requested_tasks}')
         assert requested_tasks is not None
         self.requested_tasks.update(requested_tasks)
@@ -1806,7 +1816,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.normalize_peritem is not None:
+        if self.normalize_peritem not in {None, False}:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:

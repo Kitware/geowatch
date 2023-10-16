@@ -470,7 +470,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         if model is not None:
             assert requested_tasks is None
-            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'global_head_weight'):
+                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            else:
+                import warnings
+                warnings.warn(ub.paragraph(
+                    f'''
+                    Model {model.__class__} does not have the structure needed
+                    to notify the dataset about tasks. A better design to make
+                    specifying tasks easier is needed without relying on the
+                    ``global_head_weights``.
+                    '''))
         print(f'datamodule notified: requested_tasks={requested_tasks}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks
@@ -760,7 +770,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         canvas = kwimage.stack_images_grid(
             canvas_list, chunksize=chunksize, axis=stack_axis, overlap=-12, bg_value=[64, 60, 60])
 
-        with_legend = True
+        with_legend = self.requested_tasks.get('class', True)
+        # with_legend = True
         if with_legend:
             if classes is None:
                 classes = dataset.classes
