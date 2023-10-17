@@ -20,8 +20,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   dropout applied, and `temporal_dropout` itself now is the probability a frame
   is dropped within a given batch.
 
-* Dino Site Validation now writes reasons for its decisions to site models and
-  summaries.
+* Dino and Depth Site Validation now write reasons for its decisions to site
+  models and summaries.
 
 
 ## Version 0.10.0 - Released 2023-10-01

@@ -211,11 +211,22 @@ def main(cmdline=1, **kwargs):
     input_site_fpaths = util_gis.coerce_geojson_paths(config.input_sites)
     # set(input_coco.annots().lookup('track_id', None))
 
+    site_to_site_fpath = ub.udict({
+        p.stem: p for p in input_site_fpaths
+    })
+    input_sites = list(geomodels.SiteModel.coerce_multiple(site_to_site_fpath.values()))
+
     site_id_to_summary = ub.udict()
     for summary in region_model.site_summaries():
         assert summary.site_id not in site_id_to_summary
         site_id_to_summary[summary.site_id] = summary
     ##
+
+    # Ensure caches
+    for summary in site_id_to_summary.values():
+        summary['properties'].setdefault('cache', {})
+    for site in input_sites:
+        site.header['properties'].setdefault('cache', {})
 
     output_kwcoco = reproject_annotations.main(
         cmdline=0, src=input_coco.copy(),
@@ -281,7 +292,7 @@ def main(cmdline=1, **kwargs):
                     max_start_score <= config.start_max_score and
                     max_end_score >= config.end_min_score
                 )
-                why = 'thresholds'
+                why = 'threshold'
             else:
                 # Unobservable case, automatically accept
                 accept = True
@@ -296,8 +307,8 @@ def main(cmdline=1, **kwargs):
         decision = util_json.ensure_json_serializable(decision)
         site_to_decisions[site_id] = decision
 
-    accept_sites = [s for s, d in site_to_decisions.items() if d['accept']]
-    print(f'Filter to {len(accept_sites)} / {len(site_id_to_summary)} sites')
+    num_accept = sum(d['accept'] for s, d in site_to_decisions.items())
+    print(f'Filter to {num_accept} / {len(site_id_to_summary)} sites')
 
     # Enrich each site summary with the decision reason and update status
     for site_id, decision in site_to_decisions.items():
@@ -312,30 +323,13 @@ def main(cmdline=1, **kwargs):
 
         sitesum['properties']['cache']['dino_decision'] = decision
 
-    site_to_site_fpath = ub.udict({
-        p.stem: p for p in input_site_fpaths
-    })
-
-    if __debug__:
-        # Check that the site paths correspond with the input site summary.
-        # If they don't the following logic will produce unexpected results.
-        sites_with_paths = set(site_to_site_fpath)
-        sites_with_summary = set(site_id_to_summary)
-        if sites_with_paths != sites_with_summary:
-            print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
-            print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
-            raise AssertionError(
-                f'sites with paths {len(sites_with_paths)} are not the same as '
-                f'sites with summaries {len(sites_with_summary)}')
-
     # Copy the site models and update their header with new summary
     # information.
     output_sites_dpath = ub.Path(config.output_sites_dpath)
     output_sites_dpath.ensuredir()
     out_site_fpaths = []
 
-    old_sites = list(geomodels.SiteModel.coerce_multiple(site_to_site_fpath.values()))
-    for old_site in old_sites:
+    for old_site in input_sites:
         old_fpath = site_to_site_fpath[old_site.site_id]
         new_fpath = output_sites_dpath / old_fpath.name
         new_summary = site_id_to_summary[site_id]
@@ -351,6 +345,7 @@ def main(cmdline=1, **kwargs):
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + list(new_summaries))
     output_region_fpath.parent.ensuredir()
+    print(f'Write filtered region model to: {output_region_fpath}')
     with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
         json.dump(new_region_model, file, indent=4)
 
