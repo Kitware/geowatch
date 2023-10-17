@@ -851,7 +851,7 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
     return site
 
 
-def _coerce_site_summary_tups(site_summary_or_region_model,
+def _coerce_site_summaries(site_summary_or_region_model,
                               default_region_id=None):
     """
     Possible input formats:
@@ -881,7 +881,7 @@ def _coerce_site_summary_tups(site_summary_or_region_model,
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
-    site_summary_tups = []
+    site_summaries = []
 
     # # debug mode is for comparing against a set of known GT site models
     # DEBUG_MODE = 1
@@ -921,10 +921,10 @@ def _coerce_site_summary_tups(site_summary_or_region_model,
                 f for f in region_model.site_summaries()
                 if f['properties']['status'] not in {'system_rejected'}
             ]
-            region_id = region_model.region_id
+            # region_id = region_model.region_id
             # TODO: handle default region-id if needed
 
-            site_summary_tups.extend([(region_id, s) for s in _summaries])
+            site_summaries.extend(_summaries)
 
         except jsonschema.ValidationError:
             # In this case we expect the input to be a list of site summaries.
@@ -934,9 +934,10 @@ def _coerce_site_summary_tups(site_summary_or_region_model,
                 'If you see this error, he is wrong and the error can be removed. '
                 'Otherwise we should remove this extra code')
             site_summary = site_summary_or_region_model
-            site_summary_tups.append((default_region_id, site_summary))
+            # site_summary_tups.append((default_region_id, site_summary))
+            site_summaries.append(site_summary)
 
-    return site_summary_tups
+    return site_summaries
 
 
 def assign_sites_to_videos(coco_dset, site_summaries):
@@ -1025,10 +1026,11 @@ def add_site_summary_to_kwcoco(possible_summaries,
     if default_region_id is None:
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
+    # TODO: maintain system-rejected sites?
     site_summary_or_region_model = possible_summaries
-    site_summary_tups = _coerce_site_summary_tups(
+    site_summaries = _coerce_site_summaries(
         site_summary_or_region_model, default_region_id)
-    print(f'found {len(site_summary_tups)} site summaries')
+    print(f'found {len(site_summaries)} site summaries')
 
     site_summary_cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
 
@@ -1041,14 +1043,13 @@ def add_site_summary_to_kwcoco(possible_summaries,
     # Also, should probably do this in UTM instead of CRS84
 
     # Compute Assignment between site summaries / coco videos.
-    site_summaries = [t[1] for t in site_summary_tups]
     site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries)
 
     print('warping site boundaries to pxl space...')
 
     for site_idx, video_id in site_idx_to_vidid:
 
-        region_id, site_summary = site_summary_tups[site_idx]
+        site_summary = site_summaries[site_idx]
         site_id = site_summary['properties']['site_id']
 
         # get relevant images
@@ -1445,6 +1446,9 @@ def main(argv=None, **kwargs):
                 specified to add them.  You probably forgot to specify the site
                 summaries that should be scored!
                 '''))
+
+    # TODO: in the case that we are NOT reestimating polygon boundaries, then
+    # we should pass through any previous system rejected sites.
 
     print(f'track_fn={track_fn}')
     """
