@@ -1415,9 +1415,17 @@ class ProcessNode(Node):
                 parts.append(f'    --{k} \\')
                 parts.extend(preped_varargs)
             else:
-                import shlex
-                vstr = shlex.quote(str(v))
-                parts.append(f'    --{k}={vstr} \\')
+                if isinstance(v, dict):
+                    # This relies on the underlying program being able to
+                    # interpret YAML specified on the commandline.
+                    from kwutil.util_yaml import Yaml
+                    vstr = Yaml.dumps(v)
+                    vstr = shlex.quote(vstr)
+                    parts.append(f'    --{k}={vstr} \\')
+                else:
+                    import shlex
+                    vstr = shlex.quote(str(v))
+                    parts.append(f'    --{k}={vstr} \\')
 
         return '\n'.join(parts).lstrip().rstrip('\\')
 

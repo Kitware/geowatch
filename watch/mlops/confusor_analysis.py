@@ -81,6 +81,9 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
     pred_sites = scfg.Value(None, help='the path to the predicted sites manifest / directory / globstr')
 
+    stage_to_sites = scfg.Value(None, help='A YAML mapping from stages in a pipeline to intermediate site output')
+    stage_to_metrics = scfg.Value(None, help='A YAML mapping from stages in a pipeline to intermediate metrics')
+
     region_id = scfg.Value(None, help='the id for the region')
     true_site_dpath = scfg.Value(None, help='input')
     true_region_dpath = scfg.Value(None, help='input')
@@ -110,6 +113,10 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
         if self.out_dpath is not None:
             self.out_dpath = ub.Path(self.out_dpath)
+
+        from kwutil.util_yaml import Yaml
+        self.stage_to_sites = Yaml.coerce(self.stage_to_sites)
+        self.stage_to_metrics = Yaml.coerce(self.stage_to_metrics)
 
     def _infer_from_mlops_node(self):
         import json
@@ -524,6 +531,43 @@ class ConfusionAnalysis:
             pred_df = pd.DataFrame(self.pred_confusion_rows)
             print(pred_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
             print(true_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
+
+    def load_new_stage_stuff(self):
+        """
+        We should redo confusion stuff at each stage of the pipeline and
+        determine when mistakes and good decisions are made.
+        """
+        from watch.mlops.smart_result_parser import load_iarpa_evaluation
+        from watch.geoannots.geomodels import SiteModel
+        # from watch.geoannots.geomodels import RegionModel
+        from watch.geoannots.geomodels import SiteModelCollection
+        import pandas as pd
+
+        # New stuff with stages
+        stage_preds = {}
+        for stage, sites_dpath in self.config.stage_to_sites.items():
+            sites = SiteModelCollection(list(SiteModel.coerce_multiple(sites_dpath)))
+            stage_preds[stage] = sites
+
+        def fff(c):
+            return [s.header for s in c]
+
+        stage_to_df = ub.udict(stage_preds).map_values(lambda x: x.as_region_model().pandas_summaries())
+        df1 = stage_to_df['bas']
+        df2 = stage_to_df['acsc']
+        for stage, df in stage_to_df.items():
+            ...
+
+        # New stuff with stages
+        rows = []
+        for stage, metrics_fpath in self.config.stage_to_metrics.items():
+            iarpa_result = load_iarpa_evaluation(ub.Path(metrics_fpath))
+            row = iarpa_result['metrics']
+            row['stage'] = stage
+            rows.append(row)
+        datacols = ['stage', 'bas_f1', 'sc_macro_f1', 'macro_f1_active', 'macro_f1_siteprep', 'bas_tp', 'bas_fp', 'bas_fn', 'bas_ffpa', 'bas_ppv', 'bas_tpr']
+        table = pd.DataFrame(rows)
+        print(table[datacols].T)
 
     def add_confusion_to_geojson_models(self):
         """
