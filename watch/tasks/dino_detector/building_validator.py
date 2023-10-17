@@ -227,9 +227,15 @@ def main(cmdline=1, **kwargs):
         clear_existing=False,
     )
 
-    # Default all sites to accept
-    site_to_accept = {
-        s: True for s in site_id_to_summary.keys()
+    # Enrich all sites with features (evidence) and decisions.
+    site_to_decisions = {
+        s: {
+            'type': 'dino_decision',
+            'accept': True,
+            'why': None,
+            'features': None,
+        }
+        for s in site_id_to_summary.keys()
     }
     for video_id in ub.ProgIter(output_kwcoco.videos(), desc='validate sites'):
         video = output_kwcoco.index.videos[video_id]
@@ -253,41 +259,58 @@ def main(cmdline=1, **kwargs):
             else:
                 start_images.append(coco_img)
 
+        start_features = []
+        end_features = []
         try:
-            start_features = []
             for coco_img in start_images:
                 feat = building_in_image_features(coco_img, site_id, config)
+                feat['datetime'] = coco_img['date_captured']
+                feat['type'] = 'start_feature'
                 start_features.append(feat)
 
-            end_features = []
             for coco_img in end_images:
                 feat = building_in_image_features(coco_img, site_id, config)
+                feat['datetime'] = coco_img['date_captured']
+                feat['type'] = 'end_feature'
                 end_features.append(feat)
 
             if len(start_features) and len(end_features):
                 max_start_score = max(f['max_score'] for f in start_features)
                 max_end_score = max(f['max_score'] for f in end_features)
-                accept = (
+                accept = bool(
                     max_start_score <= config.start_max_score and
                     max_end_score >= config.end_min_score
                 )
+                why = 'thresholds'
             else:
                 # Unobservable case, automatically accept
                 accept = True
+                why = 'unobservable'
         except CouldNotValidate:
             accept = True
-        site_to_accept[site_id] = accept
+            why = 'CouldNotValidate'
+        decision = site_to_decisions[site_id]
+        decision['accept'] = accept
+        decision['why'] = why
+        decision['features'] = start_features + end_features
+        decision = util_json.ensure_json_serializable(decision)
+        site_to_decisions[site_id] = decision
 
-    accept_sites = [s for s, f in site_to_accept.items() if f]
+    accept_sites = [s for s, d in site_to_decisions.items() if d['accept']]
     print(f'Filter to {len(accept_sites)} / {len(site_id_to_summary)} sites')
-    new_summaries = list(site_id_to_summary.subdict(accept_sites).values())
 
-    # Change the status of sites to "system_rejected" instead of droping them
-    reject_sites = [s for s, f in site_to_accept.items() if not f]
-    reject_summaries = list(site_id_to_summary.subdict(reject_sites).values())
-    for sitesum in reject_summaries:
-        sitesum['properties']['status'] = 'system_rejected'
-    new_summaries.extend(reject_summaries)
+    # Enrich each site summary with the decision reason and update status
+    for site_id, decision in site_to_decisions.items():
+        sitesum = site_id_to_summary[site_id]
+
+        # Change the status of sites to "system_rejected" instead of droping them
+        if not decision['accept']:
+            sitesum['properties']['status'] = 'system_rejected'
+
+        if 'cache' not in sitesum['properties']:
+            sitesum['properties']['cache'] = {}
+
+        sitesum['properties']['cache']['dino_decision'] = decision
 
     site_to_site_fpath = ub.udict({
         p.stem: p for p in input_site_fpaths
@@ -305,33 +328,34 @@ def main(cmdline=1, **kwargs):
                 f'sites with paths {len(sites_with_paths)} are not the same as '
                 f'sites with summaries {len(sites_with_summary)}')
 
-    # Copy the filtered site models over to the output directory
+    # Copy the site models and update their header with new summary
+    # information.
     output_sites_dpath = ub.Path(config.output_sites_dpath)
     output_sites_dpath.ensuredir()
-
-    keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
     out_site_fpaths = []
-    # Copy accepted sites without any modification
-    for old_fpath in keep_site_fpaths.values():
-        new_fpath = output_sites_dpath / old_fpath.name
-        old_fpath.copy(new_fpath, overwrite=True)
-        out_site_fpaths.append(new_fpath)
 
-    reject_site_fpaths = site_to_site_fpath.subdict(reject_sites)
-    # Copy the rejected sites as well, but modify their status
-    for old_fpath in reject_site_fpaths.values():
+    old_sites = list(geomodels.SiteModel.coerce_multiple(site_to_site_fpath.values()))
+    for old_site in old_sites:
+        old_fpath = site_to_site_fpath[old_site.site_id]
         new_fpath = output_sites_dpath / old_fpath.name
-        old_site = geomodels.SiteModel.coerce(old_fpath)
-        old_site.header['properties']['status'] = 'system_rejected'
+        new_summary = site_id_to_summary[site_id]
+        old_site.header['properties']['status'] = new_summary['properties']['status']
+        if 'cache' not in old_site.header['properties']:
+            old_site.header['properties']['cache'] = {}
+        old_site.header['properties']['cache'].update(new_summary['properties']['cache'])
         new_fpath.write_text(old_site.dumps())
         out_site_fpaths.append(new_fpath)
 
+    # Write the updated site summaries in a new region model
+    new_summaries = list(site_id_to_summary.values())
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + list(new_summaries))
-
     output_region_fpath.parent.ensuredir()
     with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
         json.dump(new_region_model, file, indent=4)
+
+    # from kwutil.util_json import debug_json_unserializable
+    # debug_json_unserializable(new_region_model)
 
     proc_context.stop()
 

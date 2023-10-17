@@ -542,6 +542,7 @@ class ConfusionAnalysis:
         # from watch.geoannots.geomodels import RegionModel
         from watch.geoannots.geomodels import SiteModelCollection
         import pandas as pd
+        import rich
 
         # New stuff with stages
         stage_preds = {}
@@ -552,11 +553,29 @@ class ConfusionAnalysis:
         def fff(c):
             return [s.header for s in c]
 
+        stage_order = ['bas', 'dzyne-depth-sv', 'dino-sv', 'acsc']
         stage_to_df = ub.udict(stage_preds).map_values(lambda x: x.as_region_model().pandas_summaries())
+        stage_to_df = stage_to_df.subdict(stage_order)
+        stage_to_df.map_values(len)
+        stage_to_df = stage_to_df.map_values(lambda d: d.set_index('site_id', drop=False))
+
         df1 = stage_to_df['bas']
-        df2 = stage_to_df['acsc']
-        for stage, df in stage_to_df.items():
-            ...
+        df2 = stage_to_df['dzyne-depth-sv']
+        df3 = stage_to_df['dino-sv']
+        df4 = stage_to_df['acsc']
+
+        did_depth_filter = (df1.loc[df1.site_id]['status'] != df2.loc[df1.site_id]['status'])
+        depth_filtered = did_depth_filter[did_depth_filter]
+
+        did_dino_filter = (df3.loc[df2.site_id]['status'] != df2.loc[df2.site_id]['status'])
+        dino_filtered = did_dino_filter[did_dino_filter].index
+
+        did_ac_filter = (df3.loc[df4.site_id]['status'] != df4.loc[df4.site_id]['status'])
+        acsc_filtered = did_ac_filter[did_ac_filter]
+
+        ub.oset(df1['site_id']) - ub.oset(df2['site_id'])
+        ub.oset(df2['site_id']) - ub.oset(df3['site_id'])
+        ub.oset(df3['site_id']) - ub.oset(df4['site_id'])
 
         # New stuff with stages
         rows = []
@@ -567,7 +586,7 @@ class ConfusionAnalysis:
             rows.append(row)
         datacols = ['stage', 'bas_f1', 'sc_macro_f1', 'macro_f1_active', 'macro_f1_siteprep', 'bas_tp', 'bas_fp', 'bas_fn', 'bas_ffpa', 'bas_ppv', 'bas_tpr']
         table = pd.DataFrame(rows)
-        print(table[datacols].T)
+        rich.print(table[datacols])
 
     def add_confusion_to_geojson_models(self):
         """
