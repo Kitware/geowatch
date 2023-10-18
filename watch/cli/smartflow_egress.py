@@ -6,7 +6,8 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-# FIXME: Looks like this CLI is not functional.
+# FIXME: Looks like this CLI is not functional, which might be fine considering
+# this is meant to be used as a library.
 
 class SmartflowEgressConfig(scfg.DataConfig):
     """
@@ -171,7 +172,10 @@ def smartflow_egress(assetnames_and_local_paths,
         else:
             asset_s3_outpath = outbucket / local_path.name
             if local_path not in seen:
-                local_path.copy(asset_s3_outpath)
+                from retry.api import retry_call
+                retry_call(local_path.copy, fargs=[asset_s3_outpath],
+                           tries=3, exceptions=(PermissionError,), delay=3)
+                # local_path.copy(asset_s3_outpath)
                 seen.add(local_path)
 
         assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
@@ -203,6 +207,17 @@ def smartflow_egress(assetnames_and_local_paths,
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
 
+
+__notes__ = """
+An issue that can occur in will manifest as:
+
+botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
+File "/root/code/watch/watch/cli/smartflow_egress.py", line 174, in smartflow_egress
+local_path.copy(asset_s3_outpath)
+File "/root/.pyenv/versions/3.11.2/lib/python3.11/site-packages/s3fs/core.py", line 140, in _error_wrapper
+raise err
+PermissionError: The difference between the request time and the current time is too large.
+"""
 
 if __name__ == "__main__":
     main()
