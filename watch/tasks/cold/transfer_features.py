@@ -304,6 +304,10 @@ def transfer_features_main(cmdline=1, **kwargs):
             dst_crs = dst_video['wld_crs_info']
             src_crs = src_video['wld_crs_info']
 
+            warp_src_from_wld = kwimage.Affine.coerce(src_video['warp_wld_to_vid'])
+            warp_dst_from_wld = kwimage.Affine.coerce(dst_video['warp_wld_to_vid'])
+            warp_wld_from_src = warp_src_from_wld.inv()
+
             warp_dstwld_from_srcwld = None
 
             if dst_crs != src_crs:
@@ -331,8 +335,9 @@ def transfer_features_main(cmdline=1, **kwargs):
                     crs2 = pyproj.CRS.from_authority(*dst_crs['auth'])
                     crs_tf = pyproj.Transformer.from_crs(crs_from=crs1, crs_to=crs2)
 
-                    src_valid_region = kwimage.MultiPolygon.coerce(src_video['valid_region'])
-                    src_pts = np.concatenate([p.data['exterior'].data for p in src_valid_region.data], axis=0)
+                    src_pxl_valid_region = kwimage.MultiPolygon.coerce(src_video['valid_region'])
+                    src_wld_valid_region = src_pxl_valid_region.warp(warp_wld_from_src)
+                    src_pts = np.concatenate([p.data['exterior'].data for p in src_wld_valid_region.data], axis=0)
 
                     # We now try be far too clever and estimate an affine
                     # approximation that gets does a good job in the region of
@@ -351,10 +356,6 @@ def transfer_features_main(cmdline=1, **kwargs):
                     print(f'ave_error={ave_error}')
                     print(f'max_error={max_error}')
                     warp_dstwld_from_srcwld = approx
-
-            warp_src_from_wld = kwimage.Affine.coerce(src_video['warp_wld_to_vid'])
-            warp_dst_from_wld = kwimage.Affine.coerce(dst_video['warp_wld_to_vid'])
-            warp_wld_from_src = warp_src_from_wld.inv()
 
             if warp_dstwld_from_srcwld is not None:
                 # Using the hack
