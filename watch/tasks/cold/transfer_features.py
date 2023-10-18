@@ -51,6 +51,11 @@ class TransferCocoConfig(scfg.DataConfig):
     # TODO: propogate strategy?
     max_propogate = scfg.Value(1, help='maximum number of future images a src image can transfer onto.')
 
+    allow_affine_approx = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True allow a transfer between different CRSs by approximating an affine transform. This should only be used for quick-and-dirty analysis, and never in production
+        '''))
+
 
 @profile
 def transfer_features_main(cmdline=1, **kwargs):
@@ -298,12 +303,64 @@ def transfer_features_main(cmdline=1, **kwargs):
             # Better logic
             dst_crs = dst_video['wld_crs_info']
             src_crs = src_video['wld_crs_info']
-            assert dst_crs == src_crs, 'not handling different CRS atm'
+
+            warp_dstwld_from_srcwld = None
+
+            if dst_crs != src_crs:
+                msg = ub.codeblock(
+                    f'''
+                    Expected the same CRS but got:
+                    dst_crs={dst_crs}
+                    src_crs={src_crs}
+                    ''')
+                ALLOW_AFFINE_APPROXIMATE = config.allow_affine_approx
+                if not ALLOW_AFFINE_APPROXIMATE:
+                    raise AssertionError(msg)
+                else:
+                    rich.print('[yellow]WARNING: ' + msg)
+                    rich.print('[yellow]WARNING: Estimating an approximate affine transform')
+                    # We can construct a non-affine transform between the two CRS
+                    # values, but because we are only writing metadata and not
+                    # rewriting the pixel values, we cant use it. (kwcoco metadata
+                    # only allows for affine transforms).
+                    import pyproj
+                    import numpy as np
+                    # crs1 = pyproj.CRS.from_epsg(32639)
+                    # crs2 = pyproj.CRS.from_epsg(32638)
+                    crs1 = pyproj.CRS.from_authority(*src_crs['auth'])
+                    crs2 = pyproj.CRS.from_authority(*dst_crs['auth'])
+                    crs_tf = pyproj.Transformer.from_crs(crs_from=crs1, crs_to=crs2)
+
+                    src_valid_region = kwimage.MultiPolygon.coerce(src_video['valid_region'])
+                    src_pts = np.concatenate([p.data['exterior'].data for p in src_valid_region.data], axis=0)
+
+                    # We now try be far too clever and estimate an affine
+                    # approximation that gets does a good job in the region of
+                    # the source image.
+                    import numpy as np
+                    xx1 = src_pts.T[0]
+                    yy1 = src_pts.T[1]
+                    xx2, yy2 = crs_tf.transform(xx1, yy1)
+                    pts1 = np.stack([xx1, yy1], axis=1)
+                    pts2 = np.stack([xx2, yy2], axis=1)
+                    approx = kwimage.Affine.fit(pts1, pts2)
+                    pts2_hat = kwimage.Points(xy=pts1).warp(approx)
+                    error = np.abs(pts2_hat.xy - pts2)
+                    max_error = error.max(axis=0)
+                    ave_error = error.mean(axis=0)
+                    print(f'ave_error={ave_error}')
+                    print(f'max_error={max_error}')
+                    warp_dstwld_from_srcwld = approx
 
             warp_src_from_wld = kwimage.Affine.coerce(src_video['warp_wld_to_vid'])
             warp_dst_from_wld = kwimage.Affine.coerce(dst_video['warp_wld_to_vid'])
             warp_wld_from_src = warp_src_from_wld.inv()
-            warp_dstvid_from_srcvid = warp_dst_from_wld @ warp_wld_from_src
+
+            if warp_dstwld_from_srcwld is not None:
+                # Using the hack
+                warp_dstvid_from_srcvid = warp_dst_from_wld @ warp_dstwld_from_srcwld @ warp_wld_from_src
+            else:
+                warp_dstvid_from_srcvid = warp_dst_from_wld @ warp_wld_from_src
 
         for assignment in vid_assignments:
             src_image_id = assignment['src_image_id']

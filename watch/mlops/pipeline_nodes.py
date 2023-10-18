@@ -74,9 +74,11 @@ class Pipeline:
         >>> self.print_graphs()
     """
 
-    def __init__(self, nodes=[], config=None, root_dpath=None):
+    def __init__(self, nodes=None, config=None, root_dpath=None):
         self.proc_graph = None
         self.io_graph = None
+        if nodes is None:
+            nodes = []
         self.nodes = nodes
         self.config = None
 
@@ -152,6 +154,10 @@ class Pipeline:
                 self.io_graph.add_edge(node.key, onode.key)
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
+            # hack for nodes that dont have an io dependency
+            # but still must run after one another
+            for pred in node._pred_nodes_without_io_connection:
+                self.io_graph.add_edge(pred.key, node.key)
 
         self._dirty = False
 
@@ -1029,6 +1035,12 @@ class ProcessNode(Node):
         self._overwrite_node_dpath = _overwrite_node_dpath
         self._overwrite_group_dpath = _overwrite_group_dpath
 
+        # TODO: need a better name for this.
+        # This is just a list of nodes that must be run before us, but we don't
+        # have an explicit connection between the inputs / outputs.
+        # This is currently used as a workaround, but we should support it
+        self._pred_nodes_without_io_connection = []
+
         self.configure(self.config)
 
     @profile
@@ -1294,7 +1306,7 @@ class ProcessNode(Node):
         Process nodes that this one depends on.
         """
         nodes = [pred.parent for k, v in self.inputs.items()
-                 for pred in v.pred]
+                 for pred in v.pred] + self._pred_nodes_without_io_connection
         return nodes
 
     @memoize_configured_method
@@ -1421,6 +1433,9 @@ class ProcessNode(Node):
                     from kwutil.util_yaml import Yaml
                     vstr = Yaml.dumps(v)
                     vstr = shlex.quote(vstr)
+                    if '\n' in vstr and vstr[0] == "'":
+                        # hack to prevent yaml indent errors
+                        vstr = "'\n" + vstr[1:]
                     parts.append(f'    --{k}={vstr} \\')
                 else:
                     import shlex

@@ -35,10 +35,19 @@ sdvc request "
 - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_v0_epoch3_step22551.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_v1_epoch0_step5778.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch0_step8.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch108_step872.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch18_step152.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch1_step16.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt
 " --verbose
 
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
+
+
+#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
 
 
 python -m watch.mlops.schedule_evaluation --params="
@@ -94,6 +103,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch26_step864.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch109_step3520.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch63_step2048.pt
+
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch0_step8.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch108_step872.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch18_step152.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch1_step16.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt
 
 
         sc_pxl.tta_fliprot: 0.0
@@ -262,15 +279,16 @@ python -m watch.mlops.aggregate \
 # create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_4GSD_split6_V90/Drop7-Cropped2GSD_SC_bgrn_gnt_4GSD_split6_V90_epoch338_step10848.pt.dvc
 # create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_4GSD_split6_V90/Drop7-Cropped2GSD_SC_bgrn_gnt_4GSD_split6_V90_epoch343_step11008.pt.dvc
 # create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/.gitignore
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch0_step8.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch108_step872.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch112_step904.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch12_step104.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch18_step152.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch1_step16.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt.dvc
-# create mode 100644 models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt.dvc
+#
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch0_step8.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch108_step872.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch112_step904.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch12_step104.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch18_step152.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch1_step16.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt.dvc
+# models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt.dvc
 ##
 #
 
@@ -279,3 +297,6 @@ python -m watch.mlops.aggregate \
 #
 #models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch109_step3520.pt.dvc
 #models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch63_step2048.pt.dvc
+#
+#ls /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78/
+#ls /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/

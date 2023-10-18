@@ -660,7 +660,7 @@ class ConfusionAnalysis:
                     'color': 'pink',
                 }
 
-        VALIDATE = 1
+        VALIDATE = 0
         if VALIDATE:
             all_models = SiteModelCollection(pred_sites + true_sites)
             all_models.fixup()
@@ -935,13 +935,12 @@ class ConfusionAnalysis:
             new_site_id = differentiate_site_id(site_id, config.performer_id)
             site_df.loc[site_df.index[0], 'site_id'] = new_site_id
 
-        for site_df in true_site_infos2:
-            reproject_annotations.validate_site_dataframe(site_df)
+        # for site_df in true_site_infos2:
+        #     reproject_annotations.validate_site_dataframe(site_df)
 
         dst_dset.clear_annotations()
         common_kwargs = ub.udict(
             clear_existing=False,
-            src=dst_dset,
             dst='return',
             workers=2,
         )
@@ -960,23 +959,25 @@ class ConfusionAnalysis:
         # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
         repr1 = str(dst_dset.annots())
         print(f'repr1={repr1}')
-        dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
+        dst_dset = reproject_annotations.main(cmdline=0, src=dst_dset, **true_kwargs)
         repr2 = str(dst_dset.annots())
         print(f'repr1={repr1}')
         print(f'repr2={repr2}')
 
         set(dst_dset.index.trackid_to_aids)
 
-        pred_kwargs['src'] = dst_dset
-        dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
+        dst_dset = reproject_annotations.main(cmdline=0, src=dst_dset, **pred_kwargs)
         # repr3 = str(dst_dset.annots())
         # print(f'repr1={repr1}')
         # print(f'repr2={repr2}')
         # print(f'repr3={repr3}')
 
+        self.bas_dset = None
+
         if config.dst_kwcoco is not None:
 
             if config.bas_kwcoco and config.src_kwcoco != config.bas_kwcoco:
+                # Let the AC coco files know about bas heatmaps
                 from watch import heuristics
                 from watch.tasks.cold import transfer_features
                 bas_dset = kwcoco.CocoDataset(config.bas_kwcoco)
@@ -989,9 +990,15 @@ class ConfusionAnalysis:
                     'new_coco_fpath': 'return',
                     'channels_to_transfer': ['salient'],
                     'max_propogate': None,
+                    'allow_affine_approx': True,
                 }
                 new = transfer_features.transfer_features_main(cmdline=0, **transfer_config)
                 dst_dset = new
+
+                bas_dset.clear_annotations()
+                bas_dset = reproject_annotations.main(cmdline=0, src=bas_dset, **true_kwargs)
+                bas_dset = reproject_annotations.main(cmdline=0, src=bas_dset, **pred_kwargs)
+                self.bas_dset = bas_dset
             else:
                 ub.Path(dst_dset.fpath).parent.ensuredir()
                 print(f'dump to dst_dset.fpath={dst_dset.fpath}')
@@ -1023,6 +1030,13 @@ class ConfusionAnalysis:
         cases = self.build_site_confusion_cases()
         viz_dpath = self.out_dpath / 'site_viz'
 
+        # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+        # if self.bas_dset is not None:
+        #     # If we can't visualize the site with the AC dataset,
+        #     # we probably can with the BAS dataset.
+        #     bas_covered_gdf = covered_video_geo_regions(self.bas_dset)
+        #     main_covered_gdf = covered_video_geo_regions(coco_dset)
+
         if 1:
             import pandas as pd
             case_df = pd.DataFrame(cases)
@@ -1043,7 +1057,6 @@ class ConfusionAnalysis:
         with pman:
             total = 0
             for case in pman.progiter(cases, desc='dump cases', verbose=3):
-                ...
                 # if 'CH_R001_0076' in case['name']:
                 #     raise Exception
                 #     import xdev
@@ -1060,8 +1073,16 @@ class ConfusionAnalysis:
                 fpath = dpath / fname
 
                 try:
-                    canvas = visualize_case(
-                        coco_dset, case, true_id_to_site, pred_id_to_site)
+                    try:
+                        canvas = visualize_case(
+                            coco_dset, case, true_id_to_site, pred_id_to_site)
+                    except Exception:
+                        if self.bas_dset is not None:
+                            # Fallback on using the bas dataset if neeeded
+                            canvas = visualize_case(
+                                self.bas_dset, case, true_id_to_site, pred_id_to_site)
+                        else:
+                            raise
                 except Exception as ex:
                     errors.append(ex)
                     rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
@@ -1388,6 +1409,9 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     import kwcoco
     import kwimage
     import numpy as np
+
+    # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+    # gdf = covered_video_geo_regions(coco_dset)
 
     all_aids = set()
     all_sites = []
