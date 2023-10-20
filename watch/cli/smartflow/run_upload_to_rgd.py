@@ -62,6 +62,14 @@ def main():
     upload_to_rgd(**vars(parser.parse_args()))
 
 
+def get_model_results(model_run_results_url):
+    model_runs_result = requests.get(model_run_results_url,
+                                     params={'limit': '0'})
+    request_json = model_runs_result.json()
+    request_results = request_json.get('results', ())
+    return request_results
+
+
 def upload_to_rgd(input_site_models_s3,
                   rgd_aws_region,
                   rgd_deployment_name,
@@ -109,11 +117,14 @@ def upload_to_rgd(input_site_models_s3,
 
     # Check that our run doesn't already exist
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
-    model_runs_result = requests.get(model_run_results_url,
-                                     params={'limit': '0'})
+
+    from retry.api import retry_call
+    request_results = retry_call(get_model_results, fargs=[model_run_results_url],
+                                 tries=3, exceptions=(Exception,), delay=3)
 
     existing_model_run = None
-    for model_run in model_runs_result.json().get('results', ()):
+
+    for model_run in request_results:
         if (model_run['title'] != title or
              model_run['performer']['short_code'] != performer_shortcode):
             continue
