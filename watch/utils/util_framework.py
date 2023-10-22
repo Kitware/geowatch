@@ -814,7 +814,10 @@ class NodeStateHelper:
         dpath = ub.Path(dpath).resolve()
         # cwd_paths = sorted([p.resolve() for p in dpath.glob('*')])
         # print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
-        ub.cmd('ls -al', verbose=3, cwd=dpath)
+        if dpath.exists():
+            ub.cmd('ls -al', verbose=3, cwd=dpath)
+        else:
+            print(f'dpath={dpath} does not exist')
 
         print(f' * Print some disk and machine statistics ({self.current_iteration})')
         ub.cmd('df -h', verbose=3)
