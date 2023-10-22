@@ -85,11 +85,9 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils import util_fsspec
 
     ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -141,6 +139,8 @@ def run_bas_fusion_for_baseline(config):
     print("* Running BAS fusion *")
     bas_fusion_kwcoco_path = ingress_dir / 'bas_fusion_kwcoco.json'
 
+    node_state.print_current_state(ingress_dir)
+
     # TODO: remove these defaults or replace them with whatever is the
     # default in predict. The params should be fully given in the DAG, not
     # here.
@@ -169,6 +169,8 @@ def run_bas_fusion_for_baseline(config):
             test_dataset=ingress_kwcoco_path,
             pred_dataset=bas_fusion_kwcoco_path,
             **bas_pxl_config)
+
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. If a previous interval was run; concatenate BAS fusion
     # output KWCOCO files for tracking
@@ -257,6 +259,8 @@ def run_bas_fusion_for_baseline(config):
     cropped_region_models_outdir = (ingress_dir / 'cropped_region_models_bas').ensuredir()
     cropped_site_models_outdir = (ingress_dir / 'cropped_site_models_bas').ensuredir()
 
+    node_state.print_current_state(ingress_dir)
+
     crop_cmd = [
         'python', '-m', 'watch.cli.crop_sites_to_regions',
         '--site_models', bas_site_models_outdir / '*.geojson',
@@ -313,6 +317,8 @@ def run_bas_fusion_for_baseline(config):
         ingressed_assets['bas_original_site_models_outdir'] = bas_site_models_outdir
         ingressed_assets['bas_original_region_models_outdir'] = bas_region_models_outdir
         ingressed_assets['tracked_bas_kwcoco_path'] = tracked_bas_kwcoco_path
+
+    node_state.print_current_state(ingress_dir)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

@@ -780,3 +780,43 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
         site.fixup()
         fpath.write_text(site.dumps(indent='    '))
         site.validate()
+
+
+class NodeStateHelper:
+    """
+    Prints information about the current node that is helpful for debugging.
+
+    Maintains some internal state to keep things organized.
+
+    Example:
+        >>> from watch.utils.util_framework import *  # NOQA
+        >>> self = NodeStateHelper()
+        >>> self.print_watch_version()
+        >>> self.print_current_state('.')
+        >>> self.print_current_state('.')
+    """
+
+    def __init__(self):
+        self.current_iteration = 0
+
+    def print_watch_version(self):
+        # Print info about what version of the code we are running on
+        import ubelt as ub
+        import watch
+        print(' * Print current version of the code')
+        ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+        print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
+        print('watch.__file__ = {}'.format(ub.urepr(watch.__file__, nl=1)))
+
+    def print_current_state(self, dpath):
+        import ubelt as ub
+        print(f'* Printing current directory contents ({self.current_iteration})')
+        dpath = ub.Path(dpath).resolve()
+        # cwd_paths = sorted([p.resolve() for p in dpath.glob('*')])
+        # print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+        ub.cmd('ls -al', verbose=3, cwd=dpath)
+
+        print(f' * Print some disk and machine statistics ({self.current_iteration})')
+        ub.cmd('df -h', verbose=3)
+
+        self.current_iteration += 1

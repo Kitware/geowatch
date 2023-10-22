@@ -109,9 +109,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -145,13 +145,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
-
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
@@ -278,6 +271,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # tasks in the DAG if there's no site output here
     ingressed_assets['depth_filtered_sites'] = output_sites_dpath
     ingressed_assets['depth_filtered_regions'] = output_region_dpath
+
+    node_state.print_current_state(ingress_dir)
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

@@ -72,12 +72,9 @@ def run_generate_sc_cropped_kwcoco(config):
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
@@ -87,6 +84,7 @@ def run_generate_sc_cropped_kwcoco(config):
 
     ingress_dir = ub.Path('/tmp/ingress')
     local_region_path = ub.Path('/tmp/region.json')
+    node_state.print_current_state(ingress_dir)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -128,9 +126,7 @@ def run_generate_sc_cropped_kwcoco(config):
               "from BAS *")
         input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
-    print('* Printing current directory contents (1/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     if config.acsc_cluster_config is not None:
         print('******************')
@@ -151,9 +147,7 @@ def run_generate_sc_cropped_kwcoco(config):
         cluster_region_dpath = None
         tocrop_region_fpath = input_region_path
 
-    print('* Printing current directory contents (2/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
@@ -211,9 +205,7 @@ def run_generate_sc_cropped_kwcoco(config):
     # downloaded results
     ub.cmd(['kwcoco', 'reroot', f'--src={ta1_sc_cropped_kwcoco_prefilter_path}', '--inplace=1', '--absolute=0'])
 
-    print('* Printing current directory contents (3/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     ### Filter / clean geotiffs (probably should be a separate step)
     CLEAN_GEOTIFFS = 0
@@ -264,9 +256,7 @@ def run_generate_sc_cropped_kwcoco(config):
         print('Not removing bad images')
         ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
 
-    print('* Printing current directory contents (4/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

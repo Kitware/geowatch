@@ -123,12 +123,9 @@ def main():
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -177,6 +174,8 @@ def main():
     # watch_coco_stats.main(cmdline=0, src=base_fpath)
     # coco_stats._CLI.main(cmdline=0, src=[base_fpath])
 
+    node_state.print_current_state(ingress_dir)
+
     # ub.cmd(f'kwcoco validate {base_fpath}', verbose=3)
     ub.cmd(f'kwcoco stats {base_fpath}', verbose=3)
     ub.cmd(f'geowatch stats {base_fpath}', verbose=3)
@@ -214,6 +213,8 @@ def main():
     # This is the kwcoco file with the all teamfeature outputs (i.e. previous
     # team features + MAE)
     ingressed_assets['enriched_acsc_kwcoco_file'] = full_output_kwcoco_fpath
+
+    node_state.print_current_state(ingress_dir)
 
     smartflow_egress(ingressed_assets,
                      local_region_path,

@@ -73,9 +73,9 @@ def run_generate_sv_cropped_kwcoco(input_path,
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     if dont_recompute:
         output_path = util_fsspec.FSPath.coerce(output_path)
@@ -113,6 +113,8 @@ def run_generate_sv_cropped_kwcoco(input_path,
     bas_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
+    node_state.print_current_state(ingress_dir)
+
     # 4. Crop ingress KWCOCO dataset to region for SV
     print("* Cropping KWCOCO dataset to region for SV*")
     ta1_sv_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sv.json'
@@ -148,6 +150,8 @@ def run_generate_sv_cropped_kwcoco(input_path,
     if not os.path.isdir(ingressed_assets['cropped_kwcoco_for_sv_assets']):
         os.makedirs(ingressed_assets['cropped_kwcoco_for_sv_assets'], exist_ok=True)
         ub.Path(ingressed_assets['cropped_kwcoco_for_sv_assets'] / '.empty').touch()
+
+    node_state.print_current_state(ingress_dir)
 
     smartflow_egress(ingressed_assets,
                      local_region_path,

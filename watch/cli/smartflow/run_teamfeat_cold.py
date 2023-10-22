@@ -43,20 +43,17 @@ def main():
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
     from watch.mlops.pipeline_nodes import ProcessNode
+    from watch.utils.util_framework import NodeStateHelper
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
-
-    print('Print some disk and machine statistics')
-    ub.cmd('df -h', verbose=3)
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
+
+    node_state.print_current_state(ingress_dir)
+
     ingressed_assets = smartflow_ingress(
         config.input_path,
         [
@@ -88,8 +85,7 @@ def main():
     # NOTE:
     # For COLD we need to compute on the full non-time-combined data,
     # and then transfer the features to the time-combined data.
-    ingress_dir_contents1 = list(ingress_dir.ls())
-    print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     full_input_kwcoco_fpath = ingressed_assets['timedense_bas_kwcoco_file']
     timecombined_input_kwcoco_fpath = ingressed_assets['enriched_bas_kwcoco_file']
@@ -124,17 +120,13 @@ def main():
         backend='serial',
     )
 
-    print('Print some disk and machine statistics (again again)')
-    ub.cmd('df -h', verbose=3)
-
     # Hard coded-specific output pattern.
     subset_name = base_fpath.name.split('.')[0]
     combo_code = 'C'
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
-    ingress_dir_contents2 = list(ingress_dir.ls())
-    print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
+    node_state.print_current_state()
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
@@ -171,8 +163,7 @@ def main():
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
 
-    ingress_dir_contents3 = list(ingress_dir.ls())
-    print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
 

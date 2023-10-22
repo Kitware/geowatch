@@ -121,12 +121,9 @@ def run_sc_fusion_for_baseline(config):
         from watch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -195,9 +192,7 @@ def run_sc_fusion_for_baseline(config):
 
     region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
 
-    print('* Printing current directory contents (1/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
@@ -230,9 +225,7 @@ def run_sc_fusion_for_baseline(config):
 
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
-            print('* Printing current directory contents (2/5)')
-            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+            node_state.print_current_state(ingress_dir)
         except TimeSampleError:
             # FIXME: wont work anymore with mlops. Not sure if needed.
             # Can always catch a CalledProcessError and inspect stdout
@@ -264,9 +257,7 @@ def run_sc_fusion_for_baseline(config):
             command = sc_poly.command()
             ub.cmd(command, check=True, verbose=3, system=True)
 
-            print('* Printing current directory contents (3/5)')
-            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+            node_state.print_current_state(ingress_dir)
 
             # Add in intermediate outputs for debugging
             ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
@@ -289,9 +280,7 @@ def run_sc_fusion_for_baseline(config):
         '--new_region_dpath', cropped_region_models_outdir
     ], check=True, verbose=3, capture=False)
 
-    print('* Printing current directory contents (4/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # Validate and fix all outputs
     print('Fixup and validate outputs')
@@ -300,9 +289,7 @@ def run_sc_fusion_for_baseline(config):
         site_dpath=cropped_site_models_outdir,
     )
 
-    print('* Printing current directory contents (5/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

@@ -49,9 +49,9 @@ def run_landcover_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

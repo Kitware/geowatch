@@ -178,12 +178,9 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli.smartflow_ingress import smartflow_ingress
     import kwcoco
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -279,9 +276,7 @@ def run_stac_to_cropped_kwcoco(config):
     region_id = determine_region_id(local_region_path)
     ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
 
-    print('* Printing current directory contents (1/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     from watch.geoannots.geomodels import RegionModel
     region = RegionModel.coerce(local_region_path)
@@ -480,9 +475,7 @@ def run_stac_to_cropped_kwcoco(config):
     # downloaded results
     ub.cmd(['kwcoco', 'reroot', f'--src={ta1_cropped_kwcoco_path}', '--inplace=1', '--absolute=0'])
 
-    print('* Printing current directory contents (2/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:
@@ -585,9 +578,7 @@ def run_stac_to_cropped_kwcoco(config):
     ta1_cropped_rawband_dpath.ensuredir()
     (ta1_cropped_rawband_dpath / 'dummy').write_text('dummy')
 
-    print('* Printing current directory contents (3/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {
@@ -601,6 +592,9 @@ def run_stac_to_cropped_kwcoco(config):
         'enriched_bas_kwcoco_rawbands': timecombined_rawband_dpath,
 
         # TODO: @DMJ: I dont think anything uses this? Can it be removed?
+        # JPC: Seems like the answer is no, for now. I've seen this used later
+        # on in the sc datagen node, although the stac-to-kwcoco for sc could
+        # be run there.
         'kwcoco_for_sc': ta1_sc_kwcoco_path,
 
         # We need to egress the temporally dense dataset for COLD

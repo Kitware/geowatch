@@ -77,9 +77,9 @@ def run_dino_sv(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateHelper
+    node_state = NodeStateHelper()
+    node_state.print_watch_version()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -147,8 +147,7 @@ def run_dino_sv(config):
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
     output_site_manifest_fpath = output_site_manifest_dpath / 'site_models_manifest.json'
 
-    ingress_dir_paths = list(ingress_dir.glob('*'))
-    print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
@@ -233,6 +232,8 @@ def run_dino_sv(config):
                 region_dpath=output_region_fpath.parent,
                 site_dpath=output_sites_dpath,
             )
+
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
