@@ -51,6 +51,9 @@ def main():
     print('Print current version of the code')
     ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
 
+    print('Print some disk and machine statistics')
+    ub.cmd('df -h', verbose=3)
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
@@ -99,6 +102,9 @@ def main():
     watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
 
+    print('Print some disk and machine statistics (again)')
+    ub.cmd('df -h', verbose=3)
+
     # TOOD: better passing of configs
 
     # Quick and dirty, just the existing prepare teamfeat script to get the
@@ -117,6 +123,10 @@ def main():
         run=1,
         backend='serial',
     )
+
+    print('Print some disk and machine statistics (again again)')
+    ub.cmd('df -h', verbose=3)
+
     # Hard coded-specific output pattern.
     subset_name = base_fpath.name.split('.')[0]
     combo_code = 'C'

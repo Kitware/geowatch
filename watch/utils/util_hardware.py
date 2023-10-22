@@ -77,6 +77,12 @@ def disk_info_of_path(path):
             hwinfo['hwtype'] = zfs_status['coarse_type']
         except Exception as ex:
             print('error in zfs stuff: ex = {}'.format(ub.urepr(ex, nl=1)))
+    elif filesystem == 'overlay':
+        # This is the case on AWS. lsblk isnt able to provide us with more info
+        # I'm not sure how to determine more info.
+        # References:
+        # https://docs.kernel.org/filesystems/overlayfs.html
+        ...
     else:
         try:
             if _device_is_hdd(source):
