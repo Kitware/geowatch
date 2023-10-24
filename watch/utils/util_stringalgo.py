@@ -35,32 +35,42 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
         >>> shortest_unique_prefixes(items)
         ['z', 'dog', 'du', 'dov']
 
+    Example:
+        >>> # xdoctest: +REQUIRES(module:pygtrie)
+        >>> from watch.utils.util_stringalgo import *  # NOQA
+        >>> smeti = ["params.metrics.foo.mean", "params.metrics.foo.std", "params.metrics.foo.count"]
+        >>> items = [p[::-1] for p in smeti]
+        >>> euqine = shortest_unique_prefixes(items, sep='.', min_length=2)
+        >>> unique = [p[::-1] for p in euqine]
+        >>> print(f'unique={unique}')
+        unique=['foo.mean', 'foo.std', 'foo.count']
+
     Timeing:
         >>> # DISABLE_DOCTEST
         >>> # make numbers larger to stress test
         >>> # L = max length of a string, N = number of strings,
         >>> # C = smallest gaurenteed common length
         >>> # (the setting N=10000, L=100, C=20 is feasible we are good)
-        >>> import ubelt as ub
+        >>> import timerit
         >>> import random
         >>> def make_data(N, L, C):
         >>>     rng = random.Random(0)
         >>>     return [''.join(['a' if i < C else chr(rng.randint(97, 122))
         >>>                      for i in range(L)]) for _ in range(N)]
         >>> items = make_data(N=1000, L=10, C=0)
-        >>> ub.Timerit(3).call(shortest_unique_prefixes, items).print()
+        >>> timerit.Timerit(3).call(shortest_unique_prefixes, items).print()
         Timed for: 3 loops, best of 3
             time per loop: best=24.54 ms, mean=24.54 ± 0.0 ms
         >>> items = make_data(N=1000, L=100, C=0)
-        >>> ub.Timerit(3).call(shortest_unique_prefixes, items).print()
+        >>> timerit.Timerit(3).call(shortest_unique_prefixes, items).print()
         Timed for: 3 loops, best of 3
             time per loop: best=155.4 ms, mean=155.4 ± 0.0 ms
         >>> items = make_data(N=1000, L=100, C=70)
-        >>> ub.Timerit(3).call(shortest_unique_prefixes, items).print()
+        >>> timerit.Timerit(3).call(shortest_unique_prefixes, items).print()
         Timed for: 3 loops, best of 3
             time per loop: best=232.8 ms, mean=232.8 ± 0.0 ms
         >>> items = make_data(N=10000, L=250, C=20)
-        >>> ub.Timerit(3).call(shortest_unique_prefixes, items).print()
+        >>> timerit.Timerit(3).call(shortest_unique_prefixes, items).print()
         Timed for: 3 loops, best of 3
             time per loop: best=4.063 s, mean=4.063 ± 0.0 s
     """
@@ -73,7 +83,7 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
         trie = pygtrie.CharTrie.fromkeys(items, value=0)
     else:
         # In some simple cases we can avoid constructing a trie
-        if allow_simple:
+        if allow_simple and min_length <= 1:
             tokens = [item.split(sep) for item in items]
             simple_solution = [t[0] for t in tokens]
             if len(simple_solution) == len(set(simple_solution)):
@@ -105,8 +115,13 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
     for item in items:
         freq = None
         for prefix, freq in trie.prefixes(item):
-            if freq == 1 and len(prefix) >= min_length:
-                break
+            if freq == 1:
+                if sep is None:
+                    prefix_length = len(prefix)
+                else:
+                    prefix_length = prefix.count(sep) + bool(len(prefix))
+                if prefix_length >= min_length:
+                    break
         if not allow_end:
             assert freq == 1, 'item={} has no unique prefix. freq={}'.format(item, freq)
         # print('items = {!r}'.format(items))
@@ -183,7 +198,7 @@ def _trie_iteritems(self):
                 stack.append(list(node.children.iteritems()))
 
 
-def shortest_unique_suffixes(items, sep=None):
+def shortest_unique_suffixes(items, sep=None, min_length=0):
     r"""
     Example:
         >>> # xdoctest: +REQUIRES(--pygtrie)
@@ -197,6 +212,6 @@ def shortest_unique_suffixes(items, sep=None):
         >>> shortest_unique_suffixes(items)
     """
     snoitpo = [p[::-1] for p in items]
-    sexiffus = shortest_unique_prefixes(snoitpo, sep=sep)
+    sexiffus = shortest_unique_prefixes(snoitpo, sep=sep, min_length=min_length)
     suffixes = [s[::-1] for s in sexiffus]
     return suffixes
