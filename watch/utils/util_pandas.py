@@ -125,14 +125,47 @@ def pandas_nan_eq(a, b):
     return flags
 
 
-def pandas_shorten_columns(summary_table, return_mapping=False):
+def pandas_shorten_columns(summary_table, return_mapping=False, min_length=0):
     """
     Shorten column names
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> df = pd.DataFrame([
+        >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1': 0.9, 'metrics.eval.mcc': 0.8, 'metrics.eval.acc': 0.3},
+        >>>     {'param_hashid': 'decaf', 'metrics.eval.f1': 0.6, 'metrics.eval.mcc': 0.2, 'metrics.eval.acc': 0.4},
+        >>>     {'param_hashid': 'feedcode', 'metrics.eval.f1': 0.5, 'metrics.eval.mcc': 0.3, 'metrics.eval.acc': 0.1},
+        >>> ])
+        >>> print(df.to_string(index=0))
+        >>> df2 = pandas_shorten_columns(df)
+        param_hashid  metrics.eval.f1  metrics.eval.mcc  metrics.eval.acc
+             badbeaf              0.9               0.8               0.3
+               decaf              0.6               0.2               0.4
+            feedcode              0.5               0.3               0.1
+        >>> print(df2.to_string(index=0))
+        param_hashid  f1  mcc  acc
+             badbeaf 0.9  0.8  0.3
+               decaf 0.6  0.2  0.4
+            feedcode 0.5  0.3  0.1
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> df = pd.DataFrame([
+        >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1.mean': 0.9, 'metrics.eval.f1.std': 0.8},
+        >>>     {'param_hashid': 'decaf', 'metrics.eval.f1.mean': 0.6, 'metrics.eval.f1.std': 0.2},
+        >>>     {'param_hashid': 'feedcode', 'metrics.eval.f1.mean': 0.5, 'metrics.eval.f1.std': 0.3},
+        >>> ])
+        >>> df2 = pandas_shorten_columns(df, min_length=2)
+        >>> print(df2.to_string(index=0))
+        param_hashid  f1.mean  f1.std
+             badbeaf      0.9     0.8
+               decaf      0.6     0.2
+            feedcode      0.5     0.3
     """
     import ubelt as ub
     # fixme
     old_cols = summary_table.columns
-    new_cols = shortest_unique_suffixes(old_cols, sep='.')
+    new_cols = shortest_unique_suffixes(old_cols, sep='.', min_length=min_length)
     mapping = ub.dzip(old_cols, new_cols)
     summary_table = summary_table.rename(columns=mapping)
     if return_mapping:
