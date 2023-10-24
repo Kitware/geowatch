@@ -126,7 +126,7 @@ def main():
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
-    node_state.print_current_state()
+    node_state.print_current_state(ingress_dir)
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
