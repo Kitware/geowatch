@@ -565,13 +565,13 @@ class ConfusionAnalysis:
         df4 = stage_to_df['acsc']
 
         did_depth_filter = (df1.loc[df1.site_id]['status'] != df2.loc[df1.site_id]['status'])
-        depth_filtered = did_depth_filter[did_depth_filter]
+        depth_filtered = did_depth_filter[did_depth_filter]  # NOQA
 
         did_dino_filter = (df3.loc[df2.site_id]['status'] != df2.loc[df2.site_id]['status'])
-        dino_filtered = did_dino_filter[did_dino_filter].index
+        dino_filtered = did_dino_filter[did_dino_filter].index  # NOQA
 
         did_ac_filter = (df3.loc[df4.site_id]['status'] != df4.loc[df4.site_id]['status'])
-        acsc_filtered = did_ac_filter[did_ac_filter]
+        acsc_filtered = did_ac_filter[did_ac_filter]  # NOQA
 
         ub.oset(df1['site_id']) - ub.oset(df2['site_id'])
         ub.oset(df2['site_id']) - ub.oset(df3['site_id'])

@@ -73,10 +73,12 @@ Example:
                     - 0.1
                     - 0.1
                     - 0.2
-                bas_pxl.enabled: 0
+                bas_pxl.enabled: 1
+                bas_poly_eval.true_site_dpath: true-site
+                bas_poly_eval.true_region_dpath: true-region
         " \
         --root_dpath=./my_dag_runs \
-        --devices="0,1" --queue_size=2 \
+        --devices="0,1" \
         --backend=serial --skip_existing=0 \
         --pipeline=bas \
         --run=0
