@@ -745,7 +745,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
 #
 
 
-def _merge_polys(p1, p2, poly_merge_method=None):
+def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
     """
     Given two lists of polygons, p1 and p2, merge these according to:
       - add all unique polygons in the merged list
@@ -786,10 +786,16 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     """
     import numpy as np
     merged_polys = []
+    merged_times = []
+
     if poly_merge_method is None:
         poly_merge_method = 'v1'
 
-    if poly_merge_method == 'v2':
+    if poly_merge_method == 'v3_noop':
+        merged_polys = p1 + p2
+        merged_times = t1 + t2
+
+    elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
         from watch.utils import util_gis
         import geopandas as gpd
@@ -818,6 +824,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                     # merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
+
     elif poly_merge_method == 'v1':
         from shapely.ops import unary_union
         p1_seen = set()
@@ -861,7 +868,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     else:
         raise ValueError(poly_merge_method)
 
-    return merged_polys
+    return merged_polys, merged_times
 
 
 def _process(track, _heatmaps, image_dates, gids, config):
@@ -924,6 +931,8 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
 
+    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+
     if isinstance(config.inner_window_size, str):
         # TODO: generalize if needed
         assert heatmap_dates is not None
@@ -939,19 +948,30 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         from kwutil import util_time
         import kwarray
         delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
-        image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
         bucket_ids = (image_unixtimes // delta).astype(int)
+
         unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+
         new_heatmaps = []
         for idxs in groupxs:
             inner = _norm(heatmaps[idxs], norm_ord=inner_ord)
             new_heatmaps.append(inner)
         new_heatmaps = np.array(new_heatmaps)
         heatmaps = new_heatmaps
+
+        new_heatmap_dates = []
+        for idxs in groupxs:
+            new_start_date = np.min(image_unixtimes[idxs])
+            new_end_date = np.max(image_unixtimes[idxs])
+            new_heatmap_dates.append([new_start_date, new_end_date])
+        new_heatmap_dates = np.array(new_heatmap_dates)
+        image_unixtimeframes = new_heatmap_dates
+
     else:
         if config.inner_window_size is not None:
             raise NotImplementedError(
                 'only temporal deltas for inner agg window for now')
+        image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
@@ -965,11 +985,13 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
     h_init = heatmaps[:final_size]
+    t_init = image_unixtimeframes[:final_size]
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
         step = 0
         polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step, config)
+        times_final = [[t_init[0][0], t_init[-1][1]]] * len(polys_final)
         prog.step()
 
         if n_steps > 1:
@@ -978,10 +1000,17 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             for step in range(1, n_steps):
                 prog.step()
                 h1 = heatmaps[step * final_size:(step + 1) * final_size]
+                t1 = image_unixtimeframes[step * final_size:(step + 1) * final_size]
+
                 p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
+                t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
                 p1 = convert_to_shapely(p1)
-                polys_final = _merge_polys(polys_final, p1,
-                                           poly_merge_method=config.poly_merge_method)
+
+                polys_final, times_final = _merge_polys(
+                    polys_final, times_final,
+                    p1, t1,
+                    poly_merge_method=config.poly_merge_method,
+                )
 
             polys_final = convert_to_kwimage_poly(polys_final)
     return polys_final
