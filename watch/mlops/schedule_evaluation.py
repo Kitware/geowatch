@@ -28,6 +28,8 @@ Example:
                     - "auto"
                 bas_pxl.input_space_scale:
                     - "15GSD"
+                bas_poly_eval.true_site_dpath: null
+                bas_poly_eval.true_region_dpath: null
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
                     - 0.1
@@ -48,7 +50,7 @@ Example:
                     - false
         " \
         --root_dpath=./my_dag_runs \
-        --devices="0,1" --queue_size=2 \
+        --devices="0,1" --tmux_workers=2 \
         --backend=serial --skip_existing=0 \
         --pipeline=joint_bas_sc \
         --run=0

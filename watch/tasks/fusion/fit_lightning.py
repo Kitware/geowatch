@@ -51,8 +51,15 @@ class SmartTrainer(pl.Trainer):
         print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
             import rich
-            dpath = self.logger.log_dir
+            dpath = ub.Path(self.logger.log_dir)
             rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+
+            start_tensorboard_fpath = dpath / 'start_tensorboard.sh'
+            start_tensorboard_fpath.write_text(ub.codeblock(
+                f'''
+                tensorboard --logdir {dpath}
+                '''))
+            start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
