@@ -1065,15 +1065,29 @@ def add_site_summary_to_kwcoco(possible_summaries,
         start_dt = site_summary.start_date
         end_dt = site_summary.end_date
         if start_dt is None:
+            if end_dt is not None and end_dt.date() < first_date:
+                rich.print(f'[yellow]warning: end_dt before first_date! end_dt={end_dt.date()} first_date={first_date}')
+                continue
             start_date = first_date
         else:
             start_date = start_dt.date()
         if end_dt is None:
+            if start_date > last_date:
+                rich.print(f'[yellow]warning: start_date after last_date! start_date={start_date} last_date={last_date}')
+                continue
             end_date = last_date
         else:
             end_date = end_dt.date()
 
-        assert end_date >= start_date
+        if end_date < start_date:
+            raise AssertionError(ub.codeblock(
+                f'''
+                warning: end_date before start_date!
+                site_summary={site_summary}
+                start_date={start_date}
+                end_date={start_date}
+                ''')
+            )
 
         flags = [start_date <= d <= end_date for d in image_dates]
         images = images.compress(flags)
