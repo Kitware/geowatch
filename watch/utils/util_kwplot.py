@@ -367,9 +367,31 @@ class LabelModifier:
         self.relabel(ax)
 
 
-class FigureFinalizer:
+class FigureFinalizer(ub.NiceRepr):
     """
     Helper for defining where and how figures will be saved on disk.
+
+    Known Parameters:
+        dpi : float
+        format : str
+        metadata : dict
+        bbox_inches : str
+        pad_inches : float
+        facecolor : color
+        edgecolor : color
+        backend : str
+        orientation :
+        papertype :
+        transparent :
+        bbox_extra_artists :
+        pil_kwargs :
+
+    Example:
+        from watch.utils.util_kwplot import *  # NOQA
+        self = FigureFinalizer()
+        print('self = {}'.format(ub.urepr(self, nl=1)))
+        self.update(dpi=300)
+
     """
 
     def __init__(
@@ -377,24 +399,61 @@ class FigureFinalizer:
         dpath='.',
         size_inches=None,
         cropwhite=True,
-        tight_layout=True
+        tight_layout=True,
+        **kwargs
     ):
-        self.update(ub.udict(locals()) - {'self'})
+        locals_ = ub.udict(locals())
+        locals_ -= {'self', 'kwargs'}
+        locals_.update(kwargs)
+        self.update(locals_)
+
+    def __nice__(self):
+        return ub.urepr(self.__dict__)
+
+    def copy(self):
+        """
+        Create a copy of this object.
+        """
+        new = self.__class__(**self.__dict__)
+        return new
 
     def update(self, *args, **kwargs):
+        """
+        Modify this config
+        """
         self.__dict__.update(*args, **kwargs)
 
     def finalize(self, fig, fpath, **kwargs):
+        """
+        Sets the figure properties, like size, tight layout, etc, writes to
+        disk, and then crops the whitespace out.
+
+        Args:
+            fig (matplotlib.figure.Figure): figure to safe
+
+            fpath (str | PathLike): where to save the figure image
+
+            **kwargs: overrides this config for this finalize only
+        """
         config = ub.udict(self.__dict__) | kwargs
+
         final_fpath = ub.Path(config['dpath']) / fpath
+        savekw = {}
+        if config.get('dpi', None) is not None:
+            savekw['dpi'] = config['dpi']
+            # fig.set_dpi(savekw['dpi'])
         if config['size_inches'] is not None:
             fig.set_size_inches(config['size_inches'])
         if config['tight_layout'] is not None:
             fig.tight_layout()
-        fig.savefig(final_fpath)
+        # TODO: could save to memory and then write as an image
+        fig.savefig(final_fpath, **savekw)
         cropwhite_ondisk(final_fpath)
 
     def __call__(self, fig, fpath, **kwargs):
+        """
+        Alias for finalize
+        """
         return self.finalize(fig, fpath, **kwargs)
 
 

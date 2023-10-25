@@ -26,9 +26,25 @@ class DataFrame(pd.DataFrame):
         return DataFrame
 
     @classmethod
-    def random(cls, n=10):
-        import numpy as np
-        self = cls({k: np.random.rand(10) for k in 'abcde'})
+    def random(cls, rows=10, columns='abcde', rng=None):
+        """
+        rows=10
+        columns='abcde'
+        rng = None
+        cls = util_pandas.DataFrame
+        """
+        import kwarray
+        rng = kwarray.ensure_rng(rng)
+
+        def coerce_index(data):
+            if isinstance(data, int):
+                return list(range(data))
+            else:
+                return list(data)
+        columns = coerce_index(columns)
+        index = coerce_index(rows)
+        random_data = [{c: rng.rand() for c in columns} for r in index]
+        self = cls(random_data, index=index, columns=columns)
         return self
 
     def safe_drop(self, labels, axis=0):
@@ -57,6 +73,14 @@ class DataFrame(pd.DataFrame):
             intersect (bool):
                 if True ignores labels that doen't exist, otherwise an error
                 will occur if a label is specified that does not exist.
+
+        Example:
+            >>> from watch.utils import util_pandas
+            >>> self = util_pandas.DataFrame.random(columns=['a', 'b', 'c', 'd', 'e', 'f'])
+            >>> self.reorder(['b', 'c'], axis=1)
+            >>> self.reorder([1, 0], axis=0)
+            >>> self.reorder(['q'], axis=1)
+            >>> self.reorder(['q'], axis=1, intersect=True)
         """
         existing = self.axes[axis]
         if intersect:

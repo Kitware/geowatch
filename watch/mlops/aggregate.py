@@ -326,7 +326,8 @@ def main(cmdline=True, **kwargs):
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 from watch.mlops import aggregate_plots
-                aggregate_plots.build_all_param_plots(agg, rois, config)
+                plot_config = ub.udict(config.plot_params) - {'enabled'}
+                aggregate_plots.build_all_param_plots(agg, rois, plot_config)
 
     if config.inspect:
         agg = eval_type_to_aggregator['bas_pxl_eval']
@@ -407,14 +408,23 @@ class AggregatorAnalysisMixin:
             ax.set_title(f'BAS Macro Average over {regions_of_interest}')
         return analysis, table
 
-    def analyze(agg):
+    def varied_param_counts(agg, min_variations=2, dropna=False):
+        from watch.utils.result_analysis import varied_value_counts
+        params = agg.resolved_params
+        params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+        varied_counts = varied_value_counts(params, dropna=dropna, min_variations=min_variations)
+        varied_counts = ub.udict(varied_counts).sorted_values(key=len)
+        return varied_counts
+
+    def analyze(agg, metrics_of_interest=None):
         """
         Does a stats analysis on each varied parameter. Note this makes
         independence assumptions that may not hold in general.
         """
         from watch.utils import result_analysis
-        metrics_of_interest = agg.primary_metric_cols
-        # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
+        if metrics_of_interest is None:
+            metrics_of_interest = agg.primary_metric_cols
+            # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
         params = agg.resolved_params
         metrics = agg.metrics[metrics_of_interest]
@@ -570,7 +580,8 @@ class AggregatorAnalysisMixin:
             param_lut = _agg.hashid_to_params.subdict(ranked_group['param_hashid'])
             big_param_lut.update(param_lut)
 
-            summary_cols = list(index_cols) + metric_display_cols
+            have_metric_display_cols = list(ub.oset(metric_display_cols) & list(ranked_group.columns))
+            summary_cols = list(index_cols) + have_metric_display_cols
             summary_table = ranked_group[summary_cols]
 
             if shorten:

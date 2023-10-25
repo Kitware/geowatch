@@ -13,7 +13,7 @@ except ImportError:
 
 
 @profile
-def build_all_param_plots(agg, rois, config):
+def build_all_param_plots(agg, rois, plot_config):
     """
     Main entry point for plotting results from an :class:`Aggregator`.
     """
@@ -24,7 +24,6 @@ def build_all_param_plots(agg, rois, config):
     single_table = table = agg.table
     single_table = preprocess_table_for_seaborn(agg, table)
 
-    plot_config = ub.udict(config.plot_params) - {'enabled'}
     MARK_DELIVERED = plot_config.get('mark_delivered', False)
     if MARK_DELIVERED:
         SMART_HELPER.mark_delivery(single_table)
@@ -48,7 +47,14 @@ def build_all_param_plots(agg, rois, config):
         param_to_palette = SMART_HELPER.shared_palettes(single_table)
 
     # agg = plotter.agg
-    agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
+    plot_dpath = plot_config.get('plot_dpath', None)
+    if plot_dpath is None:
+        from watch.mlops.aggregate import hash_regions
+        region_hash = hash_regions(rois)
+        # agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
+        agg_group_dpath = (agg.output_dpath / (f'all_params-{region_hash}')).ensuredir()
+    else:
+        agg_group_dpath = ub.Path(plot_dpath).ensuredir()
 
     USE_EFFECTIVE = 1
     if USE_EFFECTIVE:
@@ -63,7 +69,8 @@ def build_all_param_plots(agg, rois, config):
                         new = table[resolved_col].apply(lambda x: lut.get(x, x))
                         table[resolved_col] = new
 
-    plotter = ParamPlotter(agg)
+    vantage_points = plot_config.get('vantage_points', None)
+    plotter = ParamPlotter(agg, vantage_points=vantage_points)
 
     plotter.agg_group_dpath = agg_group_dpath
     plotter.param_to_palette = param_to_palette
@@ -75,12 +82,19 @@ def build_all_param_plots(agg, rois, config):
 
     vantage = plotter.vantage_points[0]
 
-    for vantage in plotter.vantage_points:
-        print('Plot vantage overview: ' + vantage['name'])
-        plotter.plot_vantage_overview(vantage)
-        print('Plot vantage params: ' + vantage['name'])
-        # plotter.plot_vantage_overview(vantage)
-        plotter.plot_vantage_params(vantage)
+    from kwutil.util_progress import ProgressManager
+    pman = ProgressManager()
+
+    with pman:
+        if plot_config.get('plot_overviews', 1):
+            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
+                print('Plot vantage overview: ' + vantage['name'])
+                plotter.plot_vantage_overview(vantage)
+
+        if plot_config.get('plot_params', 1):
+            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
+                print('Plot vantage params: ' + vantage['name'])
+                plotter.plot_vantage_params(vantage, pman=pman)
 
 
 def build_special_columns(agg):
@@ -123,12 +137,14 @@ class ParamPlotter:
     Builds the scatter plots and barcharts over different params.
     Working on cleaning this up
     """
-    def __init__(plotter, agg):
+    def __init__(plotter, agg, vantage_points=None):
         from watch.mlops.smart_global_helper import SMART_HELPER
         plotter.agg = agg
 
         # We will conduct analysis under serveral different vantage points
-        vantage_points = SMART_HELPER.default_vantage_points(agg.type)
+        if vantage_points is None:
+            vantage_points = SMART_HELPER.default_vantage_points(agg.type)
+
         for vantage in vantage_points:
             pm = vantage['metric1'].split('.')[-1]
             sm = vantage['metric2'].split('.')[-1]
@@ -223,6 +239,7 @@ class ParamPlotter:
         import numpy as np
         import kwplot
         import kwimage
+        import rich
         from watch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -234,17 +251,21 @@ class ParamPlotter:
         single_table = plotter.single_table
 
         modifier = plotter.modifier
+        name = vantage['name']
 
-        vantage_dpath = (plotter.agg_group_dpath / vantage['name']).ensuredir()
+        vantage_dpath2 = (plotter.agg_group_dpath / name).ensuredir()
+        vantage_dpath = (plotter.agg_group_dpath).ensuredir()
 
         main_metric = y = vantage['metric1']
         yscale = vantage['scale1']
         x = vantage['metric2']
         xscale = vantage['scale2']
+        print('vantage = {}'.format(ub.urepr(vantage, nl=1)))
+        print('main_metric = {}'.format(ub.urepr(main_metric, nl=1)))
 
         # main_metric = 'bas_poly_eval.metrics.bas_f1'
         # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
-        main_metric = agg.primary_metric_cols[0]
+        # main_metric = agg.primary_metric_cols[0]
 
         finalize_figure = util_kwplot.FigureFinalizer(
             dpath=vantage_dpath,
@@ -268,11 +289,17 @@ class ParamPlotter:
         ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
-        finalize_figure.finalize(fig, 'single_results.png')
+        finalize_figure.finalize(fig, f'overview-{name}.png')
+        rich.print(f'[green] made overview-{name}.png')
         # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
         # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
         try:
+            macro_fig_final = finalize_figure.copy()
+            macro_fig_final.update(
+                size_inches=[12, 4],
+                dpi=300,
+            )
             fig = kwplot.figure(fnum=90, doclf=True)
             ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
             ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
@@ -282,10 +309,12 @@ class ParamPlotter:
                 for param_value, num in param_histogram.items()
             }).relabel_xticks(ax)
             modifier.relabel(ax, ticks=False)
-            finalize_figure.finalize(fig, 'single_results_boxplot.png')
+            macro_fig_final.finalize(fig, f'overview-boxplot-region-vs-{main_metric}.png')
 
         except Exception as ex:
-            print(f'ex={ex}')
+            rich.print(f'[yellow] warning, unable to plot overview-boxplot-region-vs-{main_metric}.png ex={ex}')
+        else:
+            rich.print(f'[green] made overview boxplot overview-boxplot-region-vs-{main_metric}.png')
 
         if macro_table is not None:
             fig = kwplot.figure(fnum=3, doclf=True)
@@ -318,11 +347,16 @@ class ParamPlotter:
                          f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
             ax.set_xscale(xscale)
             ax.set_yscale(yscale)
-            finalize_figure.finalize(fig, 'macro_results.png')
+            roi_finalizer = finalize_figure.copy()
+            roi_finalizer.update(
+                dpath=vantage_dpath2,
+            )
+            roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
+            # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x].png')
             # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
             # ax.set_xlim(1e-2, 0.7)
 
-    def plot_vantage_params(plotter, vantage):
+    def plot_vantage_params(plotter, vantage, pman=None):
         import numpy as np
         import kwplot
         import kwarray
@@ -425,149 +459,158 @@ class ParamPlotter:
         if not len(chosen_params):
             print('Warning: no chosen params')
 
-        for rank, param_name in enumerate(ub.ProgIter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
+        from kwutil.util_progress import ProgressManager
+        owns_pman = 0
+        if pman is None:
+            pman = ProgressManager()
+            pman.__enter__()
+            owns_pman = 1
+        try:
+            for rank, param_name in enumerate(pman.progiter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
+                stats = param_name_to_stats.get(param_name, {})
+                # stats['moments']
+                anova_rank_p = stats.get('anova_rank_p', None)
+                # param_name = stats['param_name']
 
-            stats = param_name_to_stats.get(param_name, {})
-            # stats['moments']
-            anova_rank_p = stats.get('anova_rank_p', None)
-            # param_name = stats['param_name']
+                snskw = {}
+                if param_name in param_to_palette:
+                    snskw['palette'] = param_to_palette[param_name]
 
-            snskw = {}
-            if param_name in param_to_palette:
-                snskw['palette'] = param_to_palette[param_name]
+                try:
+                    macro_table = macro_table.sort_values(param_name)
+                except Exception as ex:
+                    rich.print(f'[yellow] warning, unable to sort values by {param_name} ex={ex}')
+                    ...
 
-            try:
-                macro_table = macro_table.sort_values(param_name)
-            except Exception as ex:
-                print(f'warning ex={ex}')
-                ...
+                # Number of samples we have for each value of this parameter
+                param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
+                param_histogram = param_histogram.map_keys(str)
 
-            # Number of samples we have for each value of this parameter
-            param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
-            param_histogram = param_histogram.map_keys(str)
+                sub_macro_table = macro_table
 
-            sub_macro_table = macro_table
+                min_variations = plotter.plot_config.get('min_variations', 1)
+                if min_variations > 1:
+                    ignore_params = [k for k, v in param_histogram.items() if v < min_variations]
+                    param_histogram = ub.udict(param_histogram) - set(ignore_params)
+                    row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
+                    sub_macro_table = macro_table[~row_is_ignored]
+                    if len(param_histogram) == 1:
+                        print('Skip plot')
+                        continue
+                    ...
 
-            min_variations = plotter.plot_config.get('min_variations', 1)
-            if min_variations > 1:
-                ignore_params = [k for k, v in param_histogram.items() if v < min_variations]
-                param_histogram = ub.udict(param_histogram) - set(ignore_params)
-                row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
-                sub_macro_table = macro_table[~row_is_ignored]
-                if len(param_histogram) == 1:
-                    print('Skip plot')
-                    continue
-                ...
+                header_lines = [
+                    f'BAS Results (n={len(sub_macro_table)})',
+                    f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
+                ]
+                if anova_rank_p is not None:
+                    header_lines.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+                header_text = '\n'.join(header_lines)
 
-            header_lines = [
-                f'BAS Results (n={len(sub_macro_table)})',
-                f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
-            ]
-            if anova_rank_p is not None:
-                header_lines.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
-            header_text = '\n'.join(header_lines)
+                param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
-            param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
+                param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
 
-            param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
-
-            # Mapper for the scatterplot legend
-            if had_value_remap:
-                freq_mapper_scatter = util_kwplot.LabelModifier({
-                    param_value: f'{param_value}\n{param_valname_map[param_value]} (n={num})'
-                    for param_value, num in param_histogram.items()
-                })
-            else:
-                freq_mapper_scatter = util_kwplot.LabelModifier({
-                    param_value: f'{param_value}\n(n={num})'
-                    for param_value, num in param_histogram.items()
-                })
-
-            freq_mapper_box = util_kwplot.LabelModifier({
-                param_value: f'{param_valname_map[param_value]}\n(n={num})'
-                for param_value, num in param_histogram.items()
-            })
-
-            fname_prefix = f'macro_results_{rank:03d}_{param_name}'
-            param_prefix = f'macro_results_{param_name}'
-            param_metric_prefix = f'{param_prefix}_{main_metric}'
-            param_metric2_prefix = f'{param_prefix}_{main_metric}_{secondary_metric}'
-
-            # SCATTER
-            fig = kwplot.figure(fnum=4, doclf=True)
-            ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
-            ax.set_title(header_text)
-            if 'is_star' in sub_macro_table:
-                scatterplot_highlight(data=sub_macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
-
-            if plotter.plot_config.get('compare_sv_hack', False):
-                # Hack to compare before/after SV
-                if 'sv_poly_eval' in x.split('.'):
-                    plotter._add_sv_hack_lines(ax, sub_macro_table, x, y)
-
-            ax.set_xscale(xscale)
-            ax.set_yscale(yscale)
-            modifier.relabel(ax, ticks=False)
-
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT01_scatter_legend.png'
-            param_fpath = param_dpath / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
-            finalize_figure.finalize(fig, vantage_fpath)
-            ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
-
-            # Scatter legend (doesnt care about the vantage)
-            try:
-                param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
-                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
-                if not param_fpath.exists():
-                    legend_ax = util_kwplot.extract_legend(ax)
-                    freq_mapper_scatter.relabel(legend_ax, ticks=False)
-                    finalize_figure.finalize(legend_ax.figure, param_fpath)
-                ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
-            except RuntimeError:
-                ...
-            else:
-                ax.get_legend().remove()
-
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
-            param_fpath = param_dpath / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
-            finalize_figure.finalize(fig, vantage_fpath)
-            ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
-
-            # BOX
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT04_box.png'
-            param_fpath = param_dpath / f'{param_metric_prefix}_PLT04_box.png'
-            print(f'param_fpath={param_fpath}')
-            if not param_fpath.exists():
-                fig = kwplot.figure(fnum=5, doclf=True)
-                ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
-                freq_mapper_box.relabel_xticks(ax)
-                ax.set_title(header_text)
-                modifier.relabel(ax, ticks=False)
-                modifier.relabel_xticks(ax)
-                finalize_figure.finalize(fig, param_fpath)
-            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
-
-            # Varied value table (doesnt care about the vantage)
-            param_fpath = param_dpath / f'{param_prefix}_PLT05_table.png'
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT05_table.png'
-            if not param_fpath.exists():
-                param_code_lut = []
-                for old_name, new_name in param_valname_map.items():
-                    param_code_lut.append({
-                        'code': new_name,
-                        'value': old_name,
-                        'num': param_histogram[old_name],
+                # Mapper for the scatterplot legend
+                if had_value_remap:
+                    freq_mapper_scatter = util_kwplot.LabelModifier({
+                        param_value: f'{param_value}\n{param_valname_map[param_value]} (n={num})'
+                        for param_value, num in param_histogram.items()
                     })
-                param_code_lut = pd.DataFrame(param_code_lut)
-                if not had_value_remap:
-                    param_code_lut = param_code_lut.drop('code', axis=1)
-                param_title = 'Key: ' + modifier._modify_text(param_name)
-                lut_style = param_code_lut.style.set_caption(param_title)
-                util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
-            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+                else:
+                    freq_mapper_scatter = util_kwplot.LabelModifier({
+                        param_value: f'{param_value}\n(n={num})'
+                        for param_value, num in param_histogram.items()
+                    })
 
-        rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
-        # agg0.analyze()
+                freq_mapper_box = util_kwplot.LabelModifier({
+                    param_value: f'{param_valname_map[param_value]}\n(n={num})'
+                    for param_value, num in param_histogram.items()
+                })
+
+                fname_prefix = f'macro_results_{rank:03d}_{param_name}'
+                param_prefix = f'macro_results_{param_name}'
+                param_metric_prefix = f'{param_prefix}_{main_metric}'
+                param_metric2_prefix = f'{param_prefix}_{main_metric}_{secondary_metric}'
+
+                # SCATTER
+                fig = kwplot.figure(fnum=4, doclf=True)
+                ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
+                ax.set_title(header_text)
+                if 'is_star' in sub_macro_table:
+                    scatterplot_highlight(data=sub_macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+
+                if plotter.plot_config.get('compare_sv_hack', False):
+                    # Hack to compare before/after SV
+                    if 'sv_poly_eval' in x.split('.'):
+                        plotter._add_sv_hack_lines(ax, sub_macro_table, x, y)
+
+                ax.set_xscale(xscale)
+                ax.set_yscale(yscale)
+                modifier.relabel(ax, ticks=False)
+
+                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT01_scatter_legend.png'
+                param_fpath = param_dpath / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
+                finalize_figure.finalize(fig, vantage_fpath)
+                ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
+
+                # Scatter legend (doesnt care about the vantage)
+                try:
+                    param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
+                    vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
+                    if not param_fpath.exists():
+                        legend_ax = util_kwplot.extract_legend(ax)
+                        freq_mapper_scatter.relabel(legend_ax, ticks=False)
+                        finalize_figure.finalize(legend_ax.figure, param_fpath)
+                    ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+                except RuntimeError:
+                    ...
+                else:
+                    ax.get_legend().remove()
+
+                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
+                param_fpath = param_dpath / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
+                finalize_figure.finalize(fig, vantage_fpath)
+                ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
+
+                # BOX
+                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT04_box.png'
+                param_fpath = param_dpath / f'{param_metric_prefix}_PLT04_box.png'
+                print(f'param_fpath={param_fpath}')
+                if not param_fpath.exists():
+                    fig = kwplot.figure(fnum=5, doclf=True)
+                    ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
+                    freq_mapper_box.relabel_xticks(ax)
+                    ax.set_title(header_text)
+                    modifier.relabel(ax, ticks=False)
+                    modifier.relabel_xticks(ax)
+                    finalize_figure.finalize(fig, param_fpath)
+                ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+
+                # Varied value table (doesnt care about the vantage)
+                param_fpath = param_dpath / f'{param_prefix}_PLT05_table.png'
+                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT05_table.png'
+                if not param_fpath.exists():
+                    param_code_lut = []
+                    for old_name, new_name in param_valname_map.items():
+                        param_code_lut.append({
+                            'code': new_name,
+                            'value': old_name,
+                            'num': param_histogram[old_name],
+                        })
+                    param_code_lut = pd.DataFrame(param_code_lut)
+                    if not had_value_remap:
+                        param_code_lut = param_code_lut.drop('code', axis=1)
+                    param_title = 'Key: ' + modifier._modify_text(param_name)
+                    lut_style = param_code_lut.style.set_caption(param_title)
+                    util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
+                ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+
+            rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
+            # agg0.analyze()
+        finally:
+            if owns_pman:
+                pman.__exit__()
 
 
 def edit_distance(string1, string2):

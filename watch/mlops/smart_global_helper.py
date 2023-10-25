@@ -127,6 +127,8 @@ class SmartGlobalHelper:
 
     EXTRA_HASHID_IGNORE_COLUMNS = [
         'params.sc_poly.site_summary',
+        'params.sc_pxl.num_workers',
+        'params.bas_pxl.num_workers',
     ]
 
     # Mark columns that are typically paths. Used when building effective params.
@@ -347,6 +349,15 @@ class SmartGlobalHelper:
                 {
                     'metric1': 'metrics.sc_poly_eval.sc_macro_f1',
                     'metric2': 'metrics.sc_poly_eval.bas_faa_f1',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+                {
+                    'metric1': 'metrics.sc_poly_eval.bas_f1',
+                    'metric2': 'metrics.sc_poly_eval.bas_ffpa',
 
                     'scale1': 'linear',
                     'scale2': 'linear',

@@ -228,9 +228,9 @@ python -m watch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002,KW_C501,CO_C501,CN_C500"
+    --query="df['params.sc_pxl.package_fpath'].str.contains('Drop4_tune_V30_8GSD_V3_epoch=2-step=17334') & (df['params.sc_pxl.fixed_resolution'] == '8GSD')" \
+    #--rois="KR_R002,KW_C501,CO_C501,CN_C500"
 
-    #--query="df['params.sc_pxl.package_fpath'].str.contains('Drop4_tune_V30_8GSD_V3_epoch=2-step=17334') & (df['params.sc_pxl.fixed_resolution'] == '8GSD')"
     #--rois="KR_R002,KW_C001,CO_C001,CN_C000" \
     #--query="df['param_hashid'] == 'lefmkkfomcev'" \
     #--rois="KR_R002"
@@ -310,3 +310,45 @@ python -m watch.mlops.aggregate \
 #
 #ls /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78/
 #ls /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/
+#
+
+HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
+
+python -m watch.mlops.aggregate \
+    --pipeline=sc \
+    --target "
+        - $DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_ac_static_small_baseline_v2/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sc_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.sc_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 10
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 1
+        show_csv: 0
+    " \
+    --query="(
+        (df['params.sc_pxl.fixed_resolution'] == '8GSD') &
+        (df['params.sc_poly.thresh'] == 0.07) &
+        (df['params.sc_poly.site_score_thresh'] == 0) &
+        df['params.sc_pxl.package_fpath'].str.contains('Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt')
+    )"
+    #--query="(df['param_hashid'] == 'fvlcyfgjmydd')"
+        #(df['params.sc_poly.smoothing'] == None) &
+    #--query="(df['param_hashid'] == 'fvlcyfgjmydd')"
