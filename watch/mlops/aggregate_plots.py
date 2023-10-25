@@ -260,6 +260,7 @@ class ParamPlotter:
         yscale = vantage['scale1']
         x = vantage['metric2']
         xscale = vantage['scale2']
+        region_attr = 'region_id'
         print('vantage = {}'.format(ub.urepr(vantage, nl=1)))
         print('main_metric = {}'.format(ub.urepr(main_metric, nl=1)))
 
@@ -272,7 +273,8 @@ class ParamPlotter:
             size_inches=np.array([6.4, 4.8]) * 1.0,
         )
         fig = kwplot.figure(fnum=2, doclf=True)
-        ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
+
+        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=region_attr, legend=False)
         if plotter.plot_config.get('compare_sv_hack', False):
             # Hack to compare before/after SV
             if 'sv_poly_eval' in x.split('.'):
@@ -286,7 +288,7 @@ class ParamPlotter:
                                   color='group',
                                   size=300, val_to_color=val_to_color)
 
-        ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+        ax.set_title(f'Per-Region Results (n={len(agg)})')
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
         finalize_figure.finalize(fig, f'overview-{name}.png')
@@ -301,15 +303,23 @@ class ParamPlotter:
                 dpi=300,
             )
             fig = kwplot.figure(fnum=90, doclf=True)
-            ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
-            ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
-            param_histogram = single_table.groupby('region_id').size().to_dict()
+
+            known_regions = single_table[region_attr].unique()
+            # Todo: give the user control over x-axis order
+            # hack: put imerit regions last
+            orig_order = ub.oset(known_regions)
+            trailing_regions = [r for r in orig_order if '_C' in r]
+            x_order = list(orig_order - trailing_regions) + trailing_regions
+
+            ax = sns.boxplot(data=single_table, x=region_attr, y=main_metric, order=x_order)
+            ax.set_title(f'Per-Region Results (n={len(agg)})')
+            param_histogram = single_table.groupby(region_attr).size().to_dict()
             util_kwplot.LabelModifier({
                 param_value: f'{param_value}\n(n={num})'
                 for param_value, num in param_histogram.items()
             }).relabel_xticks(ax)
             modifier.relabel(ax, ticks=False)
-            macro_fig_final.finalize(fig, f'overview-boxplot-region-vs-{main_metric}.png')
+            macro_fig_final.finalize(fig, f'overview-boxplot-{region_attr}-vs-{main_metric}.png')
 
         except Exception as ex:
             rich.print(f'[yellow] warning, unable to plot overview-boxplot-region-vs-{main_metric}.png ex={ex}')
@@ -319,13 +329,13 @@ class ParamPlotter:
         if macro_table is not None:
             fig = kwplot.figure(fnum=3, doclf=True)
             ax = fig.gca()
-            region_ids = macro_table['region_id'].unique()
+            region_ids = macro_table[region_attr].unique()
             assert len(region_ids) == 1
             macro_region_id = region_ids[0]
             palette = {
                 macro_region_id: kwimage.Color('kitware_darkgray').as01()
             }
-            ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax, palette=palette)
+            ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=region_attr, ax=ax, palette=palette)
             if plotter.plot_config.get('compare_sv_hack', False):
                 # Hack to compare before/after SV
                 if 'sv_poly_eval' in x.split('.'):
@@ -343,7 +353,7 @@ class ParamPlotter:
                                       highlight='delivered_params', ax=ax,
                                       color='group', size=300,
                                       val_to_color=val_to_color)
-            ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+            ax.set_title(f'Results (n={len(macro_table)})\n'
                          f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
             ax.set_xscale(xscale)
             ax.set_yscale(yscale)
@@ -500,7 +510,7 @@ class ParamPlotter:
                     ...
 
                 header_lines = [
-                    f'BAS Results (n={len(sub_macro_table)})',
+                    f'Results (n={len(sub_macro_table)})',
                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
                 ]
                 if anova_rank_p is not None:

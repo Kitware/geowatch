@@ -504,6 +504,11 @@ class CocoStitchingManager(object):
             else:
                 weights = weights * _center_weights
 
+        if weights is None:
+            # TODO: allow weights to be None for stitching performance in this
+            # case.
+            weights = np.ones(data.shape[0:2], dtype=np.float32)
+
         is_2d = len(data.shape) == 2
         is_3d = len(data.shape) == 3
 
