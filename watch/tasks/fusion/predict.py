@@ -153,6 +153,12 @@ class PredictConfig(DataModuleConfigMixin):
         This probably isn't generally useful and should be refactored later.
         '''))
 
+    downweight_edges = scfg.Value(True, help=ub.paragraph(
+        '''
+        if True, spatial edges are downweighted in stitching in addition to
+        using any weights coming out of the torch dataset.
+        '''))
+
 
 def build_stitching_managers(config, model, result_dataset, writer_queue=None):
     # could be torch on-device stitching
@@ -625,6 +631,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
     import rich
 
     print('Predict on device = {!r}'.format(device))
+    downweight_edges = config.downweight_edges
 
     UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
@@ -905,6 +912,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                             dsize=output_image_dsize,
                             scale=scale_outspace_from_vid,
                             weights=output_weights,
+                            downweight_edges=downweight_edges,
                         )
 
                 # Free up space for any images that have been completed

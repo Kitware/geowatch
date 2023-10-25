@@ -13,7 +13,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Batch outputs weights are new members of a frame item and are factored into
-  stitching weights in fusion.predict
+  stitching weights in fusion.predict. These are also combined with old weights
+  by default.
 
 * Changed the semantics of temporal dropout to be more natural. There is now a
   `temporal_dropout_rate` for the probability a batch item will have temporal

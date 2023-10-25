@@ -1,9 +1,120 @@
+"""
+Defines the :class:`CocoStitchingManager`, which stitches predictions from
+subregions of an image or video (or more generally - data cube) back into
+rasters corresponding to the original data. This requires that the user use a
+sliding window (e.g. perhaps defined by :class:`kwarray.SlidingWindow`) to
+iterate over space/time, produce predictions, and know the coordinates those
+predictions should be stitched back together at.
+
+The following attempts to provide a minimal example with a visualization.
+
+Example:
+    >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+    >>> from watch.tasks.fusion.coco_stitcher import demo_coco_stitching_manager
+    >>> # See the contents of the function for details, might port it to a full
+    >>> # doctest later.
+    >>> demo_coco_stitching_manager()
+"""
+
+
 import ubelt as ub
 import numpy as np
 import kwimage
 import kwarray
 import warnings
 from os.path import relpath
+
+
+def demo_coco_stitching_manager():
+    import kwcoco
+    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+
+    # This test will write to this output directory and we seed our RNG
+    out_dpath = ub.Path.appdir('watch/kwcoco_stitcher/demo')
+    rng = kwarray.ensure_rng(0)
+
+    # Given some kwcoco dataset
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes', num_videos=1, num_frames=4)
+
+    result_dataset = coco_dset.copy()
+    result_dataset.reroot(absolute=True)
+
+    # Tell the result dataset where it will live.
+    # The stitcher will write into this bundle directory.
+    result_dataset.fpath = out_dpath / 'demo_stitched.kwcoco.zip'
+
+    # We are going to predict a new raster feature. We will call it "demofeat"
+    # and it will have three channels: demochan.0, demochan.1, demochan.2.
+    # These features will be native to video space.
+    stitcher = CocoStitchingManager(
+        result_dataset=result_dataset,
+        short_code='demofeat',
+        chan_code='demochan.0|demochan.1|demochan.2',
+        stiching_space='video'
+    )
+
+    # We will use the :class:`KWCocoVideoDataset` to handle the sliding window
+    # You don't have to, but it is handy.
+    dataset = KWCocoVideoDataset(
+        coco_dset, time_dims=3, window_dims=(128, 128),
+        window_overlap=0.3,
+        channels='r|g|b',
+        mode='test',
+        time_sampling='uniform',
+    )
+
+    # There needs to be some loop that iterates over spacetime windows where
+    # predictions are generated. It is then our job to pass those predictions
+    # to the stitcher.
+    for idx in range(len(dataset)):
+        # Get a single batch item
+        item = dataset[idx]
+
+        # For each frame in the batch, accumulate its predictions
+        for frame_info in item['frames']:
+
+            # The KWCocoVideoDataset gives us information about where the
+            # predicted output should live in output space.
+            image_id = frame_info['gid']
+            output_image_dsize = frame_info['output_image_dsize']
+            output_space_slice = frame_info['output_space_slice']
+            scale_outspace_from_vid = frame_info['scale_outspace_from_vid']
+            output_weights = frame_info.get('output_weights', None)
+
+            # Generate a fake prediction for this frame
+            prob_h, prob_w = frame_info['output_dims']
+            fake_prediction = frame_info['modes']['r|g|b'] > 200
+            mask = (fake_prediction.all(axis=0).numpy()).astype(np.float32)
+            probs = rng.rand(prob_h, prob_w, 3) * mask[:, :, None]
+            probs = kwimage.gaussian_blur(probs)
+            # Add in noticable edge effects
+            probs[:4, :, 0] = 1
+            probs[-4:, :, 1] = 1
+            probs[:, :4, 2] = 1
+            probs[:, -4:, 2:] = 1
+
+            # Tell the stitcher where the probabilities should be placed in the
+            # larger context.
+            stitcher.accumulate_image(
+                image_id, output_space_slice, probs,
+                dsize=output_image_dsize,
+                scale=scale_outspace_from_vid,
+                weights=output_weights,
+                downweight_edges=1,
+            )
+
+    # The user needs to call finalize when they are done with an image.
+    # In this case we just stitch the entire thing and call finalize on
+    # everything at the end.
+    for image_id in result_dataset.images():
+        stitcher.finalize_image(image_id)
+
+    # The stitcher modified the result dataset inplace. Dump it to disk.
+    result_dataset.dump()
+
+    if 1:
+        # Visualize the stitched predictions.
+        ub.cmd(f'geowatch visualize {result_dataset.fpath} --channels="r|g|b,demochan.0:3" --stack=True', system=1)
 
 
 class CocoStitchingManager(object):
@@ -249,7 +360,7 @@ class CocoStitchingManager(object):
 
     def accumulate_image(self, gid, space_slice, data, asset_dsize=None,
                          scale_asset_from_stitchspace=None, is_ready='auto',
-                         weights=None, **kwargs):
+                         weights=None, downweight_edges=False, **kwargs):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -365,24 +476,33 @@ class CocoStitchingManager(object):
         stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
         asset_space_slice = space_slice
-        self._stitcher_center_weighted_add(stitcher, asset_space_slice, data, weights)
+        self._stitcher_center_weighted_add(stitcher, asset_space_slice, data,
+                                           weights,
+                                           downweight_edges=downweight_edges)
 
     @staticmethod
-    def _stitcher_center_weighted_add(stitcher, asset_space_slice, data, weights=None):
+    def _stitcher_center_weighted_add(stitcher, asset_space_slice, data,
+                                      weights=None, downweight_edges=False):
         """
         TODO: refactor
         """
         from watch.utils import util_kwimage
 
-        if weights is None:
-            weights = util_kwimage.upweight_center_mask(data.shape[0:2])
-        else:
+        if weights is not None:
             import kwarray
             weights = kwarray.ArrayAPI.numpy(weights)
             # Hack, the dataloader should always provide weights aligned with
             # the output, but we have offbyone errors, so just force things to
             # work while we figure those out.
             data, weights = _force_shape_agreement_by_cropping2d(data, weights)
+
+        if downweight_edges:
+            _center_weights = util_kwimage.upweight_center_mask(data.shape[0:2])
+
+            if weights is None:
+                weights = _center_weights
+            else:
+                weights = weights * _center_weights
 
         is_2d = len(data.shape) == 2
         is_3d = len(data.shape) == 3
