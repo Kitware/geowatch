@@ -251,7 +251,7 @@ def run_generate_sc_cropped_kwcoco(config):
             node_dpath='.'
         )
         command = remove_bad_images_node.final_command()
-        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+        ub.cmd(command, system=True, capture=False, verbose=3, check=True)
     else:
         print('Not removing bad images')
         ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)

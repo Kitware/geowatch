@@ -12,12 +12,9 @@ except ImportError:
     profile = ub.identity
 
 
-@profile
-def build_all_param_plots(agg, rois, plot_config):
-    """
-    Main entry point for plotting results from an :class:`Aggregator`.
-    """
+def build_plotter(agg, rois, plot_config):
     from watch.mlops.smart_global_helper import SMART_HELPER
+    from watch.utils import util_kwplot
 
     build_special_columns(agg)
     agg.build()
@@ -28,7 +25,7 @@ def build_all_param_plots(agg, rois, plot_config):
     if MARK_DELIVERED:
         SMART_HELPER.mark_delivery(single_table)
 
-    modifier = SMART_HELPER.label_modifier()
+    modifier: util_kwplot.LabelModifier = SMART_HELPER.label_modifier()
 
     if rois is not None:
         agg.build_macro_tables(rois)
@@ -79,22 +76,16 @@ def build_all_param_plots(agg, rois, plot_config):
     plotter.single_table = single_table
     plotter.rois = rois
     plotter.plot_config = plot_config
+    return plotter
 
-    vantage = plotter.vantage_points[0]
 
-    from kwutil.util_progress import ProgressManager
-    pman = ProgressManager()
-
-    with pman:
-        if plot_config.get('plot_overviews', 1):
-            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
-                print('Plot vantage overview: ' + vantage['name'])
-                plotter.plot_vantage_overview(vantage)
-
-        if plot_config.get('plot_params', 1):
-            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
-                print('Plot vantage params: ' + vantage['name'])
-                plotter.plot_vantage_params(vantage, pman=pman)
+@profile
+def build_all_param_plots(agg, rois, plot_config):
+    """
+    Main entry point for plotting results from an :class:`Aggregator`.
+    """
+    plotter = build_plotter(agg, rois, plot_config)
+    plotter.plot_all()
 
 
 def build_special_columns(agg):
@@ -152,9 +143,23 @@ class ParamPlotter:
             vantage['name'] = name
         plotter.vantage_points = vantage_points
 
-    # def plot_vantage(plotter, vantage):
-    #     plotter.plot_vantage_overview(vantage)
-    #     plotter.plot_vantage_params(vantage)
+    def plot_all(plotter):
+        vantage = plotter.vantage_points[0]
+        plot_config = plotter.plot_config
+
+        from kwutil.util_progress import ProgressManager
+        pman = ProgressManager()
+
+        with pman:
+            if plot_config.get('plot_overviews', 1):
+                for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
+                    print('Plot vantage overview: ' + vantage['name'])
+                    plotter.plot_vantage_overview(vantage)
+
+            if plot_config.get('plot_params', 1):
+                for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
+                    print('Plot vantage params: ' + vantage['name'])
+                    plotter.plot_vantage_params(vantage, pman=pman)
 
     def _add_sv_hack_lines(plotter, ax, table, x, y):
         import matplotlib as mpl
@@ -291,6 +296,7 @@ class ParamPlotter:
         ax.set_title(f'Per-Region Results (n={len(agg)})')
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
+        modifier.relabel(ax, ticks=False)
         finalize_figure.finalize(fig, f'overview-{name}.png')
         rich.print(f'[green] made overview-{name}.png')
         # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
@@ -304,14 +310,18 @@ class ParamPlotter:
             )
             fig = kwplot.figure(fnum=90, doclf=True)
 
-            known_regions = single_table[region_attr].unique()
-            # Todo: give the user control over x-axis order
-            # hack: put imerit regions last
-            orig_order = ub.oset(known_regions)
-            trailing_regions = [r for r in orig_order if '_C' in r]
-            x_order = list(orig_order - trailing_regions) + trailing_regions
+            region_order = plotter.plot_config.get('region_order', None)
+            boxsns_kw = {}
+            if region_order is not None:
+                ...
+                # known_regions = single_table[region_attr].unique()
+                # # Todo: give the user control over x-axis order
+                # # hack: put imerit regions last
+                # orig_order = ub.oset(known_regions)
+                # trailing_regions = [r for r in orig_order if '_C' in r]
+                boxsns_kw['order'] = region_order
 
-            ax = sns.boxplot(data=single_table, x=region_attr, y=main_metric, order=x_order)
+            ax = sns.boxplot(data=single_table, x=region_attr, y=main_metric, **boxsns_kw)
             ax.set_title(f'Per-Region Results (n={len(agg)})')
             param_histogram = single_table.groupby(region_attr).size().to_dict()
             util_kwplot.LabelModifier({
@@ -361,6 +371,7 @@ class ParamPlotter:
             roi_finalizer.update(
                 dpath=vantage_dpath2,
             )
+            modifier.relabel(ax, ticks=False)
             roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
             # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x].png')
             # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))

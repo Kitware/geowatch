@@ -208,6 +208,9 @@ class SmartGlobalHelper:
     def label_modifier(self):
         """
         Build the label modifier for the SMART task.
+
+        Returns:
+            util_kwplot.LabelModifier
         """
         from watch.utils import util_kwplot
         modifier = util_kwplot.LabelModifier()
