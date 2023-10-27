@@ -74,7 +74,7 @@ def run_generate_sc_cropped_kwcoco(config):
 
     from watch.utils.util_framework import NodeStateHelper
     node_state = NodeStateHelper()
-    node_state.print_watch_version()
+    node_state.print_environment()
 
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)

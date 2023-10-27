@@ -791,7 +791,7 @@ class NodeStateHelper:
     Example:
         >>> from watch.utils.util_framework import *  # NOQA
         >>> self = NodeStateHelper()
-        >>> self.print_watch_version()
+        >>> self.print_environment()
         >>> self.print_current_state('.')
         >>> self.print_current_state('.')
     """
@@ -799,14 +799,16 @@ class NodeStateHelper:
     def __init__(self):
         self.current_iteration = 0
 
-    def print_watch_version(self):
+    def print_environment(self):
         # Print info about what version of the code we are running on
         import ubelt as ub
+        import os
         import watch
         print(' * Print current version of the code')
         ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
         print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
         print('watch.__file__ = {}'.format(ub.urepr(watch.__file__, nl=1)))
+        print('os.environ = {}'.format(ub.urepr(os.environ, nl=1)))
 
     def print_current_state(self, dpath):
         import ubelt as ub

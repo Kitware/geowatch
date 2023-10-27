@@ -79,7 +79,7 @@ def run_dino_sv(config):
     # Print info about what version of the code we are running on
     from watch.utils.util_framework import NodeStateHelper
     node_state = NodeStateHelper()
-    node_state.print_watch_version()
+    node_state.print_environment()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

@@ -180,7 +180,7 @@ def run_stac_to_cropped_kwcoco(config):
 
     from watch.utils.util_framework import NodeStateHelper
     node_state = NodeStateHelper()
-    node_state.print_watch_version()
+    node_state.print_environment()
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.

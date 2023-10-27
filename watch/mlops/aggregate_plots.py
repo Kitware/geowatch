@@ -419,18 +419,19 @@ class ParamPlotter:
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
+        resolved_params['param_hashid'] = macro_table['param_hashid']
         valid_cols = resolved_params.columns.difference(blocklist)
         resolved_params = resolved_params[valid_cols]
 
         from kwutil.util_yaml import Yaml
         params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
-        print('params_of_interest = {}'.format(ub.urepr(params_of_interest, nl=1)))
-
-        chosen_params = None
 
         if params_of_interest is not None:
             chosen_params = params_of_interest
 
+            params_of_interest = set(params_of_interest)
+            # if 'param_hashid' in params_of_interest:
+            #     params_of_interest.remove(
             valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
             missing = sorted(set(params_of_interest) - set(valid_params_of_interest))
             chosen_params = valid_params_of_interest

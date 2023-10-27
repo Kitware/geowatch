@@ -162,21 +162,25 @@ def smartflow_egress(assetnames_and_local_paths,
     outbucket = FSPath.coerce(outbucket)
 
     # TODO: Can use fsspec to grab multiple files in parallel
-    seen = set()  # Prevent duplicate uploads
     assetnames_and_s3_paths = {}
-    for asset, local_path in assetnames_and_local_paths.items():
+
+    items = list(assetnames_and_local_paths.items())
+    # Prevent duplicate uploads
+    items = ub.unique(items, key=lambda x: x[1])
+
+    logger = PrintLogger()
+    for asset, local_path in ub.ProgIter(items, desc='Egress data', verbose=3):
         # Assets with paths already on S3 simply pass a reference through
         local_path = FSPath.coerce(local_path)
         if local_path.startswith('s3'):
             asset_s3_outpath = local_path
         else:
             asset_s3_outpath = outbucket / local_path.name
-            if local_path not in seen:
-                from retry.api import retry_call
-                retry_call(local_path.copy, fargs=[asset_s3_outpath],
-                           tries=3, exceptions=(PermissionError,), delay=3)
-                # local_path.copy(asset_s3_outpath)
-                seen.add(local_path)
+            from retry.api import retry_call
+            retry_call(local_path.copy, fargs=[asset_s3_outpath],
+                       fkwargs=dict(verbose=3), tries=3, backoff=2,
+                       exceptions=(PermissionError,), delay=3, logger=logger)
+            # local_path.copy(asset_s3_outpath)
 
         assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
 
@@ -206,6 +210,37 @@ def smartflow_egress(assetnames_and_local_paths,
 
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
+
+
+class PrintLogger:
+    def info(self, msg, *args, **kwargs):
+        print(msg % args)
+    def debug(self, msg, *args, **kwargs):
+        print(msg % args)
+    def error(self, msg, *args, **kwargs):
+        print(msg % args)
+    def warning(self, msg, *args, **kwargs):
+        print(msg % args)
+    def critical(self, msg, *args, **kwargs):
+        print(msg % args)
+
+
+def _devcheck_retry():
+    class Dummy:
+        def __init__(self):
+            self.count = 0
+
+        def func_to_run(self):
+            self.count += 1
+            if self.count < 3:
+                raise Exception('exception')
+    self = Dummy()
+    from retry.api import retry_call
+
+    logger = PrintLogger()
+    retry_call(self.func_to_run, fargs=[],
+               fkwargs=dict(), tries=4,
+               exceptions=(Exception,), delay=3, logger=logger)
 
 
 __notes__ = """
