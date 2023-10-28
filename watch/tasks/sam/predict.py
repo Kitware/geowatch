@@ -5,6 +5,21 @@ from torch.utils import data
 
 
 class SAMConfig(scfg.DataConfig):
+    r"""
+    Compute SAM encoder features
+
+    Usage:
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+        python -m watch.tasks.sam.predict \
+            --input_kwcoco <input-kwcoco>
+            --output_kwcoco <output-kwcoco>
+            --fixed_resolution=None
+            --weights_fpath "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth" \
+            --window_overlap=0.33333 \
+            --data_workers="2" \
+            --io_workers 0 \
+            --assets_dname="sam_feats"
+    """
     input_kwcoco = scfg.Value(None, help='input kwcoco dataset')
     output_kwcoco = scfg.Value(None, help='output')
 
@@ -312,7 +327,8 @@ class SAMFeaturePredictor(DenseFeaturePredictor):
             scale_asset_from_vid = item['scale_asset_from_vid']
             self.coco_stitcher.accumulate_image(
                 gid, asset_slice, data, asset_dsize=asset_dsize,
-                scale_asset_from_stitchspace=scale_asset_from_vid)
+                scale_asset_from_stitchspace=scale_asset_from_vid,
+                downweight_edges=True)
 
 
 def main(cmdline=1, **kwargs):
