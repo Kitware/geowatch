@@ -266,9 +266,12 @@ def fallback_copy(local_path, asset_s3_outpath):
             # In the case where we are moving a directory from the local to s3
             # we *should* just be able to use copy, but because that seems to
             # be breaking, we are falling back on an explicit aws cli command
+            profile = asset_s3_outpath.fs.storage_options.get('profile', None)
+            aws_kwargs = {}
+            if profile is not None:
+                aws_kwargs['profile'] = profile
             aws_cmd = util_framework.AWS_S3_Command(
-                'sync', local_path, asset_s3_outpath,
-                **asset_s3_outpath.fs.storage_options)
+                'sync', local_path, asset_s3_outpath, **aws_kwargs)
             aws_cmd.run()
         else:
             local_path.copy(asset_s3_outpath, verbose=3)
