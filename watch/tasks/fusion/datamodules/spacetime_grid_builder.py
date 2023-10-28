@@ -3,13 +3,19 @@ CommandLine:
     # Benchmark time sampling
     SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
 
+
+TODO:
+    - [ ] The functions that take too many arguments should be refactored as
+          object oriented code and use object attribute to store the extra
+          data.
+
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
     >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
     >>> import watch
     >>> import kwcoco
     >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-    >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
+    >>> coco_fpath = dvc_dpath / 'Drop7-MedianNoWinter10GSD-V2/NZ_R001/imganns-NZ_R001-rawbands.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> window_dims = 128
     >>> time_dims = 5
@@ -20,9 +26,9 @@ Example:
     >>>     time_sampling='soft2+distribute',
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
     >>>     keepbound=True,
-    >>>     use_annot_info=False,
-    >>>     use_grid_positives=False,
-    >>>     use_centered_positives=False,
+    >>>     use_annot_info=1,
+    >>>     use_grid_positives=1,
+    >>>     use_centered_positives=True,
     >>>     respect_valid_regions=False,  # enabling this is slow
     >>>     use_cache=0
     >>> )
@@ -30,7 +36,7 @@ Example:
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> canvas = visualize_sample_grid(dset, grid, max_vids=1, max_frames=3)
+    >>> canvas = visualize_sample_grid(coco_dset, grid, max_vids=1, max_frames=3)
     >>> kwplot.imshow(canvas, doclf=1, fnum=2)
     >>> plt.gca().set_title(ub.codeblock(
         '''
@@ -43,7 +49,7 @@ import kwarray
 import kwimage
 import numpy as np
 import ubelt as ub
-from watch.utils import util_kwimage
+import warnings
 from watch.utils import kwcoco_extensions
 from watch import heuristics
 
@@ -53,8 +59,9 @@ except ImportError:
     profile = ub.identity
 
 
-# Bump this if the cache is breaking things
-SPACETIME_CACHE_VERSION = 'cache_v15'
+# Bump this if the process for sampling the spacetime grid changes and old
+# caches are no longer valid.
+SPACETIME_CACHE_VERSION = 'spacetime_cache_v17'
 
 
 class SpacetimeGridBuilder:
@@ -317,6 +324,8 @@ def sample_video_spacetime_targets(dset,
 
     # from ndsampler import isect_indexer
     # _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
+
+    # FIXME: refactor to get rid of this hardcoded nonsense
     parts = set(time_sampling.split('+'))
     affinity_type_parts = parts & {
         'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2',
@@ -338,6 +347,11 @@ def sample_video_spacetime_targets(dset,
 
     if negative_classes is None:
         negative_classes = heuristics.BACKGROUND_CLASSES
+        warnings.warn(ub.paragraph(
+            f'''
+            Negative classes were not specified to SpacetimeGridBuilder.
+            Using heuristic background classes: {negative_classes}
+            '''))
 
     dset_hashid = dset._cached_hashid()
 
@@ -351,7 +365,6 @@ def sample_video_spacetime_targets(dset,
     print(f'winspace_space_dims={winspace_space_dims}')
     depends = [
         dset_hashid,
-        negative_classes,
         affinity_type,
         update_rule,
         winspace_space_dims,
@@ -461,6 +474,36 @@ def sample_video_spacetime_targets(dset,
     return sample_grid
 
 
+class ImagePropertyCacher:
+    """
+    Helper class for caching image property lookups
+    """
+    def __init__(image_props, dset):
+        image_props.dset = dset
+
+    @ub.memoize_method
+    def get_warp_vid_from_img(image_props, gid):
+        """
+        Abstract the transform to bring us into whatever the internal "window
+        space" is. Depends on whatever "window_scale" is computed as.
+        """
+        coco_img = image_props.dset.coco_image(gid)
+        warp_vid_from_img = coco_img.warp_vid_from_img
+        return warp_vid_from_img
+
+    @ub.memoize_method
+    def get_image_valid_region_in_vidspace(image_props, gid):
+        coco_poly = image_props.dset.index.imgs[gid].get('valid_region', None)
+        if not coco_poly:
+            sh_poly_vid = None
+        else:
+            warp_vid_from_img = image_props.get_warp_vid_from_img(gid)
+            kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
+            kw_poly_vid = kw_poly_img.warp(warp_vid_from_img)
+            sh_poly_vid = kw_poly_vid.to_shapely()
+        return sh_poly_vid
+
+
 @profile
 def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
@@ -482,28 +525,6 @@ def _sample_single_video_spacetime_targets(
     """
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     from watch.tasks.fusion.datamodules import data_utils
-
-    @ub.memoize
-    def get_warp_vid_from_img(gid):
-        """
-        Abstract the transform to bring us into whatever the internal "window
-        space" is. Depends on whatever "window_scale" is computed as.
-        """
-        coco_img = dset.coco_image(gid)
-        warp_vid_from_img = coco_img.warp_vid_from_img
-        return warp_vid_from_img
-
-    @ub.memoize
-    def get_image_valid_region_in_vidspace(gid):
-        coco_poly = dset.index.imgs[gid].get('valid_region', None)
-        if not coco_poly:
-            sh_poly_vid = None
-        else:
-            warp_vid_from_img = get_warp_vid_from_img(gid)
-            kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
-            kw_poly_vid = kw_poly_img.warp(warp_vid_from_img)
-            sh_poly_vid = kw_poly_vid.to_shapely()
-        return sh_poly_vid
 
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
@@ -589,6 +610,9 @@ def _sample_single_video_spacetime_targets(
     _cached = cacher.tryload()
     if _cached is None:
 
+        # Helper that caches repeatedly access values in the next parts
+        image_props = ImagePropertyCacher(dset)
+
         video_targets = []
         video_positive_idxs = []
         video_negative_idxs = []
@@ -612,13 +636,17 @@ def _sample_single_video_spacetime_targets(
         }
 
         if use_annot_info:
-            qtree, tid_to_infos = _build_vidspace_track_qtree(
+            qtree, tid_to_infos, loose_aid_to_infos = _build_vidspace_track_qtree(
                 dset, video_gids, negative_classes, vidspace_video_width,
-                vidspace_video_height, get_warp_vid_from_img)
+                vidspace_video_height, image_props)
         else:
             qtree = None
             tid_to_infos = None
+            loose_aid_to_infos = None
 
+        # Structured grid sampling:
+        # Consider each spatial location in the sliding window as a candidate
+        # sample and determine what label we want to give it.
         needs_sliding_window = (
             use_grid_negatives or
             use_grid_positives or
@@ -644,7 +672,7 @@ def _sample_single_video_spacetime_targets(
                 new_targets = _build_targets_in_spatial_region(
                     dset, video_id, vidspace_region, use_annot_info, qtree,
                     main_idx_to_gids, refine_iosa_thresh, time_sampler,
-                    get_image_valid_region_in_vidspace, respect_valid_regions,
+                    image_props, respect_valid_regions,
                     set_cover_algo)
                 new_targets = list(new_targets)
 
@@ -663,18 +691,36 @@ def _sample_single_video_spacetime_targets(
                             video_negative_idxs.append(len(video_targets))
                         video_targets.append(target)
 
+        # Unstructured grid sampling:
+        # Consider explicit samples placed around annotations.
         if use_centered_positives and use_annot_info:
             # FIXME: This code is too slow
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
             track_infos = list(tid_to_infos.items())
             for tid, infos in ub.ProgIter(track_infos,
-                                          desc='Centered annots',
+                                          desc='Centered tracks',
                                           enabled=len(track_infos) > 4 and probably_slow,
                                           verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
-                    video_id, tid, infos, video_gids, vidspace_window_dims,
+                    video_id, infos, video_gids, vidspace_window_dims,
+                    time_sampler)
+                new_targets = list(new_targets)
+                for target in new_targets:
+                    video_positive_idxs.append(len(video_targets))
+                    video_targets.append(target)
+
+            # For annotations without track information, consider them as
+            # tracks of length 1
+            loose_annot_infos = list(loose_aid_to_infos.items())
+            for aid, info in ub.ProgIter(loose_annot_infos,
+                                         desc='Centered annots',
+                                         enabled=len(loose_aid_to_infos) > 4 and probably_slow,
+                                         verbose=verbose * (len(loose_aid_to_infos) > 4 and probably_slow)):
+                infos = [info]
+                new_targets = _build_targets_around_track(
+                    video_id, infos, video_gids, vidspace_window_dims,
                     time_sampler)
                 new_targets = list(new_targets)
                 for target in new_targets:
@@ -708,16 +754,22 @@ def _sample_single_video_spacetime_targets(
 
 
 @profile
-def _build_targets_around_track(video_id, tid, infos, video_gids,
+def _build_targets_around_track(video_id, infos, video_gids,
                                 vidspace_window_dims, time_sampler):
     """
     Given information about a track, build targets to ensure the network trains
     with it.
+
+    Args:
+        infos (List[Dict]):
+            each row contains gid, aid, cid, tid, frame-index for the track of
+            interest.
     """
     window_height, window_width = vidspace_window_dims
+    # For every frame in the track
     for info in infos:
         main_gid = info['gid']
-        vidspace_ann_box = kwimage.Boxes([info['vidspace_box']], 'tlbr')
+        vidspace_ann_box = kwimage.Box.coerce(info['vidspace_box'], format='tlbr')
         vidspace_ann_box = vidspace_ann_box.quantize()
         vidspace_ann_box = vidspace_ann_box.resize(width=window_width, height=window_height)
         #  FIXME, this code is ugly
@@ -731,7 +783,7 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
         if _hack2:
             gids = _hack2[_hack_main_idx]
             label = 'positive_center'
-            vidspace_region = vidspace_ann_box.to_slices()[0]
+            vidspace_region = vidspace_ann_box.to_slice()
 
             target = {
                 'main_idx': _hack_main_idx,
@@ -749,21 +801,21 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
 def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                                      use_annot_info, qtree, main_idx_to_gids,
                                      refine_iosa_thresh, time_sampler,
-                                     get_image_valid_region_in_vidspace,
-                                     respect_valid_regions, set_cover_algo):
+                                     image_props, respect_valid_regions,
+                                     set_cover_algo):
     """
-    Called for each spatial grid in the sliding window. This adds multiple
-    targets
+    Called for each spatial grid in the sliding window.
+    This adds multiple targets
 
     Called as part of :func:`_sample_single_video_spacetime_targets`.
     """
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     y_sl, x_sl = vidspace_region
-    vidspace_box = kwimage.Boxes.from_slice(vidspace_region).to_ltrb()
+    vidspace_box = kwimage.Box.from_slice(vidspace_region).to_ltrb()
 
     # Find all annotations that pass through this spatial region
     if use_annot_info:
-        query = vidspace_box.data[0]
+        query = vidspace_box.data
         isect_aids = list(qtree.intersect(query))
         isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
 
@@ -774,8 +826,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         try:
             main_idx_to_gids2, resampled = _refine_time_sample(
                 dset, main_idx_to_gids, vidspace_box,
-                refine_iosa_thresh, time_sampler,
-                get_image_valid_region_in_vidspace)
+                refine_iosa_thresh, time_sampler, image_props)
         except tsm.TimeSampleError as ex:
             # Hack, just skip the region
             # We might be able to sample less and still be ok
@@ -826,20 +877,38 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
 @profile
 def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                                 vidspace_video_width, vidspace_video_height,
-                                get_warp_vid_from_img):
+                                image_props):
     """
     Build a data structure that allows for fast lookup of which annotations
     exist in the in the requested "Window Space".
 
     Called as part of :func:`_sample_single_video_spacetime_targets`.
+
+    TODO:
+        - [ ] For tracks with multiple annotations, we should build a range of
+        values indicating where the intersection occurs in spacetime instead of
+        putting each annotation on each frame. This should increase efficiency
+        by a lot.
+
+    Returns:
+        Tuple[pyqtree.Index, Dict, Dict]
     """
     import pyqtree
+
+    # Initialize a single qtree to represent where objects will be found across
+    # all time in the video. We do need a better 3D way of doing this for long
+    # videos where objects are moving.
     qtree = pyqtree.Index((0, 0, vidspace_video_width, vidspace_video_height))
     tid_to_infos = ub.ddict(list)
+    loose_aid_to_infos = ub.ddict(list)
     video_images = dset.images(video_gids)
     video_coco_images = video_images.coco_images
     video_aids = video_images.annots.lookup('id')
+
+    # For each image in the video sequence consider its annotations.
     for aids, coco_img in zip(video_aids, video_coco_images):
+
+        # Consider the data in this frame only.
         img_info = coco_img.img
         gid = img_info['id']
         frame_index = img_info['frame_index']
@@ -847,8 +916,6 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         tids = annots.lookup('track_id', None)
         cids = annots.lookup('category_id', None)
         cnames = dset.categories(cids).name
-
-        warp_vid_from_img = get_warp_vid_from_img(gid)
 
         # Gather data in imagespace so we can group expensive steps together
         imgspace_xywh = []
@@ -866,30 +933,39 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                 })
 
         imgspace_boxes = kwimage.Boxes(np.array(imgspace_xywh), 'xywh')
+
+        # Convert to image space in a single call
+        warp_vid_from_img = image_props.get_warp_vid_from_img(gid)
         vidspace_boxes = imgspace_boxes.warp(warp_vid_from_img)
         vidspace_boxes = vidspace_boxes.clip(
             0, 0, vidspace_video_width, vidspace_video_height)
+
         isvalid_flags = vidspace_boxes.area.ravel() > 0
         valid_vidspace_boxes = vidspace_boxes.compress(isvalid_flags)
         valid_infos = list(ub.compress(infos, isvalid_flags))
+        valid_ltrbs = valid_vidspace_boxes.to_ltrb().data
 
-        for info, ltrb in zip(valid_infos, valid_vidspace_boxes.to_ltrb().data):
+        for info, ltrb in zip(valid_infos, valid_ltrbs):
             tid = info['tid']
             aid = info['aid']
+            info.update({
+                'vidspace_box': ltrb,
+            })
             if tid is not None:
-                info.update({
-                    'vidspace_box': ltrb,
-                })
                 tid_to_infos[tid].append(info)
+            else:
+                # Remember annotations that are no associated with a particular
+                # track.
+                loose_aid_to_infos[aid] = info
             # A faster qtree insert would be helpful.
             # This takes 50% of the time in spacetime grid building.
             qtree.insert(aid, ltrb)
 
-    return qtree, tid_to_infos
+    return qtree, tid_to_infos, loose_aid_to_infos
 
 
 @profile
-def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, get_image_valid_region_in_vidspace):
+def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, image_props):
     """
     Refine the time sample based on spatial information
 
@@ -899,7 +975,6 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     video_gids = time_sampler.video_gids
 
-    import warnings
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning,
@@ -910,13 +985,13 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
         gid_to_isbad = {}
         if refine_iosa_thresh > 0:
             for gid in video_gids:
-                vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
+                vidspace_valid_poly = image_props.get_image_valid_region_in_vidspace(gid)
                 gid_to_isbad[gid] = False
                 # If the area is of the valid polygon is less than zero, there
                 # was probably an issue. treat it as if it didn't specify a
                 # valid region.
                 if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
-                    vidspace_box_poly = vidspace_box.to_shapely()[0]
+                    vidspace_box_poly = vidspace_box.to_shapely()
                     # Intersection over smaller area
                     isect = vidspace_valid_poly.intersection(vidspace_box_poly)
                     iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
@@ -959,104 +1034,6 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
 
     # print(f'number of resampled grid cells={resampled}')
     return refined_sample, resampled
-
-
-def lookup_track_info(coco_dset, tid):
-    """
-    UNUSED. DEPRECATED OR FIND USE.
-
-    Find the spatio-temporal extent of a track
-    """
-    track_aids = coco_dset.index.trackid_to_aids[tid]
-    vidspace_boxes = []
-    track_gids = []
-    for aid in track_aids:
-        ann = coco_dset.index.anns[aid]
-        gid = ann['image_id']
-        track_gids.append(gid)
-        img = coco_dset.index.imgs[gid]
-        bbox = ann['bbox']
-        vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
-        imgspace_box = kwimage.Boxes([bbox], 'xywh')
-        vidspace_box = imgspace_box.warp(vid_from_img)
-        vidspace_boxes.append(vidspace_box)
-    all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
-
-    full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
-
-    frame_index = coco_dset.images(track_gids).lookup('frame_index')
-    track_gids = list(ub.take(track_gids, ub.argsort(frame_index)))
-
-    track_info = {
-        'tid': tid,
-        'full_vid_box': full_vid_box,
-        'track_gids': track_gids,
-    }
-    return track_info
-
-
-def make_track_based_spatial_samples(coco_dset):
-    """
-    UNUSED. DEPRECATED OR FIND USE.
-
-    Ignore:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'
-        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-    """
-    tid_list = list(coco_dset.index.trackid_to_aids.keys())
-    tid_to_trackinfo = {}
-    for tid in tid_list:
-        track_info = lookup_track_info(coco_dset, tid)
-        gid = track_info['track_gids'][0]
-        vidid = coco_dset.index.imgs[gid]['video_id']
-        track_info['vidid'] = vidid
-        tid_to_trackinfo[tid] = track_info
-
-    vidid_to_tracks = ub.group_items(tid_to_trackinfo.values(), key=lambda x: x['vidid'])
-
-    winspace_space_dims = [96, 96]
-
-    for vidid, trackinfos in vidid_to_tracks.items():
-        positive_boxes = []
-        for track_info in trackinfos:
-            boxes = track_info['full_vid_box']
-            positive_boxes.append(boxes.to_cxywh())
-        positives = kwimage.Boxes.concatenate(positive_boxes)
-        positives_samples = positives.to_cxywh()
-        positives_samples.data[:, 2] = winspace_space_dims[0]
-        positives_samples.data[:, 3] = winspace_space_dims[1]
-        print('positive_boxes = {}'.format(ub.urepr(positive_boxes, nl=1)))
-
-        video = coco_dset.index.videos[vidid]
-        full_dims = [video['height'], video['width']]
-        window_overlap = 0.0
-        keepbound = 0
-
-        window_dims_ = full_dims if winspace_space_dims == 'full' else winspace_space_dims
-        slider = kwarray.SlidingWindow(full_dims, window_dims_,
-                                       overlap=window_overlap,
-                                       keepbound=keepbound,
-                                       allow_overshoot=True)
-
-        sliding_boxes = kwimage.Boxes.concatenate(list(map(kwimage.Boxes.from_slice, slider)))
-        ious = sliding_boxes.ious(positives)
-        overlaps = ious.sum(axis=1)
-        negative_boxes = sliding_boxes.compress(overlaps == 0)
-
-        if 1:
-            import kwplot
-            kwplot.autompl()
-            fig = kwplot.figure(fnum=vidid)
-            ax = fig.gca()
-            ax.set_title(video['name'])
-            negative_boxes.draw(setlim=1, color='red', fill=True)
-            positives.draw(color='limegreen')
-            positives_samples.draw(color='green')
 
 
 def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
@@ -1135,7 +1112,6 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
-        # >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
         >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
@@ -1168,6 +1144,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
     """
     # Visualize the sample grid
     import pandas as pd
+    from watch.utils import util_kwimage
     targets = pd.DataFrame(sample_grid['targets'])
 
     dataset_canvases = []
@@ -1197,10 +1174,10 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         if True:
             # HACK: Use a temporal sampler once to get a nice overview of the
             # dataset in time.
-            from dateutil import parser
+            from kwutil import util_time
             from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
             images = dset.images(common)
-            datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
+            datetimes = [util_time.coerce_datetime(date) for date in images.lookup('date_captured', None)]
             unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
             sensors = images.lookup('sensor_coarse', None)
             time_sampler = tsm.MultiTimeWindowSampler(

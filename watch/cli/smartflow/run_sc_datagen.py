@@ -72,6 +72,10 @@ def run_generate_sc_cropped_kwcoco(config):
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
         if output_path.exists():
@@ -80,6 +84,7 @@ def run_generate_sc_cropped_kwcoco(config):
 
     ingress_dir = ub.Path('/tmp/ingress')
     local_region_path = ub.Path('/tmp/region.json')
+    node_state.print_current_state(ingress_dir)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -88,13 +93,16 @@ def run_generate_sc_cropped_kwcoco(config):
     # Compute kwcoco-for-sc here rather than in run-bas-datagen
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
-        assets=['kwcoco_for_sc',
-                'sv_out_region_models',
-                'cropped_region_models_bas'],
+        assets=[
+            'kwcoco_for_sc',
+            'sv_out_region_models',
+            'cropped_region_models_bas'
+        ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
         dryrun=config.dryrun,
-        dont_error_on_missing_asset=True)
+        dont_error_on_missing_asset=True
+    )
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -118,9 +126,7 @@ def run_generate_sc_cropped_kwcoco(config):
               "from BAS *")
         input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
-    print('* Printing current directory contents (1/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     if config.acsc_cluster_config is not None:
         print('******************')
@@ -141,9 +147,7 @@ def run_generate_sc_cropped_kwcoco(config):
         cluster_region_dpath = None
         tocrop_region_fpath = input_region_path
 
-    print('* Printing current directory contents (2/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
@@ -188,15 +192,20 @@ def run_generate_sc_cropped_kwcoco(config):
     if EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
-        align_arglist = util_framework._make_arglist(align_config)
-        ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
-               check=True, capture=False, verbose=3)
+        align_node = ProcessNode(
+            command='python -m watch.cli.coco_align',
+            config=align_config,
+        )
+        command = align_node.final_command()
+        ub.cmd(command, check=True, capture=False, verbose=3, shell=True)
     else:
         raise KeyError(EXEC_MODE)
 
-    print('* Printing current directory contents (3/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    # Reroot the kwcoco files to be relative and make it easier to work with
+    # downloaded results
+    ub.cmd(['kwcoco', 'reroot', f'--src={ta1_sc_cropped_kwcoco_prefilter_path}', '--inplace=1', '--absolute=0'])
+
+    node_state.print_current_state(ingress_dir)
 
     ### Filter / clean geotiffs (probably should be a separate step)
     CLEAN_GEOTIFFS = 0
@@ -242,14 +251,13 @@ def run_generate_sc_cropped_kwcoco(config):
             node_dpath='.'
         )
         command = remove_bad_images_node.final_command()
-        ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
+        print('Using system=True')
+        ub.cmd(command, system=True, capture=False, verbose=3, check=True)
     else:
         print('Not removing bad images')
         ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
 
-    print('* Printing current directory contents (4/4)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
@@ -267,6 +275,16 @@ def run_generate_sc_cropped_kwcoco(config):
         ingressed_assets['clustered_region_dpath'] = cluster_region_dpath
 
     ingressed_assets['cropped_kwcoco_for_sc_assets'] = sc_cropped_assets_dir
+
+    # This is an alias to the ACSC dataset and assets that team feature
+    # scripts will update.
+    assc_kwcoco_rawband_dpath = sc_cropped_assets_dir
+    assc_kwcoco_teamfeat_dpath = (ingress_dir / '_teamfeats').ensuredir()
+    (assc_kwcoco_rawband_dpath / 'dummy').write_text('dummy')
+    (assc_kwcoco_teamfeat_dpath / 'dummy').write_text('dummy')
+    ingressed_assets['enriched_acsc_kwcoco_file'] = ta1_sc_cropped_kwcoco_path
+    ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = assc_kwcoco_teamfeat_dpath
+    ingressed_assets['enriched_acsc_kwcoco_rawbands'] = assc_kwcoco_rawband_dpath
 
     smartflow_egress(ingressed_assets,
                      local_region_path,

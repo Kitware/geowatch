@@ -290,6 +290,8 @@ def iarpa_assign_truth_confusion(truth_status, has_positive_match):
             gt_cfsn = 'gt_true_neg'
         elif truth_status in IARPA_REAL_STATUS['positive']:
             gt_cfsn = 'gt_false_neg'
+        elif truth_status in {'transient_positive'}:
+            gt_cfsn = 'gt_false_neg'
 
     return gt_cfsn
 

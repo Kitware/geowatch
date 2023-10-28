@@ -399,6 +399,26 @@ which can be done via the command:
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
 
 
+Building / Modifying a DAG
+==========================
+
+Our smartflow DAGs are built as sequences of smartflow CLI commands that wrap
+our local CLI commands. These smartflow CLI commands live in
+`watch/cli/smartflow <../../watch/cli/smartflow>`_.
+
+Each of these uses ffsspec to grab manifests of available assets from an s3
+bucket, which then points to the data the task could use. It is the scripts job
+to pull the data, perform the computation, print debugging info, and push
+results and debug data back to a new output bucket.
+
+
+See [ComputeInstanceTypes]_ for details on available instance types.
+
+References:
+    .. [ComputeInstanceTypes] https://smartgitlab.com/blacksky/smartflow/-/blob/main/docs/Framework/Smartflow-Framework.md#selecting-compute-resources-for-tasks
+
+
+
 .. _RunningDAGS:
 
 Running DAGS

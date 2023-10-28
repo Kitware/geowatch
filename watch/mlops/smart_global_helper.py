@@ -1,3 +1,9 @@
+"""
+Quick and dirty project specific stuff that ideally wont get in the way of
+general use-cases but should eventually be factored out.
+
+Special heuristics. Used by ./aggregate.py and ./aggregate_plots.py
+"""
 import kwarray
 import ubelt as ub
 from kwutil.util_yaml import Yaml
@@ -121,6 +127,15 @@ class SmartGlobalHelper:
 
     EXTRA_HASHID_IGNORE_COLUMNS = [
         'params.sc_poly.site_summary',
+        'params.sc_pxl.num_workers',
+        'params.bas_pxl.num_workers',
+    ]
+
+    # Mark columns that are typically paths. Used when building effective params.
+    EXTRA_PATH_COLUMNS = [
+        'params.bas_poly_eval.true_site_dpath',
+        'params.bas_poly_eval.true_region_dpath',
+        'params.bas_poly.boundary_region',
     ]
 
     def shared_palettes(self, macro_table):
@@ -193,6 +208,9 @@ class SmartGlobalHelper:
     def label_modifier(self):
         """
         Build the label modifier for the SMART task.
+
+        Returns:
+            util_kwplot.LabelModifier
         """
         from watch.utils import util_kwplot
         modifier = util_kwplot.LabelModifier()
@@ -334,6 +352,15 @@ class SmartGlobalHelper:
                 {
                     'metric1': 'metrics.sc_poly_eval.sc_macro_f1',
                     'metric2': 'metrics.sc_poly_eval.bas_faa_f1',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+                {
+                    'metric1': 'metrics.sc_poly_eval.bas_f1',
+                    'metric2': 'metrics.sc_poly_eval.bas_ffpa',
 
                     'scale1': 'linear',
                     'scale2': 'linear',

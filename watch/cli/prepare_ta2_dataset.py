@@ -118,7 +118,7 @@ class PrepareTA2Config(CMDQueueConfig):
             maximum cloud cover percentage (ignored if s3_fpath given)
             '''))
 
-    sensors = scfg.Value('L2', help='(ignored if s3_fpath given)')
+    sensors = scfg.Value('L2', type=str, help='(ignored if s3_fpath given)')
 
     max_products_per_region = scfg.Value(None, help=ub.paragraph(
             '''
@@ -176,6 +176,12 @@ class PrepareTA2Config(CMDQueueConfig):
     align_aux_workers = scfg.Value(0, group='align', help=ub.paragraph(
             '''
             threads per align process (typically set this to 0)
+            '''))
+
+    align_tries = scfg.Value(2, help=ub.paragraph(
+            '''
+            The maximum number of times to retry failed gdal warp
+            commands before stopping.
             '''))
 
     ignore_duplicates = scfg.Value(1, help='workers for align script')
@@ -687,6 +693,7 @@ def main(cmdline=False, **kwargs):
                     --target_gsd={config.target_gsd} \
                     --force_min_gsd={config.force_min_gsd} \
                     --workers={config.align_workers} \
+                    --tries={config.align_tries} \
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths=_justkeys({

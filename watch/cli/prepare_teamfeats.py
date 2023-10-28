@@ -24,9 +24,10 @@ Example:
     >>> #
     >>>     'virtualenv_cmd': 'conda activate watch',
     >>> #
-    >>>     'with_landcover': 1,
-    >>>     'with_materials': 1,
-    >>>     'with_invariants2': 1,
+    >>>     #'with_landcover': 1,
+    >>>     #'with_materials': 1,
+    >>>     #'with_invariants2': 1,
+    >>>     'with_mae': 1,
     >>> #
     >>>     'run': 0,
     >>>     'check': False,
@@ -428,6 +429,13 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             },
             node_dpath='.',
         )
+        WITH_S2 = 1  # hard coded
+        if WITH_S2:
+            node.algo_params.update({
+                'sensors': 'L8,S2',
+                'conse': 8,
+                'resolution': '10GSD',
+            })
         feature_nodes.append(node)
         combo_code_parts.append(codes[key])
 

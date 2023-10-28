@@ -168,7 +168,6 @@ def input_stac_to_kwcoco(stac_items_path,
 
 
 def run_stac_to_cropped_kwcoco(config):
-    from watch.utils import util_framework
     from watch.utils import util_fsspec
     from kwutil.util_yaml import Yaml
     from delayed_image.channel_spec import ChannelSpec
@@ -178,6 +177,10 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.mlops.pipeline_nodes import ProcessNode
     from watch.cli.smartflow_ingress import smartflow_ingress
     import kwcoco
+
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -226,6 +229,7 @@ def run_stac_to_cropped_kwcoco(config):
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
         if output_path.exists():
+            print('Dont recompute is True. Early stopping')
             # If output_path file was there, nothing to do
             return
 
@@ -273,9 +277,7 @@ def run_stac_to_cropped_kwcoco(config):
     region_id = determine_region_id(local_region_path)
     ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
 
-    print('* Printing current directory contents (1/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     from watch.geoannots.geomodels import RegionModel
     region = RegionModel.coerce(local_region_path)
@@ -413,9 +415,12 @@ def run_stac_to_cropped_kwcoco(config):
     if ALIGN_EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
     elif ALIGN_EXEC_MODE == 'cmd':
-        align_arglist = util_framework._make_arglist(align_config)
-        ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
-               check=True, capture=False, verbose=3)
+        align_node = ProcessNode(
+            command='python -m watch.cli.coco_align',
+            config=align_config,
+        )
+        command = align_node.final_command()
+        ub.cmd(command, check=True, capture=False, verbose=3, shell=True)
     else:
         raise KeyError(ALIGN_EXEC_MODE)
 
@@ -440,7 +445,7 @@ def run_stac_to_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
     REMOVE_BAD_IMAGES = 0
@@ -461,15 +466,17 @@ def run_stac_to_cropped_kwcoco(config):
             },
             node_dpath='.'
         )
-        command = remove_bad_images_node.command()
+        command = remove_bad_images_node.final_command()
         ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
     else:
         print('Not removing bad images. TODO: add support')
         # ta1_sc_cropped_kwcoco_prefilter_path.copy(ta1_sc_cropped_kwcoco_path)
 
-    print('* Printing current directory contents (2/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    # Reroot the kwcoco files to be relative and make it easier to work with
+    # downloaded results
+    ub.cmd(['kwcoco', 'reroot', f'--src={ta1_cropped_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
+    node_state.print_current_state(ingress_dir)
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:
@@ -499,6 +506,11 @@ def run_stac_to_cropped_kwcoco(config):
                                        target_gsd=target_gsd,
                                        workers=config.jobs)
             final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
+
+        # Reroot the kwcoco files to be relative and make it easier to work with
+        # downloaded results
+        ub.cmd(['kwcoco', 'reroot', f'--src={final_interval_bas_kwcoco_path}', '--inplace=1', '--absolute=0'])
+
     else:
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
@@ -567,9 +579,7 @@ def run_stac_to_cropped_kwcoco(config):
     ta1_cropped_rawband_dpath.ensuredir()
     (ta1_cropped_rawband_dpath / 'dummy').write_text('dummy')
 
-    print('* Printing current directory contents (3/3)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {
@@ -583,6 +593,9 @@ def run_stac_to_cropped_kwcoco(config):
         'enriched_bas_kwcoco_rawbands': timecombined_rawband_dpath,
 
         # TODO: @DMJ: I dont think anything uses this? Can it be removed?
+        # JPC: Seems like the answer is no, for now. I've seen this used later
+        # on in the sc datagen node, although the stac-to-kwcoco for sc could
+        # be run there.
         'kwcoco_for_sc': ta1_sc_kwcoco_path,
 
         # We need to egress the temporally dense dataset for COLD

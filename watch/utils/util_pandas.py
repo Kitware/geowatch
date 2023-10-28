@@ -26,9 +26,25 @@ class DataFrame(pd.DataFrame):
         return DataFrame
 
     @classmethod
-    def random(cls, n=10):
-        import numpy as np
-        self = cls({k: np.random.rand(10) for k in 'abcde'})
+    def random(cls, rows=10, columns='abcde', rng=None):
+        """
+        rows=10
+        columns='abcde'
+        rng = None
+        cls = util_pandas.DataFrame
+        """
+        import kwarray
+        rng = kwarray.ensure_rng(rng)
+
+        def coerce_index(data):
+            if isinstance(data, int):
+                return list(range(data))
+            else:
+                return list(data)
+        columns = coerce_index(columns)
+        index = coerce_index(rows)
+        random_data = [{c: rng.rand() for c in columns} for r in index]
+        self = cls(random_data, index=index, columns=columns)
         return self
 
     def safe_drop(self, labels, axis=0):
@@ -57,6 +73,14 @@ class DataFrame(pd.DataFrame):
             intersect (bool):
                 if True ignores labels that doen't exist, otherwise an error
                 will occur if a label is specified that does not exist.
+
+        Example:
+            >>> from watch.utils import util_pandas
+            >>> self = util_pandas.DataFrame.random(columns=['a', 'b', 'c', 'd', 'e', 'f'])
+            >>> self.reorder(['b', 'c'], axis=1)
+            >>> self.reorder([1, 0], axis=0)
+            >>> self.reorder(['q'], axis=1)
+            >>> self.reorder(['q'], axis=1, intersect=True)
         """
         existing = self.axes[axis]
         if intersect:
@@ -125,14 +149,47 @@ def pandas_nan_eq(a, b):
     return flags
 
 
-def pandas_shorten_columns(summary_table, return_mapping=False):
+def pandas_shorten_columns(summary_table, return_mapping=False, min_length=0):
     """
     Shorten column names
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> df = pd.DataFrame([
+        >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1': 0.9, 'metrics.eval.mcc': 0.8, 'metrics.eval.acc': 0.3},
+        >>>     {'param_hashid': 'decaf', 'metrics.eval.f1': 0.6, 'metrics.eval.mcc': 0.2, 'metrics.eval.acc': 0.4},
+        >>>     {'param_hashid': 'feedcode', 'metrics.eval.f1': 0.5, 'metrics.eval.mcc': 0.3, 'metrics.eval.acc': 0.1},
+        >>> ])
+        >>> print(df.to_string(index=0))
+        >>> df2 = pandas_shorten_columns(df)
+        param_hashid  metrics.eval.f1  metrics.eval.mcc  metrics.eval.acc
+             badbeaf              0.9               0.8               0.3
+               decaf              0.6               0.2               0.4
+            feedcode              0.5               0.3               0.1
+        >>> print(df2.to_string(index=0))
+        param_hashid  f1  mcc  acc
+             badbeaf 0.9  0.8  0.3
+               decaf 0.6  0.2  0.4
+            feedcode 0.5  0.3  0.1
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> df = pd.DataFrame([
+        >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1.mean': 0.9, 'metrics.eval.f1.std': 0.8},
+        >>>     {'param_hashid': 'decaf', 'metrics.eval.f1.mean': 0.6, 'metrics.eval.f1.std': 0.2},
+        >>>     {'param_hashid': 'feedcode', 'metrics.eval.f1.mean': 0.5, 'metrics.eval.f1.std': 0.3},
+        >>> ])
+        >>> df2 = pandas_shorten_columns(df, min_length=2)
+        >>> print(df2.to_string(index=0))
+        param_hashid  f1.mean  f1.std
+             badbeaf      0.9     0.8
+               decaf      0.6     0.2
+            feedcode      0.5     0.3
     """
     import ubelt as ub
     # fixme
     old_cols = summary_table.columns
-    new_cols = shortest_unique_suffixes(old_cols, sep='.')
+    new_cols = shortest_unique_suffixes(old_cols, sep='.', min_length=min_length)
     mapping = ub.dzip(old_cols, new_cols)
     summary_table = summary_table.rename(columns=mapping)
     if return_mapping:
@@ -143,7 +200,8 @@ def pandas_shorten_columns(summary_table, return_mapping=False):
 
 def pandas_condense_paths(colvals):
     """
-    Condense a column of paths
+    Condense a column of paths to keep only the shortest distinguishing
+    suffixes
     """
     is_valid = ~pd.isnull(colvals)
     valid_vals = colvals[is_valid].apply(os.fspath)

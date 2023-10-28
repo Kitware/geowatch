@@ -84,6 +84,30 @@ Example:
     0    0.0   NaN  NaN  NaN  NaN  NaN  NaN  NaN
 
 
+Example:
+    >>> # Simple example for computing a p-values between a set of baseline
+    >>> # results and hypothesis you think might do better.
+    >>> # Given a list of experiments, configs, and results
+    >>> from watch.utils.result_analysis import ResultAnalysis, Result
+    >>> # Given a table of experiments with parameters, and metrics
+    >>> table = [
+    >>>     Result('expt0', {'group': 'baseline'}, {'f1': 0.75}),
+    >>>     Result('expt1', {'group': 'baseline'}, {'f1': 0.72}),
+    >>>     Result('expt2', {'group': 'baseline'}, {'f1': 0.79}),
+    >>>     Result('expt3', {'group': 'baseline'}, {'f1': 0.73}),
+    >>>     Result('expt4', {'group': 'baseline'}, {'f1': 0.74}),
+    >>>     Result('expt5', {'group': 'baseline'}, {'f1': 0.74}),
+    >>>     Result('expt5', {'group': 'hypothesis'}, {'f1': 0.76}),
+    >>>     Result('expt6', {'group': 'hypothesis'}, {'f1': 0.78}),
+    >>>     Result('expt7', {'group': 'hypothesis'}, {'f1': 0.77}),
+    >>>     Result('expt8', {'group': 'hypothesis'}, {'f1': 0.75}),
+    >>> ]
+    >>> # Create a ResultAnalysis object and tell it what metrics should be maximized / minimized
+    >>> analysis = ResultAnalysis(table, metric_objectives={'f1': 'max'})
+    >>> # An overall analysis can be obtained as follows
+    >>> analysis.analysis()
+
+
 This seems related to [RijnHutter2018]_. Need to look more closely to determine
 its exact relation and what we can learn from it (or what we do better /
 worse). Also see followup [Probst2019]_.

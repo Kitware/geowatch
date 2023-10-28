@@ -278,6 +278,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
+                rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
             else:
                 print('')
                 rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
@@ -286,6 +287,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex.__dict__={ex.__dict__}')
                 coco_img = coco_dset.coco_image(gid)
                 print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
                 raise
         else:
             if mode == 'process':

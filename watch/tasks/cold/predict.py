@@ -257,7 +257,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     from watch.tasks.cold import export_cold_result_kwcoco
     from watch.tasks.cold import assemble_cold_result_kwcoco
 
-    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
@@ -300,20 +300,19 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 1: Prepare')
 
         metadata = None
-        for region in os.listdir(out_dpath / 'stacked'):
-            if region not in str(config['coco_fpath']):
-                pass
-            elif region in str(config['coco_fpath']):
-                if os.path.exists(out_dpath / 'reccg' / region):
-                    logger.info('Skipping step 1 because the stacked image already exists...')
-                    for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
-                        for file in files:
-                            if file.endswith(".json"):
-                                json_path = os.path.join(root, file)
+        if (out_dpath / 'stacked').exists():
+            for region in os.listdir(out_dpath / 'stacked'):
+                if region in str(config['coco_fpath']):
+                    if os.path.exists(out_dpath / 'reccg' / region):
+                        logger.info('Skipping step 1 because the stacked image already exists...')
+                        for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
+                            for file in files:
+                                if file.endswith(".json"):
+                                    json_path = os.path.join(root, file)
 
-                                with open(json_path, "r") as f:
-                                    metadata = json.load(f)
-                            break
+                                    with open(json_path, "r") as f:
+                                        metadata = json.load(f)
+                                break
 
         if metadata is None:
             meta_fpath = prepare_kwcoco.prepare_kwcoco_main(

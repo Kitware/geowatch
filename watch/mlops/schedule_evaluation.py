@@ -1,5 +1,10 @@
 r"""
-Helper for scheduling a set of prediction + evaluation jobs
+Helper for scheduling a set of prediction + evaluation jobs.
+
+This is the main entrypoint for running a bunch of evaluation jobs over a grid
+of parameters. We currently expect that pipelines are predefined in
+smart_pipeline.py but in the future they will likely be an external resource
+file.
 
 TODO:
     - [ ] Differentiate between pixel models for different tasks.
@@ -23,6 +28,8 @@ Example:
                     - "auto"
                 bas_pxl.input_space_scale:
                     - "15GSD"
+                bas_poly_eval.true_site_dpath: null
+                bas_poly_eval.true_region_dpath: null
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
                     - 0.1
@@ -43,7 +50,7 @@ Example:
                     - false
         " \
         --root_dpath=./my_dag_runs \
-        --devices="0,1" --queue_size=2 \
+        --devices="0,1" --tmux_workers=2 \
         --backend=serial --skip_existing=0 \
         --pipeline=joint_bas_sc \
         --run=0
@@ -66,10 +73,12 @@ Example:
                     - 0.1
                     - 0.1
                     - 0.2
-                bas_pxl.enabled: 0
+                bas_pxl.enabled: 1
+                bas_poly_eval.true_site_dpath: true-site
+                bas_poly_eval.true_region_dpath: true-region
         " \
         --root_dpath=./my_dag_runs \
-        --devices="0,1" --queue_size=2 \
+        --devices="0,1" \
         --backend=serial --skip_existing=0 \
         --pipeline=bas \
         --run=0
@@ -291,9 +300,18 @@ def schedule_evaluation(config):
             for bas_fpath in param_arg['matrix']['bas_pxl.test_dataset']:
                 region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
                 region_dpath = (smart_highres_bundle / region_id)
-                hires_coco_fpath = region_dpath / f'imgonly-{region_id}.kwcoco.zip'
-                if not hires_coco_fpath.exists():
-                    raise Exception(f'Expected hires path does not exist: {hires_coco_fpath}')
+                hires_coco_candidates = [
+                    region_dpath / f'imgonly-{region_id}.kwcoco.zip',
+                    region_dpath / f'imgonly-{region_id}-rawbands.kwcoco.zip',
+                ]
+                hires_coco_fpath = None
+                for cand_fpath in hires_coco_candidates:
+                    if cand_fpath.exists():
+                        hires_coco_fpath = cand_fpath
+                        break
+                if hires_coco_fpath is None:
+                    raise Exception(f'Expected hires path, but no candidates exist: {hires_coco_candidates}')
+
                 submatrices.append({
                     'bas_pxl.test_dataset': bas_fpath,
                     'sv_crop.crop_src_fpath': hires_coco_fpath,

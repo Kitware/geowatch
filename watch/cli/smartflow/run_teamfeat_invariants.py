@@ -46,6 +46,14 @@ def main():
 
 def run_uky_invariants_for_baseline(config):
     from watch.utils.util_framework import download_region
+
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
@@ -96,6 +104,9 @@ def run_uky_invariants_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
+
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={invariants_kwcoco_path}', '--inplace=1', '--absolute=0'])
 
     ingressed_assets['enriched_bas_kwcoco_file'] = invariants_kwcoco_path
     ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'

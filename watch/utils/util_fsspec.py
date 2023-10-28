@@ -69,8 +69,16 @@ class FSPath(str):
             # Lazy creation of a new fs
             fs = cls._current_fs()
         self = str.__new__(cls, path)
-        self.fs = fs
+        self._fs: fsspec.AbstractFileSystem = fs
         return self
+
+    @property
+    def fs(self) -> fsspec.AbstractFileSystem:
+        return self._fs
+
+    @fs.setter
+    def fs(self, value: fsspec.AbstractFileSystem):
+        self._fs = value
 
     @classmethod
     def coerce(cls, path):
@@ -270,6 +278,21 @@ class FSPath(str):
 
         References:
             https://filesystem-spec.readthedocs.io/en/latest/copying.html
+
+        Example:
+            >>> from watch.utils import util_fsspec
+            >>> dpath = util_fsspec.LocalPath.appdir('watch/fsspec/tests/copy').ensuredir()
+            >>> src_dpath = (dpath / 'src').ensuredir()
+            >>> for i in range(100):
+            ...     (src_dpath / 'file_{i:03d}.txt').write_text('hello world' * 100)
+            >>> dst_dpath = (dpath / 'dst')
+            >>> dst_dpath.delete()
+            >>> src_dpath.copy(dst_dpath, verbose=3)
+            >>> dst_dpath.delete()
+            >>> if 0:
+            >>>     from fsspec.callbacks import TqdmCallback
+            >>>     callback = TqdmCallback(tqdm_kwargs={"desc": "Your tqdm description"})
+            >>>     src_dpath.copy(dst_dpath, callback=callback)
         """
         if recursive == 'auto':
             # On S3, asking if something is a dir can give permission
@@ -287,6 +310,8 @@ class FSPath(str):
             'maxdepth': maxdepth,
             **kwargs,
         }
+
+        dst: FSPath
 
         if overwrite:
             raise NotImplementedError
@@ -308,29 +333,41 @@ class FSPath(str):
                 # generally we cant copy an empty directory to a remote.
                 try:
                     if recursive:
+                        if verbose >= 3:
+                            print(' * local -> remote (put recursive)')
                         return dst.fs.put(self, dst, **commonkw, callback=callback)
                     else:
+                        if verbose >= 3:
+                            print(' * local -> remote (put_file)')
                         return dst.fs.put_file(self, dst, callback=callback)
                 except FileExistsError:
                     # TODO: overwrite
                     raise
 
             elif isinstance(dst, LocalPath):
+                if verbose >= 3:
+                    print(' * local -> local')
                 return self.fs.copy(self, dst, **commonkw, callback=callback)
             else:
                 raise TypeError(type(dst))
         elif isinstance(self, RemotePath):
             if isinstance(dst, RemotePath):
+                if verbose >= 3:
+                    print(' * remote -> remote')
                 return self.fs.copy(self, dst, **commonkw, on_error=on_error)
             elif isinstance(dst, (LocalPath, pathlib.Path)):
 
                 if recursive:
+                    if verbose >= 3:
+                        print(' * remote -> local (get recursive)')
                     return self.fs.get(self, dst, **commonkw, callback=callback)
                 else:
                     # Using put on an s3 bucket seems like it fails when
                     # directories have tight permissions, but put file
                     # seems ok. Need to ensure that we are actually just
                     # using a file in this instance.
+                    if verbose >= 3:
+                        print(' * remote -> local (get_file)')
                     return self.fs.get_file(self, dst, callback=callback)
             else:
                 raise TypeError(type(dst))

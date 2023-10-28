@@ -220,6 +220,7 @@ _PUBLIC_L1_PRODUCTS = {
 # https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/media/files/LSDS-1435%20Landsat%20C2%20US%20ARD%20Data%20Format%20Control%20Book-v3.pdf
 _PUBLIC_L2_PRODUCTS = {
     # Public L2 Products
+    # https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l2a/
     'sentinel-s2-l2a-cogs': {
         "collections": ["sentinel-s2-l2a-cogs"],
         "endpoint": "https://earth-search.aws.element84.com/v0",

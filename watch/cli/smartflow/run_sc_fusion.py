@@ -6,13 +6,54 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import json
 import os
 import shutil
 import sys
 import traceback
 import scriptconfig as scfg
 import ubelt as ub
+
+
+
+__debugging__ = r"""
+
+
+IMAGE_NAME=watch:0.11.0-431640169-strict-pyenv3.11.2-20231013T170828-0400-from-86ab77d4
+
+docker run \
+    --runtime=nvidia \
+    --volume "$HOME/temp/debug_smartflow/ingress":/tmp/ingress \
+    --volume $HOME/.aws:/root/.aws:ro \
+    --volume "$HOME/code":/extern_code:ro \
+    --volume "$HOME/data":/extern_data:ro \
+    --volume "$HOME"/.cache/pip:/pip_cache \
+    --env AWS_PROFILE=iarpa \
+    -it "$IMAGE_NAME" bash
+
+(cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
+(cd /root/code/watch && git fetch tmp)
+(cd /root/code/watch && git checkout dev/0.11.0)
+(cd /root/code/watch && git pull tmp)
+
+ipython
+
+from watch.cli.smartflow.run_sc_fusion import *  # NOQA
+
+
+# Copied from a smartflow run that failed,
+cmdline = 0
+kwargs = {
+    'input_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/acsc_mae/items.jsonl',
+    'input_region_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/input/mono/region_models/NZ_R001.geojson',
+    'output_path'            : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion/items.jsonl',
+    'aws_profile'            : None,
+    'dryrun'                 : False,
+    'outbucket'              : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion',
+    'ta2_s3_collation_bucket': None,
+    'sc_pxl_config'          : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 12\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/wu/acsc/wu_mae_epoch=125-step=2772.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
+    'sc_poly_config'         : 'boundaries_as: polys\nmin_area_square_meters: 7200\nresolution: 8GSD\nsite_score_thresh: 0.375\nsmoothing: null\nthresh: 0.07',
+}
+"""
 
 
 class SCFusionConfig(scfg.DataConfig):
@@ -58,8 +99,8 @@ class SCFusionConfig(scfg.DataConfig):
             '''))
 
 
-def main():
-    config = SCFusionConfig.cli(strict=True)
+def main(cmdline=1, **kwargs):
+    config = SCFusionConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_sc_fusion_for_baseline(config)
 
@@ -73,18 +114,16 @@ def run_sc_fusion_for_baseline(config):
     from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
     from watch.mlops import smart_pipeline
+    import kwcoco
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
         from watch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    ####
-    # DEBUGGING:
-    # Print info about what version of the code we are running on
-    import watch
-    print('Print current version of the code')
-    ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -97,8 +136,11 @@ def run_sc_fusion_for_baseline(config):
         assets=[
             {'key': 'cropped_region_models_bas'},
             {'key': 'sv_out_region_models', 'allow_missing': False},
-            {'key': 'cropped_kwcoco_for_sc'},
-            {'key': 'cropped_kwcoco_for_sc_assets'}
+            # {'key': 'cropped_kwcoco_for_sc'},
+            # {'key': 'cropped_kwcoco_for_sc_assets'}
+            {'key': 'enriched_acsc_kwcoco_file'},
+            {'key': 'enriched_acsc_kwcoco_teamfeats'},
+            {'key': 'enriched_acsc_kwcoco_rawbands'},
         ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
@@ -150,19 +192,21 @@ def run_sc_fusion_for_baseline(config):
 
     region_models_manifest_fpath = ingress_dir / 'sc_out_region_models_manifest.json'
 
-    print('* Printing current directory contents (1/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
-    with open(ingressed_assets['cropped_kwcoco_for_sc']) as f:
-        ingress_kwcoco_data = json.load(f)
 
-    if len(ingress_kwcoco_data.get('videos', ())) > 0:
+    # TODO: could use kwcoco info to get lazy loading of just the header.
+    input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
+    ingress_dset = kwcoco.CocoDataset(input_kwcoco_fpath, autobuild=False)
+    if ingress_dset.n_videos > 0:
         # 3. Run fusion
         print('*********************')
         print("* Running SC fusion *")
+
+        ub.cmd(f'kwcoco stats {input_kwcoco_fpath}', verbose=3)
+        ub.cmd(f'geowatch stats {input_kwcoco_fpath}', verbose=3)
 
         # The params should be fully given in the DAG.
         sc_pxl_config = Yaml.coerce(config.sc_pxl_config or {})
@@ -172,15 +216,16 @@ def run_sc_fusion_for_baseline(config):
         sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
         sc_pxl.configure({
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
-            'test_dataset': ingressed_assets['cropped_kwcoco_for_sc'],
+            'test_dataset': ingressed_assets['enriched_acsc_kwcoco_file'],
         } | sc_pxl_config)
         command = sc_pxl.command()
 
+        ub.cmd(f'kwcoco stats {sc_fusion_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {sc_fusion_kwcoco_path}', verbose=3)
+
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
-            print('* Printing current directory contents (2/5)')
-            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+            node_state.print_current_state(ingress_dir)
         except TimeSampleError:
             # FIXME: wont work anymore with mlops. Not sure if needed.
             # Can always catch a CalledProcessError and inspect stdout
@@ -212,13 +257,14 @@ def run_sc_fusion_for_baseline(config):
             command = sc_poly.command()
             ub.cmd(command, check=True, verbose=3, system=True)
 
-            print('* Printing current directory contents (3/5)')
-            cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-            print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+            node_state.print_current_state(ingress_dir)
 
             # Add in intermediate outputs for debugging
             ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
             ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+
+            ub.cmd(f'kwcoco stats {tracked_sc_kwcoco_path}', verbose=3)
+            ub.cmd(f'geowatch stats {tracked_sc_kwcoco_path}', verbose=3)
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
@@ -234,9 +280,7 @@ def run_sc_fusion_for_baseline(config):
         '--new_region_dpath', cropped_region_models_outdir
     ], check=True, verbose=3, capture=False)
 
-    print('* Printing current directory contents (4/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # Validate and fix all outputs
     print('Fixup and validate outputs')
@@ -245,9 +289,7 @@ def run_sc_fusion_for_baseline(config):
         site_dpath=cropped_site_models_outdir,
     )
 
-    print('* Printing current directory contents (5/5)')
-    cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
-    print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
@@ -257,8 +299,11 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
 
     # Add in intermediate outputs for debugging
-    EGRESS_FUSION_HEATMAPS = True
-    if EGRESS_FUSION_HEATMAPS:
+    EGRESS_INTERMEDIATE_OUTPUTS = True
+    if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+        ub.cmd(['kwcoco', 'reroot', f'--src={tracked_sc_kwcoco_path}', '--inplace=1', '--absolute=0'])
         ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
         ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
         ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath

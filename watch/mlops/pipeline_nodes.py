@@ -74,9 +74,11 @@ class Pipeline:
         >>> self.print_graphs()
     """
 
-    def __init__(self, nodes=[], config=None, root_dpath=None):
+    def __init__(self, nodes=None, config=None, root_dpath=None):
         self.proc_graph = None
         self.io_graph = None
+        if nodes is None:
+            nodes = []
         self.nodes = nodes
         self.config = None
 
@@ -120,10 +122,6 @@ class Pipeline:
     @profile
     def build_nx_graphs(self):
         node_dict = self.node_dict
-        # if __debug__:
-        #     for name, node in node_dict.values():
-        #         assert node.name == name, (
-        #             'node instances require unique consistent names')
 
         self.proc_graph = nx.DiGraph()
         for name, node in node_dict.items():
@@ -156,6 +154,10 @@ class Pipeline:
                 self.io_graph.add_edge(node.key, onode.key)
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
+            # hack for nodes that dont have an io dependency
+            # but still must run after one another
+            for pred in node._pred_nodes_without_io_connection:
+                self.io_graph.add_edge(pred.key, node.key)
 
         self._dirty = False
 
@@ -284,7 +286,6 @@ class Pipeline:
             'ProcessNode': 'yellow',
             'InputNode': 'bright_cyan',
             'OutputNode': 'bright_yellow',
-
         }
 
         def labelize_graph(graph, color_procs=0):
@@ -874,6 +875,58 @@ class ProcessNode(Node):
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
         >>> print('self.final = {}'.format(ub.urepr(self.final, nl=2)))
         >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
+
+    Example:
+        >>> # How to use a ProcessNode to handle an arbitrary process call
+        >>> # First let's write a program to disk
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> import stat
+        >>> dpath = ub.Path.appdir('watch/test/pipeline/TestProcessNode2')
+        >>> dpath.delete().ensuredir()
+        >>> pycode = ub.codeblock(
+                '''
+                #!/usr/bin/env python3
+                import scriptconfig as scfg
+                import ubelt as ub
+
+                class MyCLI(scfg.DataConfig):
+                    src = None
+                    dst = None
+                    foo = None
+                    bar = None
+
+                    @classmethod
+                    def main(cls, cmdline=1, **kwargs):
+                        config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+                        print('config = ' + ub.urepr(config, nl=1))
+
+                if __name__ == '__main__':
+                    MyCLI.main()
+        ...     ''')
+        >>> fpath = dpath / 'mycli.py'
+        >>> fpath.write_text(pycode)
+        >>> fpath.chmod(fpath.stat().st_mode | stat.S_IXUSR)
+        >>> # Now that we have a script that accepts some cli arguments
+        >>> # Create a process node to represent it. We assume that
+        >>> # everything is passed as key/val style params, which you *should*
+        >>> # use for new programs, but this doesnt apply to a lot of programs
+        >>> # out there, so we will show how to handle non key/val arguments
+        >>> # later (todo).
+        >>> mynode = ProcessNode(command=str(fpath))
+        >>> # Get the invocation by runnning
+        >>> command = mynode.final_command()
+        >>> print(command)
+        >>> # Use a dictionary to configure key/value pairs
+        >>> mynode.configure({'src': 'a.txt', 'dst': 'b.txt'})
+        >>> command = mynode.final_command()
+        >>> # Note: currently because of backslash formatting
+        >>> # we need to use shell=1 or system=1 with ub.cmd
+        >>> # in the future we will fix this in ubelt (todo).
+        >>> # Similarly this class should be able to provide the arglist
+        >>> # style of invocation.
+        >>> print(command)
+        >>> ub.cmd(command, verbose=3, shell=1)
+
     """
     __node_type__ = 'process'
 
@@ -981,6 +1034,12 @@ class ProcessNode(Node):
         # Basically: use templates unless the user gives these
         self._overwrite_node_dpath = _overwrite_node_dpath
         self._overwrite_group_dpath = _overwrite_group_dpath
+
+        # TODO: need a better name for this.
+        # This is just a list of nodes that must be run before us, but we don't
+        # have an explicit connection between the inputs / outputs.
+        # This is currently used as a workaround, but we should support it
+        self._pred_nodes_without_io_connection = []
 
         self.configure(self.config)
 
@@ -1247,7 +1306,7 @@ class ProcessNode(Node):
         Process nodes that this one depends on.
         """
         nodes = [pred.parent for k, v in self.inputs.items()
-                 for pred in v.pred]
+                 for pred in v.pred] + self._pred_nodes_without_io_connection
         return nodes
 
     @memoize_configured_method
@@ -1368,9 +1427,20 @@ class ProcessNode(Node):
                 parts.append(f'    --{k} \\')
                 parts.extend(preped_varargs)
             else:
-                import shlex
-                vstr = shlex.quote(str(v))
-                parts.append(f'    --{k}={vstr} \\')
+                if isinstance(v, dict):
+                    # This relies on the underlying program being able to
+                    # interpret YAML specified on the commandline.
+                    from kwutil.util_yaml import Yaml
+                    vstr = Yaml.dumps(v)
+                    vstr = shlex.quote(vstr)
+                    if '\n' in vstr and vstr[0] == "'":
+                        # hack to prevent yaml indent errors
+                        vstr = "'\n" + vstr[1:]
+                    parts.append(f'    --{k}={vstr} \\')
+                else:
+                    import shlex
+                    vstr = shlex.quote(str(v))
+                    parts.append(f'    --{k}={vstr} \\')
 
         return '\n'.join(parts).lstrip().rstrip('\\')
 

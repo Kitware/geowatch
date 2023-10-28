@@ -15,6 +15,7 @@ Geoidgrid is from
 
 SeeAlso:
     ../geoannots/geomodels.py
+    https://github.com/ResonantGeoData/RD-WATCH/blob/main/django/src/rdwatch/schemas/site_model.py
 """
 import json
 from importlib import resources as importlib_resources

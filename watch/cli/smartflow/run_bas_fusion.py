@@ -84,6 +84,11 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils import util_framework
     from watch.utils import util_fsspec
 
+    ####
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment
+
     input_path = config.input_path
     input_region_path = config.input_region_path
     outbucket = config.outbucket
@@ -134,6 +139,8 @@ def run_bas_fusion_for_baseline(config):
     print("* Running BAS fusion *")
     bas_fusion_kwcoco_path = ingress_dir / 'bas_fusion_kwcoco.json'
 
+    node_state.print_current_state(ingress_dir)
+
     # TODO: remove these defaults or replace them with whatever is the
     # default in predict. The params should be fully given in the DAG, not
     # here.
@@ -162,6 +169,8 @@ def run_bas_fusion_for_baseline(config):
             test_dataset=ingress_kwcoco_path,
             pred_dataset=bas_fusion_kwcoco_path,
             **bas_pxl_config)
+
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. If a previous interval was run; concatenate BAS fusion
     # output KWCOCO files for tracking
@@ -250,6 +259,8 @@ def run_bas_fusion_for_baseline(config):
     cropped_region_models_outdir = (ingress_dir / 'cropped_region_models_bas').ensuredir()
     cropped_site_models_outdir = (ingress_dir / 'cropped_site_models_bas').ensuredir()
 
+    node_state.print_current_state(ingress_dir)
+
     crop_cmd = [
         'python', '-m', 'watch.cli.crop_sites_to_regions',
         '--site_models', bas_site_models_outdir / '*.geojson',
@@ -297,12 +308,17 @@ def run_bas_fusion_for_baseline(config):
 
     EGRESS_INTERMEDIATE_OUTPUTS = True
     if EGRESS_INTERMEDIATE_OUTPUTS:
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={bas_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+        ub.cmd(['kwcoco', 'reroot', f'--src={tracked_bas_kwcoco_path}', '--inplace=1', '--absolute=0'])
         # Add BAS saliency outputs to egressed attributes for debugging
         ingressed_assets['bas_pred_saliency_assets'] = ingress_dir / '_assets/pred_saliency'
         ingressed_assets['bas_fusion_kwcoco_path'] = bas_fusion_kwcoco_path
         ingressed_assets['bas_original_site_models_outdir'] = bas_site_models_outdir
         ingressed_assets['bas_original_region_models_outdir'] = bas_region_models_outdir
         ingressed_assets['tracked_bas_kwcoco_path'] = tracked_bas_kwcoco_path
+
+    node_state.print_current_state(ingress_dir)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

@@ -46,6 +46,13 @@ def main():
 def run_landcover_for_baseline(config):
     from watch.utils.util_framework import download_region
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
@@ -93,6 +100,9 @@ def run_landcover_for_baseline(config):
         '--src', enriched_bas_kwcoco_file, dzyne_landcover_features_kwcoco_path,
         '--dst', combo_features_kwcoco_path,
     ], check=True, verbose=3, capture=False)
+
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={combo_features_kwcoco_path}', '--inplace=1', '--absolute=0'])
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

@@ -176,6 +176,9 @@ class MetricsConfig(scfg.DataConfig):
 
     performer = scfg.Value('kit', help='the performer id')
 
+    tau = scfg.Value(0.2, help='T&E tau association threshold param')
+    rho = scfg.Value(0.5, help='T&E rho site detection threshold (min proportion of matching polygons)')
+
 
 def ensure_thumbnails(image_root, region_id, sites):
     '''
@@ -470,8 +473,8 @@ def main(cmdline=True, **kwargs):
             '--output_dir',
             os.fspath(out_dir),
             ## Restrict to make this faster
-            '--tau', '0.2',
-            '--rho', '0.5',
+            '--tau', str(config.tau),
+            '--rho', str(config.rho),
             '--activity', 'overall',
             '--loglevel', 'ERROR',
             f'--performer={config.performer}',

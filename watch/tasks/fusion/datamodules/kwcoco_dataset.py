@@ -10,7 +10,7 @@ Example:
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
     >>> channels = 'B10,B8a|B1,B8'
-    >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(300, 300),
+    >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300),
     >>>                           channels=channels,
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
@@ -20,9 +20,11 @@ Example:
     >>>                           use_centered_positives=True,
     >>>                           absolute_weighting=True,
     >>>                           time_sampling='uniform',
-    >>>                           time_kernel='-1y,0,1y',
+    >>>                           time_kernel='-1year,0,1month,1year',
     >>>                           modality_dropout=0.5,
-    >>>                           temporal_dropout=0.5)
+    >>>                           channel_dropout=0.5,
+    >>>                           temporal_dropout=0.7,
+    >>>                           temporal_dropout_rate=1.0)
     >>> # Add weights to annots
     >>> annots = self.sampler.dset.annots()
     >>> annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
@@ -286,6 +288,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * chip_dims / window_space_dims
     """
     __default__ = {
+
+        # TODO:
+        # 'positive_labels': scfg.Value(None, help=ub.paragraph(
+        #     '''
+        #     Labels to consider positive (in addition to infered labels)
+        #     ''')),
+
         ###############
         # SPACE OPTIONS
         ###############
@@ -662,8 +671,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
             '''
-            In fit mode, perform translation augmentations this fraction of the
-            time.
+            In fit mode, perform translation augmentations in this fraction of
+            batch items.
             '''), group=AUGMENTATION_GROUP),
 
         'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
@@ -677,19 +686,52 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
             '''
-            In fit mode, perform temporal jitter this fraction of the time.
+            In fit mode, perform temporal jitter this fraction of batch items.
             '''), group=AUGMENTATION_GROUP),
 
+        'temporal_dropout_rate': scfg.Value(1.0, type=float, help=ub.paragraph(
+            '''
+            Drops frames in a fraction of batch items.
+            '''), group=AUGMENTATION_GROUP),
         'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
-            Drops frames in a fraction of training batches
+            Given that a batch item is selected for temporal dropout, this is
+            the probability that each frame is dropped out. The main frame is
+            never removed.
             '''), group=AUGMENTATION_GROUP),
 
+        'modality_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            The fraction of batch-items modality dropout is applied to.
+            '''), group=AUGMENTATION_GROUP),
         'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Drops late-fused modalities in each frame with this probability,
             except if the frame only has one modality left.
             '''), group=AUGMENTATION_GROUP),
+
+        # TODO: specify channels that are allowed to be dropped out?
+        'channel_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            The fraction of batch-items channel dropout is applied to.
+            '''), group=AUGMENTATION_GROUP),
+        'channel_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            Drops early-fused channels within each modality with this
+            probability except if it is the last channel within a modality.
+            '''), group=AUGMENTATION_GROUP),
+
+        # TODO:
+        # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+        #     '''
+        #     Drops extra metadata provided to the model for positional encodings.
+        #     '''), group=AUGMENTATION_GROUP),
+
+        # TODO:
+        # 'augment_scale': scfg.Value(0.0, type=float, help=ub.paragraph(
+        #     '''
+        #     Train at multiple scales.
+        #     '''), group=AUGMENTATION_GROUP),
 
         'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
             '''
@@ -847,6 +889,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if exists_flag:
                 graph.nodes[name].update(**_catinfo)
 
+        # from kwutil import util_yaml
+        # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
+
         self.classes = kwcoco.CategoryTree(graph)
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
@@ -911,6 +956,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         else:
             negative_classes = (
                 self.ignore_classes | self.background_classes | self.negative_classes)
+
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 sampler.dset,
                 negative_classes=negative_classes,
@@ -1069,7 +1115,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'change': True,
             'class': True,
             'saliency': True,
-            'boxes': True,
+            # 'boxes': True,
+            'boxes': False,
+
+            # ouputs is not really a task, it requests the weights needed for
+            # predict-time stitching.
+            'outputs': mode != 'fit',
         }
 
         # Hacks: combinable channels can be visualized as RGB images.
@@ -1136,8 +1187,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def _init_balance(self, new_sample_grid):
         """
+        Build data structure used for balanced sampling.
+
         Helper for __init__ which constructs a NestedPool to balance sampling
         across input domains.
+
+        TODO:
+            HELP WANTED: We would like to configure the distribution in some
+            easy to specify way. We should be domain aware, or rather accept
+            some encoding of the domain. We want to oversample underrepresented
+            or important batch items and undersample overrepresented or
+            unimportant easy batch items. The "batch item" part is what makes
+            this hard because we need the notation of goodness, easiness, etc
+            at the batch level, which can contain multiple annotations.
         """
         # TODO: each video should be able to have some sort of group
         # attribute we can use to balance over similar videos.
@@ -1178,8 +1240,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Hack, because we didn't encode the region in the cropped site
         # (rookie move)
-        import watch
-        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
         vidname_to_region_name = {}
         for vidname in set(vidnames):
             if pat.match(vidname):
@@ -1239,6 +1301,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def reseed(self):
         """
         Reinitialize the random number generator
+
+        TODO:
+            HELP WANTED: Lack of determenism likely comes from this module and
+            the order it gives data to predict. It would be very nice if we
+            could fix that.
         """
         # Randomize across DDP workers
         if hasattr(self, 'nested_pool'):
@@ -1269,7 +1336,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         if model is not None:
             assert requested_tasks is None
-            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'global_head_weight'):
+                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            else:
+                import warnings
+                warnings.warn(ub.paragraph(
+                    f'''
+                    Model {model.__class__} does not have the structure needed
+                    to notify the dataset about tasks. A better design to make
+                    specifying tasks easier is needed without relying on the
+                    ``global_head_weights``.
+                    '''))
         print(f'dataset notified: requested_tasks={requested_tasks}')
         assert requested_tasks is not None
         self.requested_tasks.update(requested_tasks)
@@ -1277,6 +1354,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
                           gid_to_isbad, gid_to_sample):
+        """
+        Core logic that uses the target dictionary to sample a single frame at
+        a time via ndsampler. Some post-loading augmentation is also done here.
+        """
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', '*')
@@ -1338,11 +1419,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         modality_streams = sensor_channels.streams()
         if target_['allow_augment']:
             # Augment by dropping out modalities, but always keep at least one.
-            if self.config.modality_dropout:
-                keep_score = self.augment_rng.rand(len(modality_streams))
-                keep_idxs = util_kwarray.argsort_threshold(
-                    keep_score, self.config.modality_dropout, num_top=1)
-                modality_streams = list(ub.take(modality_streams, keep_idxs))
+            if self.config.modality_dropout_rate > self.augment_rng.rand():
+                if self.config.modality_dropout:
+                    keep_score = self.augment_rng.rand(len(modality_streams))
+                    keep_idxs = util_kwarray.argsort_threshold(
+                        keep_score, self.config.modality_dropout, num_top=1)
+                    modality_streams = list(ub.take(modality_streams, keep_idxs))
 
         # Sample information from each stream (each stream is a separate mode)
         sample_streams = {}
@@ -1391,6 +1473,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     force_bad = 'failed observable threshold'
                     if stop_on_bad_image:
                         break
+
+            if target_['allow_augment'] and self.config.channel_dropout:
+                if self.config.channel_dropout_rate > self.augment_rng.rand():
+                    num_bands = sample['im'].shape[3]
+                    if num_bands > 1:
+                        keep_score = self.augment_rng.rand(num_bands)
+                        keep_idxs = util_kwarray.argsort_threshold(
+                            keep_score, self.config.channel_dropout, num_top=1)
+                        drop_flags = ~kwarray.boolmask(keep_idxs, num_bands)
+                        if np.any(drop_flags):
+                            sample['im'][:, :, :, drop_flags] = np.nan
 
             sample_streams[stream.spec] = sample
             if 'annots' in sample:
@@ -1469,6 +1562,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def __getitem__(self, index):
         """
+        Build an input batch. Standard pytorch Dataset API.
+
+        Args:
+            index (int | Dict):
+                This can be an integer index between ``[0, len(self)]``.
+                In test mode this will correspond to the index in the sample
+                grid, but at train time it is randomized and you will usually
+                get a different item each time. You can pass a "target"
+                dictionary (e.g. an item from the sample grid). Note that the
+                subset of a target needed to rebuild a specific batch is
+                returned with each batch.
+
+        Returns:
+            Dict | None :
+                In this system an item is always a dictionary it is up to the
+                calling process to do any final collation. (avoiding collation
+                makes writing this module a lot simpler). If the sample fails
+                we return None, and the caller should also handle that.
+
         Example:
             >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -1587,6 +1699,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         This is just the same thing as `__getitem__` but it raises an error
         when it fails, which is handled by `__getitem__`.
+
+        Args:
+            index (int | Dict): index or target
+
+        Returns:
+            Dict
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -1627,10 +1746,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
-
-        Ignore:
-            import xdev
-            _ = xdev.profile_now(self.getitem)(target)
         """
         target = self._coerce_target(index)
 
@@ -1669,6 +1784,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         ###
         # Process sampled data
+        meta_info = self._prepare_meta_info(num_frames)
+
         if not self.inference_only:
             truth_info = self._prepare_truth_info(final_gids, gid_to_sample,
                                                   num_frames, target, target_)
@@ -1676,7 +1793,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             truth_info = None
 
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
-                                              truth_info, resolution_info)
+                                              truth_info, meta_info,
+                                              resolution_info)
 
         # if self.config['prenormalize_inputs'] is not None:
         #     raise NotImplementedError
@@ -1701,7 +1819,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.normalize_peritem is not None:
+        if self.normalize_peritem is not None and self.normalize_peritem is not False:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:
@@ -1718,6 +1836,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 valid_mask = np.isfinite(chan_data)
                                 needs_norm[(sensor, chan_name)].append((chan_data, valid_mask, parent_data, chan_sl))
 
+            # TODO: we could do data augmentation with these or let the user
+            # specify a better way.
             peritem_normalizer_params = {
                 'high': 0.95,
                 # 'mid': 0.5,
@@ -1778,7 +1898,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         pixelwise_truth_keys = [
             'change', 'class_idxs',
             'saliency', 'class_weights',
-            'saliency_weights', 'change_weights'
+            'saliency_weights', 'change_weights',
+            'output_weights',
         ]
         annotwise_truth_keys = [
             'box_ltrb',
@@ -1823,70 +1944,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if data is not None:
                     frame_item[key] = kwarray.ArrayAPI.tensor(data)
 
-        positional_tensors = None
-
-        if True:
-            # TODO: what is the standard way to do the learned embedding
-            # "input vector"?
-
-            # TODO: preprocess any auxiliary learnable information into a
-            # Tensor. It is likely ideal to pre-stack whenever possible, but we
-            # need to keep the row-form data to make visualization
-            # straight-forward. We could use a flag to toggle it depending on
-            # if we need to visualize or not.
-            permode_datas = ub.ddict(list)
-            prev_timestamp = None
-
-            # TODO: this should be part of the model.
-            # The dataloader should know nothing about positional encodings
-            # except what is needed in order to pass the data to the model.
-            time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
-
-            for frame_item in frame_items:
-
-                k = 'timestamp'
-                frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
-
-                for mode_code in frame_item['modes'].keys():
-                    # Maybe this should be a model responsibility.
-                    # I dont like defining the positional encoding in the
-                    # dataset
-                    key_tensor = data_utils._string_to_hashvec(mode_code)
-                    permode_datas['mode_tensor'].append(key_tensor)
-                    #
-                    k = 'time_index'
-                    time_index = frame_item[k]
-                    # v = np.array([frame_item[k]]).astype(np.float32)
-                    v = time_index_encoding[time_index]
-                    permode_datas[k].append(v)
-
-                    if prev_timestamp is None:
-                        time_offset = np.array([0]).astype(np.float32)
-                    else:
-                        time_offset = frame_timestamp - prev_timestamp
-
-                    # TODO: add seasonal positional encoding
-
-                    permode_datas['time_offset'].append(time_offset)
-
-                    k = 'sensor'
-                    key_tensor = data_utils._string_to_hashvec(k)
-                    permode_datas[k].append(key_tensor)
-
-                frame_item['time_offset'] = time_offset
-                prev_timestamp = frame_timestamp
-
-            positional_arrays = ub.map_vals(np.stack, permode_datas)
-            time_offset = positional_arrays.pop('time_offset', None)
-            if time_offset is not None:
-                scaled_time_offset = data_utils.abslog_scaling(time_offset)
-                positional_arrays['time_offset'] = scaled_time_offset
-            else:
-                print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
-
-            # This is flattened for each frame for each mode.
-            # A bit hacky, not in love with it.
-            positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+        positional_tensors = self._populate_positional_information(frame_items)
 
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
@@ -1924,6 +1982,87 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'target': tr_subset,
         }
         return item
+
+    def _populate_positional_information(self, frame_items):
+        """
+        Enrich each frame with information the model can use to build its
+        positional encodings. It currently returns these, but it shouldn't
+
+        Args:
+            frame_items (List[Dict]):
+
+        NOTE:
+            There is a part of this where we actually compute a sinusoidal
+            positional encoding, but that should be part of the model, not the
+            dataset.
+
+            The dataset can provide metadata to tell the model what it can use
+            to build positional encodings, but it should never tell it how to
+            use them!
+        """
+        ...
+        # TODO: what is the standard way to do the learned embedding
+        # "input vector"?
+
+        # TODO: preprocess any auxiliary learnable information into a
+        # Tensor. It is likely ideal to pre-stack whenever possible, but we
+        # need to keep the row-form data to make visualization
+        # straight-forward. We could use a flag to toggle it depending on
+        # if we need to visualize or not.
+        permode_datas = ub.ddict(list)
+        prev_timestamp = None
+
+        # TODO: this should be part of the model.
+        # The dataloader should know nothing about positional encodings
+        # except what is needed in order to pass the data to the model.
+        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
+
+        for frame_item in frame_items:
+
+            k = 'timestamp'
+            frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
+
+            for mode_code in frame_item['modes'].keys():
+                # Maybe this should be a model responsibility.
+                # I dont like defining the positional encoding in the
+                # dataset
+                key_tensor = data_utils._string_to_hashvec(mode_code)
+                permode_datas['mode_tensor'].append(key_tensor)
+                #
+                k = 'time_index'
+                time_index = frame_item[k]
+                # v = np.array([frame_item[k]]).astype(np.float32)
+                v = time_index_encoding[time_index]
+                permode_datas[k].append(v)
+
+                if prev_timestamp is None:
+                    time_offset = np.array([0]).astype(np.float32)
+                else:
+                    time_offset = frame_timestamp - prev_timestamp
+
+                # TODO: add seasonal positional encoding
+
+                permode_datas['time_offset'].append(time_offset)
+
+                k = 'sensor'
+                key_tensor = data_utils._string_to_hashvec(k)
+                permode_datas[k].append(key_tensor)
+
+            frame_item['time_offset'] = time_offset
+            prev_timestamp = frame_timestamp
+
+        positional_arrays = ub.map_vals(np.stack, permode_datas)
+        time_offset = positional_arrays.pop('time_offset', None)
+        if time_offset is not None:
+            scaled_time_offset = data_utils.abslog_scaling(time_offset)
+            positional_arrays['time_offset'] = scaled_time_offset
+        else:
+            print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
+
+        # This is flattened for each frame for each mode.
+        # A bit hacky, not in love with it.
+        positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+        return positional_tensors
 
     def _coerce_target(self, index):
         """
@@ -2207,7 +2346,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
         if self.upweight_centers or self.upweight_time is not None:
-
             if self.upweight_time is None:
                 upweight_time = 0.5
             else:
@@ -2227,9 +2365,27 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return truth_info
 
+    def _prepare_meta_info(self, num_frames):
+        if self.upweight_centers or self.upweight_time is not None:
+            if self.upweight_time is None:
+                upweight_time = 0.5
+            else:
+                upweight_time = self.upweight_time
+
+            # Learn more from the center of the space-time patch
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
+
+            time_weights = time_weights / time_weights.max()
+            time_weights = time_weights.clip(0, 1)
+            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+        meta_info = {
+            'time_weights': time_weights,
+        }
+        return meta_info
+
     @profile
     def _build_frame_items(self, final_gids, gid_to_sample,
-                           truth_info, resolution_info):
+                           truth_info, meta_info, resolution_info):
         """
         Returns:
             List[Dict]:
@@ -2335,14 +2491,58 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # Build single-frame truth
                 self._populate_frame_labels(
                     frame_item, gid, output_dsize, time_idx,
-                    mode_to_invalid_mask, resolution_info, truth_info)
+                    mode_to_invalid_mask, resolution_info, truth_info,
+                    meta_info)
+
+            wants_outputs = self.requested_tasks['outputs']
+            if wants_outputs and 'output_weights' not in frame_item:
+                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+                frame_item['output_weights'] = output_weights
 
             frame_items.append(frame_item)
         return frame_items
 
+    def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
+        time_weights = meta_info['time_weights']
+
+        frame_target_shape = output_dsize[::-1]
+        space_shape = frame_target_shape
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        if self.upweight_centers:
+            space_weights = _space_weights(space_shape)
+            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+            spacetime_weights = space_weights * time_weights[time_idx]
+        else:
+            spacetime_weights = 1
+
+        # Note: ensure this is resampled into target output space
+        # Module the pixelwise weights by the 1 - the fraction of modes
+        # that have nodata.
+        if self.config['downweight_nan_regions']:
+            nodata_total = 0.0
+            for mask in mode_to_invalid_mask.values():
+                if mask is not None:
+                    if len(mask.shape) == 3:
+                        mask_ = mask.mean(axis=2)
+                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
+                    else:
+                        mask_ = mask.astype(float)
+                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
+                    nodata_total += mask_
+            total_bands = len(mode_to_invalid_mask)
+            nodata_frac = nodata_total / total_bands
+            nodata_weight = 1 - nodata_frac
+        else:
+            nodata_weight = 1
+            # frame_weights = frame_weights * nodata_weight
+
+        generic_frame_weight = nodata_weight * spacetime_weights
+        return generic_frame_weight
+
     @profile
     def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
-                               mode_to_invalid_mask, resolution_info, truth_info):
+                               mode_to_invalid_mask, resolution_info, truth_info, meta_info):
         """
         Enrich a ``frame_item`` with rasterized truth-labels.
 
@@ -2364,7 +2564,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # of each window are in correspondence)
 
         task_tid_to_cnames = truth_info['task_tid_to_cnames']
-        time_weights = truth_info['time_weights']
         gid_to_dets = truth_info['gid_to_dets']
 
         input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
@@ -2623,36 +2822,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     task_target_weight['class'] /= max_weight
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-
-        if self.upweight_centers:
-            space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
-            spacetime_weights = space_weights * time_weights[time_idx]
-        else:
-            spacetime_weights = 1
-
-        # Note: ensure this is resampled into target output space
-        # Module the pixelwise weights by the 1 - the fraction of modes
-        # that have nodata.
-        if self.config['downweight_nan_regions']:
-            nodata_total = 0.0
-            for mask in mode_to_invalid_mask.values():
-                if mask is not None:
-                    if len(mask.shape) == 3:
-                        mask_ = mask.mean(axis=2)
-                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
-                    else:
-                        mask_ = mask.astype(float)
-                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
-                    nodata_total += mask_
-            total_bands = len(mode_to_invalid_mask)
-            nodata_frac = nodata_total / total_bands
-            nodata_weight = 1 - nodata_frac
-        else:
-            nodata_weight = 1
-            # frame_weights = frame_weights * nodata_weight
-
-        generic_frame_weight = nodata_weight * spacetime_weights
+        generic_frame_weight = self._build_generic_frame_weights(output_dsize,
+                                                                 mode_to_invalid_mask,
+                                                                 meta_info,
+                                                                 time_idx)
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
@@ -2687,6 +2860,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             )
             frame_item['saliency'] = task_target_ohe['saliency']
             frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
+
+        wants_outputs = self.requested_tasks['outputs']
+        if wants_outputs:
+            frame_item['output_weights'] = generic_frame_weight
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):
@@ -3089,9 +3266,54 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return dataset_stats
 
+    def _build_demo_outputs(self, item):
+        """
+        Construct dummy outputs that we would expect a network to generate.
+
+        Note:
+            The ability to construct this method is a motivating factor behind
+            the design decision that "a batch item should describe what its
+            expected output should look like".
+        """
+        fliprot_params = item['target'].get('fliprot_params', None)
+        rng = kwarray.ensure_rng(None)
+        #
+        # Generate random predicted change probabilities for each frame
+        item_output = {}
+        change_prob_list = []
+        for frame in item['frames'][1:]:  # first frame does not have change
+            change_prob = kwimage.Heatmap.random(
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
+            if fliprot_params:
+                change_prob = data_utils.fliprot(change_prob, **fliprot_params)
+            change_prob_list += [change_prob]
+        change_probs = np.stack(change_prob_list)
+        item_output['change_probs'] = change_probs
+        #
+        # Generate random predicted class probabilities for each frame
+        class_prob_list = []
+        frame_pred_ltrb_list = []
+        for frame in item['frames']:
+            class_prob = kwimage.Heatmap.random(
+                dims=frame['output_dims'], classes=list(self.classes), rng=rng).data['class_probs']
+            class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
+            if fliprot_params:
+                class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)
+            class_prob_list += [class_prob_]
+            # Also generate a predicted box for each frame
+            frame_output_dsize = frame['output_dims'][::-1]
+            num_pred_boxes = rng.randint(0, 8)
+            pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
+            frame_pred_ltrb_list.append(pred_boxes.to_ltrb().data)
+        class_probs = np.stack(class_prob_list)
+        item_output['class_probs'] = class_probs
+        item_output['pred_ltrb'] = frame_pred_ltrb_list
+        return item_output
+
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
+                  classes=None,
                   **kw):
         """
         Visualize an item produced by this DataSet.
@@ -3123,6 +3345,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     class_probs
                     pred_ltrb
 
+            classes (kwcoco.CategoryTree | None):
+                Classes any "class_probs" in the 'item_output' dictionary
+                corresponds to.  If unspecified uses the classes from the
+                datamodule.
+
         Note:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
@@ -3131,53 +3358,57 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import kwarray
+            >>> import rich
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> channels = 'B10|B8a|B1|B8|B11'
             >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
             >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5, window_dims=(530, 610), channels=channels)
+            >>> mode = 'fit'
+            >>> mode = 'test'
+            >>> coco_dset.clear_annotations()
+            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
             >>> #index = len(self) // 4
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
-            >>> if 1:
-            >>>     # More controlled settings for debug
-            >>>     self.disable_augmenter = True
+            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
             >>> item = self[index]
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> fliprot_params = item['target'].get('fliprot_params', None)
-            >>> rng = kwarray.ensure_rng(None)
-            >>> #
-            >>> # Generate random predicted change probabilities for each frame
-            >>> item_output = {}
-            >>> change_prob_list = []
-            >>> for frame in item['frames'][1:]:  # first frame does not have change
-            >>>     change_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
-            >>>     if fliprot_params:
-            >>>         change_prob = data_utils.fliprot(change_prob, **fliprot_params)
-            >>>     change_prob_list += [change_prob]
-            >>> change_probs = np.stack(change_prob_list)
-            >>> item_output['change_probs'] = change_probs
-            >>> #
-            >>> # Generate random predicted class probabilities for each frame
-            >>> class_prob_list = []
-            >>> frame_pred_ltrb_list = []
-            >>> for frame in item['frames']:
-            >>>     class_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=list(self.classes), rng=rng).data['class_probs']
-            >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
-            >>>     if fliprot_params:
-            >>>         class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)
-            >>>     class_prob_list += [class_prob_]
-            >>>     # Also generate a predicted box for each frame
-            >>>     frame_output_dsize = frame['output_dims'][::-1]
-            >>>     num_pred_boxes = rng.randint(0, 8)
-            >>>     pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
-            >>>     frame_pred_ltrb_list.append(pred_boxes.to_ltrb().data)
-            >>> class_probs = np.stack(class_prob_list)
-            >>> item_output['class_probs'] = class_probs
-            >>> item_output['pred_ltrb'] = frame_pred_ltrb_list
-            >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+            >>> kwplot.show_if_requested()
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> import watch
+            >>> import rich
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+            >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
+            >>> from watch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
+            >>> config = PredictConfig(**{
+            >>>     'key': 'set_cover_algo',
+            >>>     'test_dataset': coco_fpath,
+            >>>     'mask_low_quality': True,
+            >>>     'pred_dataset': expt_dvc_dpath / '_demo_khq_doctest/pred.kwcoco.zip',
+            >>>     'package_fpath': expt_dvc_dpath / 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt',
+            >>>     'devices': [0],
+            >>> })
+            >>> config, model, datamodule = _prepare_predict_data(config)
+            >>> self = datamodule.torch_datasets['test']
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
+            >>> combinable_extra = None
+            >>> item = self[index]
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
             >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
@@ -3238,7 +3469,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
             label_keys = [
                 'class_idxs', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights'
+                'class_weights', 'saliency_weights', 'change_weights',
+                'output_weights',
                 'box_ltrb',
                 # 'box_weights', 'box_tids', 'box_cidxs',
             ]
@@ -3253,7 +3485,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             cids = annots.lookup('category_id')
             class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
             frame_summary['class_hist'] = class_hist
-            frame_summary['num_annots'] = len(frame['ann_aids'])
+            if frame.get('ann_aids') is not None:
+                frame_summary['num_annots'] = len(frame['ann_aids'])
 
         item_summary['video_name'] = item['video_name']
         if timestamps:

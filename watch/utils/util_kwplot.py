@@ -124,6 +124,12 @@ def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=Non
                 from kwcoco.metrics.drawing import concice_si_display
                 for row in df2.index:
                     val = df2.loc[row, col]
+                    # if isinstance(val, str):
+                    #     try:
+                    #         val = float(val)
+                    #     except Exception:
+                    #         ...
+                    # print(f'val: {type(val)}={val}')
                     if isinstance(val, float):
                         val = concice_si_display(val)
                         df2.loc[row, col] = val
@@ -367,9 +373,31 @@ class LabelModifier:
         self.relabel(ax)
 
 
-class FigureFinalizer:
+class FigureFinalizer(ub.NiceRepr):
     """
     Helper for defining where and how figures will be saved on disk.
+
+    Known Parameters:
+        dpi : float
+        format : str
+        metadata : dict
+        bbox_inches : str
+        pad_inches : float
+        facecolor : color
+        edgecolor : color
+        backend : str
+        orientation :
+        papertype :
+        transparent :
+        bbox_extra_artists :
+        pil_kwargs :
+
+    Example:
+        from watch.utils.util_kwplot import *  # NOQA
+        self = FigureFinalizer()
+        print('self = {}'.format(ub.urepr(self, nl=1)))
+        self.update(dpi=300)
+
     """
 
     def __init__(
@@ -377,24 +405,61 @@ class FigureFinalizer:
         dpath='.',
         size_inches=None,
         cropwhite=True,
-        tight_layout=True
+        tight_layout=True,
+        **kwargs
     ):
-        self.update(ub.udict(locals()) - {'self'})
+        locals_ = ub.udict(locals())
+        locals_ -= {'self', 'kwargs'}
+        locals_.update(kwargs)
+        self.update(locals_)
+
+    def __nice__(self):
+        return ub.urepr(self.__dict__)
+
+    def copy(self):
+        """
+        Create a copy of this object.
+        """
+        new = self.__class__(**self.__dict__)
+        return new
 
     def update(self, *args, **kwargs):
+        """
+        Modify this config
+        """
         self.__dict__.update(*args, **kwargs)
 
     def finalize(self, fig, fpath, **kwargs):
+        """
+        Sets the figure properties, like size, tight layout, etc, writes to
+        disk, and then crops the whitespace out.
+
+        Args:
+            fig (matplotlib.figure.Figure): figure to safe
+
+            fpath (str | PathLike): where to save the figure image
+
+            **kwargs: overrides this config for this finalize only
+        """
         config = ub.udict(self.__dict__) | kwargs
+
         final_fpath = ub.Path(config['dpath']) / fpath
+        savekw = {}
+        if config.get('dpi', None) is not None:
+            savekw['dpi'] = config['dpi']
+            # fig.set_dpi(savekw['dpi'])
         if config['size_inches'] is not None:
             fig.set_size_inches(config['size_inches'])
         if config['tight_layout'] is not None:
             fig.tight_layout()
-        fig.savefig(final_fpath)
+        # TODO: could save to memory and then write as an image
+        fig.savefig(final_fpath, **savekw)
         cropwhite_ondisk(final_fpath)
 
     def __call__(self, fig, fpath, **kwargs):
+        """
+        Alias for finalize
+        """
         return self.finalize(fig, fpath, **kwargs)
 
 
@@ -781,3 +846,97 @@ class ArtistManager:
         _generic._setlim(minx, miny, maxx, maxy, 1.1, ax=ax)
         # ax.set_xlim(minx, maxx)
         # ax.set_ylim(miny, maxy)
+
+
+def time_sample_arcplot(time_samples, yloc=1, ax=None):
+    """
+    Example:
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> time_samples = [
+        >>>     [1, 3, 5, 7, 9],
+        >>>     [2, 3, 4, 6, 8],
+        >>>     [1, 5, 6, 7, 9],
+        >>> ]
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> time_sample_arcplot(time_samples)
+
+    References:
+        https://stackoverflow.com/questions/42162787/arc-between-points-in-circle
+    """
+
+    import kwplot
+    import numpy as np
+    # import matplotlib.patches as patches
+
+    USE_BEZIER_PACKAGE = 0
+    if USE_BEZIER_PACKAGE:
+        import bezier
+    else:
+        # bezier_path = np.arange(0, 1.01, 0.01)
+        num_path_points = 20
+        s_vals = np.linspace(0, 1, num_path_points)
+
+    if ax is None:
+        ax = kwplot.plt.gca()
+        # ax.cla()
+        # maxx = 0
+
+    num_samples = len(time_samples)
+    for idx, xlocs in enumerate(time_samples):
+        assert sorted(xlocs) == xlocs
+        ylocs = [yloc] * len(xlocs)
+        # ax.plot(xlocs, ylocs, 'o-')
+        # maxx = max(max(xlocs), maxx)
+
+        dist = ((idx + 1) / num_samples)
+        dist = (dist * 0.5) + 0.5
+        # print(f'dist={dist}')
+
+        xy_sequence = list(zip(xlocs, ylocs))
+        curve_path = []
+
+        for xy1, xy2 in ub.iter_window(xy_sequence, 2):
+
+            x1, y1 = xy1
+            x2, y2 = xy2
+
+            dx = x2 - x1
+            dy = y2 - y1
+            # normals are
+            raw_normal1 = (-dy, dx)
+            # normal2 = (dy, -dx)
+            unit_normal1 = np.array(raw_normal1) / np.linalg.norm(raw_normal1)
+
+            nx, ny = unit_normal1 * dist
+
+            xm, ym = [(x1 + x2) / 2, (y1 + y2) / 2]
+            xb, yb = [xm + nx, ym + ny]
+
+            if USE_BEZIER_PACKAGE:
+                # Create random bezier control points
+                nodes_f = np.array([
+                    [x1, y1],
+                    [xb, yb],
+                    [x2, y2],
+                ]).T
+                curve = bezier.Curve(nodes_f, degree=2)
+                num = 10
+                s_vals = np.linspace(0, 1, num)
+                # s_vals = np.linspace(*sorted(rng.rand(2)), num)
+                path_f = curve.evaluate_multi(s_vals)
+                curve_path += list(path_f)
+            else:
+                # Compute and store the Bezier curve points
+                # pure numpy version
+                curve_x = (1 - s_vals) ** 2 * x1 + 2 * (1 - s_vals) * s_vals * xb + s_vals ** 2 * x2
+                curve_y = (1 - s_vals) ** 2 * y1 + 2 * (1 - s_vals) * s_vals * yb + s_vals ** 2 * y2
+                curve_path += list(zip(curve_x, curve_y))
+
+        curve_path = np.array(curve_path)
+        ax.plot(curve_path.T[0], curve_path.T[1], '-', alpha=0.5)
+
+    # ax.set_xlim(0, maxx)
+    # ax.set_ylim(0, 3)

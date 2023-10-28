@@ -255,6 +255,35 @@ class QA_BitSpecTable(QA_SpecMixin):
         >>> kwplot.imshow(qa_canvas, pnum=(1, 3, 2), title='qa bits')
         >>> kwplot.imshow(legend, pnum=(1, 3, 3), title='qa bit legend')
         >>> kwplot.set_figtitle(f"QA Spec: name={self.spec['qa_spec_name']} sensor={self.spec['sensor']}")
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules import qa_bands
+        >>> import kwimage
+        >>> # Lookup a table for this spec
+        >>> self = qa_bands.QA_SPECS.find_table('qa_pixel', 'L8')
+        >>> assert isinstance(self, qa_bands.QA_BitSpecTable)
+        >>> # Make a quality image with every value
+        >>> pure_patches = [np.zeros((32, 32), dtype=np.int16) + val for val in self.name_to_value.values()]
+        >>> # Also add in a few mixed patches
+        >>> mixed_patches = [
+        >>>     pure_patches[0] | pure_patches[1],
+        >>>     pure_patches[2] | pure_patches[1],
+        >>> ]
+        >>> patches = pure_patches + mixed_patches
+        >>> quality_im = kwimage.stack_images_grid(patches)
+        >>> # The mask_any method makes a mask where any of the semantically given labels will be masked
+        >>> query_names = ['cloud']
+        >>> is_iffy = self.mask_any(quality_im, ['cloud'])
+        >>> drawings = self.draw_labels(quality_im)  # visualize
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> qa_canvas = drawings['qa_canvas']
+        >>> legend = drawings['legend']
+        >>> kwplot.imshow(is_iffy, pnum=(1, 3, 1), title=f'mask matching {query_names}')
+        >>> kwplot.imshow(qa_canvas, pnum=(1, 3, 2), title='qa bits')
+        >>> kwplot.imshow(legend, pnum=(1, 3, 3), title='qa bit legend')
+        >>> kwplot.set_figtitle(f"QA Spec: name={self.spec['qa_spec_name']} sensor={self.spec['sensor']}")
     """
     def __init__(table, spec):
         table.spec = spec
@@ -263,6 +292,13 @@ class QA_BitSpecTable(QA_SpecMixin):
             for item in table.spec['bits']
             if item.get('qa_name', None) is not None
         })
+
+        ranged_bits = []
+        for item in table.spec.get('bit_ranges', []):
+            if item.get('qa_name', None) is not None:
+                ranged_bits.extend(item['bit_range'])
+                # print('item = {}'.format(ub.urepr(item, nl=1)))
+        table.ranged_bits = ranged_bits
 
     def mask_any(table, quality_im, qa_names):
         if quality_im.dtype.kind == 'f':
@@ -289,6 +325,8 @@ class QA_BitSpecTable(QA_SpecMixin):
 
                 descs = []
                 for bit_number in bit_positions:
+                    if bit_number in table.ranged_bits:
+                        continue
                     bit_spec = bit_to_spec.get(bit_number, '?')
                     if bit_spec == '?':
                         descs.append('?')
@@ -377,11 +415,11 @@ class QA_ValueSpecTable(QA_SpecMixin):
     """
     def __init__(table, spec):
         table.spec = spec
-        table.name_to_value = {
+        table.name_to_value = ub.udict({
             item['qa_name']: item['value']
             for item in table.spec['values']
             if item.get('qa_name', None) is not None
-        }
+        })
 
     def mask_any(table, quality_im, qa_names):
         if quality_im.dtype.kind == 'f':
@@ -786,6 +824,54 @@ QA_SPECS.append(QA_BitSpecTable({
         {'bit_number': 5, 'qa_name': 'ice', 'qa_description': 'snow'},
         {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
         {'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'}
+    ]
+}))
+
+
+# Sentinel2 L2A SCL scene classification mask
+# https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l2a/
+QA_SPECS.append(QA_ValueSpecTable({
+    'qa_spec_name': 'SCL',
+    'qa_spec_date': '???',
+    'sensor': 'S2',
+    'dtype': {'kind': 'u', 'itemsize': 1},
+    'values': [
+        {'value': 0, 'qa_name': 'nodata', 'qa_description': 'No data'},
+        {'value': 1, 'qa_name': 'defective', 'qa_description': 'Saturated / Defective'},
+        {'value': 2, 'qa_name': 'dark_area', 'qa_description': 'Dark Area Pixels'},
+        {'value': 3, 'qa_name': 'cloud_shadow', 'qa_description': 'Cloud Shadows'},
+        {'value': 4, 'qa_name': 'vegetation', 'qa_description': 'Vegetation'},
+        {'value': 5, 'qa_name': 'bare', 'qa_description': 'Bare Soils'},
+        {'value': 6, 'qa_name': 'water', 'qa_description': 'Water'},
+        {'value': 7, 'qa_name': 'clouds_lo_prob', 'qa_description': 'Clouds low probability / Unclassified'},
+        {'value': 8, 'qa_name': 'clouds_mid_prob', 'qa_description': 'Clouds medium probability'},
+        {'value': 9, 'qa_name': 'cloud', 'qa_description': 'Clouds high probability'},
+        {'value': 10, 'qa_name': 'cirrus', 'qa_description': 'Cirrus'},
+        {'value': 11, 'qa_name': 'ice', 'qa_description': 'Snow / Ice'},
+    ]
+}))
+
+
+# Landsat Level 2 QA bands
+# https://www.usgs.gov/landsat-missions/landsat-collection-2-quality-assessment-bands
+# https://www.usgs.gov/landsat-missions/landsat-collection-1-level-1-quality-assessment-band
+QA_SPECS.append(QA_BitSpecTable({
+    'qa_spec_name': 'qa_pixel',
+    'qa_spec_date': '???',
+    'sensor': 'L8',
+    'dtype': {'kind': 'u', 'itemsize': 2},
+    'bits': [
+        {'bit_number': 0, 'qa_name': 'fill', 'qa_description': 'Designated fill'},
+        {'bit_number': 1, 'qa_name': 'terrain_occlusion', 'qa_description': 'Terrain Occlusion'},
+        {'bit_number': 4, 'qa_name': 'cloud', 'qa_description': 'Cloud'},
+    ],
+    # Represents multi-valued groups
+    'bit_ranges': [
+        {'bit_range': [2, 3], 'qa_name': 'rad_sat', 'qa_description': 'Radiometric Saturation'},
+        {'bit_range': [5, 6], 'qa_name': 'cloud_conf', 'qa_description': 'Cloud Confidence'},
+        {'bit_range': [7, 8], 'qa_name': 'cloud_shadow_conf', 'qa_description': 'Cloud Shadow Confidence'},
+        {'bit_range': [9, 10], 'qa_name': 'snow_conf', 'qa_description': 'Snow/Ice Confidence'},
+        {'bit_range': [11, 12], 'qa_name': 'snow_conf', 'qa_description': 'Snow/Ice Confidence'},
     ]
 }))
 

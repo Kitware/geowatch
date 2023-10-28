@@ -1,13 +1,11 @@
+#!/usr/bin/env python3
 r"""
-Semi-finished.
-
 Given a set of site summaries, clusters them into groups, ideally with small
 overlap. Writes new regions to a specified directory using the hash of the
 contained sites as a subregion identifier.
 
 Limitations:
     - The clustering algorithm is overly simple
-    - Requires magic numbers that should be parameterized
 
 Example:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')

@@ -355,3 +355,26 @@ def jsonify_config(config):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
     return jsonified_config
+
+
+def main():
+    """
+    Simple CLI to get hardware measurements that process context would provide.
+    """
+    # Adding things like disk info an tracking emission usage
+    self = ProcessContext(track_emissions=False)
+    obj = self.start().stop()
+    self.add_disk_info('.')
+    import torch
+    if torch.cuda.is_available():
+        device = torch.device(0)
+        self.add_device_info(device)
+    self.stop()
+    print('obj = {}'.format(ub.urepr(obj, nl=3)))
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/utils/process_context.py
+    """
+    main()

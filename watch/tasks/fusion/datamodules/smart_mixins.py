@@ -224,12 +224,17 @@ class SMARTDataMixin:
         """
         from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
 
+        registered_channels = coco_img.channels
+
+        if registered_channels is None:
+            return None
+
         quality_aliases = ['quality', 'cloudmask']
         for quality_chan_name in quality_aliases:
-            if quality_chan_name in coco_img.channels:
+            if quality_chan_name in registered_channels:
                 break
 
-        if quality_chan_name in coco_img.channels:
+        if quality_chan_name in registered_channels:
             tr_cloud = tr_frame.copy()
             tr_cloud['channels'] = quality_chan_name
             tr_cloud['antialias'] = False

@@ -62,6 +62,14 @@ def main():
     upload_to_rgd(**vars(parser.parse_args()))
 
 
+def get_model_results(model_run_results_url):
+    model_runs_result = requests.get(model_run_results_url,
+                                     params={'limit': '0'})
+    request_json = model_runs_result.json()
+    request_results = request_json.get('results', ())
+    return request_results
+
+
 def upload_to_rgd(input_site_models_s3,
                   rgd_aws_region,
                   rgd_deployment_name,
@@ -109,17 +117,28 @@ def upload_to_rgd(input_site_models_s3,
 
     # Check that our run doesn't already exist
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
-    model_runs_result = requests.get(model_run_results_url,
-                                     params={'limit': '0'})
+
+    from retry.api import retry_call
+    request_results = retry_call(get_model_results, fargs=[model_run_results_url],
+                                 tries=3, exceptions=(Exception,), delay=3)
 
     existing_model_run = None
-    for model_run in model_runs_result.json().get('results', ()):
-        flag = (model_run['title'] == title and
-                model_run['performer']['short_code'] == performer_shortcode and
-                'region' in model_run and
-                model_run['region'] is not None and
-                model_run['region'].get('name') == region_id)
-        if flag:
+
+    for model_run in request_results:
+        if (model_run['title'] != title or
+             model_run['performer']['short_code'] != performer_shortcode):
+            continue
+
+        model_region = model_run.get('region')
+        if model_region is None:
+            continue
+
+        if (isinstance(model_region, dict) and
+             model_run['region'].get('name') == region_id):
+            existing_model_run = model_run
+            break
+        elif (isinstance(model_region, str) and
+               model_region == region_id):  # noqa
             existing_model_run = model_run
             break
 
@@ -164,6 +183,7 @@ def upload_to_rgd(input_site_models_s3,
             if result.status_code != 201:
                 print(f"Error uploading site, status "
                       f"code: [{result.status_code}]")
+                print(result.text)
 
 
 def post_site(post_site_url, site_filepath):

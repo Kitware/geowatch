@@ -1,14 +1,14 @@
 """
 Logic for loading raw results from the MLops DAG root dir.
+
+Used by ./aggregate.py
 """
 import ubelt as ub
-from watch.utils import util_pattern
-from watch.utils import util_parallel
+from kwutil import util_pattern
+from kwutil import util_parallel
 from watch.utils import util_dotdict
 import parse
 import json
-import xdev
-
 from watch.mlops import smart_pipeline
 from watch.mlops import smart_result_parser
 
@@ -116,11 +116,12 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
                 'fpath': pd.DataFrame(cols['fpath'], columns=['fpath']),
                 'index': pd.DataFrame(cols['index']),
                 'metrics': pd.DataFrame(cols['metrics']),
-                'requested_params': pd.DataFrame(cols['requested_params']),
+                'requested_params': pd.DataFrame(cols['requested_params'], dtype=object),  # prevents nones from being read as nan
                 'specified_params': pd.DataFrame(cols['specified_params']),
-                'resolved_params': pd.DataFrame(cols['resolved_params']),
+                'resolved_params': pd.DataFrame(cols['resolved_params'], dtype=object),
                 'other': pd.DataFrame(cols['other']),
             }
+            # print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
             eval_type_to_results[node_name] = results
 
     return eval_type_to_results
@@ -140,7 +141,6 @@ def _lookup_result_loader(node_name):
     return result_loader_fn
 
 
-@xdev.profile
 def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
     """
     Ignore:
@@ -177,7 +177,8 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
         try:
             flat = load_result_resolved(node_dpath)
 
-            if True:
+            HACK_FOR_REGION_ID = True
+            if HACK_FOR_REGION_ID:
                 # Munge data to get the region ids we expect
                 candidate_keys = list(flat.query_keys('region_ids'))
                 region_ids = None
@@ -231,8 +232,10 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
     return result
 
 
-@xdev.profile
 def new_process_context_parser(proc_item):
+    """
+    Load parameters out of data saved by a ProcessContext object
+    """
     tracker_name_pat = util_pattern.MultiPattern.coerce({
         'watch.cli.kwcoco_to_geojson',
         'watch.cli.run_tracker',
@@ -276,7 +279,6 @@ def new_process_context_parser(proc_item):
     return output
 
 
-@xdev.profile
 def load_result_resolved(node_dpath):
     """
     Recurse through the DAG filesytem structure and load resolved
@@ -450,7 +452,6 @@ def _generalized_process_flat_resolved(fpath, node_process_name, node_type):
     return flat_resolved
 
 
-@xdev.profile
 def out_node_matching_fpaths(out_node):
     out_template = out_node.template_value
     parser = parse.Parser(str(out_template))

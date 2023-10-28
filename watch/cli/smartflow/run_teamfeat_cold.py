@@ -33,17 +33,27 @@ class TeamFeatColdConfig(scfg.DataConfig):
 
     expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
 
+    cold_workers = scfg.Value(4, type=int, help='Number of parallel workers that COLD will use')
+
 
 def main():
-    import os
-    os.environ['NO_COLOR'] = '1'
+    # import os
+    # os.environ['NO_COLOR'] = '1'
     config = TeamFeatColdConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
     from watch.mlops.pipeline_nodes import ProcessNode
+    from watch.utils.util_framework import NodeStateDebugger
+
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
+
+    node_state.print_current_state(ingress_dir)
+
     ingressed_assets = smartflow_ingress(
         config.input_path,
         [
@@ -75,8 +85,7 @@ def main():
     # NOTE:
     # For COLD we need to compute on the full non-time-combined data,
     # and then transfer the features to the time-combined data.
-    ingress_dir_contents1 = list(ingress_dir.ls())
-    print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     full_input_kwcoco_fpath = ingressed_assets['timedense_bas_kwcoco_file']
     timecombined_input_kwcoco_fpath = ingressed_assets['enriched_bas_kwcoco_file']
@@ -88,6 +97,9 @@ def main():
     from kwcoco.cli import coco_stats
     watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
+
+    print('Print some disk and machine statistics (again)')
+    ub.cmd('df -h', verbose=3)
 
     # TOOD: better passing of configs
 
@@ -101,20 +113,20 @@ def main():
         with_cold=1,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
-        cold_workers=4,
+        cold_workers=config.cold_workers,
         assets_dname='_teamfeats',
         cold_workermode='process',
         run=1,
         backend='serial',
     )
+
     # Hard coded-specific output pattern.
     subset_name = base_fpath.name.split('.')[0]
     combo_code = 'C'
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
-    ingress_dir_contents2 = list(ingress_dir.ls())
-    print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
@@ -145,11 +157,13 @@ def main():
     command = transfer_node.final_command()
     ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
+    # Reroot kwcoco files to make downloaded results easier to work with
+    ub.cmd(['kwcoco', 'reroot', f'--src={timecombined_output_kwcoco_fpath}', '--inplace=1', '--absolute=0'])
+
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
 
-    ingress_dir_contents3 = list(ingress_dir.ls())
-    print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
 

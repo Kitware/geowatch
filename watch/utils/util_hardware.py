@@ -4,17 +4,27 @@ See: ~/code/watch/watch/utils/process_context.py
 
 
 def get_cpu_mem_info():
-    import ubelt as ub
-    import cpuinfo
-    import psutil
-    cpu_info = cpuinfo.get_cpu_info()
-    svmem_info = psutil.virtual_memory()
-    mem_info = ub.dzip(svmem_info._fields, svmem_info)
+    cpu_info = get_cpu_info()
+    mem_info = get_mem_info()
     system_info = {
         'cpu_info': cpu_info,
         'mem_info': mem_info,
     }
     return system_info
+
+
+def get_cpu_info():
+    import cpuinfo
+    cpu_info = cpuinfo.get_cpu_info()
+    return cpu_info
+
+
+def get_mem_info():
+    import ubelt as ub
+    import psutil
+    svmem_info = psutil.virtual_memory()
+    mem_info = ub.dzip(svmem_info._fields, svmem_info)
+    return mem_info
 
 
 def disk_info_of_path(path):
@@ -27,6 +37,11 @@ def disk_info_of_path(path):
         >>> path = '.'
         >>> disk_info_of_path(path)
 
+    TODO:
+        - [ ] Handle btrfs
+        - [ ] Handle whatever AWS uses
+        - [ ] Use udisksctl or udevadm
+
     Ignore:
         lsblk  /dev/nvme1n1
         lsblk -afs /dev/mapper/vgubuntu-root
@@ -37,8 +52,11 @@ def disk_info_of_path(path):
         df $HOME/data/dvc-repos/smart_watch_dvc-hdd --output=source,fstype
 
         df . --output=source,fstype,itotal,iused,iavail,ipcent,size,used,avail,pcent,file,target
+
+    References:
+        https://askubuntu.com/questions/609708/how-to-find-hard-drive-brand-name-or-model
+        https://stackoverflow.com/questions/38615464/how-to-get-device-name-on-which-a-file-is-located-from-its-path-in-c
     """
-    # https://stackoverflow.com/questions/38615464/how-to-get-device-name-on-which-a-file-is-located-from-its-path-in-c
     import ubelt as ub
     path = ub.Path(path)
     path = path.resolve()
@@ -69,6 +87,12 @@ def disk_info_of_path(path):
             hwinfo['hwtype'] = zfs_status['coarse_type']
         except Exception as ex:
             print('error in zfs stuff: ex = {}'.format(ub.urepr(ex, nl=1)))
+    elif filesystem == 'overlay':
+        # This is the case on AWS. lsblk isnt able to provide us with more info
+        # I'm not sure how to determine more info.
+        # References:
+        # https://docs.kernel.org/filesystems/overlayfs.html
+        ...
     else:
         try:
             if _device_is_hdd(source):

@@ -212,6 +212,8 @@ def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
         >>>     canvas = kwimage.stack_images([canvas1, canvas2, canvas3], axis=1)
         >>>     kwplot.imshow(canvas, pnum=pnum_(), title=ub.urepr(result['params'], nl=0, compact=1, nobr=1))
     """
+    # TODO: can use the new `Affine.fliprot` when 0.9.22 releases
+
     import kwimage
     if rot_k != 0:
         x0 = canvas_dsize[0] / 2

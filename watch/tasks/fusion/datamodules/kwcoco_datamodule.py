@@ -470,7 +470,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         if model is not None:
             assert requested_tasks is None
-            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'global_head_weight'):
+                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            else:
+                import warnings
+                warnings.warn(ub.paragraph(
+                    f'''
+                    Model {model.__class__} does not have the structure needed
+                    to notify the dataset about tasks. A better design to make
+                    specifying tasks easier is needed without relying on the
+                    ``global_head_weights``.
+                    '''))
         print(f'datamodule notified: requested_tasks={requested_tasks}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks
@@ -533,9 +543,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return datamodule_vars
 
     def draw_batch(self, batch, stage='train', outputs=None, max_items=2,
-                   overlay_on_image=False, **kwargs):
+                   overlay_on_image=False, classes=None, **kwargs):
         r"""
-        Visualize a batch produced by this DataSet.
+        Visualize a batch produced by a KWCocoVideoDataset.
 
         Args:
             batch (Dict[str, List[Tensor]]): dictionary of uncollated lists of Dataset Items
@@ -545,6 +555,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             outputs (Dict[str, Tensor]):
                 maybe-collated list of network outputs?
+
+            max_items (int):
+                Maximum number of items within this batch to draw in a single
+                figure. Defaults to 2.
+
+            overlay_on_image (bool):
+                if True overlay annotations on image data for a more compact
+                view. if False separate annotations / images for a less
+                cluttered view.
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
@@ -687,17 +706,78 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             else:
                 item_output = {}
 
-            part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
+            part = dataset.draw_item(
+                item, item_output=item_output,
+                overlay_on_image=overlay_on_image, classes=classes, **kwargs)
 
             canvas_list.append(part)
-        canvas = kwimage.stack_images_grid(
-            canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])
 
-        with_legend = True
+        num_images = len(canvas_list)
+        # import xdev
+        # xdev.embed()
+        if 1:
+            # Choose a sensible chunksize for the grid based on the input image
+            # aspect ratios
+
+            # TODO: could add this as a grid heuristic.
+            import numpy as np
+            hs = np.array([c.shape[0] for c in canvas_list])
+            ws = np.array([c.shape[1] for c in canvas_list])
+
+            h_majorness = hs > (ws * 1.2)
+            w_majorness = ws > (hs * 1.2)
+            if h_majorness.sum() >= w_majorness.sum():
+                majors, minors = hs, ws
+                stack_axis = 0
+            else:
+                majors, minors = ws, hs
+                stack_axis = 1
+
+            majors_per_minor = (majors / minors).mean()
+            # Not sure if this is quite right
+            chunksize = int(np.ceil(np.sqrt(majors_per_minor * num_images)))
+
+            """
+            import sympy as sym
+            majors_per_minor, num_imgs = sym.symbols('majors_per_minor, num_imgs')
+            real_grid_major, real_grid_minor = sym.symbols('real_grid_w, real_grid_h')
+            ideal_grid_dim = sym.symbols('ideal_grid_dim')
+            sym.sqrt(num_imgs)
+            vars = (majors_per_minor, num_imgs, real_grid_major, real_grid_minor, ideal_grid_dim)
+
+            # TODO: get the system that solves for the number of images we
+            # stack across the minor dimension such that we roughly get a
+            # square image in the end.
+
+            equations = [
+                sym.Eq(ideal_grid_dim * ideal_grid_dim, num_imgs * majors_per_minor),
+                sym.Eq(majors_per_minor * ideal_grid_dim, real_grid_minor),
+                sym.Eq(ideal_grid_dim, real_grid_major),
+            ]
+            print('equations = {}'.format(ub.urepr(equations, nl=1)))
+            from sympy import solve
+            solutions = solve(equations, *vars, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            solutions = solve(equations, real_grid_major, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            solutions = solve(equations, real_grid_minor, dict=True)
+            print('solutions = {}'.format(ub.urepr(solutions, nl=2)))
+            """
+        else:
+            stack_axis = 1
+            chunksize = int(np.ceil(np.sqrt(num_images)))
+
+        canvas = kwimage.stack_images_grid(
+            canvas_list, chunksize=chunksize, axis=stack_axis, overlap=-12, bg_value=[64, 60, 60])
+
+        with_legend = self.requested_tasks is None or self.requested_tasks.get('class', True)
+        # with_legend = True
         if with_legend:
+            if classes is None:
+                classes = dataset.classes
             label_to_color = {
                 node: data['color']
-                for node, data in dataset.classes.graph.nodes.items()}
+                for node, data in classes.graph.nodes.items()}
             label_to_color = ub.sorted_keys(label_to_color)
             legend_img = utils._memo_legend(label_to_color)
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)

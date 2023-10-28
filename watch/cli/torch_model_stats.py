@@ -120,13 +120,18 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     prenorm_stats = None
     fit_config = {}
     if hasattr(module, 'dataset_stats') and module.dataset_stats is not None:
-        module.dataset_stats.keys()
+
+        dataset_stats = module.dataset_stats.copy()
+
+        if 'modality_input_stats' in dataset_stats:
+            # This is too much info to print
+            dataset_stats.pop('modality_input_stats', None)
 
         known_input_stats = []
         unknown_input_stats = []
         sensor_modes_with_stats = set()
 
-        for sens_chan_key, stats in module.dataset_stats['input_stats'].items():
+        for sens_chan_key, stats in dataset_stats['input_stats'].items():
             sensor, channel = sens_chan_key
             channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
             sensor_modes_with_stats.add((sensor, channel))
@@ -142,7 +147,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
                 })
             known_input_stats.append(sensor_stat)
 
-        unique_sensor_modes = list(module.dataset_stats['unique_sensor_modes'])
+        unique_sensor_modes = list(dataset_stats['unique_sensor_modes'])
         for sensor, channel in unique_sensor_modes:
             channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
             key = (sensor, channel)

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 r"""
+This is a SMART-specific analysis of TP/FP/TN/FN site cases with
+visualizations.
+
 #### LORES
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
@@ -48,7 +51,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         A path to an IARPA metrics MLops output directory node.
 
         Use this in the special case that you have an mlops or smartflow output
-        directory.
+        directory. This is only used to infer other values.  Not needed if
+        other values are specified.
         '''))
 
     detections_fpath = scfg.Value(None, help=ub.paragraph(
@@ -68,7 +72,7 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         '''))
 
     src_kwcoco = scfg.Value(None, help='the input kwcoco file to project onto')
-    dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write')
+    dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write. Will default based on out_dpath')
 
     bas_kwcoco = scfg.Value(None, help='path to kwcoco files containing bas heatmap predictions')
     ac_kwcoco = scfg.Value(None, help='path to kwcoco files containing AC heatmap predictions')
@@ -76,6 +80,9 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
     bas_metric_dpath = scfg.Value(None, help='A path to bas metrics if det/prop paths are not specified')
 
     pred_sites = scfg.Value(None, help='the path to the predicted sites manifest / directory / globstr')
+
+    stage_to_sites = scfg.Value(None, help='A YAML mapping from stages in a pipeline to intermediate site output')
+    stage_to_metrics = scfg.Value(None, help='A YAML mapping from stages in a pipeline to intermediate metrics')
 
     region_id = scfg.Value(None, help='the id for the region')
     true_site_dpath = scfg.Value(None, help='input')
@@ -106,6 +113,10 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
         if self.out_dpath is not None:
             self.out_dpath = ub.Path(self.out_dpath)
+
+        from kwutil.util_yaml import Yaml
+        self.stage_to_sites = Yaml.coerce(self.stage_to_sites)
+        self.stage_to_metrics = Yaml.coerce(self.stage_to_metrics)
 
     def _infer_from_mlops_node(self):
         import json
@@ -156,6 +167,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
                 return job_config
 
             if self.true_region_dpath is None:
+                # TODO: also read in things like model names and hashids if
+                # possible.
                 job_config = get_job_config()
                 self.true_region_dpath = job_config['bas_poly_eval.true_region_dpath']
 
@@ -165,6 +178,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
             if self.out_dpath is None:
                 self.out_dpath = (self.metrics_node_dpath / 'confusion_analysis')
+
+        if self.dst_kwcoco is None and self.out_dpath is not None:
             self.dst_kwcoco = self.out_dpath / 'confusion_kwcoco' / 'confusion.kwcoco.zip'
 
         if self.bas_metric_dpath is not None:
@@ -517,6 +532,62 @@ class ConfusionAnalysis:
             print(pred_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
             print(true_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
 
+    def load_new_stage_stuff(self):
+        """
+        We should redo confusion stuff at each stage of the pipeline and
+        determine when mistakes and good decisions are made.
+        """
+        from watch.mlops.smart_result_parser import load_iarpa_evaluation
+        from watch.geoannots.geomodels import SiteModel
+        # from watch.geoannots.geomodels import RegionModel
+        from watch.geoannots.geomodels import SiteModelCollection
+        import pandas as pd
+        import rich
+
+        # New stuff with stages
+        stage_preds = {}
+        for stage, sites_dpath in self.config.stage_to_sites.items():
+            sites = SiteModelCollection(list(SiteModel.coerce_multiple(sites_dpath)))
+            stage_preds[stage] = sites
+
+        def fff(c):
+            return [s.header for s in c]
+
+        stage_order = ['bas', 'dzyne-depth-sv', 'dino-sv', 'acsc']
+        stage_to_df = ub.udict(stage_preds).map_values(lambda x: x.as_region_model().pandas_summaries())
+        stage_to_df = stage_to_df.subdict(stage_order)
+        stage_to_df.map_values(len)
+        stage_to_df = stage_to_df.map_values(lambda d: d.set_index('site_id', drop=False))
+
+        df1 = stage_to_df['bas']
+        df2 = stage_to_df['dzyne-depth-sv']
+        df3 = stage_to_df['dino-sv']
+        df4 = stage_to_df['acsc']
+
+        did_depth_filter = (df1.loc[df1.site_id]['status'] != df2.loc[df1.site_id]['status'])
+        depth_filtered = did_depth_filter[did_depth_filter]  # NOQA
+
+        did_dino_filter = (df3.loc[df2.site_id]['status'] != df2.loc[df2.site_id]['status'])
+        dino_filtered = did_dino_filter[did_dino_filter].index  # NOQA
+
+        did_ac_filter = (df3.loc[df4.site_id]['status'] != df4.loc[df4.site_id]['status'])
+        acsc_filtered = did_ac_filter[did_ac_filter]  # NOQA
+
+        ub.oset(df1['site_id']) - ub.oset(df2['site_id'])
+        ub.oset(df2['site_id']) - ub.oset(df3['site_id'])
+        ub.oset(df3['site_id']) - ub.oset(df4['site_id'])
+
+        # New stuff with stages
+        rows = []
+        for stage, metrics_fpath in self.config.stage_to_metrics.items():
+            iarpa_result = load_iarpa_evaluation(ub.Path(metrics_fpath))
+            row = iarpa_result['metrics']
+            row['stage'] = stage
+            rows.append(row)
+        datacols = ['stage', 'bas_f1', 'sc_macro_f1', 'macro_f1_active', 'macro_f1_siteprep', 'bas_tp', 'bas_fp', 'bas_fn', 'bas_ffpa', 'bas_ppv', 'bas_tpr']
+        table = pd.DataFrame(rows)
+        rich.print(table[datacols])
+
     def add_confusion_to_geojson_models(self):
         """
         Modify region / site models with a confusion info in their cache.
@@ -589,11 +660,12 @@ class ConfusionAnalysis:
                     'color': 'pink',
                 }
 
-        VALIDATE = 1
+        VALIDATE = 0
         if VALIDATE:
             all_models = SiteModelCollection(pred_sites + true_sites)
             all_models.fixup()
-            all_models.validate(workers=0)
+            all_models.validate(stop_on_failure=False, strict=False)
+            # all_models.validate(workers=0)
 
         # Group by confusion type
         true_type_to_sites = ub.ddict(list)
@@ -863,13 +935,12 @@ class ConfusionAnalysis:
             new_site_id = differentiate_site_id(site_id, config.performer_id)
             site_df.loc[site_df.index[0], 'site_id'] = new_site_id
 
-        for site_df in true_site_infos2:
-            reproject_annotations.validate_site_dataframe(site_df)
+        # for site_df in true_site_infos2:
+        #     reproject_annotations.validate_site_dataframe(site_df)
 
         dst_dset.clear_annotations()
         common_kwargs = ub.udict(
             clear_existing=False,
-            src=dst_dset,
             dst='return',
             workers=2,
         )
@@ -888,23 +959,25 @@ class ConfusionAnalysis:
         # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
         repr1 = str(dst_dset.annots())
         print(f'repr1={repr1}')
-        dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
+        dst_dset = reproject_annotations.main(cmdline=0, src=dst_dset, **true_kwargs)
         repr2 = str(dst_dset.annots())
         print(f'repr1={repr1}')
         print(f'repr2={repr2}')
 
         set(dst_dset.index.trackid_to_aids)
 
-        pred_kwargs['src'] = dst_dset
-        dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
+        dst_dset = reproject_annotations.main(cmdline=0, src=dst_dset, **pred_kwargs)
         # repr3 = str(dst_dset.annots())
         # print(f'repr1={repr1}')
         # print(f'repr2={repr2}')
         # print(f'repr3={repr3}')
 
+        self.bas_dset = None
+
         if config.dst_kwcoco is not None:
 
             if config.bas_kwcoco and config.src_kwcoco != config.bas_kwcoco:
+                # Let the AC coco files know about bas heatmaps
                 from watch import heuristics
                 from watch.tasks.cold import transfer_features
                 bas_dset = kwcoco.CocoDataset(config.bas_kwcoco)
@@ -917,9 +990,15 @@ class ConfusionAnalysis:
                     'new_coco_fpath': 'return',
                     'channels_to_transfer': ['salient'],
                     'max_propogate': None,
+                    'allow_affine_approx': True,
                 }
                 new = transfer_features.transfer_features_main(cmdline=0, **transfer_config)
                 dst_dset = new
+
+                bas_dset.clear_annotations()
+                bas_dset = reproject_annotations.main(cmdline=0, src=bas_dset, **true_kwargs)
+                bas_dset = reproject_annotations.main(cmdline=0, src=bas_dset, **pred_kwargs)
+                self.bas_dset = bas_dset
             else:
                 ub.Path(dst_dset.fpath).parent.ensuredir()
                 print(f'dump to dst_dset.fpath={dst_dset.fpath}')
@@ -951,6 +1030,13 @@ class ConfusionAnalysis:
         cases = self.build_site_confusion_cases()
         viz_dpath = self.out_dpath / 'site_viz'
 
+        # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+        # if self.bas_dset is not None:
+        #     # If we can't visualize the site with the AC dataset,
+        #     # we probably can with the BAS dataset.
+        #     bas_covered_gdf = covered_video_geo_regions(self.bas_dset)
+        #     main_covered_gdf = covered_video_geo_regions(coco_dset)
+
         if 1:
             import pandas as pd
             case_df = pd.DataFrame(cases)
@@ -965,7 +1051,8 @@ class ConfusionAnalysis:
         from kwutil import util_progress
         pman = util_progress.ProgressManager()
 
-        link_dpath = viz_dpath / '_flat'
+        bytrueid_dpath = (viz_dpath / '_by_true_id')
+        bypredid_dpath = (viz_dpath / '_by_pred_id')
 
         with pman:
             total = 0
@@ -984,11 +1071,18 @@ class ConfusionAnalysis:
                 #     continue
 
                 fpath = dpath / fname
-                link_fpath = link_dpath / fname
 
                 try:
-                    canvas = visualize_case(
-                        coco_dset, case, true_id_to_site, pred_id_to_site)
+                    try:
+                        canvas = visualize_case(
+                            coco_dset, case, true_id_to_site, pred_id_to_site)
+                    except Exception:
+                        if self.bas_dset is not None:
+                            # Fallback on using the bas dataset if neeeded
+                            canvas = visualize_case(
+                                self.bas_dset, case, true_id_to_site, pred_id_to_site)
+                        else:
+                            raise
                 except Exception as ex:
                     errors.append(ex)
                     rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
@@ -1005,8 +1099,13 @@ class ConfusionAnalysis:
                 # print(f'fpath={fpath}')
                 # print(f'canvas.shape={canvas.shape}')
                 kwimage.imwrite(fpath, canvas)
-                link_fpath.parent.ensuredir()
-                ub.symlink(real_path=fpath, link_path=link_fpath)
+
+                bytrue_link_fpath = bytrueid_dpath / (case['bytrue_name'] + '.jpg')
+                bypred_link_fpath = bypredid_dpath / (case['bypred_name'] + '.jpg')
+                bytrue_link_fpath.parent.ensuredir()
+                bypred_link_fpath.parent.ensuredir()
+                ub.symlink(real_path=fpath, link_path=bytrue_link_fpath)
+                ub.symlink(real_path=fpath, link_path=bypred_link_fpath)
 
         if errors:
             rich.print(f'[red]There were {len(errors)} errors in viz')
@@ -1255,7 +1354,8 @@ def make_case(pred_sites,
         true_duration = true_dates[-1] - true_dates[0]
         pred_duration = pred_dates[-1] - pred_dates[0]
 
-        case['name'] = f'{main_pred_site.site_id}-vs-{main_true_site.site_id}'
+        main_true_name = main_true_site.site_id
+        main_pred_name = main_pred_site.site_id
 
         case.update({
             'space_iou': space_iou,
@@ -1268,12 +1368,19 @@ def make_case(pred_sites,
         })
     else:
         if has_pred:
-            case['name'] = f'{main_pred_site.site_id}-vs-null'
+            main_pred_name = main_pred_site.site_id
+            main_true_name = 'null'
         elif has_true:
-            case['name'] = f'null-vs-{main_true_site.site_id}'
+            main_true_name = main_true_site.site_id
+            main_pred_name = 'null'
         else:
             raise AssertionError('no pred or true')
 
+    case['name'] = f'{main_pred_name}-vs-{main_true_name}'
+
+    # Additional names for symlinks
+    case['bytrue_name'] = f'bytrue-{main_true_name}-vs-{main_pred_name}'
+    case['bypred_name'] = f'bypred-{main_pred_name}-vs-{main_true_name}'
     case['type'] = type_
 
     case.update({
@@ -1302,6 +1409,9 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     import kwcoco
     import kwimage
     import numpy as np
+
+    # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+    # gdf = covered_video_geo_regions(coco_dset)
 
     all_aids = set()
     all_sites = []

@@ -4,7 +4,28 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.10.0 - Released 2023-09-xx
+## Version 0.11.0 - Released 2023-11-xx
+
+### Added
+* mlops can now make symlinks to results nodes by region and param-hashids 
+* Ability to draw batches at predict time for debugging.
+* Add `channel_dropout` to KWCocoVideoDataset
+
+### Changed
+* Batch outputs weights are new members of a frame item and are factored into
+  stitching weights in fusion.predict. These are also combined with old weights
+  by default.
+
+* Changed the semantics of temporal dropout to be more natural. There is now a
+  `temporal_dropout_rate` for the probability a batch item will have temporal
+  dropout applied, and `temporal_dropout` itself now is the probability a frame
+  is dropped within a given batch.
+
+* Dino and Depth Site Validation now write reasons for its decisions to site
+  models and summaries.
+
+
+## Version 0.10.0 - Released 2023-10-01
 
 ### Added 
 
@@ -17,18 +38,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Shrink & Perterb Algorithm for regularization.
 * Add `fix_backwards_dates` to site / region geomodels `fixup` method.
 
+
 ### Changed
 * Add remove-bad-images to smartflow datagen pipeline.
 * STAC metadata is now preserved by coco-align.
 * Selection of images when picking 1 image per time window in coco-align is now influenced by STAC metadata for `eo:cloud_cover` and `quality_info:contaminated_percentage`
 * prepare ta2 dataset now outputs per-region kwcoco files inside their region directories and adds the -rawbands suffix.
 * Can now change the name of the predicted salient channel.
+* Merged changes for incremental mode into the main branch
+* Bumped versions of ndsampler, kwimage, and delayed-image to fix an issue in delayed image sampling.
 
 ### Fixed
 * coco-align now handles overviews correctly for quality bands.
 * fixed issue where dataloader did not relabel post construction to background if all frames post construction.
 * cluster-sites now attempts to fix broken site models before it uses them.
 * Fix `predicted_phase_transition_date` to be a date instead of a datetime.
+* Added workaround for issue when a classifier can predict more than the 4 main categories
+* Fix issue where SV output was not passed to AC input in smartflow
+
+### Removed
+* Moved unused cli scripts to "dev"
 
 
 ## Version 0.9.3 - Released 2023-08-31

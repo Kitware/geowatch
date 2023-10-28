@@ -546,6 +546,15 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                 self.header['properties']['start_date'] = _new_start
                 self.header['properties']['end_date'] = _new_end
 
+    @property
+    def model_type(self):
+        return self.header['properties']['type']
+
+    @property
+    def model_id(self):
+        header_id_key = self._header_type + '_id'
+        return self.header['properties'][header_id_key]
+
 
 def _report_jsonschema_error(ex):
     import rich
@@ -1246,7 +1255,7 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         feat_schema = schema | (defs[cls._feat_type + '_feature'])
         return feat_schema
 
-    def validate(self, strict=True):
+    def validate(self, strict=True, verbose=1):
         """
         Validate this sub-schema
         """
@@ -1254,7 +1263,8 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         try:
             jsonschema.validate(self, feat_schema)
         except jsonschema.ValidationError as e:
-            _report_jsonschema_error(e)
+            if verbose:
+                _report_jsonschema_error(e)
             raise
 
     def ensure_isodates(self):
@@ -1682,11 +1692,11 @@ class ModelCollection(list):
     def fixup(self):
         pman = util_progress.ProgressManager()
         with pman:
-            for s in pman.progiter(self, desc='fixup'):
-                s.fixup()
+            for model in pman.progiter(self, desc='fixup'):
+                model.fixup()
         return self
 
-    def validate(self, mode='process', workers=0, verbose=1):
+    def validate(self, strict=False, stop_on_failure=True, verbose=1, mode='process', workers=0):
         """
         Validate multiple models in parallel
         """
@@ -1694,22 +1704,32 @@ class ModelCollection(list):
         # pman = util_progress.ProgressManager(backend='progiter')
         pman = util_progress.ProgressManager()
         with pman:
-            tries = 0
-            while True:
-                jobs = ub.JobPool(mode='process', max_workers=8 if tries == 0 else 0)
-                for s in pman.progiter(self, desc='submit validate models'):
-                    job = jobs.submit(s.validate, verbose=verbose)
-                    job.s = s
+            jobs = ub.JobPool(mode='process', max_workers=workers)
+            for model in pman.progiter(self, desc='submit validate models'):
+                job = jobs.submit(model.validate, strict=strict, verbose=verbose)
+                job.model = model
+            num_passed = 0
+            errors = []
+            prog = pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models')
+            for job in prog:
                 try:
-                    for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models'):
-                        job.result()
-                except Exception:
-                    if tries > 0 or workers == 0:
-                        raise Exception
-                    tries += 1
-                    rich.print('[red] ERROR: [yellow] Failed to validate: trying again with workers=0')
+                    job.result()
+                except Exception as ex:
+                    rich.print(f'[red] ERROR: failed to validate {job.model.model_id} : {job.model.model_type} in a collection')
+                    errors.append((ex, job.model))
+                    prog.set_extra(f'Passed: {num_passed}, Failed: {len(errors)}')
+                    if stop_on_failure:
+                        raise
                 else:
-                    break
+                    num_passed += 1
+                prog.set_extra(f'Passed: {num_passed}, Failed: {len(errors)}')
+            if errors:
+                num_failed = len(errors)
+                num_total = len(jobs)
+                failed_model_ids = [model.model_id for ex, model in errors]
+                rich.print(f'[red] ERROR: failed to validate {num_failed} / {num_total} models')
+                rich.print('failed_model_ids = {}'.format(ub.urepr(failed_model_ids, nl=1)))
+                raise Exception(f'Failed to validate {num_failed} / {num_total} models')
 
 
 class SiteModelCollection(ModelCollection):

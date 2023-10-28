@@ -28,7 +28,7 @@ class DinoSVConfig(scfg.DataConfig):
             Path to input T&E Baseline Framework Region definition JSON
             '''))
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
-    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+    aws_profile = scfg.Value(None, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
@@ -74,18 +74,30 @@ def run_dino_sv(config):
     aws_profile = config.aws_profile
     dryrun = config.dryrun
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['depth_filtered_sites',
-         'depth_filtered_regions',
-         'cropped_kwcoco_for_sv',
-         'cropped_kwcoco_for_sv_assets'],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'cropped_site_models_bas',
+            'cropped_region_models_bas',
+            {'key': 'depth_filtered_sites', 'allow_missing': True},
+            {'key': 'depth_filtered_regions', 'allow_missing': True},
+            'cropped_kwcoco_for_sv',
+            'cropped_kwcoco_for_sv_assets'
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun
+    )
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -108,9 +120,19 @@ def run_dino_sv(config):
     # site validation, the path to the region / sites directories should be
     # parameters passed to us from the DAG (so we can shift the order in
     # which operations are applied at the DAG level)
-    input_region_dpath = ingressed_assets['depth_filtered_regions']
+    input_region_dpath = ub.Path(ingressed_assets['depth_filtered_regions'])
     input_sites_dpath = ub.Path(ingressed_assets['depth_filtered_sites'])
+
+    # Hack around the depth filter not populating its outputs
+    # as we would expect here
+    missing_inputs = not input_region_dpath.exists() or not input_sites_dpath.exists()
+    if missing_inputs:
+        # Fallback to pre-depth filter outputs if that is failing
+        input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_bas'])
+        input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+
     input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
+    assert input_region_fpath.exists()
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
     # dzyne output referenced by ingress_kwcoco_path
@@ -125,8 +147,7 @@ def run_dino_sv(config):
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
     output_site_manifest_fpath = output_site_manifest_dpath / 'site_models_manifest.json'
 
-    ingress_dir_paths = list(ingress_dir.glob('*'))
-    print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
+    node_state.print_current_state(ingress_dir)
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
@@ -139,6 +160,7 @@ def run_dino_sv(config):
     #     ingress_kwcoco_data = json.load(f)
     # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
+    output_region_dpath.ensuredir()
 
     if num_videos == 0:
         # Copy input region model into region_models outdir to be updated
@@ -149,11 +171,8 @@ def run_dino_sv(config):
         # here to guarentee the region with site summaries is passed forward
         # TODO: the dino code should just be robust to this.
         input_sites_dpath.copy(output_sites_dpath)
-
-        output_region_fpath.parent.ensuredir()
         input_region_fpath.copy(output_region_fpath)
     else:
-        output_region_dpath.ensuredir()
         output_site_manifest_dpath.ensuredir()
         output_sites_dpath.ensuredir()
         # 3.2 Run DinoBoxDetector
@@ -214,6 +233,8 @@ def run_dino_sv(config):
                 site_dpath=output_sites_dpath,
             )
 
+    node_state.print_current_state(ingress_dir)
+
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
@@ -221,6 +242,8 @@ def run_dino_sv(config):
     ingressed_assets['sv_out_site_models'] = output_sites_dpath
     ingressed_assets['sv_out_region_models'] = output_region_dpath
     if dino_boxes_kwcoco_path.exists():
+        # Reroot kwcoco files to make downloaded results easier to work with
+        ub.cmd(['kwcoco', 'reroot', f'--src={dino_boxes_kwcoco_path}', '--inplace=1', '--absolute=0'])
         ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
 
     smartflow_egress(ingressed_assets,
