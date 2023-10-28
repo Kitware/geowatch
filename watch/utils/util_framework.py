@@ -720,6 +720,7 @@ class AWS_S3_Command:
         """
         import ubelt as ub
         final_command = self.finalize()
+        print('final_command = {}'.format(ub.urepr(final_command, nl=1)))
         run_info = ub.cmd(final_command, verbose=verbose, shell=shell,
                           capture=capture)
         if check:
