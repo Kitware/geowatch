@@ -156,13 +156,17 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> )
 
     Ignore:
+        >>> # Requires a real S3 bucket
         >>> from watch.cli.smartflow_egress import *  # NOQA
         >>> from watch.geoannots.geomodels import RegionModel
+        >>> from watch.utils import util_fsspec
         >>> from os.path import join
         >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
         >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
         >>> outbucket = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/tests/test-egress')
+        >>> if 1:
+        >>>     outbucket.delete()
         >>> output_path = join(outbucket, 'items.jsonl')
         >>> region = RegionModel.random()
         >>> region_path = dpath / 'demo_region.geojson'
@@ -186,6 +190,18 @@ def smartflow_egress(assetnames_and_local_paths,
         >>>     outbucket,
         >>>     newline=False,
         >>> )
+        >>> outbucket.ls()
+        >>> (outbucket / 'my_dir1').ls()
+        >>> # Test subsequent ingress
+        >>> from watch.cli.smartflow_ingress import smartflow_ingress
+        >>> in_dpath = ub.Path.appdir('watch/tests/smartflow_ingress2').delete().ensuredir()
+        >>> input_path = output_path
+        >>> assets = ['asset_file1', 'asset_dir1']
+        >>> kwcoco_stac_item_assets = smartflow_ingress(
+        >>>     input_path,
+        >>>     assets,
+        >>>     in_dpath,
+        >>> )
     """
     # TODO: handle aws_profile.
     from watch.utils.util_fsspec import FSPath
@@ -198,9 +214,7 @@ def smartflow_egress(assetnames_and_local_paths,
     assetnames_and_s3_paths = {}
 
     items = list(assetnames_and_local_paths.items())
-    # Prevent duplicate uploads
-    items = list(ub.unique(items, key=lambda x: x[1]))
-
+    seen = set()  # Prevent duplicate uploads
     for asset, local_path in ub.ProgIter(items, desc='Egress data', verbose=3):
         # Assets with paths already on S3 simply pass a reference through
         local_path = FSPath.coerce(local_path)
@@ -208,13 +222,16 @@ def smartflow_egress(assetnames_and_local_paths,
             asset_s3_outpath = local_path
         else:
             asset_s3_outpath = outbucket / local_path.name
-            fallback_copy(local_path, asset_s3_outpath)
-            # from retry.api import retry_call
-            # logger = PrintLogger()
-            # retry_call(local_path.copy, fargs=[asset_s3_outpath],
-            #            fkwargs=dict(verbose=3), tries=3, backoff=2,
-            #            exceptions=(PermissionError,), delay=3, logger=logger)
-            # local_path.copy(asset_s3_outpath)
+            if local_path not in seen:
+                fallback_copy(local_path, asset_s3_outpath)
+                # local_path.copy(asset_s3_outpath)
+                # from retry.api import retry_call
+                # logger = PrintLogger()
+                # retry_call(local_path.copy, fargs=[asset_s3_outpath],
+                #            fkwargs=dict(verbose=3), tries=3, backoff=2,
+                #            exceptions=(PermissionError,), delay=3, logger=logger)
+                # local_path.copy(asset_s3_outpath)
+                seen.add(local_path)
 
         assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
 
@@ -242,7 +259,7 @@ def smartflow_egress(assetnames_and_local_paths,
         _output_path = FSPath.coerce(output_path)
         fallback_copy(_temp_path, _output_path)
 
-    print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
+    print('EGRESSED: {}'.format(ub.urepr(output_stac_items, nl=-1)))
     print('--- FINISH EGRESS ---')
     return te_output
 

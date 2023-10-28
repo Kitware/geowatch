@@ -117,6 +117,7 @@ def smartflow_ingress(input_path,
         >>> assert len(ub.Path(kwcoco_stac_item_assets['asset_dir1']).ls()) > 0
         >>> assert ub.Path(kwcoco_stac_item_assets['asset_file1']).exists()
     """
+    print('--- BEGIN INGRESS ---')
     os.makedirs(outdir, exist_ok=True)
 
     assert aws_profile is None, 'unhandled'
@@ -193,6 +194,7 @@ def smartflow_ingress(input_path,
 
     # Returns assets (with downloaded asset hrefs updated)
     print('INGRESSED = {}'.format(ub.urepr(kwcoco_stac_item_assets, nl=1)))
+    print('--- FINISH INGRESS ---')
     return kwcoco_stac_item_assets
 
 
