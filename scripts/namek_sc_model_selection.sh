@@ -42,12 +42,19 @@ sdvc request "
 - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch199_step6400.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch277_step8896.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch291_step9344.pt
 " --verbose
+
+
 
 
 
 #python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
 #python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
+#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD-V2
+#python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD-V2
 
 
 python -m watch.mlops.schedule_evaluation --params="
@@ -111,6 +118,9 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch3_step32.pt
             #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch4_step40.pt
             #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89/Drop7-Cropped2GSD_SC_bgrn_sgd_gnt_8GSD_split6_V89_epoch79_step640.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch199_step6400.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch277_step8896.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD-V2/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V91_epoch291_step9344.pt
 
 
         sc_pxl.tta_fliprot: 0.0
@@ -192,7 +202,7 @@ python -m watch.mlops.schedule_evaluation --params="
     " \
     --root_dpath="$DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1" \
     --queue_name "_ac_static_small_baseline_namek_v1" \
-    --devices="0,1" \
+    --devices="0," \
     --backend=tmux --tmux_workers=8 \
     --cache=1 --skip_existing=1 --run=1
 

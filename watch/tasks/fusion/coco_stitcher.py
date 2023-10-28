@@ -332,6 +332,10 @@ class CocoStitchingManager(object):
         self._last_vidid = None
         self._last_imgid = None
         self._ready_gids = set()
+        # The set of image ids that are currently being finalized
+        self._finalizing_gids = set()
+        # The set of image ids that have been finalized
+        self._finalized_gids = set()
 
         # Keep track of the number of times we've stitched something into an
         # image.
@@ -616,7 +620,15 @@ class CocoStitchingManager(object):
         Like finalize image, but submits the job to the manager's writer queue,
         which could be asynchronous.
         """
+        self._finalizing_gids.add(gid)
         self.writer_queue.submit(self.finalize_image, gid)
+
+    def flush_images(self):
+        """
+        Allow the writer queue to finish finalizing any incomplete images
+        before allowing the process to procede.
+        """
+        self.writer_queue.wait_until_finished()
 
     @property
     def seen_image_ids(self):
@@ -631,6 +643,8 @@ class CocoStitchingManager(object):
             gid (int): the image-id to finalize
         """
         import os
+        self._finalizing_gids.add(gid)
+
         # Remove this image from the managed set.
         img = self.result_dataset.index.imgs[gid]
 
@@ -838,6 +852,7 @@ class CocoStitchingManager(object):
             'n_anns': n_anns,
             'total_prob': total_prob,
         }
+        self._finalized_gids.add(gid)
         return info
 
 

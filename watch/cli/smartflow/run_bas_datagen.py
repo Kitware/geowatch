@@ -229,6 +229,7 @@ def run_stac_to_cropped_kwcoco(config):
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
         if output_path.exists():
+            print('Dont recompute is True. Early stopping')
             # If output_path file was there, nothing to do
             return
 

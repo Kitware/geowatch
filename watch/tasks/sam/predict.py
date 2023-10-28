@@ -46,6 +46,7 @@ class SAMConfig(scfg.DataConfig):
             --input_kwcoco <input-kwcoco>
             --output_kwcoco <output-kwcoco>
             --fixed_resolution=None
+            --channels="red|green|blue"
             --weights_fpath "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth" \
             --window_overlap=0.33333 \
             --data_workers="2" \
@@ -332,6 +333,10 @@ class DenseFeaturePredictor:
         self.sam_model = sam_model
 
     def run(self):
+        """
+        Ignore:
+            self = predictor
+        """
         import rich
         from torch.utils import data as torch_data
         from kwutil import util_progress
@@ -356,15 +361,30 @@ class DenseFeaturePredictor:
         # torch.set_grad_enabled(False)
 
         pman = util_progress.ProgressManager()
+        previously_managed_gids = set()
         with pman, torch.no_grad():
             prog = pman.progiter(batch_iter, total=len(loader),
                                   desc=f'Predict {self.short_code}')
             for batch in prog:
                 self.predict_batch(batch)
 
+                # Optimization:
+                # Because we know this process works 1 image at a time and a
+                # new image will only be seen after the current image is
+                # completed We can flush all previously managed image ids as
+                # soon as we see a new one. This prevents all predictions from
+                # living in memory.
+                currently_managed_gids = set(self.coco_stitcher.managed_image_ids())
+                new_gids = currently_managed_gids - previously_managed_gids
+                if new_gids:
+                    for gid in previously_managed_gids:
+                        self.coco_stitcher.submit_finalize_image(gid)
+                    self.coco_stitcher.flush_images()
+                previously_managed_gids = set(self.coco_stitcher.managed_image_ids())
+
         for gid in self.coco_stitcher.managed_image_ids():
             self.coco_stitcher.submit_finalize_image(gid)
-        self.coco_stitcher.writer_queue.wait_until_finished()
+        self.coco_stitcher.flush_images()
 
         obj = self.proc_context.stop()
         obj = util_json.ensure_json_serializable(obj)
