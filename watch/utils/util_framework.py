@@ -804,11 +804,15 @@ class NodeStateHelper:
         import ubelt as ub
         import os
         import watch
-        print(' * Print current version of the code')
+        print(' * Print current version of the code & environment')
         ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
         print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
         print('watch.__file__ = {}'.format(ub.urepr(watch.__file__, nl=1)))
         print('os.environ = {}'.format(ub.urepr(dict(os.environ), nl=1)))
+
+        # Check to make sure our times are in sync with amazon servers
+        ub.cmd('date -u', verbose=3)
+        ub.cmd('curl http://s3.amazonaws.com -v', verbose=3)
 
     def print_current_state(self, dpath):
         import ubelt as ub

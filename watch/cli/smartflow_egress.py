@@ -311,6 +311,9 @@ def _test_s3_hack():
     """
     An issue that can occur in will manifest as:
 
+    [2023-10-27, 23:28:51 UTC] {pod_manager.py:342} INFO - botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
+
+
     botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
     File "/root/code/watch/watch/cli/smartflow_egress.py", line 174, in smartflow_egress
     local_path.copy(asset_s3_outpath)
