@@ -489,7 +489,6 @@ class CocoStitchingManager(object):
         from watch.utils import util_kwimage
 
         if weights is not None:
-            import kwarray
             weights = kwarray.ArrayAPI.numpy(weights)
             # Hack, the dataloader should always provide weights aligned with
             # the output, but we have offbyone errors, so just force things to

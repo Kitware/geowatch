@@ -1,4 +1,36 @@
 #!/usr/bin/env python3
+"""
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
+    >>> import watch
+    >>> import kwcoco
+    >>> import ubelt as ub
+    >>> # Define where to write the output
+    >>> output_dpath = ub.Path.appdir('watch/tests/sam/demo')
+    >>> output_kwcoco_fpath = output_dpath / 'demo_sam.kwcoco.zip'
+    >>> # Define the input
+    >>> dset = kwcoco.CocoDataset.demo('vidshapes', num_frames=4, num_videos=1)
+    >>> dset.reroot(absolute=True)
+    >>> dset.fpath = output_dpath / 'sam_input.kwcoco.zip'
+    >>> dset.dump()
+    >>> input_kwcoco_fpath = dset.fpath
+    >>> # The main external data this test needs is the SAM weights
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    >>> weights_fpath = dvc_dpath / "models/sam/sam_vit_h_4b8939.pth"
+    >>> # Setup the arguments to SAM predict
+    >>> from watch.tasks.sam import predict as sam_predict
+    >>> kwargs = {
+    >>>     'input_kwcoco': input_kwcoco_fpath,
+    >>>     'output_kwcoco': output_kwcoco_fpath,
+    >>>     'fixed_resolution': None,
+    >>>     'weights_fpath': weights_fpath,
+    >>>     'channels': 'r|g|b',
+    >>> }
+    >>> cmdline = 0
+    >>> sam_predict.main(cmdline=cmdline, **kwargs)
+    >>> if 1:
+    >>>     ub.cmd(f'geowatch visualize {output_kwcoco_fpath} --stack=only --channels "r|g|b,sam.0:3,sam.3:6,sam.6:9"')
+"""
 import scriptconfig as scfg
 import ubelt as ub
 from torch.utils import data
@@ -25,11 +57,21 @@ class SAMConfig(scfg.DataConfig):
 
     weights_fpath = scfg.Value(None, help='path to pytorch model weights')
 
+    channels = scfg.Value("red|green|blue,pan", help=ub.paragraph(
+        '''
+        The channels in the dataset to be passed to SAMs rgb inputs
+        By default this is red|green|blue or pan, but if you have a different
+        channel code for rgb (e.g. r|g|b) then that must be specified.
+        In the future we may change this option such that it does a better job
+        at inference.
+        '''
+    ))
+
     window_dims = (1024, 1024)
     fixed_resolution = "10GSD"
     batch_size = 1
     window_overlap = 0.33333
-    device = scfg.Value(0)
+    device = scfg.Value(0, help='The torch device to predict on')
     select_images = None
     track_emissions = True
     data_workers = 2
@@ -37,33 +79,73 @@ class SAMConfig(scfg.DataConfig):
     assets_dname = 'sam'
 
 
-def rgb_from_kwcoco_frame(frame):
+def rgb_from_kwcoco_frame(frame, channel_priority):
     import torchvision.transforms.functional as F
     import kwimage
     import torch
     # import numpy as np
     modes = frame['modes']
     chw = None
-    if 'red|green|blue' in modes:
-        chw = modes['red|green|blue']
-        is_nan = torch.isnan(chw)
-        rgb_nan_frac = is_nan.sum() / is_nan.numel()
-    else:
-        rgb_nan_frac = 1.0
 
-    # print('----')
-    # print(f'rgb_nan_frac={rgb_nan_frac}')
-    if rgb_nan_frac >= 0.0:
-        # fallback on pan
-        if 'pan' in modes:
-            pan_chw = modes['pan']
-            pan_is_nan = torch.isnan(pan_chw)
-            pan_nan_frac = pan_is_nan.sum() / pan_is_nan.numel()
-            # print(f'pan_nan_frac={pan_nan_frac}')
-            if chw is None or rgb_nan_frac > pan_nan_frac:
-                pan_hwc = pan_chw.permute(1, 2, 0).cpu().numpy()
-                pan_hwc = kwimage.atleast_3channels(pan_hwc)
-                chw = torch.Tensor(pan_hwc).permute(2, 0, 1)
+    # A default channel_priority would look like:
+    # channel_priority = [
+    #     {'mode': 'red|green|blue', 'numel': 3},
+    #     {'mode': 'pan', 'numel': 1},
+    # ]
+
+    best = {
+        'chw': None,
+        'nan_frac': 1.1,
+    }
+
+    for candidate in channel_priority:
+        # Find a candidate chanel that the frame has and is not mostly nan
+        cand_mode = candidate['mode']
+        cand_numel = candidate['numel']
+        if cand_mode in modes:
+            cand_chw = modes[cand_mode]
+            cand_is_nan = torch.isnan(cand_chw)
+            cand_nan_frac = cand_is_nan.sum() / cand_is_nan.numel()
+
+            if cand_numel == 1:
+                # Convert to 3 channels
+                cand_hwc = cand_chw.permute(1, 2, 0).cpu().numpy()
+                cand_hwc = kwimage.atleast_3channels(cand_hwc)
+                cand_chw = torch.Tensor(cand_hwc).permute(2, 0, 1)
+
+            if cand_nan_frac < best['nan_frac']:
+                best = {
+                    'chw': cand_chw,
+                    'nan_frac': cand_nan_frac,
+                }
+
+            if cand_nan_frac == 0:
+                # No nans, looks good, stop early
+                break
+
+    # if 'red|green|blue' in modes:
+    #     chw = modes['red|green|blue']
+    #     is_nan = torch.isnan(chw)
+    #     rgb_nan_frac = is_nan.sum() / is_nan.numel()
+    # else:
+    #     rgb_nan_frac = 1.0
+    # # print('----')
+    # # print(f'rgb_nan_frac={rgb_nan_frac}')
+    # if rgb_nan_frac >= 0.0:
+    #     # fallback on pan
+    #     if 'pan' in modes:
+    #         pan_chw = modes['pan']
+    #         pan_is_nan = torch.isnan(pan_chw)
+    #         pan_nan_frac = pan_is_nan.sum() / pan_is_nan.numel()
+    #         # print(f'pan_nan_frac={pan_nan_frac}')
+    #         if chw is None or rgb_nan_frac > pan_nan_frac:
+    #             pan_hwc = pan_chw.permute(1, 2, 0).cpu().numpy()
+    #             pan_hwc = kwimage.atleast_3channels(pan_hwc)
+    #             chw = torch.Tensor(pan_hwc).permute(2, 0, 1)
+
+    chw = best['chw']
+    if chw is None:
+        raise AssertionError('Unable to find an RGB frame')
 
     hwc = chw.permute(1, 2, 0).cpu().numpy()
     normed_rgb = kwimage.normalize_intensity(hwc)
@@ -73,8 +155,9 @@ def rgb_from_kwcoco_frame(frame):
 
 class SAMWrapperDataset(data.Dataset):
 
-    def __init__(self, subdset):
+    def __init__(self, subdset, channel_priority):
         self.subdset = subdset
+        self.channel_priority = channel_priority
 
     def __len__(self):
         return len(self.subdset)
@@ -90,7 +173,8 @@ class SAMWrapperDataset(data.Dataset):
         item = torch_dataset[index]
 
         frame0 = item['frames'][0]
-        chw = rgb_from_kwcoco_frame(frame0)
+        channel_priority = self.channel_priority
+        chw = rgb_from_kwcoco_frame(frame0, channel_priority)
         hwc = chw.permute(1, 2, 0).cpu().numpy()
         norm01_resized, resize_info = kwimage.imresize(
             hwc, dsize=(1024, 1024), interpolation='lanczos',
@@ -172,6 +256,7 @@ class DenseFeaturePredictor:
         from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
         from watch.utils import util_parallel
         from watch.utils import process_context
+        import kwcoco
 
         # put the vendored package into our namespace.
         import geowatch_tpl  # NOQA
@@ -190,8 +275,19 @@ class DenseFeaturePredictor:
             force_bad_frames=True,
             resample_invalid_frames=0,
             time_steps=1,
-            channels="red|green|blue,pan",
+            channels=config.channels,
+            # channels="red|green|blue,pan",
         )
+
+        # Build a list of channel priorities to indicate what
+        # SAM should interpret as RGB or coerce to RGB
+        channel_priority = []
+        for spec in kwcoco.ChannelSpec.coerce(config.channels).streams():
+            channel_priority.append({
+                'mode': spec.spec,
+                'numel': spec.numel(),
+            })
+
         datamodule.setup('test')
         self.datamodule = datamodule
 
@@ -215,7 +311,7 @@ class DenseFeaturePredictor:
             torch_dataset.new_sample_grid['targets'],
             key=lambda x: (x['video_id'], x['main_gid']))
 
-        self.wrapper_dset = self.WrapperDsetClass(torch_dataset)
+        self.wrapper_dset = self.WrapperDsetClass(torch_dataset, channel_priority)
 
         writer_queue = util_parallel.BlockingJobQueue(max_workers=config.io_workers)
         self.coco_stitcher = CocoStitchingManager(
