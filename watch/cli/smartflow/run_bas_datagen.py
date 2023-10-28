@@ -178,8 +178,8 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli.smartflow_ingress import smartflow_ingress
     import kwcoco
 
-    from watch.utils.util_framework import NodeStateHelper
-    node_state = NodeStateHelper()
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
     node_state.print_environment()
 
     if config.aws_profile is not None:

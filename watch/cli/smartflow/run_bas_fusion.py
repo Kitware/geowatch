@@ -85,8 +85,8 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils import util_fsspec
 
     ####
-    from watch.utils.util_framework import NodeStateHelper
-    node_state = NodeStateHelper()
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
     node_state.print_environment
 
     input_path = config.input_path

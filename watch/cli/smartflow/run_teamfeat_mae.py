@@ -123,8 +123,8 @@ def main():
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
 
-    from watch.utils.util_framework import NodeStateHelper
-    node_state = NodeStateHelper()
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
     node_state.print_environment()
 
     # 1. Ingress data

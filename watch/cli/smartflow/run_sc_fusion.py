@@ -121,8 +121,8 @@ def run_sc_fusion_for_baseline(config):
         from watch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    from watch.utils.util_framework import NodeStateHelper
-    node_state = NodeStateHelper()
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
     node_state.print_environment()
 
     # 1. Ingress data

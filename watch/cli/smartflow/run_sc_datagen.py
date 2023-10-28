@@ -72,8 +72,8 @@ def run_generate_sc_cropped_kwcoco(config):
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    from watch.utils.util_framework import NodeStateHelper
-    node_state = NodeStateHelper()
+    from watch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
     node_state.print_environment()
 
     if config.dont_recompute:

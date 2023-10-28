@@ -783,7 +783,7 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
         site.validate()
 
 
-class NodeStateHelper:
+class NodeStateDebugger:
     """
     Prints information about the current node that is helpful for debugging.
 
@@ -793,7 +793,7 @@ class NodeStateHelper:
         >>> from watch.utils.util_framework import *  # NOQA
         >>> import ubelt as ub
         >>> watch_appdir_dpath = ub.Path.appdir('watch')
-        >>> self = NodeStateHelper()
+        >>> self = NodeStateDebugger()
         >>> self.print_environment()
         >>> self.print_current_state(watch_appdir_dpath)
         >>> self.print_current_state(watch_appdir_dpath)

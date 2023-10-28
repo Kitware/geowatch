@@ -43,9 +43,9 @@ def main():
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
     from watch.mlops.pipeline_nodes import ProcessNode
-    from watch.utils.util_framework import NodeStateHelper
+    from watch.utils.util_framework import NodeStateDebugger
 
-    node_state = NodeStateHelper()
+    node_state = NodeStateDebugger()
     node_state.print_environment()
 
     # 1. Ingress data
