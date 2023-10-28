@@ -791,10 +791,12 @@ class NodeStateHelper:
 
     Example:
         >>> from watch.utils.util_framework import *  # NOQA
+        >>> import ubelt as ub
+        >>> watch_appdir_dpath = ub.Path.appdir('watch')
         >>> self = NodeStateHelper()
         >>> self.print_environment()
-        >>> self.print_current_state('.')
-        >>> self.print_current_state('.')
+        >>> self.print_current_state(watch_appdir_dpath)
+        >>> self.print_current_state(watch_appdir_dpath)
     """
 
     def __init__(self):
@@ -805,6 +807,7 @@ class NodeStateHelper:
         import ubelt as ub
         import os
         import watch
+        print(' --- <NODE_ENV> --- ')
         print(' * Print current version of the code & environment')
         ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
         print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
@@ -812,11 +815,14 @@ class NodeStateHelper:
         print('os.environ = {}'.format(ub.urepr(dict(os.environ), nl=1)))
 
         # Check to make sure our times are in sync with amazon servers
-        ub.cmd('date -u', verbose=3)
-        ub.cmd('curl http://s3.amazonaws.com -v', verbose=3)
+        if 0:
+            ub.cmd('date -u', verbose=3)
+            ub.cmd('curl http://s3.amazonaws.com -v', verbose=3)
+        print(' --- </NODE_ENV> --- ')
 
     def print_current_state(self, dpath):
         import ubelt as ub
+        print(f' --- <NODE_STATE iter={self.current_iteration}> --- ')
         print(f'* Printing current directory contents ({self.current_iteration})')
         dpath = ub.Path(dpath).resolve()
         # cwd_paths = sorted([p.resolve() for p in dpath.glob('*')])
@@ -829,4 +835,5 @@ class NodeStateHelper:
         print(f' * Print some disk and machine statistics ({self.current_iteration})')
         ub.cmd('df -h', verbose=3)
 
+        print(f' --- </NODE_STATE iter={self.current_iteration}> --- ')
         self.current_iteration += 1
