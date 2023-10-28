@@ -4,17 +4,27 @@ See: ~/code/watch/watch/utils/process_context.py
 
 
 def get_cpu_mem_info():
-    import ubelt as ub
-    import cpuinfo
-    import psutil
-    cpu_info = cpuinfo.get_cpu_info()
-    svmem_info = psutil.virtual_memory()
-    mem_info = ub.dzip(svmem_info._fields, svmem_info)
+    cpu_info = get_cpu_info()
+    mem_info = get_mem_info()
     system_info = {
         'cpu_info': cpu_info,
         'mem_info': mem_info,
     }
     return system_info
+
+
+def get_cpu_info():
+    import cpuinfo
+    cpu_info = cpuinfo.get_cpu_info()
+    return cpu_info
+
+
+def get_mem_info():
+    import ubelt as ub
+    import psutil
+    svmem_info = psutil.virtual_memory()
+    mem_info = ub.dzip(svmem_info._fields, svmem_info)
+    return mem_info
 
 
 def disk_info_of_path(path):

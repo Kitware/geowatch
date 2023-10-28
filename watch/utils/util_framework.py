@@ -835,5 +835,9 @@ class NodeStateDebugger:
         print(f' * Print some disk and machine statistics ({self.current_iteration})')
         ub.cmd('df -h', verbose=3)
 
+        from watch.utils import util_hardware
+        mem_info = util_hardware.get_mem_info()
+        print('mem_info = {}'.format(ub.urepr(mem_info, nl=1, align=':')))
+
         print(f' --- </NODE_STATE iter={self.current_iteration}> --- ')
         self.current_iteration += 1
