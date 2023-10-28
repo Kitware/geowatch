@@ -258,8 +258,9 @@ def fallback_copy(local_path, asset_s3_outpath):
 
     DO_FALLBACK = 1
 
-    from fsspec.callbacks import TqdmCallback
-    callback = TqdmCallback(tqdm_kwargs={"desc": "Copying"})
+    # callback seems to break, not sure why, fixme?
+    # from fsspec.callbacks import TqdmCallback
+    # callback = TqdmCallback(tqdm_kwargs={"desc": "Copying"})
     if local_path.is_dir() and isinstance(asset_s3_outpath, util_fsspec.S3Path):
         if DO_FALLBACK:
             # In the case where we are moving a directory from the local to s3
@@ -270,10 +271,12 @@ def fallback_copy(local_path, asset_s3_outpath):
                 **asset_s3_outpath.fs.storage_options)
             aws_cmd.run()
         else:
-            local_path.copy(asset_s3_outpath, verbose=3, callback=callback)
+            local_path.copy(asset_s3_outpath, verbose=3)
+            #callback=callback)
     else:
         # In every other case, regular copy is probably fine
-        local_path.copy(asset_s3_outpath, verbose=3, callback=callback)
+        local_path.copy(asset_s3_outpath, verbose=3)
+        #callback=callback)
 
 
 class PrintLogger:
