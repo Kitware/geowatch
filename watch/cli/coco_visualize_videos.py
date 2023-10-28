@@ -198,13 +198,12 @@ class CocoVisualizeConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
-
     Example:
         >>> import kwcoco
         >>> from watch.utils import kwcoco_extensions
         >>> from watch.cli.coco_visualize_videos import *  # NOQA
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/viz_video').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('watch/test/viz_video1').delete().ensuredir()
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2, image_size=(64, 64), num_videos=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
@@ -214,6 +213,27 @@ def main(cmdline=True, **kwargs):
         >>>     'space': 'video',
         >>>     'channels': None,
         >>>     'zoom_to_tracks': True,
+        >>> }
+        >>> cmdline = False
+        >>> main(cmdline=cmdline, **kwargs)
+
+    Example:
+        >>> import kwcoco
+        >>> from watch.utils import kwcoco_extensions
+        >>> from watch.cli.coco_visualize_videos import *  # NOQA
+        >>> import watch
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch/test/viz_video2').delete().ensuredir()
+        >>> dset = watch.coerce_kwcoco('watch-msi', num_frames=5, image_size=(64, 64), num_videos=1)
+        >>> img = dset.dataset['images'][0]
+        >>> coco_img = dset.coco_image(img['id'])
+        >>> kwargs = {
+        >>>     'src': dset.fpath,
+        >>>     'viz_dpath': dpath,
+        >>>     'space': 'video',
+        >>>     'channels': None,
+        >>>     'zoom_to_tracks': False,
+        >>>     'stack': 'only',
         >>> }
         >>> cmdline = False
         >>> main(cmdline=cmdline, **kwargs)
@@ -1354,7 +1374,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     if verbose > 100:
         print('after normalizer part')
 
-    canvas = kwimage.nodata_checkerboard(canvas, on_value=0.3)
+    canvas = kwimage.nodata_checkerboard(canvas, on_value=0.0)
 
     if verbose > 100:
         print('after checkers part')

@@ -124,6 +124,12 @@ def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=Non
                 from kwcoco.metrics.drawing import concice_si_display
                 for row in df2.index:
                     val = df2.loc[row, col]
+                    # if isinstance(val, str):
+                    #     try:
+                    #         val = float(val)
+                    #     except Exception:
+                    #         ...
+                    # print(f'val: {type(val)}={val}')
                     if isinstance(val, float):
                         val = concice_si_display(val)
                         df2.loc[row, col] = val

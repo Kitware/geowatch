@@ -265,6 +265,7 @@ class ParamPlotter:
         yscale = vantage['scale1']
         x = vantage['metric2']
         xscale = vantage['scale2']
+
         region_attr = 'region_id'
         print('vantage = {}'.format(ub.urepr(vantage, nl=1)))
         print('main_metric = {}'.format(ub.urepr(main_metric, nl=1)))
@@ -279,7 +280,23 @@ class ParamPlotter:
         )
         fig = kwplot.figure(fnum=2, doclf=True)
 
-        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=region_attr, legend=False)
+        unique_regions = single_table[region_attr].unique()
+        print(f'unique_regions={unique_regions}')
+        num_regions = len(unique_regions)
+        print(f'num_regions={num_regions}')
+        if num_regions < 10:
+            colors = sns.color_palette(n_colors=num_regions)
+        else:
+            colors = kwimage.Color.distinct(num_regions, legacy=False)
+            colors = [kwimage.Color.coerce(c).adjust(saturate=-0.3, lighten=-0.1).as01()
+                      for c in kwimage.Color.distinct(num_regions, legacy=False)]
+            # c = colors[0]
+        regionid_to_color = ub.dzip(unique_regions, colors)
+        snskw = {}
+        snskw['palette'] = regionid_to_color
+
+        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=region_attr, legend=False, **snskw)
+
         if plotter.plot_config.get('compare_sv_hack', False):
             # Hack to compare before/after SV
             if 'sv_poly_eval' in x.split('.'):
@@ -320,6 +337,7 @@ class ParamPlotter:
                 # orig_order = ub.oset(known_regions)
                 # trailing_regions = [r for r in orig_order if '_C' in r]
                 boxsns_kw['order'] = region_order
+            boxsns_kw.update(snskw)
 
             ax = sns.boxplot(data=single_table, x=region_attr, y=main_metric, **boxsns_kw)
             ax.set_title(f'Per-Region Results (n={len(agg)})')
@@ -480,6 +498,8 @@ class ParamPlotter:
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
         if not len(chosen_params):
             print('Warning: no chosen params')
+        else:
+            print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
 
         from kwutil.util_progress import ProgressManager
         owns_pman = 0
@@ -511,7 +531,7 @@ class ParamPlotter:
                 sub_macro_table = macro_table
 
                 min_variations = plotter.plot_config.get('min_variations', 1)
-                if min_variations > 1:
+                if min_variations > 1 and not (params_of_interest is not None and param_name in params_of_interest):
                     ignore_params = [k for k, v in param_histogram.items() if v < min_variations]
                     param_histogram = ub.udict(param_histogram) - set(ignore_params)
                     row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
@@ -557,6 +577,8 @@ class ParamPlotter:
 
                 # SCATTER
                 fig = kwplot.figure(fnum=4, doclf=True)
+
+                # Scatter with legend
                 ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
                 ax.set_title(header_text)
                 if 'is_star' in sub_macro_table:
@@ -588,8 +610,10 @@ class ParamPlotter:
                 except RuntimeError:
                     ...
                 else:
-                    ax.get_legend().remove()
-
+                    legend = ax.get_legend()
+                    if legend is not None:
+                        legend.remove()
+                # Scatter without legend
                 vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
                 param_fpath = param_dpath / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
                 finalize_figure.finalize(fig, vantage_fpath)
@@ -601,13 +625,27 @@ class ParamPlotter:
                 print(f'param_fpath={param_fpath}')
                 if not param_fpath.exists():
                     fig = kwplot.figure(fnum=5, doclf=True)
-                    ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
-                    freq_mapper_box.relabel_xticks(ax)
-                    ax.set_title(header_text)
-                    modifier.relabel(ax, ticks=False)
-                    modifier.relabel_xticks(ax)
-                    finalize_figure.finalize(fig, param_fpath)
-                ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+                    try:
+                        ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
+                    except Exception as box_ex:
+                        box_ex = box_ex
+                        rich.print(ub.codeblock(
+                            f'''
+                            [red]Error with boxplot
+
+                            x={param_name}
+                            y={y}
+
+                            ex={box_ex}
+                            '''))
+                    else:
+                        freq_mapper_box.relabel_xticks(ax)
+                        ax.set_title(header_text)
+                        modifier.relabel(ax, ticks=False)
+                        modifier.relabel_xticks(ax)
+                        finalize_figure.finalize(fig, param_fpath)
+                if param_fpath.exists():
+                    ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
 
                 # Varied value table (doesnt care about the vantage)
                 param_fpath = param_dpath / f'{param_prefix}_PLT05_table.png'
@@ -620,7 +658,7 @@ class ParamPlotter:
                             'value': old_name,
                             'num': param_histogram[old_name],
                         })
-                    param_code_lut = pd.DataFrame(param_code_lut)
+                    param_code_lut = pd.DataFrame(param_code_lut, columns=['code', 'value', 'num'])
                     if not had_value_remap:
                         param_code_lut = param_code_lut.drop('code', axis=1)
                     param_title = 'Key: ' + modifier._modify_text(param_name)

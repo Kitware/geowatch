@@ -1414,6 +1414,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                     region_to_num_compatible[region_id] += num
 
         if verbose:
+            macro_compatible_num = macro_compatible_num.sorted_values()
+
+            macro_compatible_cumsum = {}
+
+            if 0:
+                for k1, val in macro_compatible_num.items():
+                    if k1 not in macro_compatible_cumsum:
+                        macro_compatible_cumsum[k1] = val
+                    for k2 in macro_compatible_cumsum:
+                        if k1 != k2 and k1.issuperset(k2):
+                            macro_compatible_cumsum[k2] += val
+                x = ub.udict(macro_compatible_cumsum).sorted_values()
+                print('x = {}'.format(ub.urepr(x, nl=1)))
+
             print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
             print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
