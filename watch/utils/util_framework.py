@@ -808,7 +808,7 @@ class NodeStateHelper:
         ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
         print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
         print('watch.__file__ = {}'.format(ub.urepr(watch.__file__, nl=1)))
-        print('os.environ = {}'.format(ub.urepr(os.environ, nl=1)))
+        print('os.environ = {}'.format(ub.urepr(dict(os.environ), nl=1)))
 
     def print_current_state(self, dpath):
         import ubelt as ub

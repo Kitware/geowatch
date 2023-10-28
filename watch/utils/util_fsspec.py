@@ -334,11 +334,11 @@ class FSPath(str):
                 try:
                     if recursive:
                         if verbose >= 3:
-                            print(' * local -> remove (put recursive)')
+                            print(' * local -> remote (put recursive)')
                         return dst.fs.put(self, dst, **commonkw, callback=callback)
                     else:
                         if verbose >= 3:
-                            print(' * local -> remove (put_file)')
+                            print(' * local -> remote (put_file)')
                         return dst.fs.put_file(self, dst, callback=callback)
                 except FileExistsError:
                     # TODO: overwrite

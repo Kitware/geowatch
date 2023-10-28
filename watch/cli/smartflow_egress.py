@@ -154,9 +154,42 @@ def smartflow_egress(assetnames_and_local_paths,
         >>>     outbucket,
         >>>     newline=False,
         >>> )
+
+    Ignore:
+        >>> from watch.cli.smartflow_egress import *  # NOQA
+        >>> from watch.geoannots.geomodels import RegionModel
+        >>> from os.path import join
+        >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
+        >>> local_dpath = (dpath / 'local').ensuredir()
+        >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
+        >>> outbucket = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/tests/test-egress')
+        >>> output_path = join(outbucket, 'items.jsonl')
+        >>> region = RegionModel.random()
+        >>> region_path = dpath / 'demo_region.geojson'
+        >>> region_path.write_text(region.dumps())
+        >>> assetnames_and_local_paths = {
+        >>>     'asset_file1': dpath / 'my_path1.txt',
+        >>>     'asset_file2': dpath / 'my_path2.txt',
+        >>>     'asset_file_reference': dpath / 'my_path1.txt',
+        >>>     'asset_dir1': dpath / 'my_dir1',
+        >>> }
+        >>> # Generate local data we will pretend to egress
+        >>> assetnames_and_local_paths['asset_file1'].write_text('foobar1')
+        >>> assetnames_and_local_paths['asset_file2'].write_text('foobar2')
+        >>> assetnames_and_local_paths['asset_dir1'].ensuredir()
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data1')
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data2')
+        >>> te_output = smartflow_egress(
+        >>>     assetnames_and_local_paths,
+        >>>     region_path,
+        >>>     output_path,
+        >>>     outbucket,
+        >>>     newline=False,
+        >>> )
     """
     # TODO: handle aws_profile.
     from watch.utils.util_fsspec import FSPath
+    print('--- BEGIN EGRESS ---')
 
     assert aws_profile is None, 'unhandled'
     outbucket = FSPath.coerce(outbucket)
@@ -166,9 +199,8 @@ def smartflow_egress(assetnames_and_local_paths,
 
     items = list(assetnames_and_local_paths.items())
     # Prevent duplicate uploads
-    items = ub.unique(items, key=lambda x: x[1])
+    items = list(ub.unique(items, key=lambda x: x[1]))
 
-    logger = PrintLogger()
     for asset, local_path in ub.ProgIter(items, desc='Egress data', verbose=3):
         # Assets with paths already on S3 simply pass a reference through
         local_path = FSPath.coerce(local_path)
@@ -176,10 +208,12 @@ def smartflow_egress(assetnames_and_local_paths,
             asset_s3_outpath = local_path
         else:
             asset_s3_outpath = outbucket / local_path.name
-            from retry.api import retry_call
-            retry_call(local_path.copy, fargs=[asset_s3_outpath],
-                       fkwargs=dict(verbose=3), tries=3, backoff=2,
-                       exceptions=(PermissionError,), delay=3, logger=logger)
+            fallback_copy(local_path, asset_s3_outpath)
+            # from retry.api import retry_call
+            # logger = PrintLogger()
+            # retry_call(local_path.copy, fargs=[asset_s3_outpath],
+            #            fkwargs=dict(verbose=3), tries=3, backoff=2,
+            #            exceptions=(PermissionError,), delay=3, logger=logger)
             # local_path.copy(asset_s3_outpath)
 
         assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
@@ -206,10 +240,40 @@ def smartflow_egress(assetnames_and_local_paths,
 
         _temp_path = FSPath.coerce(temporary_file.name)
         _output_path = FSPath.coerce(output_path)
-        _temp_path.copy(_output_path)
+        fallback_copy(_temp_path, _output_path)
 
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
+    print('--- FINISH EGRESS ---')
     return te_output
+
+
+def fallback_copy(local_path, asset_s3_outpath):
+    """
+    Copying with fsspec alone seems to be causing issues.
+    This provides a fallback to a raw S3 command, as well as other verbosity.
+    """
+    from watch.utils import util_fsspec
+    from watch.utils import util_framework
+    assert isinstance(local_path, util_fsspec.LocalPath)
+
+    DO_FALLBACK = 1
+
+    from fsspec.callbacks import TqdmCallback
+    callback = TqdmCallback(tqdm_kwargs={"desc": "Copying"})
+    if local_path.is_dir() and isinstance(asset_s3_outpath, util_fsspec.S3Path):
+        if DO_FALLBACK:
+            # In the case where we are moving a directory from the local to s3
+            # we *should* just be able to use copy, but because that seems to
+            # be breaking, we are falling back on an explicit aws cli command
+            aws_cmd = util_framework.AWS_S3_Command(
+                'sync', local_path, asset_s3_outpath,
+                **asset_s3_outpath.fs.storage_options)
+            aws_cmd.run()
+        else:
+            local_path.copy(asset_s3_outpath, verbose=3, callback=callback)
+    else:
+        # In every other case, regular copy is probably fine
+        local_path.copy(asset_s3_outpath, verbose=3, callback=callback)
 
 
 class PrintLogger:
@@ -243,16 +307,41 @@ def _devcheck_retry():
                exceptions=(Exception,), delay=3, logger=logger)
 
 
-__notes__ = """
-An issue that can occur in will manifest as:
+def _test_s3_hack():
+    """
+    An issue that can occur in will manifest as:
 
-botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
-File "/root/code/watch/watch/cli/smartflow_egress.py", line 174, in smartflow_egress
-local_path.copy(asset_s3_outpath)
-File "/root/.pyenv/versions/3.11.2/lib/python3.11/site-packages/s3fs/core.py", line 140, in _error_wrapper
-raise err
-PermissionError: The difference between the request time and the current time is too large.
-"""
+    botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
+    File "/root/code/watch/watch/cli/smartflow_egress.py", line 174, in smartflow_egress
+    local_path.copy(asset_s3_outpath)
+    File "/root/.pyenv/versions/3.11.2/lib/python3.11/site-packages/s3fs/core.py", line 140, in _error_wrapper
+    raise err
+    PermissionError: The difference between the request time and the current time is too large.
+    """
+    from watch.utils import util_fsspec
+    util_fsspec.S3Path._new_fs(profile='iarpa')
+    s3_dpath = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v120/batch/kit/CN_C000/2021-08-31/split/mono/products/dummy-test')
+    s3_dpath.parent.ls()
+    dst_dpath = s3_dpath
+
+    dpath = util_fsspec.LocalPath.appdir('watch/fsspec/test-s3-hack/').ensuredir()
+    # dst_dpath = (dpath / 'dst')
+
+    src_dpath = (dpath / 'src').ensuredir()
+    for i in range(100):
+        (src_dpath / f'file_{i:03d}.txt').write_text('hello world' * 100)
+
+    from fsspec.callbacks import TqdmCallback
+    callback = TqdmCallback(tqdm_kwargs={"desc": "Your tqdm description"})
+    src_dpath.copy(dst_dpath, callback=callback)
+    from watch.utils import util_framework
+
+    aws_cmd = util_framework.AWS_S3_Command(
+        'sync', src_dpath, dst_dpath,
+        **dst_dpath.fs.storage_options)
+    print(aws_cmd.finalize())
+    aws_cmd.run()
+
 
 if __name__ == "__main__":
     main()
