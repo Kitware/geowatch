@@ -24,6 +24,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Dino and Depth Site Validation now write reasons for its decisions to site
   models and summaries.
 
+* MLops updates to handle results ingested from smartflow
+
+
+### Fixed
+* SAM features can now be run on toydata
+
+* Fixed minor issues in utilities
+
 
 ## Version 0.10.0 - Released 2023-10-01
 
