@@ -16,11 +16,11 @@ class UploadRGDConfig(scfg.DataConfig):
     """
     Run TA-2 BAS fusion as baseline framework component
     """
-    input_site_models_s3 = scfg.Value(None, type=str, position=1, required=True, help='Path to S3 directory of site models')
+    input_site_models_s3 = scfg.Value(None, type=str, position=1, help='Path to S3 directory of site models')
 
-    rgd_aws_region = scfg.Value(None, type=str, required=True, help='AWS region where RGD instance is running')
+    rgd_aws_region = scfg.Value(None, type=str, help='AWS region where RGD instance is running')
 
-    rgd_deployment_name = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+    rgd_deployment_name = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Name of RGD deployment (e.g. 'resonantgeodatablue'
             '''))
@@ -30,11 +30,11 @@ class UploadRGDConfig(scfg.DataConfig):
             AWS Profile to use for AWS S3 CLI commands
             '''))
 
-    title = scfg.Value(None, type=str, required=True, help='Title of the model run')
+    title = scfg.Value(None, type=str, help='Title of the model run')
 
-    region_id = scfg.Value(None, type=str, required=True, help='Region ID (e.g. "KR_R002")')
+    region_id = scfg.Value(None, type=str, help='Region ID (e.g. "KR_R002")')
 
-    performer_shortcode = scfg.Value('KIT', type=str, required=True, help='Performer shortcode (e.g. "KIT")')
+    performer_shortcode = scfg.Value('KIT', type=str, help='Performer shortcode (e.g. "KIT")')
 
     rgd_endpoint_override = scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -52,6 +52,11 @@ class UploadRGDConfig(scfg.DataConfig):
 def main():
     config = UploadRGDConfig.cli()
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    assert config.rgd_aws_region is not None
+    assert config.input_site_models_s3 is not None
+    assert config.rgd_deployment_name is not None
+    assert config.title is not None
+    assert config.region_id is not None
     upload_to_rgd(**config)
 
 
