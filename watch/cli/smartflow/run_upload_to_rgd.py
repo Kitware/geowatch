@@ -1,4 +1,4 @@
-import argparse
+#!/usr/bin/env python
 import sys
 import subprocess
 import json
@@ -9,64 +9,60 @@ import os
 
 import requests
 import ubelt as ub
+import scriptconfig as scfg
+
+
+class UploadRGDConfig(scfg.DataConfig):
+    """
+    Run TA-2 BAS fusion as baseline framework component
+    """
+    input_site_models_s3 = scfg.Value(None, type=str, position=1, required=True, help='Path to S3 directory of site models')
+
+    rgd_aws_region = scfg.Value(None, type=str, required=True, help='AWS region where RGD instance is running')
+
+    rgd_deployment_name = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Name of RGD deployment (e.g. 'resonantgeodatablue'
+            '''))
+
+    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            AWS Profile to use for AWS S3 CLI commands
+            '''))
+
+    title = scfg.Value(None, type=str, required=True, help='Title of the model run')
+
+    region_id = scfg.Value(None, type=str, required=True, help='Region ID (e.g. "KR_R002")')
+
+    performer_shortcode = scfg.Value('KIT', type=str, required=True, help='Performer shortcode (e.g. "KIT")')
+
+    rgd_endpoint_override = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Use this RGD URL instead of looking up via aws tools
+            '''))
+
+    jobs = scfg.Value(8, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+
+    expiration_time = scfg.Value(None, type=int, short_alias=['x'], help=ub.paragraph(
+            '''
+            Number of days to keep system run output in RGD
+            '''))
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run TA-2 BAS fusion as "
-                    "baseline framework component")
-
-    parser.add_argument('input_site_models_s3',
-                        type=str,
-                        help="Path to S3 directory of site models")
-    parser.add_argument("--rgd_aws_region",
-                        required=True,
-                        type=str,
-                        help="AWS region where RGD instance is running")
-    parser.add_argument("--rgd_deployment_name",
-                        required=True,
-                        type=str,
-                        help="Name of RGD deployment "
-                             "(e.g. 'resonantgeodatablue'")
-    parser.add_argument("--aws_profile",
-                        required=False,
-                        type=str,
-                        help="AWS Profile to use for AWS S3 CLI commands")
-    parser.add_argument("--title",
-                        required=True,
-                        type=str,
-                        help="Title of the model run")
-    parser.add_argument("--region_id",
-                        required=True,
-                        type=str,
-                        help='Region ID (e.g. "KR_R002")')
-    parser.add_argument("--performer_shortcode",
-                        required=True,
-                        type=str,
-                        default='KIT',
-                        help='Performer shortcode (e.g. "KIT")')
-    parser.add_argument("--rgd_endpoint_override",
-                        type=str,
-                        help="Use this RGD URL instead of looking up "
-                             "via aws tools")
-    parser.add_argument("-j", "--jobs",
-                        type=int,
-                        default=8,
-                        required=False,
-                        help="Number of jobs to run in parallel")
-    parser.add_argument("-x", "--expiration_time",
-                        type=int,
-                        required=False,
-                        help="Number of days to keep system run output in RGD")
-
-    upload_to_rgd(**vars(parser.parse_args()))
+    config = UploadRGDConfig.cli()
+    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    upload_to_rgd(**config)
 
 
 def get_model_results(model_run_results_url):
-    model_runs_result = requests.get(model_run_results_url,
-                                     params={'limit': '0'})
-    request_json = model_runs_result.json()
-    request_results = request_json.get('results', ())
+    try:
+        model_runs_result = requests.get(model_run_results_url, params={
+            'limit': '0'})
+        request_json = model_runs_result.json()
+        request_results = request_json.get('results', ())
+    except Exception:
+        raise
     return request_results
 
 
@@ -80,6 +76,7 @@ def upload_to_rgd(input_site_models_s3,
                   jobs=8,
                   rgd_endpoint_override=None,
                   expiration_time=None):
+
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()
 
@@ -119,8 +116,11 @@ def upload_to_rgd(input_site_models_s3,
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
 
     from retry.api import retry_call
-    request_results = retry_call(get_model_results, fargs=[model_run_results_url],
-                                 tries=3, exceptions=(Exception,), delay=3)
+    from watch.utils import util_framework
+    logger = util_framework.PrintLogger()
+    request_results = retry_call(
+        get_model_results, fargs=[model_run_results_url], tries=3,
+        exceptions=(Exception,), delay=3, logger=logger)
 
     existing_model_run = None
 
@@ -197,4 +197,4 @@ def post_site(post_site_url, site_filepath):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
