@@ -795,27 +795,54 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
         merged_polys = p1 + p2
         merged_times = t1 + t2
 
-#     if poly_merge_method == 'v3':
-#         # Just combine anything that touches in both frames together, if their timestamps touch too
-#         from watch.utils import util_gis
-#         import geopandas as gpd
+    if poly_merge_method == 'v3':
+        from shapely.ops import unary_union
 
-#         p1_df = gpd.GeoDataFrame(geometry=p1)
-#         p1_df[["start", "end"]] = t1
-#         p2_df = gpd.GeoDataFrame(geometry=p2)
-#         p2_df[["start", "end"]] = t2
+        p1_seen = set()
+        p2_seen = set()
+        # add all polygons that overlap
+        for j, (_p1, _t1) in enumerate(zip(p1, t1)):
+            if j in p1_seen:
+                continue
+            for i, (_p2, _t2) in enumerate(zip(p2, t2)):
 
-#         merged_polys = []
+                # if timestamps dont line up, skip
+                if _t1[1] != _t2[0]:
+                    continue
+                if (i in p2_seen) or (i > len(p2) - 1):
+                    continue
 
-#         p1_notime_mask = p1_df["end"] != p2_df["start"].min()
-#         p1_notime_df = p1_df[p1_notime_mask]
-#         p1_candidates_df = p1_df[~p1_notime_mask]
+                if _p1.intersects(_p2):
+                    combo = unary_union([_p1, _p2])
+                    if combo.geom_type == 'Polygon':
+                        merged_polys.append(combo)
+                    elif combo.geom_type == 'MultiPolygon':
+                        # Can this ever happen? It seems to have occurred in a test
+                        # run. Bowties can cause this.
+                        # import warnings
+                        # warnings.warn('Found two intersecting polygons where the
+                        # union was a multipolygon')
+                        merged_polys.extend(list(combo.geoms))
+                    else:
+                        raise AssertionError(
+                            f'Unexpected type {combo.geom_type} from {_p1} and {_p2}')
 
-#         merged_polys.append(p1_notime_df["geometry"])
+                    p1_seen.add(j)
+                    p2_seen.add(i)
 
-#         isect_idxs = util_gis.geopandas_pairwise_overlaps(p1_candidates_df, p2_df)
-#         for p1_idx, p2_idxs in isect_idxs.items():
-            
+        # all polygons that did not overlap with any polygon
+        all_p1 = set(np.arange(len(p1)))
+        remaining_p1 = all_p1 - p1_seen
+
+        for index in remaining_p1:
+            merged_polys.append(p1[index])
+            merged_times.append(t1[index])
+
+        all_p2 = set(np.arange(len(p2)))
+        remaining_p2 = all_p2 - p2_seen
+        for index in remaining_p2:
+            merged_polys.append(p2[index])
+            merged_times.append(t2[index])
 
     elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
