@@ -795,6 +795,28 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
         merged_polys = p1 + p2
         merged_times = t1 + t2
 
+#     if poly_merge_method == 'v3':
+#         # Just combine anything that touches in both frames together, if their timestamps touch too
+#         from watch.utils import util_gis
+#         import geopandas as gpd
+
+#         p1_df = gpd.GeoDataFrame(geometry=p1)
+#         p1_df[["start", "end"]] = t1
+#         p2_df = gpd.GeoDataFrame(geometry=p2)
+#         p2_df[["start", "end"]] = t2
+
+#         merged_polys = []
+
+#         p1_notime_mask = p1_df["end"] != p2_df["start"].min()
+#         p1_notime_df = p1_df[p1_notime_mask]
+#         p1_candidates_df = p1_df[~p1_notime_mask]
+
+#         merged_polys.append(p1_notime_df["geometry"])
+
+#         isect_idxs = util_gis.geopandas_pairwise_overlaps(p1_candidates_df, p2_df)
+#         for p1_idx, p2_idxs in isect_idxs.items():
+            
+
     elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
         from watch.utils import util_gis
