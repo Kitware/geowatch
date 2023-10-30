@@ -1346,13 +1346,8 @@ def dzyne_sv_only_pipeline():
 
     Demo Schedule Evaluate Inovcation:
 
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-        DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-
         HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-        BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
         python -m watch.mlops.schedule_evaluation --params="
             pipeline: dzyne_sv_only

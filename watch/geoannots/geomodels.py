@@ -1517,6 +1517,20 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
 
         Returns:
             SiteHeader
+
+        Example:
+            >>> # Convert a RegionModel to a collection of SiteModels
+            >>> from watch.geoannots import geomodels
+            >>> region = geomodels.RegionModel.random()
+            >>> sites = []
+            >>> for sitesum in region.site_summaries():
+            >>>     # Current hacky way to pass along region ids
+            >>>     sitesum['properties']['cache']['region_id'] = region.region_id
+            >>>     # This only produces a site header, we may need to add
+            >>>     # observations to the site model itself as well
+            >>>     site_header = sitesum.as_site()
+            >>>     site = SiteModel(features=[site_header])
+            >>>     sites.append(site)
         """
         new_cls = SiteHeader
         return self._convert(new_cls)
