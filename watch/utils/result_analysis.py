@@ -519,7 +519,7 @@ class ResultAnalysis(ub.NiceRepr):
     def varied(self):
         return self.result_table.varied
 
-    def abalation_groups(self, param_group, k=2):
+    def abaltion_groups(self, param_group, k=2):
         """
         Return groups where the specified parameter(s) are varied, but all
         other non-ignored parameters are held the same.
@@ -539,7 +539,7 @@ class ResultAnalysis(ub.NiceRepr):
         Example:
             >>> self = ResultAnalysis.demo()
             >>> param = 'param2'
-            >>> self.abalation_groups(param)
+            >>> self.abaltion_groups(param)
         """
         if not ub.iterable(param_group):
             param_group = [param_group]
@@ -604,7 +604,7 @@ class ResultAnalysis(ub.NiceRepr):
         print(results.get_best_result(metric="score", mode="min").config)
         raise NotImplementedError
 
-    def abalate(self, param_group, metrics=None, use_openskill='auto'):
+    def ablate(self, param_group, metrics=None, use_openskill='auto'):
         """
         TODO:
             rectify with test-group
@@ -613,12 +613,12 @@ class ResultAnalysis(ub.NiceRepr):
             >>> self = ResultAnalysis.demo(100)
             >>> param = 'param2'
             >>> # xdoctest: +REQUIRES(module:openskill)
-            >>> self.abalate(param)
+            >>> self.ablate(param)
 
             >>> self = ResultAnalysis.demo()
             >>> param_group = ['param2', 'param3']
             >>> # xdoctest: +REQUIRES(module:openskill)
-            >>> self.abalate(param_group)
+            >>> self.ablate(param_group)
         """
         if self.table is None:
             self.table = self.build_table()
@@ -718,6 +718,9 @@ class ResultAnalysis(ub.NiceRepr):
             )
             print(pd.DataFrame([pd.Series(pos_delta).describe().T]))
         return scored_obs
+
+    abalation_groups = abaltion_groups
+    abalate = ablate
 
     def test_group(self, param_group, metric_key):
         """
