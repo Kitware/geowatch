@@ -1896,7 +1896,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame2['change_weights'] = change_weights.clip(0, None)
 
         pixelwise_truth_keys = [
-            'change', 'class_idxs',
+            'change', 'class_idxs', 'class_ohe',
             'saliency', 'class_weights',
             'saliency_weights', 'change_weights',
             'output_weights',
@@ -1924,7 +1924,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # Augment the truth rasters in the same way
                     data = frame_item.get(key, None)
                     if data is not None:
-                        frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
+                        if key == 'class_ohe':
+                            frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-3, -2])
+                        else:
+                            frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
                 for key in coord_truth_keys:
                     # Augment the truth coordinates in the same way
                     data = frame_item.get(key, None)
@@ -2851,6 +2854,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 generic_frame_weight
             )
             frame_item['class_idxs'] = frame_cidxs
+            frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
             frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
         if wants_saliency_sseg:
             task_frame_weight = (
@@ -3468,10 +3472,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             for mode_key, im_mode in frame['modes'].items():
                 frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
             label_keys = [
-                'class_idxs', 'saliency', 'change'
+                'class_idxs', 'class_ohe', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights',
-                'output_weights',
-                'box_ltrb',
+                'output_weights', 'box_ltrb',
                 # 'box_weights', 'box_tids', 'box_cidxs',
             ]
             for key in label_keys:
