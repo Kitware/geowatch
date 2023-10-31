@@ -4,12 +4,16 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.11.0 - Released 2023-11-xx
+## Version 0.11.1 - Released 2023-11-xx
 
 ### Added
 * mlops can now make symlinks to results nodes by region and param-hashids 
+
 * Ability to draw batches at predict time for debugging.
+
 * Add `channel_dropout` to KWCocoVideoDataset
+
+* Added environment variables (e.g. `PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY`) and parameters in ProcessContext to disable telemetry
 
 ### Changed
 * Batch outputs weights are new members of a frame item and are factored into
@@ -23,6 +27,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Dino and Depth Site Validation now write reasons for its decisions to site
   models and summaries.
+
+* MLops updates to handle results ingested from smartflow
+
+
+### Fixed
+* SAM features can now be run on toydata
+
+* Fixed minor issues in utilities
 
 
 ## Version 0.10.0 - Released 2023-10-01

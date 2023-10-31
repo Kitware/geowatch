@@ -269,7 +269,7 @@ class PolygonEvaluation(ProcessNode):
     in_paths = {
         'true_region_dpath',
         'true_site_dpath',
-        'sites_fpath',
+        'sites_fpath',  # bad name, this is site-coercable
     }
 
     out_paths = {
@@ -1294,6 +1294,11 @@ def make_smart_pipeline(name):
         >>> dag = make_smart_pipeline('bas_depth_vali')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
+
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('dzyne_sv_only')
+        >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
     """
     from watch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial
@@ -1325,11 +1330,96 @@ def make_smart_pipeline(name):
                                                depth_validation=True,
                                                site_crops=False, with_acsc=False),
     }
-    make_nodes = node_makers[name]
-    nodes = make_nodes()
+
+    if name == 'dzyne_sv_only':
+        nodes = dzyne_sv_only_pipeline()
+    else:
+        make_nodes = node_makers[name]
+        nodes = make_nodes()
     dag = PipelineDAG(nodes)
     dag.build_nx_graphs()
     return dag
+
+
+def dzyne_sv_only_pipeline():
+    r"""
+
+    Demo Schedule Evaluate Inovcation:
+
+        HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+
+        python -m watch.mlops.schedule_evaluation --params="
+            pipeline: dzyne_sv_only
+            matrix:
+                sv_depth_score.input_region:
+                    $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KR_R002.geojson
+                    # $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CN_C500.geojson
+                    # $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CO_C501.geojson
+                    # $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KW_C501.geojson
+                sv_depth_score.model_fpath:
+                    - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+                    # - $DVC_EXPT_DPATH/models/depth_pcd/model3.h5
+                sv_depth_filter.threshold:
+                    - 0.1
+                    # - 0.2
+                sv_poly_eval.true_region_dpath:  $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_truth/region_models
+                sv_poly_eval.true_site_dpath:  $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models
+                pre_poly_eval.true_region_dpath:  $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_truth/region_models
+                pre_poly_eval.true_site_dpath:  $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models
+
+            submatrices:
+                # For each region, pair it with the appropriate input kwcoco
+
+                - sv_depth_score.input_region: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KR_R002.geojson
+                  sv_depth_filter.input_sites: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KR_R002
+                  pre_poly_eval.sites_fpath: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KR_R002
+                  sv_depth_score.input_kwcoco: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/KR_R002/imgonly-KR_R002-rawbands-small.kwcoco.zip
+
+                - sv_depth_score.input_region: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CN_C500.geojson
+                  sv_depth_filter.input_sites: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CN_C500
+                  pre_poly_eval.sites_fpath: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CN_C500
+                  sv_depth_score.input_kwcoco: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/CN_C000/imgonly-CN_C000-rawbands-small.kwcoco.zip
+
+                - sv_depth_score.input_region: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CO_C501.geojson
+                  sv_depth_filter.input_sites: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CO_C501
+                  pre_poly_eval.sites_fpath: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/CO_C501
+                  sv_depth_score.input_kwcoco: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/CO_C001/imgonly-CO_C001-rawbands-small.kwcoco.zip
+
+                - sv_depth_score.input_region: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KW_C501.geojson
+                  sv_depth_filter.input_sites: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KW_C501
+                  pre_poly_eval.sites_fpath: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KW_C501
+                  sv_depth_score.input_kwcoco: $HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD/KW_C001/imgonly-KW_C001-rawbands-small.kwcoco.zip
+
+            " \
+            --root_dpath="$DVC_EXPT_DPATH/_test_dzyne_sv_only" \
+            --devices="0,1" --tmux_workers=8 \
+            --backend=tmux --queue_name "_test_dzyne_sv_only" \
+            --skip_existing=0 \
+            --run=0
+    """
+    nodes = {}
+
+    # Three nodes: crop, score, filter, evaluate
+
+    score_node = nodes['sv_depth_score'] = SV_DepthPredict()
+    filter_node = nodes['sv_depth_filter'] = SV_DepthFilter()
+    eval_node = nodes['sv_poly_eval'] = PolygonEvaluation(name='sv_poly_eval')
+
+    # Connect the scored output of the predictor to the input of the filter
+    score_node.outputs['out_kwcoco'].connect(filter_node.inputs['input_kwcoco'])
+
+    # Ensure the same regions passed to scoring are also passed to filtering
+    score_node.inputs['input_region'].connect(filter_node.inputs['input_region'])
+
+    # Add an evaluation step after bas validation
+    filter_node.outputs['output_sites_dpath'].connect(eval_node.inputs['sites_fpath'])
+
+    # This adds a dummy node for pre-evaluation. Connections are not working
+    # correctly, so they are hacked in the submatrix.
+    nodes['pre_poly_eval'] = PolygonEvaluation(name='pre_poly_eval')
+
+    return nodes
 
 
 # from xdev import profile  # NOQA

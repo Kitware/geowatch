@@ -1,6 +1,8 @@
 """
 Add NaN parsing to normal ijson pure-python parsing backend.
 
+This is not RFC 8259, but RFC 8259 is wrong. :Skinner Out Of Touch meme:.
+
 References:
     https://github.com/ICRAR/ijson/issues/33
 

@@ -20,10 +20,9 @@ def get_cpu_info():
 
 
 def get_mem_info():
-    import ubelt as ub
     import psutil
     svmem_info = psutil.virtual_memory()
-    mem_info = ub.dzip(svmem_info._fields, svmem_info)
+    mem_info = dict(zip(svmem_info._fields, svmem_info))
     return mem_info
 
 

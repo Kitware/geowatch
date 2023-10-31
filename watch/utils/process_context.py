@@ -1,9 +1,20 @@
+"""
+Defines the :class:`ProcessContext` object, which is what mlops expects jobs to
+be wrapped in.
+
+TODO:
+    - [ ] Make "most" telemetry opt-in
+"""
 import platform
 import socket
 import sys
 import os
 import ubelt as ub
 import uuid
+from kwutil import util_environ
+
+PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY = util_environ.envflag('PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY', default=False)
+PROCESS_CONTEXT_DISABLE_MOST_TELEMETRY = util_environ.envflag('PROCESS_CONTEXT_DISABLE_MOST_TELEMETRY', default=False)
 
 
 class ProcessContext:
@@ -30,24 +41,64 @@ class ProcessContext:
         type (str): The type of this process
             (usually keep the default of process)
 
+        request_all_telemetry (bool):
+            if False, telemetry is disabled. This is forced to False if
+            PROCESS_CONTEXT_DISABLE_MOST_TELEMETRY is in the environment.
+
+        request_most_telemetry (bool):
+            if False, telemetry is disabled. This is forced to False if
+            PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY is in the environment.
+
+    Note:
+        This module provides telemetry, which records user-identifiable
+        information. While useful, it does raise ethical concerns about user
+        privacy, and the people running this code have a right to know about it
+        and opt out. In the future we will change our policy to opt-in, but for
+        system stability, we are not changing defaults.
+
+    Note:
+        There are two levels of telemetry.
+
+        Enviornment telemetry. These are things like the machine the code was
+        run on. Use PROCESS_CONTEXT_DISABLE_MOST_TELEMETRY=0 to opt-out.
+
+        The start / stop / sys.argv / config objects are necessary for mlops to
+        do anything. But these can leak information by containing system paths.
+        Emissions is also in this category. Use
+        PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY to opt out.
+
     CommandLine:
         xdoctest -m watch.utils.process_context ProcessContext
 
     Example:
         >>> from watch.utils.process_context import *
+        >>> import torch
+        >>> import rich
+        >>> device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
         >>> # Adding things like disk info an tracking emission usage
         >>> self = ProcessContext(track_emissions='offline')
-        >>> obj = self.start().stop()
+        >>> obj1 = self.start().stop()
         >>> self.add_disk_info('.')
-        >>> import torch
-        >>> if torch.cuda.is_available():
-        >>>     device = torch.device(0)
-        >>>     self.add_device_info(device)
-        >>> print('obj = {}'.format(ub.urepr(obj, nl=3)))
+        >>> self.add_device_info(device)
+        >>> #
+        >>> # Telemetry can be mostly disabled
+        >>> self = ProcessContext(track_emissions='offline', request_most_telemetry=False)
+        >>> obj2 = self.start().stop()
+        >>> self.add_disk_info('.')
+        >>> self.add_device_info(device)
+        >>> # Telemetry can be completely disabled
+        >>> self = ProcessContext(track_emissions='offline', request_all_telemetry=False)
+        >>> obj3 = self.start().stop()
+        >>> self.add_disk_info('.')
+        >>> self.add_device_info(device)
+        >>> rich.print('full_telemetry = {}'.format(ub.urepr(obj1, nl=3)))
+        >>> rich.print('some_telemetry = {}'.format(ub.urepr(obj2, nl=3)))
+        >>> rich.print('no_telemetry = {}'.format(ub.urepr(obj3, nl=3)))
     """
 
     def __init__(self, name=None, type='process', args=None, config=None,
-                 extra=None, track_emissions=False):
+                 extra=None, track_emissions=False, request_all_telemetry=True,
+                 request_most_telemetry=True):
         if args is None:
             args = sys.argv
         else:
@@ -78,6 +129,21 @@ class ProcessContext:
         self.emissions_tracker = None
         self._emission_backend = 'auto'
 
+        if PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY:
+            request_all_telemetry = 0
+        else:
+            self.enable_all_telemetry = request_all_telemetry
+
+        if PROCESS_CONTEXT_DISABLE_MOST_TELEMETRY:
+            request_most_telemetry = 0
+        else:
+            self.enable_most_telemetry = request_most_telemetry
+
+        if not self.enable_all_telemetry:
+            self.enable_most_telemetry = 0
+            self.properties.pop('config')
+            self.properties.pop('args')
+
     def write_invocation(self, invocation_fpath):
         """
         Write a helper file that contains a locally reproducable invocation of
@@ -97,6 +163,8 @@ class ProcessContext:
         return timestamp
 
     def _hostinfo(self):
+        if not self.enable_most_telemetry:
+            return {}
         return {
             "host": socket.gethostname(),
             "user": ub.Path.home().name,
@@ -105,6 +173,8 @@ class ProcessContext:
         }
 
     def _osinfo(self):
+        if not self.enable_most_telemetry:
+            return {}
         (
             uname_system,
             _,
@@ -121,12 +191,16 @@ class ProcessContext:
         }
 
     def _pyinfo(self):
+        if not self.enable_most_telemetry:
+            return {}
         return {
             "py_impl": platform.python_implementation(),
             "py_version": sys.version.replace("\n", ""),
         }
 
     def _meminfo(self):
+        if not self.enable_most_telemetry:
+            return {}
         import psutil
 
         # TODO: could collect memory info at start and stop and intermediate
@@ -138,6 +212,8 @@ class ProcessContext:
         }
 
     def _cpuinfo(self):
+        if not self.enable_most_telemetry:
+            return {}
         import cpuinfo
 
         _cpu_info = cpuinfo.get_cpu_info()
@@ -147,6 +223,8 @@ class ProcessContext:
         return cpu_info
 
     def _machine(self):
+        if not self.enable_most_telemetry:
+            return {'telemetry_disabled': True}
         return ub.dict_union(
             self._hostinfo(),
             self._meminfo(),
@@ -156,6 +234,8 @@ class ProcessContext:
         )
 
     def start(self):
+        if not self.enable_all_telemetry:
+            return self
         self.properties.update({
             "machine": self._machine(),
             "start_timestamp": self._timestamp(),
@@ -167,10 +247,11 @@ class ProcessContext:
         return self
 
     def stop(self):
-        self.properties["stop_timestamp"] = self._timestamp()
-        start_time = ub.timeparse(self.properties["start_timestamp"])
-        stop_time = ub.timeparse(self.properties["stop_timestamp"])
-        self.properties["duration"] = str(stop_time - start_time)
+        if self.enable_all_telemetry:
+            self.properties["stop_timestamp"] = self._timestamp()
+            start_time = ub.timeparse(self.properties["start_timestamp"])
+            stop_time = ub.timeparse(self.properties["stop_timestamp"])
+            self.properties["duration"] = str(stop_time - start_time)
         if self.emissions_tracker is not None:
             try:
                 self._stop_emissions_tracker()
@@ -185,6 +266,8 @@ class ProcessContext:
         self.stop()
 
     def _start_emissions_tracker(self):
+        if not self.enable_all_telemetry:
+            return
 
         emissions_tracker = None
 
@@ -268,9 +351,13 @@ class ProcessContext:
         """
         Add information about a torch device that was used in this process.
 
+        Does nothing if telemetry is disabled.
+
         Args:
             device (torch.device): torch device to add info about
         """
+        if not self.enable_most_telemetry:
+            return
         import torch
         try:
             device_info = {
@@ -298,7 +385,11 @@ class ProcessContext:
     def add_disk_info(self, path):
         """
         Add information about a storage disk that was used in this process
+
+        Does nothing if telemetry is disabled.
         """
+        if not self.enable_most_telemetry:
+            return
         try:
             from watch.utils import util_hardware
             # Get information about disk used in this process
