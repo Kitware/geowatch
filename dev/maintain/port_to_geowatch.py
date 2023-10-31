@@ -62,7 +62,7 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
 
         cd $HOME/temp/port/watch
         git fetch
-        git reset --hard origin/dev/0.10.1
+        git reset --hard origin/main
 
     """
     import ubelt as ub
@@ -72,7 +72,7 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
     repo_dpath = module_dpath.parent
 
     # Reset to last working state
-    ub.cmd('git reset --hard origin/dev/0.10.1', cwd=repo_dpath, verbose=3)
+    ub.cmd('git reset --hard origin/main', cwd=repo_dpath, verbose=3)
 
     # Delete the old geowatch mirror
     (module_dpath).delete()
