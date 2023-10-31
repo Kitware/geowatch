@@ -1879,6 +1879,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for frame1, frame2 in ub.iter_window(frame_items, 2):
                     class_weights1 = frame1['class_weights']
                     class_weights2 = frame2['class_weights']
+                    # TODO: prefer class-ohe if available
                     class_idxs1 = frame1['class_idxs']
                     class_idxs2 = frame2['class_idxs']
                     if class_idxs2.shape != class_idxs1.shape:
@@ -1896,7 +1897,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame2['change_weights'] = change_weights.clip(0, None)
 
         pixelwise_truth_keys = [
-            'change', 'class_idxs',
+            'change', 'class_idxs', 'class_ohe',
             'saliency', 'class_weights',
             'saliency_weights', 'change_weights',
             'output_weights',
@@ -1924,7 +1925,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # Augment the truth rasters in the same way
                     data = frame_item.get(key, None)
                     if data is not None:
-                        frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
+                        if key == 'class_ohe':
+                            frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-3, -2])
+                        else:
+                            frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
                 for key in coord_truth_keys:
                     # Augment the truth coordinates in the same way
                     data = frame_item.get(key, None)
@@ -2470,6 +2474,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 'modes': mode_to_imdata,
                 'change': None,
                 'class_idxs': None,
+                'class_ohe': None,
                 'saliency': None,
                 'change_weights': None,
                 'class_weights': None,
@@ -2840,8 +2845,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
             # Postprocess (Dilate?) the truth map
-            # TODO: it would be better if the network accepted indicator vector
-            # style labels rather than integer style labels.
             for cidx, class_map in enumerate(task_target_ohe['class']):
                 # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
                 frame_cidxs[class_map > 0] = cidx
@@ -2850,7 +2853,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 task_target_weight['class'] *
                 generic_frame_weight
             )
+            # TODO: no need to pass class-cidxs if class-ohe is present.
+            # TODO: add metadata to the frame item to indicate the channel
+            # ordering of each dimension (or used xarray / named tensors when
+            # they become supported)
             frame_item['class_idxs'] = frame_cidxs
+            frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
             frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
         if wants_saliency_sseg:
             task_frame_weight = (
@@ -3150,6 +3158,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 image_id_histogram[frame_item['gid']] += 1
                 if with_class:
                     # Update pixel-level class histogram
+                    # TODO: prefer class-ohe if available
                     class_idxs = frame_item['class_idxs']
                     if class_idxs is not None:
                         item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
@@ -3468,10 +3477,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             for mode_key, im_mode in frame['modes'].items():
                 frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
             label_keys = [
-                'class_idxs', 'saliency', 'change'
+                'class_idxs', 'class_ohe', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights',
-                'output_weights',
-                'box_ltrb',
+                'output_weights', 'box_ltrb',
                 # 'box_weights', 'box_tids', 'box_cidxs',
             ]
             for key in label_keys:

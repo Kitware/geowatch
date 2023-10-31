@@ -1609,7 +1609,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         frame_sensor_chan_tokens = einops.rearrange(x2, '1 hs ws f -> hs ws f')
         return frame_sensor_chan_tokens, space_shape
 
-    def _head_loss(self, head_key, head_logits, head_truth, head_weights):
+    def _head_loss(self, head_key, head_logits, head_truth, head_weights, head_encoding):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
@@ -1628,7 +1628,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_weights_input = head_weights_input[:, 0]
         elif criterion.target_encoding == 'onehot':
             # Note: 1HE is much easier to work with
-            head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
+            if head_encoding == 'index':
+                head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
+            elif head_encoding == 'ohe':
+                head_true_ohe = head_truth
+            else:
+                raise KeyError(head_encoding)
             head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
         else:
             raise KeyError(criterion.target_encoding)
@@ -1645,18 +1650,23 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     def _build_item_loss_parts(self, item, resampled_logits):
         item_loss_parts = {}
         item_truths = {}
+        item_encoding = {}
         if self.hparams.decouple_resolution:
             for head_key, head_logits in resampled_logits.items():
 
                 if head_key == 'class':
+                    truth_encoding = 'index'
+                    # TODO: prefer class-ohe if available
                     truth_label_key = 'class_idxs'
                     truth_weight_key = 'class_weights'
                     start_idx = 0
                 elif head_key == 'saliency':
+                    truth_encoding = 'index'
                     truth_label_key = 'saliency'
                     truth_weight_key = 'saliency_weights'
                     start_idx = 0
                 elif head_key == 'change':
+                    truth_encoding = 'index'
                     truth_label_key = 'change'
                     truth_weight_key = 'change_weights'
                     start_idx = 1
@@ -1676,7 +1686,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         einops.rearrange(frame_head_logits, 'b t h w c -> (b t) c h w'),
                         [h, w], mode='bilinear', align_corners=False), 'b c h w -> b 1 h w c')
 
-                    head_loss = self._head_loss(head_key, frame_head_logits2, frame_head_truth, frame_head_weights)
+                    head_loss = self._head_loss(head_key, frame_head_logits2, frame_head_truth, frame_head_weights, truth_encoding)
                     frame_head_losses.append(head_loss)
 
                 if frame_head_losses:
@@ -1702,18 +1712,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 for key, _tensors in item_pixel_weights_list.items()
             }
             if self.global_head_weights['change']:
+                item_encoding['change'] = 'index'
                 # [B, T, H, W]
                 item_truths['change'] = torch_safe_stack([
                     frame['change'] for frame in item['frames'][1:]
                 ], item_shape=[0, 0])[None, ...]
 
             if self.global_head_weights['class']:
-                # [B, T, H, W]
+                item_encoding['class'] = 'ohe'
+                # [B, C, T, H, W]
                 item_truths['class'] = torch.stack([
-                    frame['class_idxs'] for frame in item['frames']
+                    frame['class_ohe'] for frame in item['frames']
                 ])[None, ...]
 
             if self.global_head_weights['saliency']:
+                item_encoding['saliency'] = 'index'
                 item_truths['saliency'] = torch.stack([
                     frame['saliency'] for frame in item['frames']
                 ])[None, ...]
@@ -1721,8 +1734,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # Compute criterion loss for each head
             for head_key, head_logits in resampled_logits.items():
                 head_truth = item_truths[head_key]
+                head_truth_encoding = item_encoding[head_key]
                 head_weights = item_weights[head_key]
-                head_loss = self._head_loss(head_key, head_logits, head_truth, head_weights)
+                head_loss = self._head_loss(head_key, head_logits, head_truth, head_weights, head_truth_encoding)
                 item_loss_parts[head_key] = head_loss
 
         return item_loss_parts, item_truths
