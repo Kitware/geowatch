@@ -1655,14 +1655,17 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             for head_key, head_logits in resampled_logits.items():
 
                 if head_key == 'class':
+                    truth_encoding = 'index'
                     truth_label_key = 'class_idxs'
                     truth_weight_key = 'class_weights'
                     start_idx = 0
                 elif head_key == 'saliency':
+                    truth_encoding = 'index'
                     truth_label_key = 'saliency'
                     truth_weight_key = 'saliency_weights'
                     start_idx = 0
                 elif head_key == 'change':
+                    truth_encoding = 'index'
                     truth_label_key = 'change'
                     truth_weight_key = 'change_weights'
                     start_idx = 1
@@ -1682,7 +1685,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         einops.rearrange(frame_head_logits, 'b t h w c -> (b t) c h w'),
                         [h, w], mode='bilinear', align_corners=False), 'b c h w -> b 1 h w c')
 
-                    head_loss = self._head_loss(head_key, frame_head_logits2, frame_head_truth, frame_head_weights)
+                    head_loss = self._head_loss(head_key, frame_head_logits2, frame_head_truth, frame_head_weights, truth_encoding)
                     frame_head_losses.append(head_loss)
 
                 if frame_head_losses:
