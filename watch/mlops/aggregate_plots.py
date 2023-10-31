@@ -143,13 +143,29 @@ class ParamPlotter:
             vantage['name'] = name
         plotter.vantage_points = vantage_points
 
+    def plot_resources(plotter):
+        import rich
+        from watch.utils import util_kwplot
+        agg = plotter.agg
+        resource_summary_df = agg.resource_summary_table()
+        rich.print(resource_summary_df.to_string())
+        resource_summary_df
+
+        table = resource_summary_df
+        table_title = 'resources'
+        table_fpath = plotter.agg_group_dpath / f'{table_title}.png'
+        table_style = table.style.set_caption(table_title)
+        util_kwplot.dataframe_table(table_style, table_fpath, title=table_title)
+
     def plot_all(plotter):
         vantage = plotter.vantage_points[0]
         plot_config = plotter.plot_config
 
         from kwutil.util_progress import ProgressManager
+        import rich
         pman = ProgressManager()
 
+        rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
         with pman:
             if plot_config.get('plot_overviews', 1):
                 for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):

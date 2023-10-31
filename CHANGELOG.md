@@ -8,8 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * mlops can now make symlinks to results nodes by region and param-hashids 
+
 * Ability to draw batches at predict time for debugging.
+
 * Add `channel_dropout` to KWCocoVideoDataset
+
+* Added environment variables (e.g. `PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY`) and parameters in ProcessContext to disable telemetry
 
 ### Changed
 * Batch outputs weights are new members of a frame item and are factored into

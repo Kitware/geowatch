@@ -630,7 +630,7 @@ class AggregatorAnalysisMixin:
                     k: ub.udict(v) - varied_param_names
                     for k, v in top_param_lut.items()}
 
-                non_varied_params = ub.udict.union(*top_nonvaried_param_lut.values())
+                non_varied_params = ub.udict().union(*top_nonvaried_param_lut.values())
                 rich.print('Varied Basis: = {}'.format(ub.urepr(varied, nl=2)))
                 rich.print('Constant Params: {}'.format(ub.urepr(non_varied_params, nl=2)))
                 rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
