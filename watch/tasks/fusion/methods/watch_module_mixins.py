@@ -200,6 +200,7 @@ class WatchModuleMixins:
                     frame['change_weights'] = rng.rand(H0, W0)
                     frame['change_output_dims'] = (H0, W0)
 
+                # TODO: allow class-ohe xor class-idxs to be missing
                 frame['class_idxs'] = rng.randint(low=0, high=C - 1, size=(H0, W0))
                 frame['class_ohe'] = np.eye(C)[np.random.choice(C, H0 * W0)].reshape(H0, W0, C)
                 frame['class_weights'] = rng.rand(H0, W0)

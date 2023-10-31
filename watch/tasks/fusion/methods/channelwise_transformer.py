@@ -1656,6 +1656,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
                 if head_key == 'class':
                     truth_encoding = 'index'
+                    # TODO: prefer class-ohe if available
                     truth_label_key = 'class_idxs'
                     truth_weight_key = 'class_weights'
                     start_idx = 0

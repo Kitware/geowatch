@@ -234,6 +234,7 @@ class BatchVisualizationBuilder:
         truth_keys = []
         weight_keys = []
         if builder.requested_tasks['class']:
+            # TODO: prefer class-ohe if available
             truth_keys.append('class_idxs')
             weight_keys.append('class_weights')
         if builder.requested_tasks['saliency']:
@@ -601,6 +602,7 @@ class BatchVisualizationBuilder:
 
         if builder.draw_truth:
             # Create the true class label overlay
+            # TODO: prefer class-ohe if available
             overlay_key = 'class_idxs'
             if overlay_key in truth_overlay_keys and builder.requested_tasks['class']:
                 class_idxs = frame_truth.get(overlay_key, None)
