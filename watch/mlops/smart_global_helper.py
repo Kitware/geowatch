@@ -138,6 +138,17 @@ class SmartGlobalHelper:
         'params.bas_poly.boundary_region',
     ]
 
+    LABEL_MAPPINGS = {
+        'region_id': 'Region ID',
+        'metrics.sc_poly_eval.bas_ffpa': 'FFPA',
+        'metrics.sc_poly_eval.bas_faa_f1': 'BAS-FAA-F1',
+        'sc_poly_eval.bas_ffpa': 'FFPA',
+        'sc_poly_eval.bas_faa_f1': 'BAS-FAA-F1',
+
+        'metrics.sc_poly_eval.bas_f1': 'BAS-F1',
+        'metrics.sc_poly_eval.sc_macro_f1': 'AC-F1 (macro)',
+    }
+
     def shared_palettes(self, macro_table):
         """
         For each key in a hard code set (relevant to SMART), assign a

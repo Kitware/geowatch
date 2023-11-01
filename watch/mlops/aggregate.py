@@ -325,9 +325,8 @@ def main(cmdline=True, **kwargs):
     if config.plot_params['enabled']:
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
-                from watch.mlops import aggregate_plots
                 plot_config = ub.udict(config.plot_params) - {'enabled'}
-                aggregate_plots.build_all_param_plots(agg, rois, plot_config)
+                agg.plot_all(rois, plot_config)
 
     if config.inspect:
         agg = eval_type_to_aggregator['bas_pxl_eval']
@@ -859,6 +858,137 @@ class AggregatorAnalysisMixin:
         import rich
         resource_summary_df = agg.resource_summary_table()
         rich.print(resource_summary_df.to_string())
+
+    def make_summary_analysis(subagg, config):
+        output_dpath = ub.Path(config['output_dpath']) / 'aggregate'
+        agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
+        agg_group_dpath = agg_group_dpath.ensuredir()
+
+        import rich
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+        # Given these set of A/B values, visualize each region
+        for region_id, group in ub.ProgIter(list(subagg.index.groupby('region_id')), desc='Inspect Region'):
+            group_agg = subagg.filterto(index=group.index)
+            for id, row in group_agg.index.iterrows():
+                ...
+                inspect_node(subagg, id, row, group_agg, agg_group_dpath)
+
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+    def make_result_node_symlinks(agg):
+        """
+        Builds symlinks to results node paths based on region and param
+        hashids.
+        """
+        assert agg.output_dpath is not None
+        assert agg.type is not None
+        base_dpath = (agg.output_dpath / 'param_links' / agg.type)
+        byregion_dpath = (base_dpath / 'by_region').ensuredir()
+        byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
+        print('base_dpath = {}'.format(ub.urepr(base_dpath, nl=1)))
+        print('byregion_dpath = {}'.format(ub.urepr(byregion_dpath, nl=1)))
+        print('byparamid_dpath = {}'.format(ub.urepr(byparamid_dpath, nl=1)))
+        grouped = agg.table.groupby(['param_hashid', 'region_id'])
+        for group_vals, group in ub.ProgIter(list(grouped), desc='symlink nodes'):
+            # handle the fact that there can be multiple runs of the same param hashid.
+            # TODO: sort the groups in a consistent way if possible
+            for group_idx, row in enumerate(group.to_dict('records'), start=1):
+                region_id = row['region_id']
+                param_hashid = row['param_hashid']
+                version_id = f'version_{group_idx}'
+                eval_fpath = ub.Path(row['fpath'])
+                node_dpath = eval_fpath.parent
+                node_byregion_dpath = (byregion_dpath / region_id / param_hashid / version_id)
+                node_byparamid_dpath = (byparamid_dpath / param_hashid / region_id / version_id)
+                node_byregion_dpath.parent.ensuredir()
+                node_byparamid_dpath.parent.ensuredir()
+                ub.symlink(real_path=node_dpath, link_path=node_byparamid_dpath, overwrite=1)
+                ub.symlink(real_path=node_dpath, link_path=node_byregion_dpath, overwrite=1)
+
+        import rich
+        rich.print(f'Made Param Links: [link={base_dpath}]{base_dpath}[/link]')
+
+    def build_plotter(agg, rois=None, plot_config=None):
+        if rois is None:
+            ...
+        if plot_config is None:
+            plot_config = {}
+        from watch.mlops import aggregate_plots
+        # agg.macro_key_to_regions
+        plotter = aggregate_plots.build_plotter(agg, rois, plot_config)
+        return plotter
+
+    def plot_all(agg, rois=None, plot_config=None):
+        plotter = agg.build_plotter(rois, plot_config)
+        plotter.plot_all()
+
+    def _wip_build_per_region_variance_tables(agg):
+        from watch.utils import util_pandas
+        table = util_pandas.DataFrame(agg.table)
+
+        def stats_aggregate(subgroup, metric_keys):
+            from watch.utils import util_dotdict
+            metric_description = subgroup[metric_keys].describe()
+            stats_row = {}
+            for key, stats in metric_description.T.iterrows():
+                stats = ub.udict(stats.to_dict())
+                count = stats.pop('count')
+                stats = stats - {'50%', '75%', '25%'}
+                keystats = util_dotdict.DotDict(stats).add_prefix(key)
+                stats_row.update(keystats)
+                stats_row['count'] = count
+            return stats_row
+
+        group_rows = []
+        metric_keys = ub.oset(list(agg.primary_metric_cols + agg.display_metric_cols))
+
+        for _, subgroup in table.groupby(['region_id']):
+            region_id = subgroup.iloc[0]['region_id']
+            index_row = ub.udict({'region_id': region_id})
+            stats_row = stats_aggregate(subgroup, metric_keys)
+            stats_row = index_row | stats_row
+            group_rows.append(stats_row)
+
+        group_stats = util_pandas.DataFrame(group_rows)
+        group_stats_show, col_mapping = util_pandas.pandas_shorten_columns(group_stats, min_length=2, return_mapping=True)
+        # rich.print(group_stats_show)
+
+        metrics_with_std = []
+        for srow in group_stats.to_dict('records'):
+            group_count = None
+            for metric in metric_keys:
+                mean = srow[metric + '.mean']
+                std = srow[metric + '.std']
+                count = srow['count']
+                region_id = srow['region_id']
+                if math.isnan(mean):
+                    cell = '-'
+                else:
+                    if count == 1:
+                        cell = f'{mean:0.2f}'
+                    else:
+                        cell = f'{mean:0.2f}±{std:0.2f}'
+                if group_count is None:
+                    # Only add count once
+                    group_count = count
+                    metrics_with_std.append({
+                        'cell': count,
+                        'metric': 'count',
+                        'region_id': region_id,
+                    })
+                else:
+                    assert group_count == count
+                metrics_with_std.append({
+                    'cell': cell,
+                    'metric': metric,
+                    'region_id': region_id,
+                })
+        longform = util_pandas.DataFrame(metrics_with_std)
+        all_metric_table = longform.pivot(
+            index=['region_id'], columns=['metric'], values='cell')
+        all_metric_table = util_pandas.pandas_shorten_columns(all_metric_table, min_length=0)
+        return all_metric_table
 
 
 class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
@@ -1562,56 +1692,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             agg.macro_key_to_regions[macro_key] = regions_of_interest
             agg.region_to_tables[macro_key] = macro_table
             return macro_table
-
-    def make_summary_analysis(subagg, config):
-        output_dpath = ub.Path(config['output_dpath']) / 'aggregate'
-        agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
-        agg_group_dpath = agg_group_dpath.ensuredir()
-
-        import rich
-        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
-
-        # Given these set of A/B values, visualize each region
-        for region_id, group in ub.ProgIter(list(subagg.index.groupby('region_id')), desc='Inspect Region'):
-            group_agg = subagg.filterto(index=group.index)
-            for id, row in group_agg.index.iterrows():
-                ...
-                inspect_node(subagg, id, row, group_agg, agg_group_dpath)
-
-        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
-
-    def make_result_node_symlinks(agg):
-        """
-        Builds symlinks to results node paths based on region and param
-        hashids.
-        """
-        assert agg.output_dpath is not None
-        assert agg.type is not None
-        base_dpath = (agg.output_dpath / 'param_links' / agg.type)
-        byregion_dpath = (base_dpath / 'by_region').ensuredir()
-        byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
-        print('base_dpath = {}'.format(ub.urepr(base_dpath, nl=1)))
-        print('byregion_dpath = {}'.format(ub.urepr(byregion_dpath, nl=1)))
-        print('byparamid_dpath = {}'.format(ub.urepr(byparamid_dpath, nl=1)))
-        grouped = agg.table.groupby(['param_hashid', 'region_id'])
-        for group_vals, group in ub.ProgIter(list(grouped), desc='symlink nodes'):
-            # handle the fact that there can be multiple runs of the same param hashid.
-            # TODO: sort the groups in a consistent way if possible
-            for group_idx, row in enumerate(group.to_dict('records'), start=1):
-                region_id = row['region_id']
-                param_hashid = row['param_hashid']
-                version_id = f'version_{group_idx}'
-                eval_fpath = ub.Path(row['fpath'])
-                node_dpath = eval_fpath.parent
-                node_byregion_dpath = (byregion_dpath / region_id / param_hashid / version_id)
-                node_byparamid_dpath = (byparamid_dpath / param_hashid / region_id / version_id)
-                node_byregion_dpath.parent.ensuredir()
-                node_byparamid_dpath.parent.ensuredir()
-                ub.symlink(real_path=node_dpath, link_path=node_byparamid_dpath, overwrite=1)
-                ub.symlink(real_path=node_dpath, link_path=node_byregion_dpath, overwrite=1)
-
-        import rich
-        rich.print(f'Made Param Links: [link={base_dpath}]{base_dpath}[/link]')
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):

@@ -91,6 +91,54 @@ class DataFrame(pd.DataFrame):
         new_labels = list(resolved_labels) + list(remain)
         return self.reindex(labels=new_labels, axis=axis)
 
+    def _orig_groupby(self, by=None, **kwargs):
+        return super().groupby(by=by, **kwargs)
+
+    def groupby(self, by=None, **kwargs):
+        """
+        Fixed groupby behavior so length-one arguments are handled correctly
+
+        Args:
+            df (DataFrame):
+            ** kwargs: groupby kwargs
+
+        Example:
+            >>> from watch.utils import util_pandas
+            >>> df = util_pandas.DataFrame({
+            >>>     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+            >>>     'Color': ['Blue', 'Blue', 'Blue', 'Yellow'],
+            >>>     'Max Speed': [380., 370., 24., 26.]
+            >>>     })
+            >>> new1 = dict(list(df.groupby(['Animal', 'Color'])))
+            >>> new2 = dict(list(df.groupby(['Animal'])))
+            >>> new3 = dict(list(df.groupby('Animal')))
+            >>> assert sorted(new1.keys())[0] == ('Falcon', 'Blue')
+            >>> assert sorted(new3.keys())[0] == 'Falcon'
+            >>> # This is the case that is fixed.
+            >>> assert sorted(new2.keys())[0] == ('Falcon',)
+        """
+        groups = super().groupby(by=by, **kwargs)
+        fixed_groups = _fix_groupby(groups)
+        return fixed_groups
+
+    def match_columns(self, pat, hint='glob'):
+        """
+        Find matching columns in O(N)
+        """
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(pat, hint=hint)
+        found = [c for c in self.columns if pat.match(c)]
+        return found
+
+    def search_columns(self, pat, hint='glob'):
+        """
+        Find matching columns in O(N)
+        """
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(pat, hint=hint)
+        found = [c for c in self.columns if pat.search(c)]
+        return found
+
 
 def pandas_reorder_columns(df, columns):
     # Use DataFrame.reorder instead

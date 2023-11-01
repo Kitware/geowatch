@@ -940,3 +940,16 @@ def time_sample_arcplot(time_samples, yloc=1, ax=None):
 
     # ax.set_xlim(0, maxx)
     # ax.set_ylim(0, 3)
+
+
+def color_new_labels(label_to_color, labels):
+    import kwimage
+    # Given an existing set of colors, add colors to things without it.
+    missing = {k for k, v in label_to_color.items() if v is None}
+    has_color = set(label_to_color) - missing
+    missing |= set(labels) - has_color
+    existing_colors = list((ub.udict(label_to_color) & has_color).values())
+    new_colors = kwimage.Color.distinct(len(missing), existing=existing_colors, legacy=False)
+    new_label_to_color = label_to_color.copy()
+    new_label_to_color.update(dict(zip(missing, new_colors)))
+    return new_label_to_color

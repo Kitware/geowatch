@@ -1514,6 +1514,8 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
                 'row contains columns {}').format(missing))
         columns.update(row.keys())
 
+    cannonical_nan = float('nan')
+
     # Build up the set of unique values for each column
     from collections import Counter
     varied_counts = ub.ddict(Counter)
@@ -1522,8 +1524,17 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
             value = row.get(key, default)
             if isinstance(value, list):
                 value = tuple(value)
-            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
-                continue
+
+            if isinstance(value, numbers.Number) and math.isnan(value):
+                if dropna:
+                    continue
+                else:
+                    # Always use a single nan value such that the id check
+                    # passes. Otherwise we could end up with a dictionary that
+                    # contains multiple nan keys.
+                    # References:
+                    # .. [SO6441857] https://stackoverflow.com/questions/6441857/nans-as-key-in-dictionaries
+                    value = cannonical_nan
             varied_counts[key][value] += 1
 
     # Remove any column that does not have enough variation

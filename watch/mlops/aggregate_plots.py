@@ -47,7 +47,10 @@ def build_plotter(agg, rois, plot_config):
     plot_dpath = plot_config.get('plot_dpath', None)
     if plot_dpath is None:
         from watch.mlops.aggregate import hash_regions
-        region_hash = hash_regions(rois)
+        if rois is not None:
+            region_hash = hash_regions(rois)
+        else:
+            region_hash = 'allrois'
         # agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
         agg_group_dpath = (agg.output_dpath / (f'all_params-{region_hash}')).ensuredir()
     else:
@@ -63,8 +66,9 @@ def build_plotter(agg, rois, plot_config):
             for c in [col, resolved_col]:
                 for table in [macro_table, single_table]:
                     if table is not None:
-                        new = table[resolved_col].apply(lambda x: lut.get(x, x))
-                        table[resolved_col] = new
+                        if resolved_col in table:
+                            new = table[resolved_col].apply(lambda x: lut.get(x, x))
+                            table[resolved_col] = new
 
     vantage_points = plot_config.get('vantage_points', None)
     plotter = ParamPlotter(agg, vantage_points=vantage_points)
@@ -296,20 +300,23 @@ class ParamPlotter:
         )
         fig = kwplot.figure(fnum=2, doclf=True)
 
-        unique_regions = single_table[region_attr].unique()
-        print(f'unique_regions={unique_regions}')
-        num_regions = len(unique_regions)
-        print(f'num_regions={num_regions}')
-        if num_regions < 10:
-            colors = sns.color_palette(n_colors=num_regions)
-        else:
-            colors = kwimage.Color.distinct(num_regions, legacy=False)
-            colors = [kwimage.Color.coerce(c).adjust(saturate=-0.3, lighten=-0.1).as01()
-                      for c in kwimage.Color.distinct(num_regions, legacy=False)]
-            # c = colors[0]
-        regionid_to_color = ub.dzip(unique_regions, colors)
         snskw = {}
-        snskw['palette'] = regionid_to_color
+        if 'region_id' in plotter.param_to_palette:
+            snskw['palette']  = plotter.param_to_palette['region_id']
+        else:
+            unique_regions = single_table[region_attr].unique()
+            print(f'unique_regions={unique_regions}')
+            num_regions = len(unique_regions)
+            print(f'num_regions={num_regions}')
+            if num_regions < 10:
+                colors = sns.color_palette(n_colors=num_regions)
+            else:
+                colors = kwimage.Color.distinct(num_regions, legacy=False)
+                colors = [kwimage.Color.coerce(c).adjust(saturate=-0.3, lighten=-0.1).as01()
+                          for c in kwimage.Color.distinct(num_regions, legacy=False)]
+                # c = colors[0]
+            regionid_to_color = ub.dzip(unique_regions, colors)
+            snskw['palette'] = regionid_to_color
 
         ax = sns.scatterplot(data=single_table, x=x, y=y, hue=region_attr, legend=False, **snskw)
 
@@ -542,7 +549,14 @@ class ParamPlotter:
 
                 # Number of samples we have for each value of this parameter
                 param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
-                param_histogram = param_histogram.map_keys(str)
+                param_histogram_ = {}
+                for k, v in param_histogram.items():
+                    k = str(k)
+                    if k in param_histogram_:
+                        param_histogram_[k] += v
+                    else:
+                        param_histogram_[k] = v
+                param_histogram = param_histogram_
 
                 sub_macro_table = macro_table
 
