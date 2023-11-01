@@ -2618,6 +2618,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
+            if weight is None:
+                weight = 1.0
             poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)

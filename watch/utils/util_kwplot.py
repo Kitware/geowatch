@@ -226,6 +226,9 @@ class LabelModifier:
     """
     Registers multiple ways to relabel text on axes
 
+    TODO:
+        - [ ] Maybe rename to label manager?
+
     Example:
         >>> # xdoctest: +SKIP
         >>> import sys, ubelt
