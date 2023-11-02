@@ -1028,6 +1028,18 @@ class Palette(ub.udict):
     def sorted_keys(self):
         return self.__class__(super().sorted_keys())
 
+    def reorder(self, head=None, tail=None):
+        if head is None:
+            head = []
+        if tail is None:
+            tail = []
+        head_part = self.subdict(head)
+        tail_part = self.subdict(tail)
+        end_keys = (head_part.keys() | tail_part.keys())
+        mid_part = self - end_keys
+        new = self.__class__(head_part | mid_part | tail_part)
+        return new
+
     """
     # Do we want to offer standard pallets for small datas
 
