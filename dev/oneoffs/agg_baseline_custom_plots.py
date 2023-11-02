@@ -76,10 +76,8 @@ if 1:
     constant = ub.udict(constant).sorted_keys()
 
     varied_text = ub.urepr(varied, nl=2)
-    print(varied_text)
-
     constant_text = ub.urepr(constant, nl=2)
-    dpath = ub.Path('~').expand()
+    dpath = (ub.Path('~').expand() / 'tmp-kwc5').ensuredir()
     (dpath / 'constant_text.txt').write_text(constant_text)
     (dpath / 'varied_text.txt').write_text(varied_text)
 
@@ -88,6 +86,18 @@ if 1:
 
     kw_records = kw_cases[['region_id', 'fpath', 'metrics.sc_poly_eval.bas_f1']].to_dict('records')
     print('kw_records = {}'.format(ub.urepr(kw_records, nl=2)))
+
+    # Check for the best KW_C5001 example
+
+    df2 = agg.table
+    df2 = df2[df2['region_id'] == 'KW_C501']
+    flags = df2['params.sc_pxl.package_fpath'].str.contains('Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548')
+    df2 = df2[flags]
+    max_idx = df2['metrics.sc_poly_eval.bas_f1'].idxmax()
+
+    case = df2.loc[[max_idx]]
+    case_record = case.to_dict('records')
+    rich.print('case_record = {}'.format(ub.urepr(case_record, nl=2)))
 
 
 subagg.output_dpath = agg.output_dpath / 'baseline'
