@@ -43,7 +43,6 @@ def build_plotter(agg, rois, plot_config):
         macro_table = None
         param_to_palette = SMART_HELPER.shared_palettes(single_table)
 
-    # agg = plotter.agg
     plot_dpath = plot_config.get('plot_dpath', None)
     if plot_dpath is None:
         from watch.mlops.aggregate import hash_regions
@@ -51,16 +50,17 @@ def build_plotter(agg, rois, plot_config):
             region_hash = hash_regions(rois)
         else:
             region_hash = 'allrois'
-        # agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
-        agg_group_dpath = (agg.output_dpath / (f'all_params-{region_hash}')).ensuredir()
+        plot_dpath = (agg.output_dpath / 'plots')
     else:
-        agg_group_dpath = ub.Path(plot_dpath).ensuredir()
+        plot_dpath = ub.Path(plot_dpath)
+
+    macro_plot_dpath = (plot_dpath / (f'all_params-{region_hash}'))
 
     USE_EFFECTIVE = 1
     if USE_EFFECTIVE:
         # Relabel the resolved params to use the "effective-params"
         # instead.
-        print(f'agg.mappings={agg.mappings}')
+        # print(f'agg.mappings={agg.mappings}')
         for col, lut in agg.mappings.items():
             resolved_col = 'resolved_' + col
             for c in [col, resolved_col]:
@@ -73,13 +73,16 @@ def build_plotter(agg, rois, plot_config):
     vantage_points = plot_config.get('vantage_points', None)
     plotter = ParamPlotter(agg, vantage_points=vantage_points)
 
-    plotter.agg_group_dpath = agg_group_dpath
+    plotter.plot_dpath = plot_dpath
+    plotter.macro_plot_dpath = macro_plot_dpath
+
     plotter.param_to_palette = param_to_palette
     plotter.modifier = modifier
     plotter.macro_table = macro_table
     plotter.single_table = single_table
     plotter.rois = rois
     plotter.plot_config = plot_config
+    plotter.roi_attr = 'region_id'
     return plotter
 
 
@@ -89,7 +92,7 @@ def build_all_param_plots(agg, rois, plot_config):
     Main entry point for plotting results from an :class:`Aggregator`.
     """
     plotter = build_plotter(agg, rois, plot_config)
-    plotter.plot_all()
+    plotter.plot_requested()
 
 
 def build_special_columns(agg):
@@ -147,6 +150,18 @@ class ParamPlotter:
             vantage['name'] = name
         plotter.vantage_points = vantage_points
 
+    def plot_requested(plotter):
+        plot_config = plotter.plot_config
+
+        if plot_config.get('plot_resources', 1):
+            plotter.plot_resources()
+
+        if plot_config.get('plot_overviews', 1):
+            plotter.plot_overviews()
+
+        if plot_config.get('plot_params', 1):
+            plotter.plot_params()
+
     def plot_resources(plotter):
         import rich
         from watch.utils import util_kwplot
@@ -157,108 +172,40 @@ class ParamPlotter:
 
         table = resource_summary_df
         table_title = 'resources'
-        table_fpath = plotter.agg_group_dpath / f'{table_title}.png'
+        table_fpath = plotter.plot_dpath / f'{table_title}.png'
         table_style = table.style.set_caption(table_title)
         util_kwplot.dataframe_table(table_style, table_fpath, title=table_title)
+        rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
 
-    def plot_all(plotter):
-        vantage = plotter.vantage_points[0]
-        plot_config = plotter.plot_config
-
+    def plot_overviews(plotter):
         from kwutil.util_progress import ProgressManager
         import rich
         pman = ProgressManager()
 
-        rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
+        rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
         with pman:
-            if plot_config.get('plot_overviews', 1):
-                for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
-                    print('Plot vantage overview: ' + vantage['name'])
-                    plotter.plot_vantage_overview(vantage)
+            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
+                print('Plot vantage overview: ' + vantage['name'])
+                plotter.plot_vantage_per_region_overview(vantage)
 
-            if plot_config.get('plot_params', 1):
-                for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
-                    print('Plot vantage params: ' + vantage['name'])
-                    plotter.plot_vantage_params(vantage, pman=pman)
+                if plotter.macro_table is not None:
+                    plotter.plot_vantage_macro_overview(vantage)
 
-    def _add_sv_hack_lines(plotter, ax, table, x, y):
-        import matplotlib as mpl
+        rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
 
-        def add_arrows_to_lines(line_collection, position=None, direction='right', size=15, color=None):
-            """
-            add an arrow to a line.
+    def plot_params(plotter):
+        from kwutil.util_progress import ProgressManager
+        import rich
+        pman = ProgressManager()
 
-            line:       Line2D object
-            position:   x-position of the arrow. If None, mean of xdata is taken
-            direction:  'left' or 'right'
-            size:       size of the arrow in fontsize points
-            color:      if None, line color is taken.
+        rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
+        with pman:
+            for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
+                print('Plot vantage params: ' + vantage['name'])
+                plotter.plot_vantage_params(vantage, pman=pman)
+        rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
 
-            References:
-                .. [SO34017866] https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot-with-matplotlib
-            """
-            if color is None:
-                color = line_collection.get_color()
-
-            for segment in line_collection.get_segments():
-                xdata = segment[:, 0]
-                ydata = segment[:, 1]
-
-                if position is None:
-                    position = xdata.mean()
-                # find closest index
-                import numpy as np
-                start_ind = np.argmin(np.absolute(xdata - position))
-                start_ind = 0
-                if direction == 'right':
-                    end_ind = start_ind + 1
-                else:
-                    end_ind = start_ind - 1
-
-                line_collection.axes.annotate(
-                    '',
-                    xytext=(xdata[start_ind], ydata[start_ind]),
-                    xy=(xdata[end_ind], ydata[end_ind]),
-                    arrowprops=dict(arrowstyle="->", color=color),
-                    size=size, zorder=0,
-                )
-        # Hack to compare before/after SV
-        # import matplotlib as mpl
-        # ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
-        # sns.scatterplot(data=single_table, x=x_prev, y=y_prev, ax=ax, legend=False)
-        if 'sv_poly_eval' in x.split('.'):
-            print('SV HACK!!!')
-            x_prev = x.replace('sv_poly_eval', 'bas_poly_eval')
-            y_prev = y.replace('sv_poly_eval', 'bas_poly_eval')
-
-            # xy1 = table[[x_prev, y_prev]].values
-            # xy2 = table[[x, y]].values
-            # uv = xy2 - xy1
-            # ax.quiver(xy1.T[0], xy1.T[1], uv.T[0], uv.T[1])
-
-            segments = []
-            # patches = []
-            for x1, y1, x2, y2 in table[[x_prev, y_prev, x, y]].values:
-                segments.append([(x1, y1), (x2, y2)])
-                # patch = mpl.patches.FancyArrow(
-                #     x1, y1, x2 - x1, y2 - y1,
-                #     width=0.001, length_includes_head=True,
-                #     head_width=0.001,
-                #     head_length=0.001,
-                # )
-                # patches.append(patch)
-                ...
-            # collection = mpl.collections.PatchCollection(patches)
-            # ax.add_collection(collection)
-            line_collection = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=1)
-            ax.add_collection(line_collection)
-            add_arrows_to_lines(line_collection)
-            # pts1 = [s[0] for s in segments]
-            # pts2 = [s[1] for s in segments]
-            # ax.plot(*zip(*pts1), 'rx', label='before SV')
-            # ax.plot(*zip(*pts2), 'bo', label='after SV')
-
-    def plot_vantage_overview(plotter, vantage):
+    def plot_vantage_per_region_overview(plotter, vantage):
         from watch.utils import util_kwplot
         from watch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
@@ -271,54 +218,31 @@ class ParamPlotter:
         kwplot.close_figures()
 
         agg = plotter.agg
-        rois = plotter.rois
-        macro_table = plotter.macro_table
         single_table = plotter.single_table
 
-        modifier = plotter.modifier
         name = vantage['name']
-
-        vantage_dpath2 = (plotter.agg_group_dpath / name).ensuredir()
-        vantage_dpath = (plotter.agg_group_dpath).ensuredir()
-
-        main_metric = y = vantage['metric1']
-        yscale = vantage['scale1']
+        y = vantage['metric1']
         x = vantage['metric2']
+        yscale = vantage['scale1']
         xscale = vantage['scale2']
-
-        region_attr = 'region_id'
-        print('vantage = {}'.format(ub.urepr(vantage, nl=1)))
-        print('main_metric = {}'.format(ub.urepr(main_metric, nl=1)))
-
-        # main_metric = 'bas_poly_eval.metrics.bas_f1'
-        # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
-        # main_metric = agg.primary_metric_cols[0]
+        main_metric = y
+        roi_attr = plotter.roi_attr
 
         finalize_figure = util_kwplot.FigureFinalizer(
-            dpath=vantage_dpath,
+            dpath=plotter.plot_dpath,
             size_inches=np.array([6.4, 4.8]) * 1.0,
         )
         fig = kwplot.figure(fnum=2, doclf=True)
 
         snskw = {}
-        if 'region_id' in plotter.param_to_palette:
-            snskw['palette']  = plotter.param_to_palette['region_id']
+        if roi_attr in plotter.param_to_palette:
+            roi_to_color = util_kwplot.Palette.coerce(plotter.param_to_palette[roi_attr])
         else:
-            unique_regions = single_table[region_attr].unique()
-            print(f'unique_regions={unique_regions}')
-            num_regions = len(unique_regions)
-            print(f'num_regions={num_regions}')
-            if num_regions < 10:
-                colors = sns.color_palette(n_colors=num_regions)
-            else:
-                colors = kwimage.Color.distinct(num_regions, legacy=False)
-                colors = [kwimage.Color.coerce(c).adjust(saturate=-0.3, lighten=-0.1).as01()
-                          for c in kwimage.Color.distinct(num_regions, legacy=False)]
-                # c = colors[0]
-            regionid_to_color = ub.dzip(unique_regions, colors)
-            snskw['palette'] = regionid_to_color
+            unique_rois = single_table[roi_attr].unique()
+            roi_to_color = util_kwplot.Palette.coerce(unique_rois)
+        snskw['palette'] = roi_to_color
 
-        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=region_attr, legend=False, **snskw)
+        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=roi_attr, legend=False, **snskw)
 
         if plotter.plot_config.get('compare_sv_hack', False):
             # Hack to compare before/after SV
@@ -332,91 +256,102 @@ class ParamPlotter:
                                   highlight='delivered_params', ax=ax,
                                   color='group',
                                   size=300, val_to_color=val_to_color)
-
         ax.set_title(f'Per-Region Results (n={len(agg)})')
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
-        modifier.relabel(ax, ticks=False)
+        plotter.modifier.relabel(ax, ticks=False)
         finalize_figure.finalize(fig, f'overview-{name}.png')
         rich.print(f'[green] made overview-{name}.png')
-        # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
-        # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
         try:
             macro_fig_final = finalize_figure.copy()
-            macro_fig_final.update(
-                size_inches=[12, 4],
-                dpi=300,
-            )
+            macro_fig_final.update(size_inches=[12, 4], dpi=300)
             fig = kwplot.figure(fnum=90, doclf=True)
 
             region_order = plotter.plot_config.get('region_order', None)
             boxsns_kw = {}
             if region_order is not None:
-                ...
-                # known_regions = single_table[region_attr].unique()
-                # # Todo: give the user control over x-axis order
-                # # hack: put imerit regions last
-                # orig_order = ub.oset(known_regions)
-                # trailing_regions = [r for r in orig_order if '_C' in r]
                 boxsns_kw['order'] = region_order
             boxsns_kw.update(snskw)
 
-            ax = sns.boxplot(data=single_table, x=region_attr, y=main_metric, **boxsns_kw)
+            ax = sns.boxplot(data=single_table, x=roi_attr, y=main_metric, **boxsns_kw)
             ax.set_title(f'Per-Region Results (n={len(agg)})')
-            param_histogram = single_table.groupby(region_attr).size().to_dict()
+            param_histogram = single_table.groupby(roi_attr).size().to_dict()
             util_kwplot.LabelModifier({
                 param_value: f'{param_value}\n(n={num})'
                 for param_value, num in param_histogram.items()
             }).relabel_xticks(ax)
-            modifier.relabel(ax, ticks=False)
-            macro_fig_final.finalize(fig, f'overview-boxplot-{region_attr}-vs-{main_metric}.png')
+            plotter.modifier.relabel(ax, ticks=False)
+            macro_fig_final.finalize(fig, f'overview-boxplot-{roi_attr}-vs-{main_metric}.png')
 
         except Exception as ex:
             rich.print(f'[yellow] warning, unable to plot overview-boxplot-region-vs-{main_metric}.png ex={ex}')
         else:
             rich.print(f'[green] made overview boxplot overview-boxplot-region-vs-{main_metric}.png')
 
-        if macro_table is not None:
-            fig = kwplot.figure(fnum=3, doclf=True)
-            ax = fig.gca()
-            region_ids = macro_table[region_attr].unique()
-            assert len(region_ids) == 1
-            macro_region_id = region_ids[0]
-            palette = {
-                macro_region_id: kwimage.Color('kitware_darkgray').as01()
-            }
-            ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=region_attr, ax=ax, palette=palette)
-            if plotter.plot_config.get('compare_sv_hack', False):
-                # Hack to compare before/after SV
-                if 'sv_poly_eval' in x.split('.'):
-                    plotter._add_sv_hack_lines(ax, macro_table, x, y)
-            if 'is_star' in macro_table:
-                scatterplot_highlight(
-                    data=macro_table, x=x, y=y, highlight='is_star', ax=ax,
-                    size=300)
-            if 'delivered_params' in macro_table:
-                import kwimage
-                val_to_color = SMART_HELPER.delivery_to_color
-                if 0:
-                    kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
-                scatterplot_highlight(data=macro_table, x=x, y=y,
-                                      highlight='delivered_params', ax=ax,
-                                      color='group', size=300,
-                                      val_to_color=val_to_color)
-            ax.set_title(f'Results (n={len(macro_table)})\n'
-                         f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
-            ax.set_xscale(xscale)
-            ax.set_yscale(yscale)
-            roi_finalizer = finalize_figure.copy()
-            roi_finalizer.update(
-                dpath=vantage_dpath2,
-            )
-            modifier.relabel(ax, ticks=False)
-            roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
-            # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x].png')
-            # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
-            # ax.set_xlim(1e-2, 0.7)
+        roi_legend = roi_to_color.make_legend_img(dpi=300)
+        roi_legend_fpath = (plotter.plot_dpath / 'roi_legend.png')
+        kwimage.imwrite(roi_legend_fpath, roi_legend)
+
+    def plot_vantage_macro_overview(plotter, vantage):
+        from watch.utils import util_kwplot
+        from watch.utils.util_kwplot import scatterplot_highlight
+        import kwplot
+        import kwimage
+        import numpy as np
+        # import rich
+        from watch.mlops.smart_global_helper import SMART_HELPER
+        sns = kwplot.autosns()
+        plt = kwplot.autoplt()  # NOQA
+        kwplot.close_figures()
+
+        rois = plotter.rois
+        macro_table = plotter.macro_table
+        roi_attr = plotter.roi_attr
+
+        name = vantage['name']
+        y = vantage['metric1']
+        x = vantage['metric2']
+        yscale = vantage['scale1']
+        xscale = vantage['scale2']
+
+        roi_finalizer = util_kwplot.FigureFinalizer(
+            dpath=plotter.macro_plot_dpath,
+            size_inches=np.array([6.4, 4.8]) * 1.0,
+        )
+
+        fig = kwplot.figure(fnum=3, doclf=True)
+        ax = fig.gca()
+        region_ids = macro_table[roi_attr].unique()
+        assert len(region_ids) == 1
+        macro_region_id = region_ids[0]
+        palette = {
+            macro_region_id: kwimage.Color('kitware_darkgray').as01()
+        }
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=roi_attr, ax=ax, palette=palette)
+        if plotter.plot_config.get('compare_sv_hack', False):
+            # Hack to compare before/after SV
+            if 'sv_poly_eval' in x.split('.'):
+                plotter._add_sv_hack_lines(ax, macro_table, x, y)
+        if 'is_star' in macro_table:
+            scatterplot_highlight(
+                data=macro_table, x=x, y=y, highlight='is_star', ax=ax,
+                size=300)
+        if 'delivered_params' in macro_table:
+            import kwimage
+            val_to_color = SMART_HELPER.delivery_to_color
+            if 0:
+                kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
+            scatterplot_highlight(data=macro_table, x=x, y=y,
+                                  highlight='delivered_params', ax=ax,
+                                  color='group', size=300,
+                                  val_to_color=val_to_color)
+        ax.set_title(f'Results (n={len(macro_table)})\n'
+                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+        ax.set_xscale(xscale)
+        ax.set_yscale(yscale)
+        plotter.modifier.relabel(ax, ticks=False)
+        roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
 
     def plot_vantage_params(plotter, vantage, pman=None):
         import numpy as np
@@ -439,16 +374,14 @@ class ParamPlotter:
         modifier = plotter.modifier
         param_to_palette = plotter.param_to_palette
 
-        param_group_dpath = plotter.agg_group_dpath / 'params'
-        vantage_dpath = ((plotter.agg_group_dpath / vantage['name']).ensuredir()).resolve()
+        param_group_dpath = plotter.macro_plot_dpath / 'params'
+        vantage_dpath = ((plotter.macro_plot_dpath / vantage['name']).ensuredir()).resolve()
 
         main_metric = y = vantage['metric1']
-        yscale = vantage['scale1']
-        main_objective = vantage['objective1']
-
         secondary_metric = x = vantage['metric2']
+        main_objective = vantage['objective1']
+        yscale = vantage['scale1']
         xscale = vantage['scale2']
-
         metric_objectives = {main_metric: main_objective}
 
         finalize_figure = util_kwplot.FigureFinalizer(
@@ -696,11 +629,88 @@ class ParamPlotter:
                     util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
                 ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
 
-            rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
+            rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
             # agg0.analyze()
         finally:
             if owns_pman:
                 pman.__exit__()
+
+    def _add_sv_hack_lines(plotter, ax, table, x, y):
+        import matplotlib as mpl
+
+        def add_arrows_to_lines(line_collection, position=None, direction='right', size=15, color=None):
+            """
+            add an arrow to a line.
+
+            line:       Line2D object
+            position:   x-position of the arrow. If None, mean of xdata is taken
+            direction:  'left' or 'right'
+            size:       size of the arrow in fontsize points
+            color:      if None, line color is taken.
+
+            References:
+                .. [SO34017866] https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot-with-matplotlib
+            """
+            if color is None:
+                color = line_collection.get_color()
+
+            for segment in line_collection.get_segments():
+                xdata = segment[:, 0]
+                ydata = segment[:, 1]
+
+                if position is None:
+                    position = xdata.mean()
+                # find closest index
+                import numpy as np
+                start_ind = np.argmin(np.absolute(xdata - position))
+                start_ind = 0
+                if direction == 'right':
+                    end_ind = start_ind + 1
+                else:
+                    end_ind = start_ind - 1
+
+                line_collection.axes.annotate(
+                    '',
+                    xytext=(xdata[start_ind], ydata[start_ind]),
+                    xy=(xdata[end_ind], ydata[end_ind]),
+                    arrowprops=dict(arrowstyle="->", color=color),
+                    size=size, zorder=0,
+                )
+        # Hack to compare before/after SV
+        # import matplotlib as mpl
+        # ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
+        # sns.scatterplot(data=single_table, x=x_prev, y=y_prev, ax=ax, legend=False)
+        if 'sv_poly_eval' in x.split('.'):
+            print('SV HACK!!!')
+            x_prev = x.replace('sv_poly_eval', 'bas_poly_eval')
+            y_prev = y.replace('sv_poly_eval', 'bas_poly_eval')
+
+            # xy1 = table[[x_prev, y_prev]].values
+            # xy2 = table[[x, y]].values
+            # uv = xy2 - xy1
+            # ax.quiver(xy1.T[0], xy1.T[1], uv.T[0], uv.T[1])
+
+            segments = []
+            # patches = []
+            for x1, y1, x2, y2 in table[[x_prev, y_prev, x, y]].values:
+                segments.append([(x1, y1), (x2, y2)])
+                # patch = mpl.patches.FancyArrow(
+                #     x1, y1, x2 - x1, y2 - y1,
+                #     width=0.001, length_includes_head=True,
+                #     head_width=0.001,
+                #     head_length=0.001,
+                # )
+                # patches.append(patch)
+                ...
+            # collection = mpl.collections.PatchCollection(patches)
+            # ax.add_collection(collection)
+            line_collection = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=1)
+            ax.add_collection(line_collection)
+            add_arrows_to_lines(line_collection)
+            # pts1 = [s[0] for s in segments]
+            # pts2 = [s[1] for s in segments]
+            # ax.plot(*zip(*pts1), 'rx', label='before SV')
+            # ax.plot(*zip(*pts2), 'bo', label='after SV')
 
 
 def edit_distance(string1, string2):

@@ -8802,7 +8802,7 @@ DATASET_CODE=Drop7-Cropped2GSD-V2
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6-subset.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red,blue|green|red|nir,pan),(WV1):(pan)"
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red,blue|green|red|nir08,pan),(WV1):(pan)"
 EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V92
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
@@ -8823,9 +8823,9 @@ data:
     input_resolution      : 2.0GSD
     output_resolution     : 2.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 2
+    batch_size             : 1
     normalize_perframe     : false
-    normalize_peritem      : 'blue|green|red|nir|pan'
+    normalize_peritem      : 'blue|green|red|nir|nir08|pan'
     max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
@@ -8853,7 +8853,7 @@ model:
         #class_weights         : auto
         class_weights          : 'auto'
         tokenizer              : linconv
-        arch_name              : smt_it_stm_l24
+        arch_name              : smt_it_stm_m24
         decoder                : mlp
         positive_change_weight : 1
         negative_change_weight : 0.01

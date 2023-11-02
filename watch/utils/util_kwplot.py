@@ -51,7 +51,7 @@ def cropwhite_ondisk(fpath):
 
 
 def dataframe_table(table, fpath, title=None, fontsize=12,
-                    table_conversion='auto', fnum=None, show=False):
+                    table_conversion='auto', dpi=None, fnum=None, show=False):
     """
     Use dataframe_image (dfi) to render a pandas dataframe.
 
@@ -101,6 +101,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
         table_conversion=table_conversion,
         fontsize=fontsize,
         max_rows=-1,
+        dpi=dpi,
     )
     if show == 'imshow':
         imdata = kwimage.imread(fpath)
@@ -446,7 +447,8 @@ class FigureFinalizer(ub.NiceRepr):
         """
         config = ub.udict(self.__dict__) | kwargs
 
-        final_fpath = ub.Path(config['dpath']) / fpath
+        dpath = ub.Path(config['dpath']).ensuredir()
+        final_fpath = dpath / fpath
         savekw = {}
         if config.get('dpi', None) is not None:
             savekw['dpi'] = config['dpi']
@@ -943,6 +945,111 @@ def time_sample_arcplot(time_samples, yloc=1, ax=None):
 
     # ax.set_xlim(0, maxx)
     # ax.set_ylim(0, 3)
+
+
+class Palette(ub.udict):
+    """
+    Dictionary subclass that maps a label to a particular color.
+
+    Explicit colors per label can be given, but for other unspecified labels we
+    attempt to generate a distinct color.
+
+    Example:
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> self1 = Palette()
+        >>> self1.add_labels(labels=['a', 'b'])
+        >>> self1.update({'foo': 'blue'})
+        >>> self1.update(['bar', 'baz'])
+        >>> self2 = Palette.coerce({'foo': 'blue'})
+        >>> self2.update(['a', 'b', 'bar', 'baz'])
+        >>> self1 = self1.sorted_keys()
+        >>> self2 = self2.sorted_keys()
+        >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
+        >>> import kwplot
+        >>> kwplot.autoplt()
+        >>> canvas1 = self1.make_legend_img()
+        >>> canvas2 = self2.make_legend_img()
+        >>> canvas = kwimage.stack_images([canvas1, canvas2])
+        >>> kwplot.imshow(canvas)
+    """
+
+    @classmethod
+    def coerce(cls, data):
+        self = cls()
+        self.update(data)
+        return self
+
+    def update(self, other):
+        if isinstance(other, dict):
+            self.add_labels(label_to_color=other)
+        else:
+            self.add_labels(labels=other)
+
+    def add_labels(self, label_to_color=None, labels=None):
+        """
+        Forces particular labels to take a specific color and then chooses
+        colors for any other unspecified label.
+
+        Args:
+            label_to_color (Dict[str, Any] | None): mapping to colors that are forced
+            labels (List[str] | None): new labels that should take distinct colors
+        """
+        import kwimage
+        # Given an existing set of colors, add colors to things without it.
+        if label_to_color is None:
+            label_to_color = {}
+        if labels is None:
+            labels = []
+
+        # Determine which labels in the input mapping are not explicitly given
+        specified = {k: kwimage.Color.coerce(v).as01()
+                     for k, v in label_to_color.items() if v is not None}
+        unspecified = ub.oset(label_to_color.keys()) - specified
+
+        # Merge specified colors into this pallet
+        super().update(specified)
+
+        # Determine which labels need a color.
+        new_labels = (unspecified | ub.oset(labels)) - set(self.keys())
+        num_new = len(new_labels)
+        if num_new:
+            existing_colors = list(self.values())
+            new_colors = kwimage.Color.distinct(num_new,
+                                                existing=existing_colors,
+                                                legacy=False)
+            new_label_to_color = dict(zip(new_labels, new_colors))
+            super().update(new_label_to_color)
+
+    def make_legend_img(self, dpi=300, **kwargs):
+        import kwplot
+        legend = kwplot.make_legend_img(self, dpi=dpi, **kwargs)
+        return legend
+
+    def sorted_keys(self):
+        return self.__class__(super().sorted_keys())
+
+    """
+    # Do we want to offer standard pallets for small datas
+
+    # if num_regions < 10:
+    #     colors = sns.color_palette(n_colors=num_regions)
+    # else:
+    #     colors = kwimage.Color.distinct(num_regions, legacy=False)
+    #     colors = [kwimage.Color.coerce(c).adjust(saturate=-0.3, lighten=-0.1).as01()
+    #               for c in kwimage.Color.distinct(num_regions, legacy=False)]
+    """
+
+
+class PaletteManager:
+    """
+    Manages colors that should be kept constant across different labels for
+    multiple parameters.
+
+    self = PaletteManager()
+    self.update_params('region_id', {'region1': 'red'})
+    """
+    def __init__(self):
+        self.param_to_palette = {}
 
 
 def color_new_labels(label_to_color, labels):

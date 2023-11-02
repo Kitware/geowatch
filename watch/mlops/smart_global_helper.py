@@ -139,7 +139,7 @@ class SmartGlobalHelper:
     ]
 
     LABEL_MAPPINGS = {
-        'region_id': 'Region ID',
+        'region_id': 'Region',
         'metrics.sc_poly_eval.bas_ffpa': 'FFPA',
         'metrics.sc_poly_eval.bas_faa_f1': 'BAS-FAA-F1',
         'sc_poly_eval.bas_ffpa': 'FFPA',
