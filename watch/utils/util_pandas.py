@@ -139,6 +139,11 @@ class DataFrame(pd.DataFrame):
         found = [c for c in self.columns if pat.search(c)]
         return found
 
+    def varied_values(self, **kwargs):
+        from watch.utils.result_analysis import varied_values
+        varied = varied_values(self, **kwargs)
+        return varied
+
 
 def pandas_reorder_columns(df, columns):
     # Use DataFrame.reorder instead
