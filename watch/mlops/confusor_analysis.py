@@ -1501,7 +1501,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     if len(unique_vidids) == 0:
         raise AssertionError('no video')
 
-    if len(unique_vidids) == 1:
+    if len(unique_vidids) > 1:
         errors.append('Matched multiple videos')
 
     video_id = unique_vidids[0]
@@ -1852,7 +1852,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
 
         if errors:
             import rich
-            rich.print(f'[yellow]There were {len(errors)} recoverable errors in case["name"]')
+            rich.print(f'[yellow]There were {len(errors)} recoverable errors in {case["name"]}')
             text = ub.urepr(errors, nobr=1, precision=2)
             grid_canvas = kwimage.draw_header_text(grid_canvas, text=text, halign='left', color='kitware_red')
 
