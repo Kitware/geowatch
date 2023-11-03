@@ -61,6 +61,15 @@ class SmartTrainer(pl.Trainer):
                 '''))
             start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
 
+            draw_tensorboard = dpath / 'draw_tensorboard.sh'
+            draw_tensorboard.write_text(ub.codeblock(
+                r'''
+                #!/bin/bash
+                WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+                    {dpath}
+                '''
+            ))
+
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
             # able to determine what tasks it should be producing data for.
