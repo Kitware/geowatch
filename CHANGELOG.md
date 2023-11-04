@@ -11,6 +11,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Reorganized mlops analysis plots for more user control and stability
 
+* Batch visualizations now have the option of showing summary text information
+
 ### Fixed
 
 * Fixed handling of nans in `varied_values`

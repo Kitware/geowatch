@@ -98,3 +98,9 @@ Misc
    integration as the mechanism of handling nested configurations, so it
    should be compatible with jsonargparse powered things like LightningCLI in
    the future.
+
+
+2. When you are writing a python package, give your module a distinctive name.
+   Don't name it "lib" or "model" or "net", do something that wont conflict
+   with other python packages. This is a tip based off of observing this
+   anti-pattern in research repos.
