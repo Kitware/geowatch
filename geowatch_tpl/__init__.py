@@ -27,6 +27,12 @@ FORCE_STATIC = int(os.environ.get('GEOWATCH_STATIC_TPL', '0'))
 
 
 STATIC_SUBMODULES = {
+    'scalemae': {
+        'rel_dpath': 'scale-mae/scalemae',
+        'ignore': [
+            'scale-mae/scalemae/splits',
+        ]
+    },
     'torchview': {
         'rel_dpath': 'torchview/torchview',
     },
