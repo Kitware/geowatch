@@ -4,6 +4,9 @@ Defines a torch Dataset for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
+CommandLine:
+    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
+
 Example:
     >>> # Demo toy data without augmentation
     >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -15,6 +18,7 @@ Example:
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
+    >>>                           augment_space_shift_rate=0.5,
     >>>                           use_grid_negatives=False,
     >>>                           use_grid_positives=False,
     >>>                           use_centered_positives=True,
@@ -31,8 +35,9 @@ Example:
     >>> self.disable_augmenter = False
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
-    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_dim=1024)
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> kwplot.autompl()
@@ -1963,10 +1968,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
-        tr_subset = ub.dict_isect(target_, {
+
+        relevant_target_keys = {
             'gids', 'space_slice', 'video_id', 'fliprot_params',
             'main_idx', 'scale', 'main_skip_reason', 'allow_augment'
-        })
+        }
+        resolved_target_subset = ub.dict_isect(target_, relevant_target_keys)
+        requested_target_subset = ub.dict_isect(target, relevant_target_keys)
 
         resolved_input_scale = resolution_info['resolved_input_scale']
         resolved_output_scale = resolution_info['resolved_output_scale']
@@ -1993,7 +2001,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'domain': video.get('domain', video.get('name', None)),
             'input_gsd': resolved_input_scale.get('gsd', None),
             'output_gsd': resolved_output_scale.get('gsd', None),
-            'target': tr_subset,
+
+            # TODO: rename 'target' to resolved_target
+            'target': resolved_target_subset,
+            'requested_target': requested_target_subset,
         }
         return item
 
@@ -2177,6 +2188,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if force_bad_frames:
             final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
             print('gid_to_isbad = {}'.format(ub.urepr(gid_to_isbad, nl=1)))
+        final_gids = list(final_gids)
 
         # coco_dset.images(final_gids).lookup('date_captured')
         target_['gids'] = final_gids
@@ -2632,6 +2644,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
+            if weight is None:
+                weight = 1.0
             poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
@@ -3327,8 +3341,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
-                  classes=None,
-                  **kw):
+                  classes=None, show_summary_text=True, **kw):
         """
         Visualize an item produced by this DataSet.
 
@@ -3364,9 +3377,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 corresponds to.  If unspecified uses the classes from the
                 datamodule.
 
+            show_summary_text (bool):
+                if True, draw additional summary debug information.
+                Defaults to True.
+
         Note:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
+
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -3460,6 +3478,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             classes=self.classes, requested_tasks=self.requested_tasks,
             rescale=rescale, **kw)
         canvas = builder.build()
+
+        if show_summary_text:
+            summary = self.summarize_item(item)
+            summary = ub.udict(summary) - {'frame_summaries'}
+            summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
+            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
+            canvas = kwimage.stack_images([header, canvas])
+
         return canvas
 
     def summarize_item(self, item):
@@ -3502,7 +3528,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame.get('ann_aids') is not None:
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
-        item_summary['video_name'] = item['video_name']
+        vidname = item['video_name']
+        video = self.coco_dset.index.name_to_video[vidname]
+        vid_w = video['width']
+        vid_h = video['height']
+        item_summary['video_name'] = vidname
+        item_summary['video_hw'] = (vid_h, vid_w)
+
         if timestamps:
             deltas = np.diff(timestamps)
             deltas = [d.total_seconds() for d in deltas]
@@ -3513,6 +3545,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             item_summary['mean_delta'] = np.mean(deltas)
         item_summary['input_gsd'] = item['input_gsd']
         item_summary['output_gsd'] = item['output_gsd']
+
+        if 'requested_target' in item:
+            item_summary['requested_target'] = item['requested_target']
+
+        if 'target' in item:
+            item_summary['resolved_target'] = item['target']
+
         return item_summary
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,

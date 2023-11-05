@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.12.0 - Released 2023-12-xx
 
 
+### Changed
+
+* SMARTTrainer now writes helpful scripts to visualize batches as an independent process (works around ddp issue) 
+
+* Reorganized mlops analysis plots for more user control and stability
+
+* Batch visualizations now have the option of showing summary text information
+
+### Fixed
+
+* Fixed handling of nans in `varied_values`
+
+* confusion analysis now attempts to work around small errors and produce some sort of visualization for each case.
+
+
 ## Version 0.11.1 - Released 2023-11-xx
 
 ### Added
@@ -33,11 +48,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * MLops updates to handle results ingested from smartflow
 
+* `KWCocoVideoDataset` now produces one-hot-embedding truth masks for the class task.
+
 
 ### Fixed
 * SAM features can now be run on toydata
 
 * Fixed minor issues in utilities
+
+* Improved smartflow stability in datagen nodes.
 
 
 ## Version 0.10.0 - Released 2023-10-01

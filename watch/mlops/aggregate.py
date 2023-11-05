@@ -352,6 +352,9 @@ class TopResultsReport:
 
 
 class AggregatorAnalysisMixin:
+    """
+    Analysis methods for :class:`Aggregator`.
+    """
     def macro_analysis(agg):
         import pandas as pd
         from watch.utils import result_analysis
@@ -1029,6 +1032,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 displayed (after the primary metrics).
         """
         agg.output_dpath = output_dpath
+
+        from watch.utils import util_pandas
+        if not isinstance(table, util_pandas.DataFrame):
+            table = util_pandas.DataFrame(table)
+
         agg.table = table
         agg.type = type
         agg.subtables = None

@@ -10,3 +10,6 @@
 [submodule "geowatch_tpl/submodules/shapestats"]
 	path = geowatch_tpl/submodules/shapestats
 	url = git@github.com:Erotemic/shapestats.git
+[submodule "geowatch_tpl/submodules/scale-mae"]
+	path = geowatch_tpl/submodules/scale-mae
+	url = git@github.com:bair-climate-initiative/scale-mae.git

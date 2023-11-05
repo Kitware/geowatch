@@ -1057,6 +1057,10 @@ class ConfusionAnalysis:
         with pman:
             total = 0
             for case in pman.progiter(cases, desc='dump cases', verbose=3):
+                print(case['name'])
+                # if 'KW_C501_0393' in case['name']:
+                #     import xdev
+                #     xdev.snapshot()
                 # if 'CH_R001_0076' in case['name']:
                 #     raise Exception
                 #     import xdev
@@ -1084,7 +1088,7 @@ class ConfusionAnalysis:
                         else:
                             raise
                 except Exception as ex:
-                    errors.append(ex)
+                    errors.append(f'Failed to plot {case["name"]} due to {ex!r}')
                     rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
                     rich.print(f'[red] ERRORS {len(errors)} / {total}')
                     # import xdev
@@ -1420,6 +1424,8 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
 
     main_trackids = []
 
+    errors = []
+
     for site_type in ['pred_sites', 'true_sites']:
         if site_type == 'pred_sites':
             tag = 'kit'
@@ -1437,16 +1443,20 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
                 # tid = track['id']
                 # annots = tracks.annots[0]
             else:
-                site_aids = list(coco_dset.index.trackid_to_aids[coco_site_id])
-                all_aids.update(site_aids)
-                annots = coco_dset.annots(site_aids)
-                site_trackid = annots[0:1].lookup('track_id')[0]
-                main_trackids.append(site_trackid)
-                # main_pred_aids.update(pred_aids)
-                if site_type == 'pred_sites':
-                    main_pred_aids.update(site_aids)
+                try:
+                    site_aids = list(coco_dset.index.trackid_to_aids[coco_site_id])
+                except KeyError:
+                    errors.append(f'Failed to lookup {coco_site_id} in {site_type}')
                 else:
-                    main_true_aids.update(site_aids)
+                    all_aids.update(site_aids)
+                    annots = coco_dset.annots(site_aids)
+                    site_trackid = annots[0:1].lookup('track_id')[0]
+                    main_trackids.append(site_trackid)
+                    # main_pred_aids.update(pred_aids)
+                    if site_type == 'pred_sites':
+                        main_pred_aids.update(site_aids)
+                    else:
+                        main_true_aids.update(site_aids)
 
     # case['main_pred_site']
 
@@ -1488,7 +1498,12 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     all_images = _all_images.take(_sortx)
 
     unique_vidids = sorted(set(_all_images.lookup('video_id')))
-    assert len(unique_vidids) == 1, 'not a single video'
+    if len(unique_vidids) == 0:
+        raise AssertionError('no video')
+
+    if len(unique_vidids) > 1:
+        errors.append('Matched multiple videos')
+
     video_id = unique_vidids[0]
 
     # In most cases try to only use the "lo" number of images, but allow us to
@@ -1835,7 +1850,14 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             text = ub.urepr(toshow, nobr=1, precision=2)
             grid_canvas = kwimage.draw_header_text(grid_canvas, text=text, halign='left', color='kitware_blue')
 
+        if errors:
+            import rich
+            rich.print(f'[yellow]There were {len(errors)} recoverable errors in {case["name"]}')
+            text = ub.urepr(errors, nobr=1, precision=2)
+            grid_canvas = kwimage.draw_header_text(grid_canvas, text=text, halign='left', color='kitware_red')
+
         parts.append(grid_canvas)
+
     if 1:
         timeline_canvas = make_case_timeline(case)
         timeline_canvas = kwimage.ensure_float01(timeline_canvas)
