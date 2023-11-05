@@ -23,6 +23,7 @@ from watch.tasks.tracking.utils import (
     gpd_sort_by_gid, gpd_len,
     gpd_compute_scores)
 import geopandas as gpd
+import pandas as pd
 
 try:
     from xdev import profile
@@ -318,7 +319,9 @@ class TimeSplitFilter:
                     subtrack_idx += 1
 
                     subtracks.append(subtrack)
-            result = gpd.concat(subtracks)
+            result = gpd.GeoDataFrame(
+                pd.concat(subtracks, ignore_index=True)
+            )
         else:
             result = gdf
         return result
