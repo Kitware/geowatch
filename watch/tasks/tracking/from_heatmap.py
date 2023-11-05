@@ -289,14 +289,15 @@ class TimeSplitFilter:
     def __call__(self, gdf):
 
         def _edit(grp):
+            magic_thresh = 0.5
             sub_tracks = []
             for idx, score in enumerate(scores):
 
-                if (score > thresh) and (track_start is None):
+                if (score > magic_thresh) and (track_start is None):
                     # print(f"track started at {idx}")
                     track_start = idx
 
-                if (score < thresh) and (track_start is not None):
+                if (score < magic_thresh) and (track_start is not None):
                     # print(f"track ended at {idx-1}")
                     sub_tracks.append((track_start, idx))
                     track_start = None
@@ -310,7 +311,7 @@ class TimeSplitFilter:
             subtracks = []
             subtrack_idx = 1
             for track_id, group in gdf.groupby('track_idx'):
-                for sub_id, (start, stop) in enumerate(_edit(list(group["fg"]))):
+                for sub_id, (start, stop) in enumerate(_edit(list(group[('fg', self.threshold)]))):
                     subtrack = group.iloc[start:stop]
                     subtrack["track_idx"] = subtrack_idx
                     subtrack_idx += 1
@@ -735,6 +736,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
         thrs.add(-1)
     if config.time_thresh:
         thrs.add(config.time_thresh * config.thresh)
+    if config.time_split_thresh:
+        thrs.add(config.time_split_thresh)
     #####
     ## Jon C: I'm not sure about this. Going from a set to a list, and then having
     ## the resulting function depend on the order of the list makes me nerevous.
@@ -775,7 +778,6 @@ def time_aggregated_polys(sub_dset, **kwargs):
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     if config.time_split_thresh:
-        print(_TRACKS.keys())
         split_filter = TimeSplitFilter(config.time_split_thresh)
         n_orig = gpd_len(_TRACKS)
         _TRACKS = split_filter(_TRACKS)
