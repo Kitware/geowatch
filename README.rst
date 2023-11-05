@@ -35,6 +35,71 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 
 
+Purpose & Features
+------------------
+
+Geowatch can be used to train, predict, and evaluate segmentation models on
+multi-sensor image or video data.
+Polygons can be extracted or "tracked" across frames in a video to produce
+vectorized predictions.
+
+Images can be in different resolutions, may be paired with geospatial metadata
+(but this is not required), and have any number of sensed or derived raster
+bands. Each raster band for an image need not be at the same resolution. The
+only requirement is that there is an affine transform that relates each
+underlying "asset space" into "image space", which in turn must be similarly
+related to each "video space". These transforms and all other details of the
+dataset are provided in a kwcoco file.
+
+Dataloaders are setup to work with kwcoco files, and at train time details like
+mean/std computation, classes, frequency weights are handled automatically as
+opposed to common practice of hardcoding those values somewhere in a config
+file or in the code. In this way geowatch seeks to run on the input data the
+user provides, rather than make assumptions about it. The only restriction is
+that the data must be registered in a
+`kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_ file, which is
+easy to do, can co-exist with arbitrary other on-disk structures, and has many
+benefits. Images can be arbitrarily large or small, and can be used in-situ
+(i.e. the raw images need not be pre-processed in any way), although some
+formats (e.g. COGs) will be more efficient than others.
+
+
+Slides:
+
+* `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
+
+* `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
+
+Use Case: Heavy Construction
+----------------------------
+
+The motivating use-case for this software is detection of heavy construction
+events and the classification of their phases.
+
+
+The first image illustrates the broad area search (BAS) component of the
+pipeline that uses low spatio-temporal resolution data to detect candidate
+"salient" regions for further processing.
+
+.. image:: https://i.imgur.com/tilGphj.gif
+   :height: 100px
+   :align: left
+
+The next main component of the system is activity characterization (AC) where
+higher resolution data is used to refine predicted information. In this case we
+classify each polygon as a different phase of construction. In the above
+example there are 3 detected candidates. We now zoom in on the one in the
+middle.
+
+.. image:: https://i.imgur.com/2EBpDGZ.gif
+   :height: 100px
+   :align: left
+
+This shows the system detecting the construction of the KHQ building and
+classifying its phases. This demo was run on public data, and can be reproduced
+with `Tutorial 6 <tutorial/tutorial6_predict_KHQ.sh>`_. The system was not
+trained on this region.
+
 Getting Started
 ---------------
 
@@ -84,7 +149,7 @@ We also have limited windows support, see `installing GEOWATCH on Windows  <docs
 Tutorials
 ---------
 
-We have a set of tutorials related to training models and predicting with the
+We have a set of `tutorials <./tutorials>`_ related to training models and predicting with the
 system.
 
 * Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
@@ -94,6 +159,10 @@ system.
 * Tutorial 3: `Feature Fusion Tutorial <tutorial/tutorial3_feature_fusion.sh>`_
 
 * Tutorial 4: `Misc Training Tutorial <tutorial/tutorial4_advanced_training.sh>`_
+
+* Tutorial 5: `KR2 BAS SMART Demo <tutorial/tutorial5_bas_prediction.sh>`_
+
+* Tutorial 6: `KHQ SMART Demo <tutorial/tutorial6_predict_KHQ.sh>`_
 
 
 Documentation
@@ -145,12 +214,30 @@ For quick reference, a list of current documentation files is:
 Development
 -----------
 
-For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst>`_
+For new collaborators, please refer to the `onboarding docs <docs/onboarding.rst>`_
 
-For internal collaberators, please refer to the `internal docs <docs/data/internal_resources.rst>`_
+For internal collaborators, please refer to the `internal docs <docs/data/internal_resources.rst>`_
 
 For more details about the GEOWATCH CLI and other CLI tools included in this package see:
 `the GEOWATCH CLI docs <docs/watch_cli.rst>`_
+
+
+Related Work
+------------
+
+There are other GIS and segmentation focused torch packages out there:
+
+* https://github.com/microsoft/torchgeo - Torch geo provides many custom
+  dataloaders for standard datasets. In contrast, we provide a single data
+  loader for kwcoco files.
+
+* https://github.com/azavea/raster-vision - based on chips, whereas ours
+  focuses on the ability to process data in-situ (using the help of
+  `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_).
+
+* https://github.com/open-mmlab/mmsegmentation - A very good package (and
+  research group), we use some the mmlabs models, but their library doesn't
+  have the data flexibility (e.g. large image support) that kwcoco provides.
 
 
 Acknowledgement

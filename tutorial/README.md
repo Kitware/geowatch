@@ -1,7 +1,0 @@
-# Tutorials
-
-- Tutorial 0: IARPA SMART Demo [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial5_bas_prediction.sh) [<img src="https://colab.research.google.com/assets/colab-badge.svg">](https://colab.research.google.com/drive/1SiNUDCn1sBMu2wybB8dyal6CM-fqAj1Y?usp=share_link)
-- Tutorial 1: Generate toy data and fit a simple network [<img src="https://img.shields.io/badge/jupyter-%23FA0F00.svg?style=for-the-badge&logo=jupyter&logoColor=white">](tutorial1_rgb_network.ipynb) [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial1_rgb_network.sh) [<img src="https://colab.research.google.com/assets/colab-badge.svg">](https://colab.research.google.com/drive/1zGgs47WglRf3lLpjS3vHUmgxIM4oziBH?usp=share_link)
-- Tutorial 2: Generate toy multi-spectral data and fit a simple network [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial2_msi_network.sh)
-- Tutorial 3: Fuse features from multiple sources [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial3_feature_fusion.sh)
-- Tutorial 4: Advanced Training [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial4_advanced_training.sh)

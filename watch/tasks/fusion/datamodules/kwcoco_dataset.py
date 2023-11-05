@@ -4,6 +4,13 @@ Defines a torch Dataset for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
+
+For notes on Spaces, see
+    ~/code/watch/docs/coding_conventions.rst
+
+CommandLine:
+    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
+
 Example:
     >>> # Demo toy data without augmentation
     >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -15,6 +22,7 @@ Example:
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
+    >>>                           augment_space_shift_rate=0.5,
     >>>                           use_grid_negatives=False,
     >>>                           use_grid_positives=False,
     >>>                           use_centered_positives=True,
@@ -31,8 +39,9 @@ Example:
     >>> self.disable_augmenter = False
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
-    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_dim=1024)
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> kwplot.autompl()
@@ -65,154 +74,6 @@ Example:
     >>> kwplot.autompl()
     >>> kwplot.imshow(canvas)
     >>> kwplot.show_if_requested()
-
-CommandLine:
-    USE_RTREE=1 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1
-    USE_RTREE=0 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1
-
-Example:
-    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-    >>> # Demo with real data
-    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-    >>> import watch
-    >>> import kwcoco
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
-    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-    >>> ##'red|green|blue',
-    >>> self = KWCocoVideoDataset(
-    >>>     coco_dset,
-    >>>     time_dims=7, window_dims=(196, 196),
-    >>>     window_overlap=0,
-    >>>     channels="(S2,L8):blue|green|red|nir",
-    >>>     input_space_scale='3.3GSD',
-    >>>     window_space_scale='3.3GSD',
-    >>>     output_space_scale='1GSD',
-    >>>     prenormalize_inputs=True,
-    >>>     #normalize_peritem='nir',
-    >>>     dist_weights=0,
-    >>>     quality_threshold=0,
-    >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-    >>> )
-    >>> self.requested_tasks['change'] = 1
-    >>> self.requested_tasks['saliency'] = 1
-    >>> self.requested_tasks['class'] = 0
-    >>> self.requested_tasks['boxes'] = 1
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-    >>> index['allow_augment'] = False
-    >>> item = self[index]
-    >>> target = item['target']
-    >>> #for idx in range(100):
-    ... #    self[idx]
-    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-    >>> # xdoctest: +REQUIRES(--show)
-    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
-    >>> import kwplot
-    >>> kwplot.autompl()
-    >>> kwplot.imshow(canvas, fnum=1)
-    >>> kwplot.show_if_requested()
-
-Example:
-    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-    >>> # This shows how you can use the dataloader to sample an arbitrary
-    >>> # spacetime volume.
-    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-    >>> import watch
-    >>> import kwcoco
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
-    >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
-    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-    >>> ##'red|green|blue',
-    >>> self = KWCocoVideoDataset(
-    >>>     coco_dset,
-    >>>     time_dims=7, window_dims=(196, 196),
-    >>>     window_overlap=0,
-    >>>     channels="(S2,L8):blue|green|red|nir",
-    >>>     input_space_scale='3.3GSD',
-    >>>     window_space_scale='3.3GSD',
-    >>>     output_space_scale='1GSD',
-    >>>     #normalize_peritem='nir',
-    >>>     dist_weights=0,
-    >>>     quality_threshold=0,
-    >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-    >>> )
-    >>> self.requested_tasks['change'] = 1
-    >>> self.requested_tasks['saliency'] = 1
-    >>> self.requested_tasks['class'] = 0
-    >>> self.requested_tasks['boxes'] = 1
-    >>> target = {
-    >>>     'video_id': 3,
-    >>>     'gids': [529, 555, 607, 697, 719, 730, 768],
-    >>>     'main_idx': 3,
-    >>>     'space_slice': (slice(0, 65, None), slice(130, 195, None)),
-    >>> }
-    >>> item = self[target]
-
-Example:
-    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-    >>> # Tests the hard negative sampling
-    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-    >>> import watch
-    >>> import kwcoco
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> coco_fpath = dvc_dpath / 'Drop6-MeanYear10GSD/data.kwcoco.zip'
-    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-    >>> ##'red|green|blue',
-    >>> self = KWCocoVideoDataset(
-    >>>     coco_dset,
-    >>>     time_dims=5, window_dims=(196, 196),
-    >>>     window_overlap=0,
-    >>>     channels="(S2,L8):blue|green|red",
-    >>>     fixed_resolution='10GSD',
-    >>>     normalize_peritem=True,
-    >>>     use_grid_negatives='cleared',
-    >>>     use_grid_positives=False,
-    >>>     use_centered_positives= True,
-    >>>     time_kernel='(-2y,-1y,0,1y,2y)',
-    >>> )
-    >>> self.requested_tasks['change'] = 1
-    >>> self.requested_tasks['saliency'] = 1
-    >>> self.requested_tasks['class'] = 0
-    >>> self.requested_tasks['boxes'] = 1
-
-    >>> # Check that all of the negative regions are from cleared videos
-    >>> videos = self.sampler.dset.videos()
-    >>> vidid_to_cleared = ub.udict(ub.dzip(videos.lookup('id'), videos.lookup('cleared', False)))
-    >>> assert self.config['use_grid_negatives'] == 'cleared'
-    >>> positive_idxs = self.new_sample_grid['positives_indexes']
-    >>> negative_idxs = self.new_sample_grid['negatives_indexes']
-    >>> targets = self.new_sample_grid['targets']
-    >>> negative_video_ids = {targets[x]['video_id'] for x in negative_idxs}
-    >>> positive_video_ids = {targets[x]['video_id'] for x in positive_idxs}
-    >>> assert all(vidid_to_cleared.subdict(negative_video_ids).values())
-
-    >>> index = 0
-    >>> item = self[index]
-    >>> target = item['target']
-    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-    >>> # xdoctest: +REQUIRES(--show)
-    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
-    >>> import kwplot
-    >>> kwplot.autompl()
-    >>> kwplot.imshow(canvas, fnum=1)
-    >>> kwplot.show_if_requested()
-
-
-Ignore:
-    >>> self.disable_augmenter = True
-    >>> self.normalize_peritem = None
-    >>> self.config['mask_low_quality'] = True
-    >>> self.config['force_bad_frames'] = True
-    >>> self.config['resample_invalid_frames'] = 0
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
-    >>> item1 = self[index]
-    >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
-    >>> item2 = self[index]
-    >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
-    >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
-    >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
-    >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
 
 Known Issues
 ------------
@@ -257,9 +118,6 @@ try:
 except Exception:
     profile = ub.identity
 
-# For notes on Spaces
-# See ~/code/watch/docs/coding_conventions.rst
-
 
 SPACE_GROUP = 'spacetime (space)'
 TIME_GROUP = 'spacetime (time)'
@@ -287,465 +145,415 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * time_sampling
         * chip_dims / window_space_dims
     """
-    __default__ = {
 
-        # TODO:
-        # 'positive_labels': scfg.Value(None, help=ub.paragraph(
-        #     '''
-        #     Labels to consider positive (in addition to infered labels)
-        #     ''')),
+    # TODO:
+    # 'positive_labels': scfg.Value(None, help=ub.paragraph(
+    #     '''
+    #     Labels to consider positive (in addition to infered labels)
+    #     ''')),
 
-        ###############
-        # SPACE OPTIONS
-        ###############
+    sampler_backend = scfg.Value(None, help="Can be None, 'npy', or 'cog'.")
 
-        'chip_dims': scfg.Value(128, help=ub.paragraph(
+    sampler_workdir = scfg.Value(None, help="A location the sampler can write a cache if a backend is selected.")
+
+    sampler_workers = scfg.Value('avail/2', help="Number of workers to precompute a sampler backend.")
+
+    ###############
+    # SPACE OPTIONS
+    ###############
+
+    chip_dims = scfg.Value(128, alias=['window_space_dims', 'window_dims', 'chip_size'], group=SPACE_GROUP, help=ub.paragraph(
             '''
-            Spatial height/width per batch. If given as a single number, used
-            as both width and height.
-            '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+', group=SPACE_GROUP),
-
-        'fixed_resolution': scfg.Value(None, help=ub.paragraph(
+            Spatial height/width per batch. If given as a single number,
+            used as both width and height.
+            '''), nargs='+')
+    fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
             '''
-            If specified, fixes resolution of window, output, and input space.
-            '''), group=SPACE_GROUP),
-
-        'window_space_scale': scfg.Value(None, help=ub.paragraph(
+            If specified, fixes resolution of window, output, and input
+            space.
+            '''))
+    window_space_scale = scfg.Value(None, alias=['window_resolution'], group=SPACE_GROUP, help=ub.paragraph(
             '''
-            Change the "scale" or resolution of the video space used by the
-            sliding window.
-            Note: this modifies the GSD BEFORE the sample window has been
-            selected, so the extent and resolution of the data changes.
-
-            If specified as a numeric value then this is applied to as a scale
-            factor. (E.g.  setting this to 2 is equivalent to scaling video
-            space by 2). For geospatial data where each video has a
-            "target_gsd", then this can be set to as an absolute by including
-            the "GSD" suffix. (e.g. If this is set to "10GSD", then video space
-            will be scaled to match).
-            '''), alias=['window_resolution'], group=SPACE_GROUP),
-
-        'input_space_scale': scfg.Value(None, help=ub.paragraph(
+            Change the "scale" or resolution of the video space used by
+            the sliding window. Note: this modifies the GSD BEFORE the
+            sample window has been selected, so the extent and
+            resolution of the data changes. If specified as a numeric
+            value then this is applied to as a scale factor. (E.g.
+            setting this to 2 is equivalent to scaling video space by
+            2). For geospatial data where each video has a "target_gsd",
+            then this can be set to as an absolute by including the
+            "GSD" suffix. (e.g. If this is set to "10GSD", then video
+            space will be scaled to match).
+            '''))
+    input_space_scale = scfg.Value(None, alias=['space_scale', 'data_space_scale', 'input_resolution'], group=SPACE_GROUP, help=ub.paragraph(
             '''
             Change the "scale" or resolution of the sampled video space.
             Note: this modifies the GSD AFTER the sample window has been
-            selected, so the extend of the data does NOT change, but the resolution does.
-
-            If specified as a numeric value then this is applied to as a scale
-            factor. (E.g.  setting this to 2 is equivalent to scaling video
-            space by 2). For geospatial data where each video has a
-            "target_gsd", then this can be set to as an absolute by including
-            the "GSD" suffix. (e.g. If this is set to "10GSD", then video space
-            will be scaled to match).
-
-            This can also be set to "native" to use heterogeneous sampling.
-            '''), alias=['space_scale', 'data_space_scale', 'input_resolution'], group=SPACE_GROUP),
-
-        'output_space_scale': scfg.Value(None, help=ub.paragraph(
+            selected, so the extend of the data does NOT change, but the
+            resolution does. If specified as a numeric value then this
+            is applied to as a scale factor. (E.g. setting this to 2 is
+            equivalent to scaling video space by 2). For geospatial data
+            where each video has a "target_gsd", then this can be set to
+            as an absolute by including the "GSD" suffix. (e.g. If this
+            is set to "10GSD", then video space will be scaled to
+            match). This can also be set to "native" to use
+            heterogeneous sampling.
+            '''))
+    output_space_scale = scfg.Value(None, alias=['target_space_scale', 'output_resolution'], group=SPACE_GROUP, help=ub.paragraph(
             '''
-            Change the "scale" or resolution of the desired target resolution.
+            Change the "scale" or resolution of the desired target
+            resolution. Follows other GSD / scale semantics.
+            '''))
+    chip_overlap = scfg.Value(0.0, alias=['window_space_overlap', 'window_overlap'], group=SPACE_GROUP, help=ub.paragraph(
+            '''
+            Fraction of the spatial sliding window that will overlap.
+            Only applies to training dataset when used in the data
+            module.
+            '''))
 
-            Follows other GSD / scale semantics.
-            '''), alias=['target_space_scale', 'output_resolution'], group=SPACE_GROUP),
+    ##############
+    # TIME OPTIONS
+    ##############
 
-        # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
-        'chip_overlap': scfg.Value(
-            0.0, help=ub.paragraph(
-                '''
-                Fraction of the spatial sliding window that will overlap.
-                Only applies to training dataset when used in the data module.
-                '''),
-            alias=['window_space_overlap', 'window_overlap'],
-            group=SPACE_GROUP
-        ),
-
-        ##############
-        # TIME OPTIONS
-        ##############
-
-        # TODO: make auto based on time kernel.
-        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims'], group=TIME_GROUP),
-
-
-        'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
+    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help='number of temporal samples (i.e. frames) per batch')
+    time_sampling = scfg.Value('contiguous', type=str, group=TIME_GROUP, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous
             frames. Can be auto, contiguous, hard+distribute, or
             dilate_affinity
-            '''), group=TIME_GROUP),
-
-        'time_span': scfg.Value(None, help=ub.paragraph(
+            '''))
+    time_span = scfg.Value(None, group=TIME_GROUP, help=ub.paragraph(
             '''
-            Roughly how much time should be between sample frames.
-            This argument needs reworking.
-            '''), group=TIME_GROUP),
+            Roughly how much time should be between sample frames. This
+            argument needs reworking.
+            '''))
+    time_kernel = scfg.Value(None, type=str, group=TIME_GROUP, help='Mutually exclusive with time_span.')
 
-        'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Mutually exclusive with time_span.
-            '''), group=TIME_GROUP),
+    ##############
+    # MODE OPTIONS
+    ##############
 
-        ##############
-        # MODE OPTIONS
-        ##############
-
-        'channels': scfg.Value(None, type=str, help=ub.paragraph(
+    channels = scfg.Value(None, type=str, group='sensorchan', help=ub.paragraph(
             '''
             channels to use should be SensorChanSpec coercable
-            '''), group='sensorchan'),
-
-        'include_sensors': scfg.Value(None, help=ub.paragraph(
+            '''))
+    include_sensors = scfg.Value(None, group='sensorchan', help=ub.paragraph(
             '''
-            if specified can be comma separated valid sensors. NOTE: this
-            should be specified via a sensorchan speci in channels instead
-            '''), group='sensorchan'),
-
-        'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
+            if specified can be comma separated valid sensors. NOTE:
+            this should be specified via a sensorchan speci in channels
+            instead
+            '''))
+    exclude_sensors = scfg.Value(None, type=str, group='sensorchan', help=ub.paragraph(
             '''
             comma delimited list of sensors to avoid, such as S2 or L8
-            '''), group='sensorchan'),
+            '''))
 
-        ##############
-        # SIZE OPTIONS
-        ##############
+    ##############
+    # SIZE OPTIONS
+    ##############
 
-        'select_images': scfg.Value(
-            None, type=str, help=ub.paragraph(
-                '''
-                A json query (via the jq spec) that specifies which images
-                belong in the subset. Note, this is a passed as the body of
-                the following jq query format string to filter valid ids
-                '.images[] | select({select_images}) | .id'.
-
-                Examples for this argument are as follows:
-                '.id < 3' will select all image ids less than 3.
-                '.file_name | test(".*png")' will select only images with
-                file names that end with png.
-                '.file_name | test(".*png") | not' will select only images
-                with file names that do not end with png.
-                '.myattr == "foo"' will select only image dictionaries
-                where the value of myattr is "foo".
-                '.id < 3 and (.file_name | test(".*png"))' will select only
-                images with id less than 3 that are also pngs.
-                .myattr | in({"val1": 1, "val4": 1}) will take images
-                where myattr is either val1 or val4.
-
-                Requries the "jq" python library is installed.
-                '''), group=SELECTION_GROUP),
-
-        'select_videos': scfg.Value(
-            None, help=ub.paragraph(
-                '''
-                A json query (via the jq spec) that specifies which videos
-                belong in the subset. Note, this is a passed as the body of
-                the following jq query format string to filter valid ids
-                '.videos[] | select({select_images}) | .id'.
-
-                Examples for this argument are as follows:
-                '.name | startswith("foo")' will select only videos
-                where the name starts with foo.
-
-                Only applicable for dataset that contain videos.
-
-                Requries the "jq" python library is installed.
-                '''), group=SELECTION_GROUP),
-
-        'max_epoch_length': scfg.Value(None, help=ub.paragraph(
+    select_images = scfg.Value(None, type=str, group=SELECTION_GROUP, help=ub.paragraph(
+            '''
+            A json query (via the jq spec) that specifies which images
+            belong in the subset. Note, this is a passed as the body of
+            the following jq query format string to filter valid ids
+            '.images[] | select({select_images}) | .id'. Examples for
+            this argument are as follows: '.id < 3' will select all
+            image ids less than 3. '.file_name | test(".*png")' will
+            select only images with file names that end with png.
+            '.file_name | test(".*png") | not' will select only images
+            with file names that do not end with png. '.myattr == "foo"'
+            will select only image dictionaries where the value of
+            myattr is "foo". '.id < 3 and (.file_name | test(".*png"))'
+            will select only images with id less than 3 that are also
+            pngs. .myattr | in({"val1": 1, "val4": 1}) will take images
+            where myattr is either val1 or val4. Requries the "jq"
+            python library is installed.
+            '''))
+    select_videos = scfg.Value(None, group=SELECTION_GROUP, help=ub.paragraph(
+            '''
+            A json query (via the jq spec) that specifies which videos
+            belong in the subset. Note, this is a passed as the body of
+            the following jq query format string to filter valid ids
+            '.videos[] | select({select_images}) | .id'. Examples for
+            this argument are as follows: '.name | startswith("foo")'
+            will select only videos where the name starts with foo. Only
+            applicable for dataset that contain videos. Requries the
+            "jq" python library is installed.
+            '''))
+    max_epoch_length = scfg.Value(None, help=ub.paragraph(
             '''
             If specified, restricts number of steps per epoch
-            ''')),
+            '''))
 
-        #######################
-        # SAMPLING GRID OPTIONS
-        #######################
+    #######################
+    # SAMPLING GRID OPTIONS
+    #######################
 
-        'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
+    set_cover_algo = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            Set cover algorithm to remove redundant gids when building space
-            time targets. Options are 'approx' (a greedy solution) or 'exact'
-            (an ILP solution). If None is passed, set cover is not computed.
-            The 'exact' method requires the pulp package (and can be very slow
-            so it is generally not recommended).
-            '''), group=SAMPLE_GROUP),
-
-        'use_centered_positives': scfg.Value(False, help=ub.paragraph(
+            Set cover algorithm to remove redundant gids when building
+            space time targets. Options are 'approx' (a greedy solution)
+            or 'exact' (an ILP solution). If None is passed, set cover
+            is not computed. The 'exact' method requires the pulp
+            package (and can be very slow so it is generally not
+            recommended).
+            '''), choices=[None, 'approx', 'exact'])
+    use_centered_positives = scfg.Value(False, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            Use centers of annotations as window centers
-            Only applies to training dataset when used in the data module.
+            Use centers of annotations as window centers Only applies to
+            training dataset when used in the data module.
             Validation/test dataset defaults to False.
-            '''), group=SAMPLE_GROUP),
-
-        'use_grid_positives': scfg.Value(True, help=ub.paragraph(
+            '''))
+    use_grid_positives = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            Use sliding window cells that overlap with positive annotations as
-            positives.  Only applies to training dataset when used in the data
-            module.  Validation/test dataset defaults to True.
-            '''), group=SAMPLE_GROUP),
-
-        'use_grid_negatives': scfg.Value(True, help=ub.paragraph(
+            Use sliding window cells that overlap with positive
+            annotations as positives. Only applies to training dataset
+            when used in the data module. Validation/test dataset
+            defaults to True.
+            '''))
+    use_grid_negatives = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            Use sliding window cells dont overlap with positive annotations as
-            negatives. If set to "cleared", then only videos with a True
-            "cleared" attribute contribute grid negatives. Only applies to
-            training dataset when used in the data module. Validation/test
-            dataset defaults to True.
-            '''), group=SAMPLE_GROUP),
-
-        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
+            Use sliding window cells dont overlap with positive
+            annotations as negatives. If set to "cleared", then only
+            videos with a True "cleared" attribute contribute grid
+            negatives. Only applies to training dataset when used in the
+            data module. Validation/test dataset defaults to True.
+            '''))
+    use_grid_valid_regions = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            If True, the initial grid will only place windows in valid regions.
-            '''), group=SAMPLE_GROUP),
-
-        # Overwritten for non-train
-        'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
+            If True, the initial grid will only place windows in valid
+            regions.
+            '''))
+    neg_to_pos_ratio = scfg.Value(1.0, type=float, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
             maximum ratio of samples with no annotations to samples with
-            annots.
-            Only applies to training dataset when used in the data module.
-            Validation/test dataset defaults to zero.
-            '''), group=SAMPLE_GROUP),
-
-        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
+            annots. Only applies to training dataset when used in the
+            data module. Validation/test dataset defaults to zero.
+            '''))
+    use_grid_cache = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
-            If true, will cache the spacetime grid to make multiple
-            runs quicker.
-            '''), group=SAMPLE_GROUP),
+            If true, will cache the spacetime grid to make multiple runs
+            quicker.
+            '''))
 
-        ############################
-        # DATA NORMALIZATION OPTIONS
-        ############################
+    ############################
+    # DATA NORMALIZATION OPTIONS
+    ############################
 
-        # TODO: 'normalizer': scfg.Value - user specified normalizer configuration.
-        # might want tight jsonargparse integeration here.
-
-        'prenormalize_inputs': scfg.Value(None, help=ub.paragraph(
+    prenormalize_inputs = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
             '''
             New in 0.4.3: Can specified as list of dictionaries that
-            effectively contains the dataset statistics to use. Details of that
-            will be documented as the feature matures.
-
-            See the watch.cli.coco_spectra script to help determine reasonable
-            values for this.
-
-            These normalizations are applied at the dataloader getitem level.
-
-            This should be specified as a list of dictionaries each containing:
-                * mean:
-                * std:
-                * min:
-                * max:
-
-            As well as the Modality to which the normalization applies, e.g.:
-                * domain
-                * channels
-                * sensor
-
-            If set to True, then we try to automatically compute these values.
-            '''), group=NORM_GROUP),
-
-        'normalize_perframe': scfg.Value(False, help=ub.paragraph(
+            effectively contains the dataset statistics to use. Details
+            of that will be documented as the feature matures. See the
+            watch.cli.coco_spectra script to help determine reasonable
+            values for this. These normalizations are applied at the
+            dataloader getitem level. This should be specified as a list
+            of dictionaries each containing: * mean: * std: * min: *
+            max: As well as the Modality to which the normalization
+            applies, e.g.: * domain * channels * sensor If set to True,
+            then we try to automatically compute these values.
+            '''))
+    normalize_perframe = scfg.Value(False, group=NORM_GROUP, help=ub.paragraph(
             '''
-            Applies a pre-normalizaiton that normalizes each frame by itself.
-            This is not recommended unless you have a larger chip size
-            because there needs to be enough data within a frame for
-            the normalization to be effective.
-            '''), group=NORM_GROUP),
-
-        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            Applies a pre-normalizaiton that normalizes each frame by
+            itself. This is not recommended unless you have a larger
+            chip size because there needs to be enough data within a
+            frame for the normalization to be effective.
+            '''))
+    normalize_peritem = scfg.Value(None, type=str, group=NORM_GROUP, help=ub.paragraph(
             '''
-            Applies a pre-normalization across all frames in an item.  This
-            preserves relative temporal variations.
+            Applies a pre-normalization across all frames in an item.
+            This preserves relative temporal variations. Can be
+            specified as a ChannelSpec, and in this case will only be
+            applied to these channels. If True all channels are
+            normalized this way.
+            '''))
 
-            Can be specified as a ChannelSpec, and in this case will only be
-            applied to these channels. If True all channels are normalized this
-            way.
-            '''), group=NORM_GROUP),
+    ###################
+    # WEIGHTING OPTIONS
+    ###################
 
-        ###################
-        # WEIGHTING OPTIONS
-        ###################
-
-        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.', group=WEIGHT_GROUP),
-        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.', group=WEIGHT_GROUP),
-
-        'absolute_weighting': scfg.Value(False, help=ub.paragraph(
+    ignore_dilate = scfg.Value(0, group=WEIGHT_GROUP, help='Dilation applied to ignore masks.')
+    weight_dilate = scfg.Value(0, group=WEIGHT_GROUP, help='Dilation applied to weight masks.')
+    absolute_weighting = scfg.Value(False, group=WEIGHT_GROUP, help=ub.paragraph(
             '''
-            if True allow weights to be larger than 1, otherwise item weights
-            are rescaled.
-            '''), group=WEIGHT_GROUP),
-
-        'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
+            if True allow weights to be larger than 1, otherwise item
+            weights are rescaled.
+            '''))
+    min_spacetime_weight = scfg.Value(0.9, group=WEIGHT_GROUP, help=ub.paragraph(
             '''
             Minimum space-time dilation weight. Used in conjunction with
-            '''), group=WEIGHT_GROUP),
-
-        'upweight_centers': scfg.Value(True, help=ub.paragraph(
+            '''))
+    upweight_centers = scfg.Value(True, group=WEIGHT_GROUP, help=ub.paragraph(
             '''
-            Applies a weighting such that the center of the frame incurs more
-            loss.
-            '''), group=WEIGHT_GROUP),
-
-        'upweight_time': scfg.Value(None, help=ub.paragraph(
+            Applies a weighting such that the center of the frame incurs
+            more loss.
+            '''))
+    upweight_time = scfg.Value(None, group=WEIGHT_GROUP, help=ub.paragraph(
             '''
-            A number between 0.0 and 1.0 representing where to upweight time
-            the most (1.0 is last frame 0.0 is the first frame).
-            '''), group=WEIGHT_GROUP),
-
-        'dist_weights': scfg.Value(0, help=ub.paragraph(
+            A number between 0.0 and 1.0 representing where to upweight
+            time the most (1.0 is last frame 0.0 is the first frame).
+            '''))
+    dist_weights = scfg.Value(0, group=WEIGHT_GROUP, help=ub.paragraph(
             '''
             To use distance-transform based weights on annotations or
             not
-            '''), group=WEIGHT_GROUP),
+            '''))
+    balance_areas = scfg.Value(False, group=WEIGHT_GROUP, help=ub.paragraph(
+            '''
+            if True balance the weight of small and large polygons
+            '''))
 
-        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons', group=WEIGHT_GROUP),
+    ##################################
+    # DYNAMIC FILTER / MASKING OPTIONS
+    ##################################
 
-        ##################################
-        # DYNAMIC FILTER / MASKING OPTIONS
-        ##################################
-
-        'use_cloudmask': scfg.Value(None, help=ub.paragraph(
+    use_cloudmask = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
             '''
             Allow the dataloader to use the quality band to skip frames.
-            DEPRECATED: set quality_threshold=0 to disable the cloudmask.
-            Set to a positive value to use it, up to that threshold.
-            '''), group=FILTER_GROUP),
-
-        'quality_threshold': scfg.Value(0.0, help=ub.paragraph(
+            DEPRECATED: set quality_threshold=0 to disable the
+            cloudmask. Set to a positive value to use it, up to that
+            threshold.
+            '''))
+    quality_threshold = scfg.Value(0.0, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            The minimum fraction of usable pixels required in a frame sample.
-            If a frame has fewer than this fraction of usable pixels (i.e. not
-            clouds or other quality flags), it is marked for resampling as a
-            "bad" frame.
-            '''), group=FILTER_GROUP),
-
-        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans', group=FILTER_GROUP),
-
-        'mask_nan_bands': scfg.Value('', help=ub.paragraph(
+            The minimum fraction of usable pixels required in a frame
+            sample. If a frame has fewer than this fraction of usable
+            pixels (i.e. not clouds or other quality flags), it is
+            marked for resampling as a "bad" frame.
+            '''))
+    mask_low_quality = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            Channels that propogate their nans to other bands / streams. This should be
-            FusedChannelSpec coercible.
-            '''), group=FILTER_GROUP),
-
-        'mask_samecolor_method': scfg.Value(None, help=ub.paragraph(
+            if True, mask low quality pixels with nans
+            '''))
+    mask_nan_bands = scfg.Value('', group=FILTER_GROUP, help=ub.paragraph(
             '''
-            If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
-            Can be histogram or region.
-            '''), group=FILTER_GROUP),
-
-        'mask_samecolor_bands': scfg.Value('red', help=ub.paragraph(
+            Channels that propogate their nans to other bands / streams.
+            This should be FusedChannelSpec coercible.
+            '''))
+    mask_samecolor_method = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            Channels to use for SAMECOLOR_QUALITY_HEURISTIC. This should be
-            FusedChannelSpec coercible.
-            '''), group=FILTER_GROUP),
-
-        'mask_samecolor_values': scfg.Value(0, type=list, help=ub.paragraph(
+            If enabled, set as method to use for
+            SAMECOLOR_QUALITY_HEURISTIC. Can be histogram or region.
+            '''))
+    mask_samecolor_bands = scfg.Value('red', group=FILTER_GROUP, help=ub.paragraph(
+            '''
+            Channels to use for SAMECOLOR_QUALITY_HEURISTIC. This should
+            be FusedChannelSpec coercible.
+            '''))
+    mask_samecolor_values = scfg.Value(0, type=list, group=FILTER_GROUP, help=ub.paragraph(
             '''
             List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
-            '''), group=FILTER_GROUP),
-
-        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing', group=FILTER_GROUP),
-
-        'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
+            '''))
+    force_bad_frames = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            The minimum fraction of non-nan pixels required in a frame sample.
-            If a frame has fewer than this fraction of usable pixels (i.e. not
-            clouds or other quality flags), it is marked for resampling as a
-            "bad" frame.
-            '''), group=FILTER_GROUP),
-
-        'resample_invalid_frames': scfg.Value(3, help=ub.paragraph(
+            if True, force loading, even if data is nan / missing
+            '''))
+    observable_threshold = scfg.Value(0.0, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            Number of attempts to resample any frame marked as invalid via
-            quality or nodata checks.
-            '''), alias=['resample_max_tries'], group=FILTER_GROUP),
-
-        'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted', group=FILTER_GROUP),
-
-        ######################
-        # AUGMENTATION OPTIONS
-        ######################
-        ### TODO: these should likely become a nested jsonargparse
-        ### style config for a more general "augmentation scheme".
-
-        # See: ./data_augment.py
-
-        'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
+            The minimum fraction of non-nan pixels required in a frame
+            sample. If a frame has fewer than this fraction of usable
+            pixels (i.e. not clouds or other quality flags), it is
+            marked for resampling as a "bad" frame.
+            '''))
+    resample_invalid_frames = scfg.Value(3, alias=['resample_max_tries'], group=FILTER_GROUP, help=ub.paragraph(
             '''
-            In fit mode, perform translation augmentations in this fraction of
-            batch items.
-            '''), group=AUGMENTATION_GROUP),
-
-        'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random x-flips'''), group=AUGMENTATION_GROUP),
-
-        'augment_space_yflip': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random y-flips'''), group=AUGMENTATION_GROUP),
-
-        'augment_space_rot': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random 90 degree rotations'''), group=AUGMENTATION_GROUP),
-
-        'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
+            Number of attempts to resample any frame marked as invalid
+            via quality or nodata checks.
+            '''))
+    downweight_nan_regions = scfg.Value(True, group=FILTER_GROUP, help=ub.paragraph(
             '''
-            In fit mode, perform temporal jitter this fraction of batch items.
-            '''), group=AUGMENTATION_GROUP),
+            if True, unobservable (i.e. nan) pixels are downweighted
+            '''))
 
-        'temporal_dropout_rate': scfg.Value(1.0, type=float, help=ub.paragraph(
+    ######################
+    # AUGMENTATION OPTIONS
+    ######################
+    ### TODO: these should likely become a nested jsonargparse
+    ### style config for a more general "augmentation scheme".
+
+    # See: ./data_augment.py
+
+    augment_space_shift_rate = scfg.Value(0.9, group=AUGMENTATION_GROUP, help=ub.paragraph(
+            '''
+            In fit mode, perform translation augmentations in this
+            fraction of batch items.
+            '''))
+    augment_space_xflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
+            '''
+            In fit mode, if true, perform random x-flips
+            '''))
+    augment_space_yflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
+            '''
+            In fit mode, if true, perform random y-flips
+            '''))
+    augment_space_rot = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
+            '''
+            In fit mode, if true, perform random 90 degree rotations
+            '''))
+    augment_time_resample_rate = scfg.Value(0.8, group=AUGMENTATION_GROUP, help=ub.paragraph(
+            '''
+            In fit mode, perform temporal jitter this fraction of batch
+            items.
+            '''))
+    temporal_dropout_rate = scfg.Value(1.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
             Drops frames in a fraction of batch items.
-            '''), group=AUGMENTATION_GROUP),
-        'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''))
+    temporal_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
-            Given that a batch item is selected for temporal dropout, this is
-            the probability that each frame is dropped out. The main frame is
-            never removed.
-            '''), group=AUGMENTATION_GROUP),
-
-        'modality_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+            Given that a batch item is selected for temporal dropout,
+            this is the probability that each frame is dropped out. The
+            main frame is never removed.
+            '''))
+    modality_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
             The fraction of batch-items modality dropout is applied to.
-            '''), group=AUGMENTATION_GROUP),
-        'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''))
+    modality_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
-            Drops late-fused modalities in each frame with this probability,
-            except if the frame only has one modality left.
-            '''), group=AUGMENTATION_GROUP),
+            Drops late-fused modalities in each frame with this
+            probability, except if the frame only has one modality left.
+            '''))
 
-        # TODO: specify channels that are allowed to be dropped out?
-        'channel_dropout_rate': scfg.Value(0.0, type=float, help=ub.paragraph(
+    # TODO: specify channels that are allowed to be dropped out?
+    channel_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
             The fraction of batch-items channel dropout is applied to.
-            '''), group=AUGMENTATION_GROUP),
-        'channel_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''))
+    channel_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
             Drops early-fused channels within each modality with this
-            probability except if it is the last channel within a modality.
-            '''), group=AUGMENTATION_GROUP),
+            probability except if it is the last channel within a
+            modality.
+            '''))
 
-        # TODO:
-        # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
-        #     '''
-        #     Drops extra metadata provided to the model for positional encodings.
-        #     '''), group=AUGMENTATION_GROUP),
+    # TODO:
+    # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+    #     '''
+    #     Drops extra metadata provided to the model for positional encodings.
+    #     '''), group=AUGMENTATION_GROUP),
 
-        # TODO:
-        # 'augment_scale': scfg.Value(0.0, type=float, help=ub.paragraph(
-        #     '''
-        #     Train at multiple scales.
-        #     '''), group=AUGMENTATION_GROUP),
+    # TODO:
+    # 'augment_scale': scfg.Value(0.0, type=float, help=ub.paragraph(
+    #     '''
+    #     Train at multiple scales.
+    #     '''), group=AUGMENTATION_GROUP),
 
-        'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
+    reseed_fit_random_generators = scfg.Value(True, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
             '''
-            This option forces the dataloader random number generator to reseed
-            itself, effectively ignoring any global seed in non-test mode.  In
-            test mode, this has no effect. The reason this defaults to True is
-            because of our balanced sampling approach, where the index of a
-            sample passed to getitem is ignored and we randomly return an item
-            acording to the balanced distribution. This relies on randomness
-            and if this was set to False dataloader clones for ddp or multiple
-            workers would generate the same sequence of data regardless of
-            split indexes.
-            '''), group=AUGMENTATION_GROUP),
-    }
+            This option forces the dataloader random number generator to
+            reseed itself, effectively ignoring any global seed in non-
+            test mode. In test mode, this has no effect. The reason this
+            defaults to True is because of our balanced sampling
+            approach, where the index of a sample passed to getitem is
+            ignored and we randomly return an item acording to the
+            balanced distribution. This relies on randomness and if this
+            was set to False dataloader clones for ddp or multiple
+            workers would generate the same sequence of data regardless
+            of split indexes.
+            '''))
 
     def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
@@ -855,9 +663,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             mode (str): fit or predict
             **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
         """
-        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
-        sampler = ndsampler.CocoSampler.coerce(sampler)
         config = KWCocoVideoDatasetConfig(**kwargs)
+
+        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
+        if config.sampler_backend is None:
+            sampler = ndsampler.CocoSampler.coerce(sampler)
+        else:
+            from watch.utils import util_parallel
+            sampler = ndsampler.CocoSampler.coerce(
+                sampler,
+                workdir=config.sampler_workdir,
+                backend=config.sampler_backend)
+            workers = util_parallel.coerce_num_workers(config.sampler_workers)
+            sampler.frames.prepare(workers=workers)
+
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
             window_dims = chip_dims
@@ -1953,10 +1772,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
-        tr_subset = ub.dict_isect(target_, {
+
+        relevant_target_keys = {
             'gids', 'space_slice', 'video_id', 'fliprot_params',
             'main_idx', 'scale', 'main_skip_reason', 'allow_augment'
-        })
+        }
+        resolved_target_subset = ub.dict_isect(target_, relevant_target_keys)
+        requested_target_subset = ub.dict_isect(target, relevant_target_keys)
 
         resolved_input_scale = resolution_info['resolved_input_scale']
         resolved_output_scale = resolution_info['resolved_output_scale']
@@ -1983,7 +1805,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'domain': video.get('domain', video.get('name', None)),
             'input_gsd': resolved_input_scale.get('gsd', None),
             'output_gsd': resolved_output_scale.get('gsd', None),
-            'target': tr_subset,
+
+            # TODO: rename 'target' to resolved_target
+            'target': resolved_target_subset,
+            'requested_target': requested_target_subset,
         }
         return item
 
@@ -2167,6 +1992,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if force_bad_frames:
             final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
             print('gid_to_isbad = {}'.format(ub.urepr(gid_to_isbad, nl=1)))
+        final_gids = list(final_gids)
 
         # coco_dset.images(final_gids).lookup('date_captured')
         target_['gids'] = final_gids
@@ -2623,6 +2449,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
+            if weight is None:
+                weight = 1.0
             poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
@@ -3322,8 +3150,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
-                  classes=None,
-                  **kw):
+                  classes=None, show_summary_text=True, **kw):
         """
         Visualize an item produced by this DataSet.
 
@@ -3359,9 +3186,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 corresponds to.  If unspecified uses the classes from the
                 datamodule.
 
+            show_summary_text (bool):
+                if True, draw additional summary debug information.
+                Defaults to True.
+
         Note:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
+
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -3455,6 +3287,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             classes=self.classes, requested_tasks=self.requested_tasks,
             rescale=rescale, **kw)
         canvas = builder.build()
+
+        if show_summary_text:
+            summary = self.summarize_item(item)
+            summary = ub.udict(summary) - {'frame_summaries'}
+            summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
+            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
+            canvas = kwimage.stack_images([header, canvas])
+
         return canvas
 
     def summarize_item(self, item):
@@ -3496,7 +3336,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame.get('ann_aids') is not None:
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
-        item_summary['video_name'] = item['video_name']
+        vidname = item['video_name']
+        video = self.coco_dset.index.name_to_video[vidname]
+        vid_w = video['width']
+        vid_h = video['height']
+        item_summary['video_name'] = vidname
+        item_summary['video_hw'] = (vid_h, vid_w)
+
         if timestamps:
             deltas = np.diff(timestamps)
             deltas = [d.total_seconds() for d in deltas]
@@ -3507,6 +3353,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             item_summary['mean_delta'] = np.mean(deltas)
         item_summary['input_gsd'] = item['input_gsd']
         item_summary['output_gsd'] = item['output_gsd']
+
+        if 'requested_target' in item:
+            item_summary['requested_target'] = item['requested_target']
+
+        if 'target' in item:
+            item_summary['resolved_target'] = item['target']
+
         return item_summary
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
@@ -3538,6 +3391,159 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             collate_fn=ub.identity,  # disable collation
         )
         return loader
+
+
+def more_demos():
+    """
+    CommandLine:
+        USE_RTREE=1 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
+        USE_RTREE=0 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # Demo with real data
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> ##'red|green|blue',
+        >>> self = KWCocoVideoDataset(
+        >>>     coco_dset,
+        >>>     time_dims=7, window_dims=(196, 196),
+        >>>     window_overlap=0,
+        >>>     channels="(S2,L8):blue|green|red|nir",
+        >>>     input_space_scale='3.3GSD',
+        >>>     window_space_scale='3.3GSD',
+        >>>     output_space_scale='1GSD',
+        >>>     prenormalize_inputs=True,
+        >>>     #normalize_peritem='nir',
+        >>>     dist_weights=0,
+        >>>     quality_threshold=0,
+        >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+        >>> )
+        >>> self.requested_tasks['change'] = 1
+        >>> self.requested_tasks['saliency'] = 1
+        >>> self.requested_tasks['class'] = 0
+        >>> self.requested_tasks['boxes'] = 1
+        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> index['allow_augment'] = False
+        >>> item = self[index]
+        >>> target = item['target']
+        >>> #for idx in range(100):
+        ... #    self[idx]
+        >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1)
+        >>> kwplot.show_if_requested()
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # This shows how you can use the dataloader to sample an arbitrary
+        >>> # spacetime volume.
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> ##'red|green|blue',
+        >>> self = KWCocoVideoDataset(
+        >>>     coco_dset,
+        >>>     time_dims=7, window_dims=(196, 196),
+        >>>     window_overlap=0,
+        >>>     channels="(S2,L8):blue|green|red|nir",
+        >>>     input_space_scale='3.3GSD',
+        >>>     window_space_scale='3.3GSD',
+        >>>     output_space_scale='1GSD',
+        >>>     #normalize_peritem='nir',
+        >>>     dist_weights=0,
+        >>>     quality_threshold=0,
+        >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+        >>> )
+        >>> self.requested_tasks['change'] = 1
+        >>> self.requested_tasks['saliency'] = 1
+        >>> self.requested_tasks['class'] = 0
+        >>> self.requested_tasks['boxes'] = 1
+        >>> target = {
+        >>>     'video_id': 3,
+        >>>     'gids': [529, 555, 607, 697, 719, 730, 768],
+        >>>     'main_idx': 3,
+        >>>     'space_slice': (slice(0, 65, None), slice(130, 195, None)),
+        >>> }
+        >>> item = self[target]
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # Tests the hard negative sampling
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop6-MeanYear10GSD/data.kwcoco.zip'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> ##'red|green|blue',
+        >>> self = KWCocoVideoDataset(
+        >>>     coco_dset,
+        >>>     time_dims=5, window_dims=(196, 196),
+        >>>     window_overlap=0,
+        >>>     channels="(S2,L8):blue|green|red",
+        >>>     fixed_resolution='10GSD',
+        >>>     normalize_peritem=True,
+        >>>     use_grid_negatives='cleared',
+        >>>     use_grid_positives=False,
+        >>>     use_centered_positives= True,
+        >>>     time_kernel='(-2y,-1y,0,1y,2y)',
+        >>> )
+        >>> self.requested_tasks['change'] = 1
+        >>> self.requested_tasks['saliency'] = 1
+        >>> self.requested_tasks['class'] = 0
+        >>> self.requested_tasks['boxes'] = 1
+
+        >>> # Check that all of the negative regions are from cleared videos
+        >>> videos = self.sampler.dset.videos()
+        >>> vidid_to_cleared = ub.udict(ub.dzip(videos.lookup('id'), videos.lookup('cleared', False)))
+        >>> assert self.config['use_grid_negatives'] == 'cleared'
+        >>> positive_idxs = self.new_sample_grid['positives_indexes']
+        >>> negative_idxs = self.new_sample_grid['negatives_indexes']
+        >>> targets = self.new_sample_grid['targets']
+        >>> negative_video_ids = {targets[x]['video_id'] for x in negative_idxs}
+        >>> positive_video_ids = {targets[x]['video_id'] for x in positive_idxs}
+        >>> assert all(vidid_to_cleared.subdict(negative_video_ids).values())
+
+        >>> index = 0
+        >>> item = self[index]
+        >>> target = item['target']
+        >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1)
+        >>> kwplot.show_if_requested()
+
+
+    Ignore:
+        >>> self.disable_augmenter = True
+        >>> self.normalize_peritem = None
+        >>> self.config['mask_low_quality'] = True
+        >>> self.config['force_bad_frames'] = True
+        >>> self.config['resample_invalid_frames'] = 0
+        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
+        >>> item1 = self[index]
+        >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+        >>> item2 = self[index]
+        >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
+        >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
+        >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
+        >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
+
+    """
 
 
 def worker_init_fn(worker_id):

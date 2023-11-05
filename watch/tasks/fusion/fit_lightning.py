@@ -61,6 +61,88 @@ class SmartTrainer(pl.Trainer):
                 '''))
             start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
 
+            draw_tensorboard = dpath / 'draw_tensorboard.sh'
+            draw_tensorboard.write_text(ub.codeblock(
+                fr'''
+                #!/bin/bash
+                WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+                    {dpath}
+                '''
+            ))
+
+            predict_vali = dpath / 'predict_vali.sh'
+
+            try:
+                vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
+            except Exception:
+                vali_coco_fpath = None
+
+            try:
+                train_coco_path = self.datamodule.train_dataset.coco_dset.fpath
+            except Exception:
+                train_coco_path = None
+
+            predict_vali.write_text(ub.codeblock(
+                fr'''
+                #!/bin/bash
+                TRAIN_DPATH="{dpath}"
+                echo $TRAIN_DPATH
+
+                # Find a checkpoint to evaluate
+                CHECKPOINT_FPATH=$(python -c "if 1:
+                    import pathlib
+                    train_dpath = pathlib.Path('$TRAIN_DPATH')
+                    found = sorted((train_dpath / 'checkpoints').glob('*.ckpt'))
+                    found = [f for f in found if 'last.ckpt' not in str(f)]
+                    print(found[-1])
+                    ")
+                echo $CHECKPOINT_FPATH
+
+                # Convert it into a package, then get the name of that
+                geowatch repackage $CHECKPOINT_FPATH
+
+                PACKAGE_FPATH=$(python -c "if 1:
+                    import pathlib
+                    p = pathlib.Path('$CHECKPOINT_FPATH')
+                    found = list(p.parent.glob(p.stem + '*.pt'))
+                    print(found[-1])
+                    ")
+                echo $PACKAGE_FPATH
+
+                PACKAGE_NAME=$(python -c "if 1:
+                    import pathlib
+                    p = pathlib.Path('$PACKAGE_FPATH')
+                    print(p.stem.replace('.ckpt', ''))
+                    ")
+                echo $PACKAGE_NAME
+
+
+                # Predict on the validation set
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {vali_coco_fpath} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --draw_batches=True \
+                    --clear_annots=False \
+                    --device cpu
+
+                # Predict on the training set
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {train_coco_path} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --draw_batches=True \
+                    --clear_annots=False \
+                    --device cpu
+                '''
+            ))
+            """
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath /data/joncrall/dvc-repos/shitspotter_expt_dvc/training/toothbrush/joncrall/ShitSpotter/runs/shitspotter_v5/lightning_logs/version_10/checkpoints/last.ckpt
+                    --test_dataset
+                    --pred_dataset={dpath}/monitor/preds/pred.kwcoco.zip
+            """
+
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
             # able to determine what tasks it should be producing data for.

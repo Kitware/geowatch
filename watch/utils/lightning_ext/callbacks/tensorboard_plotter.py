@@ -185,13 +185,14 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     import kwplot
     from kwplot.auto_backends import BackendContext
 
-    train_dpath = ub.Path(train_dpath)
-
-    if not (train_dpath / 'monitor').exists():
-        if (train_dpath / '../monitor').exists():
-            train_dpath = (train_dpath / '..')
-        elif (train_dpath / '../../monitor').exists():
-            train_dpath = (train_dpath / '../..')
+    train_dpath = ub.Path(train_dpath).resolve()
+    if not train_dpath.name.startswith('version_'):
+        # hack
+        if not (train_dpath / 'monitor').exists():
+            if (train_dpath / '../monitor').exists():
+                train_dpath = (train_dpath / '..')
+            elif (train_dpath / '../../monitor').exists():
+                train_dpath = (train_dpath / '../..')
 
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=verbose)
 
@@ -404,6 +405,7 @@ def redraw_cli(train_dpath):
 
     hparams_fpath = train_dpath / 'hparams.yaml'
     if hparams_fpath.exists():
+        print('Found hparams')
         import yaml
         with open(hparams_fpath, 'r') as file:
             hparams = yaml.load(file, yaml.Loader)
@@ -420,11 +422,15 @@ def redraw_cli(train_dpath):
             title = model_cfgstr
         title = expt_name + '\n' + title
     else:
+        print('Did not find hparams')
         title = expt_name
 
     print(f'train_dpath={train_dpath}')
     print(f'title={title}')
     _dump_measures(train_dpath, title, verbose=1)
+    import rich
+    tensorboard_dpath = train_dpath / 'monitor/tensorboard'
+    rich.print(f'[link={tensorboard_dpath}]{tensorboard_dpath}[/link]')
 
 
 if __name__ == '__main__':

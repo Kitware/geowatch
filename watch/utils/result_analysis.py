@@ -1386,7 +1386,8 @@ class SkillTracker:
         ratings.update(ub.dzip(ranking, new_ratings))
 
 
-def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
+def varied_values(longform, min_variations=0, max_variations=None,
+                  default=ub.NoParam, dropna=False):
     """
     Given a list of dictionaries, find the values that differ between them.
 
@@ -1403,6 +1404,10 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
         min_variations (int, default=0):
             "columns" with fewer than ``min_variations`` unique values are
             removed from the result.
+
+        max_variations (int | None):
+            If specified only return items with fewer than this number of
+            variations.
 
         default (VT | NoParamType):
             if specified, unspecified columns are given this value.
@@ -1436,6 +1441,8 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
                 'row contains columns {}').format(missing))
         columns.update(row.keys())
 
+    cannonical_nan = float('nan')
+
     # Build up the set of unique values for each column
     varied = ub.ddict(set)
     for row in longform:
@@ -1443,8 +1450,16 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
             value = row.get(key, default)
             if isinstance(value, list):
                 value = tuple(value)
-            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
-                continue
+            if isinstance(value, numbers.Number) and math.isnan(value):
+                if dropna:
+                    continue
+                else:
+                    # Always use a single nan value such that the id check
+                    # passes. Otherwise we could end up with a dictionary that
+                    # contains multiple nan keys.
+                    # References:
+                    # .. [SO6441857] https://stackoverflow.com/questions/6441857/nans-as-key-in-dictionaries
+                    value = cannonical_nan
             varied[key].add(value)
 
     # Remove any column that does not have enough variation
@@ -1452,10 +1467,18 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
         for key, values in list(varied.items()):
             if len(values) < min_variations:
                 varied.pop(key)
+
+    if max_variations is not None:
+        for key, values in list(varied.items()):
+            if len(values) > max_variations:
+                varied.pop(key)
+
     return varied
 
 
-def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=False):
+def varied_value_counts(longform, min_variations=0,
+                        max_variations=None,
+                        default=ub.NoParam, dropna=False):
     """
     Given a list of dictionaries, find the values that differ between them.
 
@@ -1469,9 +1492,13 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
             The values of the dictionary must be hashable. Lists will be
             converted into tuples.
 
-        min_variations (int, default=0):
+        min_variations (int):
             "columns" with fewer than ``min_variations`` unique values are
-            removed from the result.
+            removed from the result. Defaults to 0.
+
+        max_variations (int | None):
+            If specified only return items with fewer than this number of
+            variations.
 
         default (VT | NoParamType):
             if specified, unspecified columns are given this value.
@@ -1514,6 +1541,8 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
                 'row contains columns {}').format(missing))
         columns.update(row.keys())
 
+    cannonical_nan = float('nan')
+
     # Build up the set of unique values for each column
     from collections import Counter
     varied_counts = ub.ddict(Counter)
@@ -1522,8 +1551,17 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
             value = row.get(key, default)
             if isinstance(value, list):
                 value = tuple(value)
-            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
-                continue
+
+            if isinstance(value, numbers.Number) and math.isnan(value):
+                if dropna:
+                    continue
+                else:
+                    # Always use a single nan value such that the id check
+                    # passes. Otherwise we could end up with a dictionary that
+                    # contains multiple nan keys.
+                    # References:
+                    # .. [SO6441857] https://stackoverflow.com/questions/6441857/nans-as-key-in-dictionaries
+                    value = cannonical_nan
             varied_counts[key][value] += 1
 
     # Remove any column that does not have enough variation
@@ -1531,6 +1569,12 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
         for key, values in list(varied_counts.items()):
             if len(values) < min_variations:
                 varied_counts.pop(key)
+
+    if max_variations is not None:
+        for key, values in list(varied_counts.items()):
+            if len(values) > max_variations:
+                varied_counts.pop(key)
+
     return varied_counts
 
 
