@@ -154,6 +154,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     sampler_backend = scfg.Value(None, help="Can be None, 'npy', or 'cog'.")
 
+    sampler_workdir = scfg.Value(None, help="A location the sampler can write a cache if a backend is selected.")
+
+    sampler_workers = scfg.Value('avail/2', help="Number of workers to precompute a sampler backend.")
+
     ###############
     # SPACE OPTIONS
     ###############
@@ -211,7 +215,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # TIME OPTIONS
     ##############
 
-    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help='number of temporal sampler per batch')
+    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help='number of temporal samples (i.e. frames) per batch')
     time_sampling = scfg.Value('contiguous', type=str, group=TIME_GROUP, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous
@@ -666,12 +670,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             sampler = ndsampler.CocoSampler.coerce(sampler)
         else:
             from watch.utils import util_parallel
-            # TODO: better sampler backend integration
             sampler = ndsampler.CocoSampler.coerce(
                 sampler,
                 workdir=config.sampler_workdir,
                 backend=config.sampler_backend)
-            workers = util_parallel.coerce_num_workers('avail/2')
+            workers = util_parallel.coerce_num_workers(config.sampler_workers)
             sampler.frames.prepare(workers=workers)
 
         chip_dims = config['chip_dims']
