@@ -6,7 +6,7 @@ from needing to specify what the available options are in multiple places.
 """
 import kwcoco
 import kwimage
-import ndsampler
+# import ndsampler
 import pytorch_lightning as pl
 import ubelt as ub
 import scriptconfig as scfg

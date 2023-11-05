@@ -71,12 +71,24 @@ class SmartTrainer(pl.Trainer):
             ))
 
             predict_vali = dpath / 'predict_vali.sh'
-            vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
+
+            try:
+                vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
+            except Exception:
+                vali_coco_fpath = None
+
+            try:
+                train_coco_path = self.datamodule.train_dataset.coco_dset.fpath
+            except Exception:
+                train_coco_path = None
+
             predict_vali.write_text(ub.codeblock(
                 fr'''
                 #!/bin/bash
                 TRAIN_DPATH="{dpath}"
                 echo $TRAIN_DPATH
+
+                # Find a checkpoint to evaluate
                 CHECKPOINT_FPATH=$(python -c "if 1:
                     import pathlib
                     train_dpath = pathlib.Path('$TRAIN_DPATH')
@@ -85,6 +97,8 @@ class SmartTrainer(pl.Trainer):
                     print(found[-1])
                     ")
                 echo $CHECKPOINT_FPATH
+
+                # Convert it into a package, then get the name of that
                 geowatch repackage $CHECKPOINT_FPATH
 
                 PACKAGE_FPATH=$(python -c "if 1:
@@ -103,11 +117,22 @@ class SmartTrainer(pl.Trainer):
                 echo $PACKAGE_NAME
 
 
+                # Predict on the validation set
                 python -m watch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
                     --test_dataset {vali_coco_fpath} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/preds/$PACKAGE_NAME/pred.kwcoco.zip \
+                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                     --draw_batches=True \
+                    --clear_annots=False \
+                    --device cpu
+
+                # Predict on the training set
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {train_coco_path} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --draw_batches=True \
+                    --clear_annots=False \
                     --device cpu
                 '''
             ))

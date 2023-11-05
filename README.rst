@@ -66,9 +66,9 @@ formats (e.g. COGs) will be more efficient than others.
 
 Slides:
 
-    * `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
+* `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
 
-    * `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
+* `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
 
 Use Case: Heavy Construction
 ----------------------------
@@ -87,13 +87,18 @@ pipeline that uses low spatio-temporal resolution data to detect candidate
 
 The next main component of the system is activity characterization (AC) where
 higher resolution data is used to refine predicted information. In this case we
-classify each polygon as a different phase of construction.
+classify each polygon as a different phase of construction. In the above
+example there are 3 detected candidates. We now zoom in on the one in the
+middle.
 
 .. image:: https://i.imgur.com/2EBpDGZ.gif
    :height: 100px
    :align: left
 
-
+This shows the system detecting the construction of the KHQ building and
+classifying its phases. This demo was run on public data, and can be reproduced
+with `Tutorial 6 <tutorial/tutorial6_predict_KHQ.sh>`_. The system was not
+trained on this region.
 
 Getting Started
 ---------------
@@ -155,7 +160,7 @@ system.
 
 * Tutorial 4: `Misc Training Tutorial <tutorial/tutorial4_advanced_training.sh>`_
 
-* Tutorial 5: `KHQ SMART Demo <tutorial/tutorial5_bas_prediction.sh>`_
+* Tutorial 5: `KR2 BAS SMART Demo <tutorial/tutorial5_bas_prediction.sh>`_
 
 * Tutorial 6: `KHQ SMART Demo <tutorial/tutorial6_predict_KHQ.sh>`_
 
@@ -220,15 +225,19 @@ For more details about the GEOWATCH CLI and other CLI tools included in this pac
 Related Work
 ------------
 
-There are other GIS-focused torch packages out there:
+There are other GIS and segmentation focused torch packages out there:
 
 * https://github.com/microsoft/torchgeo - Torch geo provides many custom
   dataloaders for standard datasets. In contrast, we provide a single data
   loader for kwcoco files.
 
-* https://github.com/azavea/raster-vision - based on chips, where as ours
+* https://github.com/azavea/raster-vision - based on chips, whereas ours
   focuses on the ability to process data in-situ (using the help of
   `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_).
+
+* https://github.com/open-mmlab/mmsegmentation - A very good package (and
+  research group), we use some the mmlabs models, but their library doesn't
+  have the data flexibility (e.g. large image support) that kwcoco provides.
 
 
 Acknowledgement
