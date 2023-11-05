@@ -15,6 +15,8 @@ This folder contains several tutorials on how to use the GeoWATCH system to trai
 
 -  Tutorial 6: KHQ SMART Demo |Tutorial6_Shell|
 
+  * See Also: `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
+
 
 TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
 

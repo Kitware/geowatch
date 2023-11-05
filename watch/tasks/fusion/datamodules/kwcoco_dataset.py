@@ -871,7 +871,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
         sampler = ndsampler.CocoSampler.coerce(sampler, backend=sampler_backend)
 
-        if sampler.backend is not None:
+        if sampler._backend is not None:
             # TODO: better sampler backend integration
             from watch.utils import util_parallel
             workers = util_parallel.coerce_num_workers('avail/2')

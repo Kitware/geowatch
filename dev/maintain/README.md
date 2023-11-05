@@ -1,1 +1,1 @@
-Script for repo maintenance
+Scripts for repo maintenance

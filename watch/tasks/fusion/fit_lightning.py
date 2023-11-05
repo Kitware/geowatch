@@ -104,10 +104,11 @@ class SmartTrainer(pl.Trainer):
 
 
                 python -m watch.tasks.fusion.predict \
-                    --package_fpath {dpath}/checkpoints/last.pt \
+                    --package_fpath $PACKAGE_FPATH \
                     --test_dataset {vali_coco_fpath} \
                     --pred_dataset=$TRAIN_DPATH/monitor/preds/$PACKAGE_NAME/pred.kwcoco.zip \
-                    --draw_batches=True
+                    --draw_batches=True \
+                    --device cpu
                 '''
             ))
             """
