@@ -3371,6 +3371,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
 
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -3468,7 +3469,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             summary = self.summarize_item(item)
             summary = ub.udict(summary) - {'frame_summaries'}
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
-            canvas = kwimage.draw_header_text(canvas, text=summary_text, halign='left', color='kitware_blue')
+            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
+            canvas = kwimage.stack_images([header, canvas])
 
         return canvas
 

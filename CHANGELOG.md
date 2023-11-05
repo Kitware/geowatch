@@ -9,6 +9,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* SMARTTrainer now writes helpful scripts to visualize batches as an independent process (works around ddp issue) 
+
 * Reorganized mlops analysis plots for more user control and stability
 
 * Batch visualizations now have the option of showing summary text information

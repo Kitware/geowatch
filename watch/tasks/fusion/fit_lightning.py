@@ -70,6 +70,53 @@ class SmartTrainer(pl.Trainer):
                 '''
             ))
 
+            predict_vali = dpath / 'predict_vali.sh'
+            vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
+            predict_vali.write_text(ub.codeblock(
+                fr'''
+                #!/bin/bash
+                TRAIN_DPATH="{dpath}"
+                echo $TRAIN_DPATH
+                CHECKPOINT_FPATH=$(python -c "if 1:
+                    import pathlib
+                    train_dpath = pathlib.Path('$TRAIN_DPATH')
+                    found = sorted((train_dpath / 'checkpoints').glob('*.ckpt'))
+                    found = [f for f in found if 'last.ckpt' not in str(f)]
+                    print(found[-1])
+                    ")
+                echo $CHECKPOINT_FPATH
+                geowatch repackage $CHECKPOINT_FPATH
+
+                PACKAGE_FPATH=$(python -c "if 1:
+                    import pathlib
+                    p = pathlib.Path('$CHECKPOINT_FPATH')
+                    found = list(p.parent.glob(p.stem + '*.pt'))
+                    print(found[-1])
+                    ")
+                echo $PACKAGE_FPATH
+
+                PACKAGE_NAME=$(python -c "if 1:
+                    import pathlib
+                    p = pathlib.Path('$PACKAGE_FPATH')
+                    print(p.stem.replace('.ckpt', ''))
+                    ")
+                echo $PACKAGE_NAME
+
+
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath {dpath}/checkpoints/last.pt \
+                    --test_dataset {vali_coco_fpath} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/preds/$PACKAGE_NAME/pred.kwcoco.zip \
+                    --draw_batches=True
+                '''
+            ))
+            """
+                python -m watch.tasks.fusion.predict \
+                    --package_fpath /data/joncrall/dvc-repos/shitspotter_expt_dvc/training/toothbrush/joncrall/ShitSpotter/runs/shitspotter_v5/lightning_logs/version_10/checkpoints/last.ckpt
+                    --test_dataset
+                    --pred_dataset={dpath}/monitor/preds/pred.kwcoco.zip
+            """
+
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
             # able to determine what tasks it should be producing data for.
