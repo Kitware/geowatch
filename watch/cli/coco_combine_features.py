@@ -140,7 +140,8 @@ def main(cmdline=True, **kwargs):
         print('missing_hist = {!r}'.format(missing_hist))
 
     print('dump dst_dset.fpath = {!r}'.format(dst_dset.fpath))
-    dst_dset.dump(dst_dset.fpath, newlines=True)
+    dst_dset.fpath
+    dst_dset.dump(newlines=True)
 
 
 def combine_auxiliary_features(dst_dset, src_dsets):

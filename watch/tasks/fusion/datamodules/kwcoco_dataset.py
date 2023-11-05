@@ -300,6 +300,11 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         #     Labels to consider positive (in addition to infered labels)
         #     ''')),
 
+        'sampler_backend': scfg.Value(None, help=ub.paragraph(
+            '''
+            Can be None, 'npy', or 'cog'.
+            ''')),
+
         ###############
         # SPACE OPTIONS
         ###############
@@ -860,9 +865,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             mode (str): fit or predict
             **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
         """
-        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
-        sampler = ndsampler.CocoSampler.coerce(sampler)
         config = KWCocoVideoDatasetConfig(**kwargs)
+        sampler_backend = config['sampler_backend']
+
+        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
+        sampler = ndsampler.CocoSampler.coerce(sampler, backend=sampler_backend)
+
+        if sampler.backend is not None:
+            # TODO: better sampler backend integration
+            from watch.utils import util_parallel
+            workers = util_parallel.coerce_num_workers('avail/2')
+            sampler.frames.prepare(workers=workers)
+
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
             window_dims = chip_dims
