@@ -84,6 +84,11 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
             is "spawn".
             '''), group='resources')
 
+    sampler_backend = scfg.Value(None, help=ub.paragraph(
+        '''
+        Can be None, 'npy', or 'cog'.
+        '''))
+
     sqlview = scfg.Value(False, help=ub.paragraph(
             '''
             If False, reads the COCO dataset as a json file. Otherwise
@@ -353,7 +358,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 print('Build train kwcoco dataset')
 
             print('self.exclude_sensors', self.exclude_sensors)
-            coco_train_sampler = ndsampler.CocoSampler(train_coco_dset)
+            # coco_train_sampler = ndsampler.CocoSampler(train_coco_dset)
+            coco_train_sampler = train_coco_dset
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler, mode='fit', **self.train_dataset_config,
             )
@@ -403,7 +409,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_coco_dset = _read_kwcoco_split('vali')
                 if self.verbose:
                     print('Build validation kwcoco dataset')
-                vali_coco_sampler = ndsampler.CocoSampler(vali_coco_dset)
+                # vali_coco_sampler = ndsampler.CocoSampler(vali_coco_dset)
+                vali_coco_sampler = vali_coco_dset
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
                 self.torch_datasets['vali'] = vali_dataset
@@ -413,7 +420,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             test_coco_dset = _read_kwcoco_split('test')
             if self.verbose:
                 print('Build test kwcoco dataset')
-            test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
+            # test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
+            test_coco_sampler = test_coco_dset
             self.coco_datasets['test'] = test_coco_dset
             self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler, mode='test', **self.test_dataset_config,
