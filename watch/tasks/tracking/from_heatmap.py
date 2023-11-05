@@ -22,6 +22,7 @@ from watch.tasks.tracking.utils import (
     trackid_is_default,
     gpd_sort_by_gid, gpd_len,
     gpd_compute_scores)
+import geopandas as gpd
 
 try:
     from xdev import profile
@@ -272,6 +273,50 @@ class TimePolygonFilter:
         if len(gdf) > 0:
             group = gdf.groupby('track_idx', group_keys=False)
             result = group.apply(_edit)
+        else:
+            result = gdf
+        return result
+
+
+class TimeSplitFilter:
+    """
+    Splits tracks based on start and end of each subtracks min response.
+    """
+
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    def __call__(self, gdf):
+
+        def _edit(grp):
+            sub_tracks = []
+            for idx, score in enumerate(scores):
+
+                if (score > thresh) and (track_start is None):
+                    # print(f"track started at {idx}")
+                    track_start = idx
+
+                if (score < thresh) and (track_start is not None):
+                    # print(f"track ended at {idx-1}")
+                    sub_tracks.append((track_start, idx))
+                    track_start = None
+
+            if (track_start is not None):
+                sub_tracks.append((track_start, None))
+
+            return sub_tracks
+
+        if len(gdf) > 0:
+            subtracks = []
+            subtrack_idx = 1
+            for track_id, group in gdf.groupby('track_idx'):
+                for sub_id, (start, stop) in enumerate(_edit(list(group["fg"]))):
+                    subtrack = group.iloc[start:stop]
+                    subtrack["track_idx"] = subtrack_idx
+                    subtrack_idx += 1
+
+                    subtracks.append(subtrack)
+            result = gpd.concat(subtracks)
         else:
             result = gdf
         return result
@@ -728,6 +773,14 @@ def time_aggregated_polys(sub_dset, **kwargs):
         _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
+
+    if config.time_split_thresh:
+        split_filter = TimeSplitFilter(config.time_split_thresh)
+        n_orig = gpd_len(_TRACKS)
+        _TRACKS = split_filter(_TRACKS)
+        n_result = gpd_len(_TRACKS)
+        print('filter based on time splitting: remaining tracks '
+              f'{n_result} / {n_orig}')
 
     # The tracker assumes the polygons will be output in video space.
     if scale_vid_from_trk is not None and len(_TRACKS):
@@ -1342,6 +1395,12 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     bg_key = scfg.Value(None, help=ub.paragraph(
         '''
         Zero or more channels to use as the negative class for polygon scoring.
+        '''))
+
+    time_split_thresh = scfg.Value(None, help=ub.paragraph(
+        '''
+        time splitting parameter. if set, tracks will be broken into subtracks
+        based on when the score is above this threshold.
         '''))
 
     time_thresh = scfg.Value(1, help=ub.paragraph(
