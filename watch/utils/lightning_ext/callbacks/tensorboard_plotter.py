@@ -428,6 +428,9 @@ def redraw_cli(train_dpath):
     print(f'train_dpath={train_dpath}')
     print(f'title={title}')
     _dump_measures(train_dpath, title, verbose=1)
+    import rich
+    tensorboard_dpath = train_dpath / 'monitor/tensorboard'
+    rich.print(f'[link={tensorboard_dpath}]{tensorboard_dpath}[/link]')
 
 
 if __name__ == '__main__':

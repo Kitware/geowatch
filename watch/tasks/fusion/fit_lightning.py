@@ -63,7 +63,7 @@ class SmartTrainer(pl.Trainer):
 
             draw_tensorboard = dpath / 'draw_tensorboard.sh'
             draw_tensorboard.write_text(ub.codeblock(
-                r'''
+                fr'''
                 #!/bin/bash
                 WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
                     {dpath}
