@@ -775,6 +775,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     if config.time_split_thresh:
+        print(_TRACKS)
         split_filter = TimeSplitFilter(config.time_split_thresh)
         n_orig = gpd_len(_TRACKS)
         _TRACKS = split_filter(_TRACKS)
