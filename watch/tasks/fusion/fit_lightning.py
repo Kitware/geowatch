@@ -123,12 +123,14 @@ class SmartTrainer(pl.Trainer):
                     --test_dataset {vali_coco_fpath} \
                     --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                     --draw_batches=True \
+                    --window_overlap 0 \
                     --clear_annots=False \
                     --device cpu
 
                 # Predict on the training set
                 python -m watch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
+                    --window_overlap 0 \
                     --test_dataset {train_coco_path} \
                     --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                     --draw_batches=True \
