@@ -288,7 +288,7 @@ class TimeSplitFilter:
 
     def __call__(self, gdf):
 
-        def _edit(grp):
+        def _edit(scores):
             magic_thresh = 0.5
             sub_tracks = []
             for idx, score in enumerate(scores):
