@@ -290,6 +290,7 @@ class TimeSplitFilter:
 
         def _edit(scores):
             magic_thresh = 0.5
+            track_start = None
             sub_tracks = []
             for idx, score in enumerate(scores):
 
