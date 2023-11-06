@@ -284,10 +284,34 @@ class TimeSplitFilter:
     Splits tracks based on start and end of each subtracks min response.
     """
 
-    def __init__(self, threshold):
+    def __init__(self, threshold, frame_buffer):
         self.threshold = threshold
+        self.frame_buffer = frame_buffer
 
     def __call__(self, gdf):
+
+        def buffer_by(tracks, by):
+            new_tracks = []
+            for start, end in tracks:
+                new_tracks.append((start-by, end+by))
+            return new_tracks
+
+        def merge_neighbors(tracks):
+            new_tracks = []
+            prev = None
+            for curr in tracks:
+                if prev is None:
+                    prev = curr
+                    continue
+
+                if curr[0] <= prev[1]:
+                    prev = (prev[0], curr[1])
+                else:
+                    new_tracks.append(prev)
+                    prev = curr
+
+            new_tracks.append(prev)
+            return new_tracks
 
         def _edit(scores):
             magic_thresh = 0.5
@@ -313,7 +337,20 @@ class TimeSplitFilter:
             subtracks = []
             subtrack_idx = 1
             for track_id, group in gdf.groupby('track_idx'):
-                for sub_id, (start, stop) in enumerate(_edit(list(group[('fg', self.threshold)]))):
+
+                subtrack_startstops = _edit(list(group[('fg', self.threshold)]))
+                subtrack_startstops = buffer_by(subtrack_startstops, self.frame_buffer)
+                subtrack_startstops = merge_neighbors(subtrack_startstops)
+
+                if len(subtrack_startstops) == 0:
+                    return gpd.GeoDataFrame()
+
+                if subtrack_startstops[0][0] < 0:
+                    subtrack_startstops[0] = (0, subtrack_startstops[0][1])
+                if subtrack_startstops[-1][0] >= len(group):
+                    subtrack_startstops[-1] = (subtrack_startstops[-1][0], len(group))
+
+                for sub_id, (start, stop) in enumerate(subtrack_startstops):
                     subtrack = group.iloc[start:stop]
                     subtrack["track_idx"] = subtrack_idx
                     subtrack_idx += 1
@@ -782,7 +819,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     if config.time_split_thresh:
-        split_filter = TimeSplitFilter(config.time_split_thresh)
+        split_filter = TimeSplitFilter(config.time_split_thresh, config.time_split_frame_buffer)
         n_orig = gpd_len(_TRACKS)
         _TRACKS = split_filter(_TRACKS)
         n_result = gpd_len(_TRACKS)
@@ -1408,6 +1445,12 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
         '''
         time splitting parameter. if set, tracks will be broken into subtracks
         based on when the score is above this threshold.
+        '''))
+
+    time_split_frame_buffer = scfg.Value(2, help=ub.paragraph(
+        '''
+        time splitting parameter. if set, subtracks will be buffered by the specified
+        number of frames. if this causes subtracks to overlap, they are merged together.
         '''))
 
     time_thresh = scfg.Value(1, help=ub.paragraph(
