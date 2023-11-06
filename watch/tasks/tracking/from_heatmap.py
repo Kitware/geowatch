@@ -329,7 +329,7 @@ class TimeSplitFilter:
                     track_start = None
 
             if (track_start is not None):
-                sub_tracks.append((track_start, None))
+                sub_tracks.append((track_start, len(scores)))
 
             return sub_tracks
 
