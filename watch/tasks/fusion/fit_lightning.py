@@ -151,12 +151,6 @@ class SmartTrainer(pl.Trainer):
                 geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
                 '''
             ))
-            """
-                python -m watch.tasks.fusion.predict \
-                    --package_fpath /data/joncrall/dvc-repos/shitspotter_expt_dvc/training/toothbrush/joncrall/ShitSpotter/runs/shitspotter_v5/lightning_logs/version_10/checkpoints/last.ckpt
-                    --test_dataset
-                    --pred_dataset={dpath}/monitor/preds/pred.kwcoco.zip
-            """
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
