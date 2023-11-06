@@ -159,7 +159,7 @@ kwimage>=0.9.21
 kwcoco>=0.7.1
 delayed_image>=0.2.10
 albumentations==1.0.0  # pinned for invariants model
-ndsampler>=0.7.5
+ndsampler>=0.7.6
 tifffile>=2021.4.8
 
 # Includes SimpleITK. Used in depth predictor.
