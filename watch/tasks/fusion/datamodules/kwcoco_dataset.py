@@ -10,6 +10,7 @@ For notes on Spaces, see
 
 CommandLine:
     xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
+    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
 
 Example:
     >>> # Demo toy data without augmentation

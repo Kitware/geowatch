@@ -88,6 +88,8 @@ class SmartTrainer(pl.Trainer):
                 TRAIN_DPATH="{dpath}"
                 echo $TRAIN_DPATH
 
+                ### --- Choose Checkpoint --- ###
+
                 # Find a checkpoint to evaluate
                 CHECKPOINT_FPATH=$(python -c "if 1:
                     import pathlib
@@ -98,6 +100,8 @@ class SmartTrainer(pl.Trainer):
                     ")
                 echo $CHECKPOINT_FPATH
 
+                ### --- Repackage Checkpoint --- ###
+
                 # Convert it into a package, then get the name of that
                 geowatch repackage $CHECKPOINT_FPATH
 
@@ -106,26 +110,32 @@ class SmartTrainer(pl.Trainer):
                     p = pathlib.Path('$CHECKPOINT_FPATH')
                     found = list(p.parent.glob(p.stem + '*.pt'))
                     print(found[-1])
-                    ")
+                ")
                 echo $PACKAGE_FPATH
 
                 PACKAGE_NAME=$(python -c "if 1:
                     import pathlib
                     p = pathlib.Path('$PACKAGE_FPATH')
                     print(p.stem.replace('.ckpt', ''))
-                    ")
+                ")
                 echo $PACKAGE_NAME
 
+                ### --- Validation Prediction --- ###
 
                 # Predict on the validation set
                 python -m watch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
                     --test_dataset {vali_coco_fpath} \
                     --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                    --draw_batches=True \
                     --window_overlap 0 \
                     --clear_annots=False \
+                    --draw_batches=True \
                     --device cpu
+
+                # Visualize vali predictions
+                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+
+                ### --- Training Prediction --- ###
 
                 # Predict on the training set
                 python -m watch.tasks.fusion.predict \
@@ -133,9 +143,12 @@ class SmartTrainer(pl.Trainer):
                     --window_overlap 0 \
                     --test_dataset {train_coco_path} \
                     --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                    --draw_batches=True \
                     --clear_annots=False \
+                    --draw_batches=True \
                     --device cpu
+
+                # Visualize train predictions
+                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
                 '''
             ))
             """
