@@ -501,12 +501,12 @@ class BatchVisualizationBuilder:
 
         vid_text = f'video: {builder.item["video_id"]} - {builder.item["video_name"]}'
 
-        producer_rank = builder.item.get('producer_rank', None)
-        producer_mode = builder.item.get('producer_mode', None)
-        requested_index = builder.item.get('requested_index', None)
-        resolved_index = builder.item.get('resolved_index', None)
-        if producer_rank is not None:
-            vid_text += f'\nrank={producer_rank} {producer_mode} {requested_index=} {resolved_index=}'
+        # producer_rank = builder.item.get('producer_rank', None)
+        # producer_mode = builder.item.get('producer_mode', None)
+        # requested_index = builder.item.get('requested_index', None)
+        # resolved_index = builder.item.get('resolved_index', None)
+        # if producer_rank is not None:
+        #     vid_text += f'\nrank={producer_rank} {producer_mode} {requested_index=} {resolved_index=}'
 
         sample_gsd = builder.item.get('sample_gsd', None)
         if sample_gsd is not None:

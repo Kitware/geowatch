@@ -131,7 +131,7 @@ if __name__ == '__main__':
         dvc remote add --local ooo ssh://ooo/data/joncrall/dvc-repos/smart_data_dvc/.dvc/cache
 
     CommandLine:
-        python -m dvc_discover_ssh_remote namek --dry
+        python ~/code/watch/dev/poc/dvc_discover_ssh_remote.py namek --dry
 
         python ~/code/watch/dev/wip/dvc_discover_ssh_remote.py ooo
         python ~/code/watch/dev/wip/dvc_discover_ssh_remote.py namek

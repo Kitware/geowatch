@@ -3360,6 +3360,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if 'target' in item:
             item_summary['resolved_target'] = item['target']
 
+        item_summary['producer_rank'] = item.get('producer_rank', None)
+        item_summary['producer_mode'] = item.get('producer_mode', None)
+        item_summary['requested_index'] = item.get('requested_index', None)
+        item_summary['resolved_index'] = item.get('resolved_index', None)
+
         return item_summary
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
