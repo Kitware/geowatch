@@ -438,7 +438,10 @@ class BatchVisualizationBuilder:
                                 raw_signal = kwimage.ensure_float01(raw_signal)
                                 needs_norm = False
                             else:
-                                needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                                try:
+                                    needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                                except Exception:
+                                    needs_norm = False
 
                     if needs_norm:
                         mask = (raw_signal != 0) & np.isfinite(raw_signal)

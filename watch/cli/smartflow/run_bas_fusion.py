@@ -73,6 +73,24 @@ class BasFusionConfig(scfg.DataConfig):
             '''))
 
 
+__debug_notes__ = r"""
+config = {
+    'input_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v130/batch/kit/KR_R002/2021-08-31/split/mono/products/cold/items.jsonl',
+    'input_region_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v130/batch/kit/KR_R002/2021-08-31/input/mono/region_models/KR_R002.geojson',
+    'output_path'            : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v130/batch/kit/KR_R002/2021-08-31/split/mono/products/bas-fusion/items.jsonl',
+    'aws_profile'            : None,
+    'dryrun'                 : False,
+    'outbucket'              : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v130/batch/kit/KR_R002/2021-08-31/split/mono/products/bas-fusion',
+    'ta2_s3_collation_bucket': None,
+    'previous_bas_outbucket' : None,
+    'bas_pxl_config'         : 'chip_dims: auto\nchip_overlap: 0.3\nfixed_resolution: 10GSD\nnum_workers: 24\npackage_fpath: /root/data/smart_expt_dvc/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt\ntime_sampling: soft4\ntime_span: auto\ntta_fliprot: 3\ntta_time: 3',
+    'bas_poly_config'        : 'agg_fn: probs\ninner_agg_fn: mean\ninner_window_size: 1y\nmax_area_square_meters: 8000000\nmin_area_square_meters: 7200\nmoving_window_size: null\nnorm_ord: inf\npoly_merge_method: v2\npolygon_simplify_tolerance: 1\nresolution: 10GSD\nthresh: 0.375\ntime_thresh: 0.8',
+}
+config = BasFusionConfig(**config)
+
+"""
+
+
 def main():
     config = BasFusionConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
@@ -92,7 +110,7 @@ def run_bas_fusion_for_baseline(config):
     ####
     from watch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
-    node_state.print_environment
+    node_state.print_environment()
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -171,7 +189,15 @@ def run_bas_fusion_for_baseline(config):
     if bas_pxl_config.get('package_fpath', None) is None:
         raise ValueError('Requires package_fpath')
 
+    print('bas_pxl_config = {}'.format(ub.urepr(bas_pxl_config, nl=1)))
+
     ingress_kwcoco_path = ingressed_assets['enriched_bas_kwcoco_file']
+
+    if 0:
+        import kwcoco
+        src_dset = kwcoco.CocoDataset(ingress_kwcoco_path)
+        src_dset.validate()
+
     predict(devices='0,',
             write_preds=False,
             write_probs=True,

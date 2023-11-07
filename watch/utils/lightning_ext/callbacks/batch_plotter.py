@@ -3,6 +3,7 @@ import numpy as np
 import pytorch_lightning as pl
 import ubelt as ub
 import warnings
+import traceback
 from kwutil import util_time
 from kwutil.slugify_ext import smart_truncate
 from watch.utils import util_kwimage
@@ -227,7 +228,8 @@ class BatchPlotter(pl.callbacks.Callback):
             print("========")
             print("Exception raised during batch rendering callback.")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))
 
     #  Old sig
     # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
@@ -240,7 +242,8 @@ class BatchPlotter(pl.callbacks.Callback):
             print("========")
             print("Exception raised during batch rendering callback.")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         try:
@@ -249,4 +252,5 @@ class BatchPlotter(pl.callbacks.Callback):
             print("========")
             print("Exception raised during batch rendering callback.")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))
