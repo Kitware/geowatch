@@ -1119,7 +1119,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     print('Projecting regions to pixel coords')
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
-    print('Done projecting')
+    rich.print(f'[green]Done projecting: {coco_dset.n_annots} annotations')
     return coco_dset
 
 
@@ -1452,7 +1452,7 @@ def main(argv=None, **kwargs):
         # case if there are legidimately no sites to score!) But in our main
         # use case where site_summary should be specified, this is an error so
         # we are treating it that way for now.
-        if track_kwargs.get('boundaries_as') == 'polys' and coco_dset.n_annots:
+        if track_kwargs.get('boundaries_as') == 'polys' and not coco_dset.n_annots:
             raise Exception(ub.codeblock(
                 '''
                 You requested scoring boundaries as polygons, but the dataset
@@ -1479,6 +1479,8 @@ def main(argv=None, **kwargs):
 
     # Measure how long tracking takes
     proc_context.stop()
+
+    rich.print('[green] Finished main tracking phase')
 
     out_kwcoco = args.out_kwcoco
 

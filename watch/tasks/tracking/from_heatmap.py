@@ -166,9 +166,9 @@ def probs(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
     modulated_probs = probs * hard_probs
 
     if viz_dpath is not None:
-        kwimage.imwrite(viz_dpath / '0.png', kwimage.ensure_uint255(probs))
-        kwimage.imwrite(viz_dpath / '1.png', kwimage.ensure_uint255(hard_probs))
-        kwimage.imwrite(viz_dpath / '2.png', kwimage.ensure_uint255(modulated_probs))
+        kwimage.imwrite(viz_dpath / 'probs_raw.png', kwimage.ensure_uint255(probs))
+        kwimage.imwrite(viz_dpath / 'probs_hard.png', kwimage.ensure_uint255(hard_probs))
+        kwimage.imwrite(viz_dpath / 'probs_modulated.png', kwimage.ensure_uint255(modulated_probs))
 
     return modulated_probs
 
@@ -415,6 +415,12 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     from watch.utils import kwcoco_extensions
     key, bg_key = _validate_keys(key, bg_key)
 
+    print('Add tracks to dset')
+    print(f'bg_key={bg_key}')
+    print(f'key={key}')
+    print('tracks:')
+    print(tracks)
+
     if tracks.empty:
         print('no tracks to add!')
         return sub_dset
@@ -436,7 +442,8 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             cand_keys = bg_key
         if 1:
             # HACK for eval16, need to be nicer about what we do here
-            cand_keys = ub.oset(cand_keys) - {'ac_salient'}
+            if len(cand_keys) > 1:
+                cand_keys = ub.oset(cand_keys) - {'ac_salient'}
         if len(cand_keys) > 1:
             # TODO ensure bg classes are scored if there are >1 of them
             cat_name = ub.argmax(ub.udict.subdict(scores_dct, cand_keys))
@@ -575,7 +582,7 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
 @profile
 def time_aggregated_polys(sub_dset, **kwargs):
     """
-    Track function.
+    Polygon extraction and tracking function.
 
     Aggregate heatmaps across time, threshold them to get polygons,
     and add one track per polygon.
@@ -619,21 +626,38 @@ def time_aggregated_polys(sub_dset, **kwargs):
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
         >>> from watch.demo import demo_kwcoco_with_heatmaps
         >>> import watch
-        >>> #sub_dset = demo_kwcoco_with_heatmaps(
-        >>> #                num_frames=5, image_size=(480, 640))
         >>> sub_dset = watch.coerce_kwcoco(
         >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> min_area_square_meters = None
-        >>> orig_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>> kwargs = dict(thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>> orig_track = time_aggregated_polys(sub_dset, **kwargs)
         >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>> inter_track = time_aggregated_polys(sub_dset,  **kwargs)
+        >>> assert inter_track.iloc[0][('fg', -1)] == 0
+        >>> assert inter_track.iloc[1][('fg', -1)] > 0
+
+    Example:
+        >>> # test interpolation
+        >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
+        >>> from watch.demo import demo_kwcoco_with_heatmaps
+        >>> import watch
+        >>> sub_dset = watch.coerce_kwcoco(
+        >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>>     geodata=True, heatmap=True, dates=True)
+        >>> thresh = 0.01
+        >>> min_area_square_meters = None
+        >>> kwargs = dict(thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>> orig_track = time_aggregated_polys(sub_dset, **kwargs)
+        >>> # Test robustness to frames that are missing heatmaps
+        >>> skip_gids = [1,3]
+        >>> for gid in skip_gids:
+        >>>      sub_dset.imgs[gid]['auxiliary'].pop()
+        >>> inter_track = time_aggregated_polys(sub_dset,  **kwargs)
         >>> assert inter_track.iloc[0][('fg', -1)] == 0
         >>> assert inter_track.iloc[1][('fg', -1)] > 0
     """
@@ -642,7 +666,6 @@ def time_aggregated_polys(sub_dset, **kwargs):
     #
     import kwimage
     import geopandas as gpd
-    import numpy as np
     config = TimeAggregatedPolysConfig(**kwargs)
     config.key, config.bg_key = _validate_keys(config.key, config.bg_key)
 
@@ -662,46 +685,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
 
-    scale_vid_from_trk = None
-    tracking_gsd = None
-    if len(video_gids) and (config.resolution is not None):
-        # Determine resolution information for videospace (what we will return
-        # in) and tracking space (what we will build heatmaps in)
-        first_gid = video_gids[0]
-        first_coco_img = sub_dset.coco_image(first_gid)
-        # (w, h)
-        vidspace_resolution = first_coco_img.resolution(space='video')['mag']
-        vidspace_resolution = np.array(vidspace_resolution)
-
-        # (w, h)
-        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-            space='video', resolution=config.resolution)
-        scale_trk_from_vid = np.array(scale_trk_from_vid)
-
-        # Determinethe pixel size of tracking space
-        tracking_resolution = vidspace_resolution / scale_trk_from_vid
-        if not np.isclose(*tracking_resolution):
-            print(f'warning: nonsquare pxl size of {tracking_resolution}')
-        tracking_gsd = np.mean(tracking_resolution)
-
-        # Get the transform from tracking space back to video space
-        scale_vid_from_trk = 1 / scale_trk_from_vid
-    else:
-        scale_vid_from_trk = (1, 1)
-
-    if tracking_gsd is None:
-        if len(video_gids):
-            # Use whatever is in the kwcoco file as the default.
-            first_gid = video_gids[0]
-            first_coco_img = sub_dset.coco_image(first_gid)
-            # (w, h)
-            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
-            default_gsd = np.mean(vidspace_resolution)
-        else:
-            default_gsd = 30
-            print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
-                  f'has no listed resolution; assuming {default_gsd}')
-        tracking_gsd = default_gsd
+    scale_vid_from_trk, tracking_gsd = _determine_tracking_scale(
+        config, sub_dset, video_gids, video)
 
     if not any(has_requested_chans_list):
         raise KeyError(f'no imgs in dset {sub_dset.tag} '
@@ -725,7 +710,11 @@ def time_aggregated_polys(sub_dset, **kwargs):
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
 
-    print('time aggregation: number of polygons: ', len(gids_polys))
+    import rich
+    if len(gids_polys):
+        rich.print('[green] time aggregation: number of polygons: ', len(gids_polys))
+    else:
+        rich.print('[red] time aggregation: number of polygons: ', len(gids_polys))
 
     # size and response filters should operate on each vidpoly separately.
     if config.max_area_square_meters:
@@ -791,10 +780,14 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # to debug this. (6% of polygons in KR_R001, so not a huge difference)
     # USE_DASK = True
     USE_DASK = False
+    print('Begin compute track scores:')
+    print(_TRACKS)
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
                                  USE_DASK=USE_DASK,
                                  resolution=config.resolution)
 
+    print('Finished computing track scores:')
+    print(_TRACKS)
     if _TRACKS.empty:
         return _TRACKS
 
@@ -834,7 +827,57 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # TODO: do we need to convert to MultiPolygon here? Or can that be handled
     # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
+    print('Returning Tracks')
+    print(_TRACKS)
     return _TRACKS
+
+
+def _determine_tracking_scale(config, sub_dset, video_gids, video):
+    """
+    Factored out code from :func:`time_aggregated_polys`
+    """
+    import numpy as np
+    scale_vid_from_trk = None
+    tracking_gsd = None
+    if len(video_gids) and (config.resolution is not None):
+        # Determine resolution information for videospace (what we will return
+        # in) and tracking space (what we will build heatmaps in)
+        first_gid = video_gids[0]
+        first_coco_img = sub_dset.coco_image(first_gid)
+        # (w, h)
+        vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+        vidspace_resolution = np.array(vidspace_resolution)
+
+        # (w, h)
+        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+            space='video', resolution=config.resolution)
+        scale_trk_from_vid = np.array(scale_trk_from_vid)
+
+        # Determinethe pixel size of tracking space
+        tracking_resolution = vidspace_resolution / scale_trk_from_vid
+        if not np.isclose(*tracking_resolution):
+            print(f'warning: nonsquare pxl size of {tracking_resolution}')
+        tracking_gsd = np.mean(tracking_resolution)
+
+        # Get the transform from tracking space back to video space
+        scale_vid_from_trk = 1 / scale_trk_from_vid
+    else:
+        scale_vid_from_trk = (1, 1)
+
+    if tracking_gsd is None:
+        if len(video_gids):
+            # Use whatever is in the kwcoco file as the default.
+            first_gid = video_gids[0]
+            first_coco_img = sub_dset.coco_image(first_gid)
+            # (w, h)
+            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+            default_gsd = np.mean(vidspace_resolution)
+        else:
+            default_gsd = 30
+            print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
+                  f'has no listed resolution; assuming {default_gsd}')
+        tracking_gsd = default_gsd
+    return scale_vid_from_trk, tracking_gsd
 
 
 #
@@ -1105,11 +1148,12 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         import kwimage
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
+    # outer agg function
     _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
 
     image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
 
-    if isinstance(config.inner_window_size, str):
+    if config.inner_window_size is not None:
         # TODO: generalize if needed
         assert heatmap_dates is not None
 
@@ -1121,16 +1165,17 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             raise NotImplementedError(config.inner_agg_fn)
 
         # Do inner aggregation before outer aggregation
-        from kwutil import util_time
-        import kwarray
-        delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
-        bucket_ids = (image_unixtimes // delta).astype(int)
-
-        unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+        groupxs = _compute_time_window(
+            config.inner_window_size, num_frames=len(heatmaps),
+            heatmap_dates=heatmap_dates)
 
         new_heatmaps = []
+        new_heatmap_dates = []
         for idxs in groupxs:
+            # Is min over the dates the right thing to do?
+            new_date = min(ub.take(heatmap_dates, idxs))
             inner = _norm(heatmaps[idxs], norm_ord=inner_ord)
+            new_heatmap_dates.append(new_date)
             new_heatmaps.append(inner)
         new_heatmaps = np.array(new_heatmaps)
         heatmaps = new_heatmaps
@@ -1148,37 +1193,41 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             raise NotImplementedError(
                 'only temporal deltas for inner agg window for now')
         image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
+        heatmap_dates = new_heatmap_dates
+
+    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+    image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
-    if config.moving_window_size is not None:
-        total_n = len(heatmaps)
-        final_size = int(total_n // np.ceil((total_n / config.moving_window_size)))
-        n_steps = total_n // final_size
-    else:
-        final_size = len(heatmaps)
-        n_steps = 1
+    groupxs = _compute_time_window(
+        config.inner_window_size, num_frames=len(heatmaps),
+        heatmap_dates=heatmap_dates)
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
-    h_init = heatmaps[:final_size]
-    t_init = image_unixtimeframes[:final_size]
+    n_steps = len(groupxs)
+    xs_init = groupxs[0]
+    h_init = heatmaps[xs_init]
+    t_init = image_unixtimeframes[xs_init]
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
+    # prog.begin()
     with prog:
-        step = 0
-        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step, config)
+        step_idx = 0
+        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step_idx, config)
         times_final = [[t_init[0][0], t_init[-1][1]]] * len(polys_final)
         prog.step()
 
         if n_steps > 1:
             polys_final = convert_to_shapely(polys_final)
 
-            for step in range(1, n_steps):
+            for step_idx in range(1, n_steps):
+                idxs = groupxs[step_idx]
                 prog.step()
-                h1 = heatmaps[step * final_size:(step + 1) * final_size]
-                t1 = image_unixtimeframes[step * final_size:(step + 1) * final_size]
+                h1 = heatmaps[idxs]
+                t1 = image_unixtimeframes[idxs]
 
-                p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
+                p1 = _process_1_step(h1, _agg_fn, track_bounds, step_idx, config)
                 t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
                 p1 = convert_to_shapely(p1)
 
@@ -1192,10 +1241,52 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     return polys_final
 
 
-def _process_1_step(heatmaps, _agg_fn, track_bounds, step, config):
+def _compute_time_window(window, num_frames=None, heatmap_dates=None):
+    """
+    Example:
+        >>> window = 5
+        >>> num_frames = 23
+        >>> groupxs = _compute_time_window(window, num_frames)
+        >>> print(f'groupxs={groupxs}')
+        >>> #
+        >>> window = '7days'
+        >>> from kwutil import util_time
+        >>> heatmap_dates = list(map(util_time.coerce_datetime, [
+        >>>     '2020-01-01', '2020-01-02', '2020-02-01',
+        >>>     '2020-02-02', '2020-03-14', '2020-03-23',
+        >>>     '2020-04-01', '2020-06-23', '2020-06-26',
+        >>>     '2020-06-27', '2020-06-28', ]))
+        >>> groupxs = _compute_time_window(window, num_frames, heatmap_dates)
+        >>> print(f'groupxs={groupxs}')
+        >>> groupxs = _compute_time_window(None, num_frames, heatmap_dates)
+        >>> print(f'groupxs={groupxs}')
+    """
+    import kwarray
+    from kwutil import util_time
+    import numpy as np
+    if window is None:
+        bucket_ids = np.arange(num_frames)
+    elif isinstance(window, str):
+        assert heatmap_dates is not None
+        delta = util_time.coerce_timedelta(window).total_seconds()
+        image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+        image_unixtimes = image_unixtimes - image_unixtimes[0]
+        bucket_ids = (image_unixtimes // delta).astype(int)
+    elif isinstance(window, int):
+        assert num_frames is not None
+        frame_indexes = np.arange(num_frames)
+        bucket_ids = frame_indexes // window
+    else:
+        raise NotImplementedError('')
+    unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+    return groupxs
+
+
+def _process_1_step(heatmaps, _agg_fn, track_bounds, step_idx, config):
     # FIXME: no dynamic globals.
     if config.viz_out_dir is not None:
-        viz_dpath = (config.viz_out_dir / f'heatmaps_{step}').ensuredir()
+        viz_dpath = (config.viz_out_dir / f'heatmaps_{step_idx}').ensuredir()
+        # print('\nviz_dpath = {}\n'.format(ub.urepr(viz_dpath, nl=1)))
     else:
         viz_dpath = None
 
@@ -1214,6 +1305,8 @@ def _process_1_step(heatmaps, _agg_fn, track_bounds, step, config):
 
 def _gids_polys(sub_dset, **kwargs):
     """
+    This is associated with :class:`_GidPolyConfig`
+
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> from watch.tasks.tracking.from_heatmap import _gids_polys
@@ -1222,12 +1315,12 @@ def _gids_polys(sub_dset, **kwargs):
         >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
         >>> key = 'salient'
         >>> agg_fn = 'probs'
-        >>> thresh = 0.01
+        >>> thresh = 0.001
         >>> morph_kernel = 3
         >>> thresh_hysteresis = 0
         >>> norm_ord = 1
         >>> resolution = None
-        >>> moving_window_size = None
+        >>> outer_window_size = None
         >>> inner_window_size = '1year'
         >>> results = list(_gids_polys(
         >>>     sub_dset,
@@ -1238,7 +1331,7 @@ def _gids_polys(sub_dset, **kwargs):
         >>>     thresh_hysteresis=thresh_hysteresis,
         >>>     norm_ord=norm_ord,
         >>>     resolution=resolution,
-        >>>     moving_window_size=moving_window_size,
+        >>>     outer_window_size=outer_window_size,
         >>>     use_boundaries=None,
         >>> ))
 
@@ -1276,6 +1369,8 @@ def _gids_polys(sub_dset, **kwargs):
     load_workers = 0  # TODO: configure
     load_jobs = ub.JobPool(mode='process', max_workers=load_workers)
 
+    print(f'Reading heatmaps with: key={key}')
+
     with load_jobs:
         for coco_img in ub.ProgIter(coco_images, desc='submit heatmap jobs'):
             delayed = coco_img.imdelay(channels=key, space='video', resolution=config.resolution)
@@ -1285,11 +1380,17 @@ def _gids_polys(sub_dset, **kwargs):
         for job in ub.ProgIter(load_jobs.jobs, desc='collect heatmap jobs'):
             _heatmap = job.result()
             _heatmaps.append(_heatmap)
+
     _heatmaps = np.stack(_heatmaps, axis=0)
     print(f'(presum) _heatmaps.shape={_heatmaps.shape}')
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
     print(f'_heatmaps.shape={_heatmaps.shape}')
-    missing_ix = np.invert([key in i.channels for i in coco_images])
+    missing_ix = np.array([key not in i.channels for i in coco_images])
+
+    num_missing = missing_ix.sum()
+    import rich
+    rich.print(f'[yellow]There are {num_missing} images that are missing {key} channels')
+
     # TODO this was actually broken in orig, so turning it off here for now
     interpolate = 0
     if interpolate:
@@ -1312,7 +1413,7 @@ def _gids_polys(sub_dset, **kwargs):
         result_gen = itertools.chain.from_iterable(
             j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
         result_gen = list(result_gen)
-        return result_gen
+    return result_gen
 
 #
 # --- wrappers ---
@@ -1371,6 +1472,7 @@ def _resolve_arg_values(self):
 class _GidPolyConfig(scfg.DataConfig):
     # This is the base config that all from-heatmap trackers have in common
     # which has to do with how heatmaps are loaded, normalized, and aggregated.
+    # This is associated with :func:`_gids_polys`
 
     key = scfg.Value('salient', help=ub.paragraph(
         '''
@@ -1404,17 +1506,17 @@ class _GidPolyConfig(scfg.DataConfig):
     norm_ord = scfg.Value(1, help=ub.paragraph(
         '''
         The generalized mean order used to average heatmaps over the
-        "moving_window_size". A value of 1 is the normal mean. A value of inf
+        "outer_window_size". A value of 1 is the normal mean. A value of inf
         is the max function. Note: this is effectively an outer_agg_fn.
         '''))
 
     # TODO: rename to outer_window_size
-    moving_window_size = scfg.Value(None, help=ub.paragraph(
+    outer_window_size = scfg.Value(None, help=ub.paragraph(
         '''
         The outer moving window size. The number of consecutive inner window
         results to aggregate together. If None, then all inner window results
         are combined into a single final heatmap.
-        '''), alias=['outer_window_size'])
+        '''), alias=['moving_window_size'])
 
     inner_window_size = scfg.Value(None, help=ub.paragraph(
         '''
@@ -1528,8 +1630,8 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
         if isinstance(self.inner_window_size, float) and math.isnan(self.inner_window_size):
             self.inner_window_size = None
 
-        if isinstance(self.moving_window_size, float) and math.isnan(self.moving_window_size):
-            self.moving_window_size = None
+        if isinstance(self.outer_window_size, float) and math.isnan(self.outer_window_size):
+            self.outer_window_size = None
 
 
 class CommonTrackFn(NewTrackFunction, TimeAggregatedPolysConfig):
@@ -1559,6 +1661,8 @@ class TimeAggregatedBAS(TrackFnWithSV):
     def create_tracks(self, sub_dset):
         aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
         tracks = time_aggregated_polys(sub_dset, **aggkw)
+        print('Tracks:')
+        print(tracks)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -1600,7 +1704,7 @@ class TimeAggregatedSC(TrackFnWithSV):
 
     def create_tracks(self, sub_dset):
         """
-        boundaries_as: use for Site Boundary annots in coco_dset
+        boundaries_as: use for Site Boundary annots in coco_dsennjk
             'bounds': generated polys will lie inside the boundaries
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
@@ -1608,6 +1712,8 @@ class TimeAggregatedSC(TrackFnWithSV):
         import kwcoco
         import kwimage
 
+        print(f'self={self}')
+        print(f'self.boundaries_as={self.boundaries_as}')
         if self.boundaries_as == 'polys':
             tracks = score_track_polys(
                 sub_dset,
@@ -1628,27 +1734,32 @@ class TimeAggregatedSC(TrackFnWithSV):
             aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
             aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
             tracks = time_aggregated_polys(sub_dset, **aggkw)
+        print('Tracks:')
+        print(tracks)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
         import kwcoco
         if self.boundaries_as != 'polys':
-            col_map = {}
-            for c in tracks.columns:
-                if c[0] == 'fg':
-                    k = kwcoco.ChannelSpec('|'.join(self.key)).spec
-                    col_map[c] = (k, *c[1:])
-                elif c[0] == 'bg':
-                    k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
-                    col_map[c] = (k, *c[1:])
-            # weird effect here - reassignment casts from GeoDataFrame to
-            # DataFrame. Related to invalid geometry column?
-            # tracks = tracks.rename(columns=col_map)
-            tracks.rename(columns=col_map, inplace=True)
+            if 0:
+                col_map = {}
+                for c in tracks.columns:
+                    if c[0] == 'fg':
+                        k = kwcoco.ChannelSpec('|'.join(self.key)).spec
+                        col_map[c] = (k, *c[1:])
+                    elif c[0] == 'bg':
+                        k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
+                        col_map[c] = (k, *c[1:])
+                print(f'col_map={col_map}')
+                # weird effect here - reassignment casts from GeoDataFrame to
+                # DataFrame. Related to invalid geometry column?
+                # tracks = tracks.rename(columns=col_map)
+                tracks.rename(columns=col_map, inplace=True)
 
         thresh = self.thresh
         key = self.key
         bg_key = self.bg_key
+        print(tracks)
         sub_dset = _add_tracks_to_dset(sub_dset, tracks=tracks, thresh=thresh,
                                        key=key, bg_key=bg_key, **kwargs)
         if self.site_validation:

@@ -333,6 +333,7 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
     TODO: This needs docs and examples for the BAS and SC/AC cases.
 
     Args:
+        gdf (gdf.GeoDataFrame): input data frame
 
         sub_dset (kwcoco.CocoDataset):
             dataset with reference to images
@@ -352,6 +353,25 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
     Calls :func:`_compute_group_scores` on each dataframe row, which will
     execute the read for the image prediction scores for polygons with
     :func:`score_poly`.
+
+    Returns:
+        gdf.GeoDataFrame - a scored variant of the input data frame
+
+             returns the per-channels scores as well as summed groups of
+             channels. (not sure if that last one is necessary, might need to
+             refactor to simplify)
+
+    Example:
+        >>> import kwcoco
+        >>> from watch.tasks.tracking.utils import *  # NOQA
+        >>> from watch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
+        >>> sub_dset = kwcoco.CocoDataset.demo('vidshapes1')
+        >>> gdf, _ = _build_annot_gdf(sub_dset)
+        >>> thrs = [-1, 'median']
+        >>> ks = {'r|g': ['r', 'g'], 'bg': ['b']}
+        >>> USE_DASK = 0
+        >>> resolution = None
+        >>> gdf2 = gpd_compute_scores(gdf, sub_dset, thrs, ks, USE_DASK, resolution)
     """
     import pandas as pd
 
@@ -446,9 +466,28 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dse
         groups = df.groupby('b',group_keys=False)
         grp = list(groups._iterate_slices())[0]
         groups.apply(foo)
+
+    Args:
+        grp : A Pandas Group Object for data in the same iamge
+
+    Example:
+        >>> import kwcoco
+        >>> from watch.tasks.tracking.utils import *  # NOQA
+        >>> from watch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
+        >>> _valid_keys = ['r', 'g', 'b']
+        >>> sub_dset = kwcoco.CocoDataset.demo('vidshapes1')
+        >>> aids = list(coco_dset.images().annots[0])
+        >>> grp, _ = _build_annot_gdf(coco_dset, aids=aids)
+        >>> thrs = [-1, 'mean', 'max', 'min', 'median']
+        >>> gdf2 = _compute_group_scores(grp, thrs=thrs, _valid_keys=_valid_keys, sub_dset=sub_dset)
+        >>> print(gdf2)
     """
 
     gid = getattr(grp, 'name', None)
+    if gid is None:
+        if len(grp) > 0:
+            gid = grp.iloc[0]['gid']
+
     if gid is None:
         for thr in thrs:
             grp[[(k, thr) for k in _valid_keys]] = 0
@@ -487,17 +526,17 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dse
 
 @profile
 def score_track_polys(coco_dset,
-                      cnames: Iterable[str],
+                      cnames=None,
                       score_chan=None,
                       resolution: Optional[str] = None):
     """
-    Score the polygons in a kwcoco dataset based on heatmaps without chaning
+    Score the polygons in a kwcoco dataset based on heatmaps without modifying
     the polygon boundaries.
 
     Args:
         coco_dset (kwcoco.CocoDataset):
 
-        cnames (List[str]):
+        cnames (Iterable[str] | None):
             category names. Only annotations with these names will be
             considered.
 
@@ -509,22 +548,81 @@ def score_track_polys(coco_dset,
         kwcoco dataset ever.
 
     Returns:
-        gpd dataframe.
+        gpd.GeoDataFrame:
+            With columns:
+                gid: the image id
+                poly: the polygon in video space
+                track_idx: the annotation trackid
+
+                And then for each score chan: c you get a column:
+                    (c, -1) where the -1 indicates that no threshold was
+                    applied, and that this is the mean of that channel
+                    intensity under the polygon.
+
+                Then there is another column where all channels are fused: f
+                and you get a column: (f, -1)
 
     Note:
         The returned unerlying GDF should return polygons in video space as it
         will be consumed by :func:`_add_tracks_to_dset`.
+
+    Example:
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-msi')
+        >>> cnames = None
+        >>> resolution = None
+        >>> score_chan = kwcoco.ChannelSpec.coerce('B1|B8|B8a|B10|B11')
+        >>> gdf = score_track_polys(coco_dset, cnames, score_chan, resolution)
+        >>> print(gdf)
     """
+    # TODO could refactor to work on coco_dset.annots() and integrate
+    import numpy as np
+
+    annots = coco_dset.annots()
+    gdf, flat_scales = _build_annot_gdf(coco_dset, cnames=cnames, resolution=resolution)
+
+    if score_chan is not None:
+        # USE_DASK = True
+        USE_DASK = False
+        keys = {score_chan.spec: list(score_chan.unique())}
+        sub_dset = coco_dset
+        thrs = [-1]
+        ks = keys
+        gdf = gpd_compute_scores(gdf, sub_dset, thrs, ks, USE_DASK=USE_DASK,
+                                 resolution=resolution)
+    # TODO standard way to access sorted_gids
+    sorted_gids = coco_dset.index._set_sorted_by_frame_index(
+        np.unique(annots.gids))
+    gdf = gpd_sort_by_gid(gdf, sorted_gids)
+
+    if resolution is not None:
+        # It should be the case that all of the scale factors are the same
+        # because it is wrt to video space. Check for this and then
+        # just apply a single warp.
+        assert ub.allsame(flat_scales)
+        if flat_scales:
+            inverse_scale = 1 / flat_scales[0][0], 1 / flat_scales[0][1]
+            gdf['poly'] = gdf['poly'].scale(
+                xfact=inverse_scale[0],
+                yfact=inverse_scale[1],
+                origin=(0, 0, 0))
+
+    return gdf
+
+
+def _build_annot_gdf(coco_dset, aids=None, cnames=None, resolution=None):
     # TODO could refactor to work on coco_dset.annots() and integrate
     import geopandas as gpd
     import numpy as np
-    cnames = list(set(cnames))
 
-    annots = coco_dset.annots()
-    annots = annots.compress(
-        np.in1d(np.array(annots.cnames, dtype=str), cnames))
-    if len(annots) < 1:
-        print(f'warning: no cnames={cnames} annots in dset dset.tag={coco_dset.tag}!')
+    annots = coco_dset.annots(aids)
+
+    if cnames is not None:
+        cnames = list(set(cnames))
+        annots = annots.compress(
+            np.in1d(np.array(annots.cnames, dtype=str), cnames))
+        if len(annots) < 1:
+            print(f'warning: no cnames={cnames} annots in dset dset.tag={coco_dset.tag}!')
 
     # Load polygon annotation segmentation in video space at the target
     # resolution
@@ -557,34 +655,7 @@ def score_track_polys(coco_dset,
         'poly': flat_polys,
         'track_idx': flat_track_ids,
     }, geometry='poly')
-
-    if score_chan is not None:
-        # USE_DASK = True
-        USE_DASK = False
-        keys = {score_chan.spec: list(score_chan.unique())}
-        sub_dset = coco_dset
-        thrs = [-1]
-        ks = keys
-        gdf = gpd_compute_scores(gdf, sub_dset, thrs, ks, USE_DASK=USE_DASK,
-                                 resolution=resolution)
-    # TODO standard way to access sorted_gids
-    sorted_gids = coco_dset.index._set_sorted_by_frame_index(
-        np.unique(annots.gids))
-    gdf = gpd_sort_by_gid(gdf, sorted_gids)
-
-    if resolution is not None:
-        # It should be the case that all of the scale factors are the same
-        # because it is wrt to video space. Check for this and then
-        # just apply a single warp.
-        assert ub.allsame(flat_scales)
-        if flat_scales:
-            inverse_scale = 1 / flat_scales[0][0], 1 / flat_scales[0][1]
-            gdf['poly'] = gdf['poly'].scale(
-                xfact=inverse_scale[0],
-                yfact=inverse_scale[1],
-                origin=(0, 0, 0))
-
-    return gdf
+    return gdf, flat_scales
 
 
 @lru_cache(maxsize=512)
@@ -613,7 +684,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
         use_rasterio (bool):
             use rasterio.features module instead of kwimage
 
-        threshold (float):
+        threshold (float | List[float | str]):
             Return fraction of poly with probs > threshold.  If -1, return
             average value of probs in poly. Can be a list of values, in which
             case returns all of them.
@@ -641,7 +712,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
         >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
         >>> print('result = {}'.format(ub.urepr(result, nl=1)))
         >>> # Test with -1 threshold
-        >>> threshold = -1
+        >>> threshold = [-1, 'min', 'median']
         >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
         >>> print('result = {}'.format(ub.urepr(result, nl=1)))
 
@@ -693,16 +764,28 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     msk = (np.isfinite(rel_probs) * rel_mask).astype(bool)
     all_non_finite = not msk.any()
 
+    mskd_rel_probs = np.ma.array(rel_probs, mask=~msk)
+
     for t in threshold:
         if all_non_finite:
-            result.append(np.full(rel_probs.shape[:-2], fill_value=np.nan))
+            stat = np.full(rel_probs.shape[:-2], fill_value=np.nan)
+        elif t == 'max':
+            stat = mskd_rel_probs.max(axis=(-2, -1)).filled(0)
+        elif t == 'min':
+            stat = mskd_rel_probs.min(axis=(-2, -1)).filled(0)
+        elif t == 'mean':
+            stat = mskd_rel_probs.mean(axis=(-2, -1)).filled(0)
+        elif t == 'median':
+            stat = np.ma.median(mskd_rel_probs, axis=(-2, -1)).filled(0)
         elif t == -1:
-            mskd = np.ma.array(rel_probs, mask=~msk)
-            result.append(mskd.mean(axis=(-2, -1)).filled(0))
+            # Alias for mean, todo: deprecate
+            stat = mskd_rel_probs.mean(axis=(-2, -1)).filled(0)
         else:
+            # Real threshold case
             hard_prob = rel_probs > t
-            mskd = np.ma.array(hard_prob, mask=~msk)
-            result.append(mskd.mean(axis=(-2, -1)).filled(0))
+            mskd_hard_prob = np.ma.array(hard_prob, mask=~msk)
+            stat = mskd_hard_prob.mean(axis=(-2, -1)).filled(0)
+        result.append(stat)
 
     return result if _return_list else result[0]
 
