@@ -867,14 +867,17 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
     Example:
         >>> from watch.tasks.tracking.from_heatmap import * # NOQA
         >>> from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+        >>> import kwimage
+        >>> import numpy as np
         >>> #
         >>> p1 = [kwimage.Polygon.random().scale(0.2).to_shapely() for _ in range(1)]
-        >>> t1 = list(range(len(p1)))
+        >>> t1 = np.arange(len(p1) * 2).reshape(-1, 2)
         >>> p2 = [kwimage.Polygon.random().to_shapely() for _ in range(1)]
-        >>> t2 = list(range(len(p2)))
+        >>> t2 = np.arange(len(p2) * 2).reshape(-1, 2)
         >>> poly_merge_method = 'v3'
         >>> #
         >>> _merge_polys(p1, t1, p2, t2, poly_merge_method)
+
     Ignore:
         from watch.tasks.tracking.from_heatmap import * # NOQA
         from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
