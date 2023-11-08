@@ -436,7 +436,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
     key = 'with_wv_landcover'
     if config[key]:
         if config.check:
-            simple_dvc.SimpleDVC().request(model_fpaths['with_wv_landcover'])
+            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_wv_landcover'])
         # Landcover is fairly fast to run
         node = ProcessNode(
             name=key + name_suffix,
