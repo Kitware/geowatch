@@ -848,6 +848,33 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
       - add all unique polygons in the merged list
       - for overlapping polygons, add the union of both polygons
 
+    Args:
+        p1 (List[shapely.geometry.polygon.Polygon]):
+            List of polygons in group1
+
+        t1 (List[float]):
+            List of times corresponding with polygons in group1
+
+        p2 (List[shapely.geometry.polygon.Polygon]):
+            List of polygons in group1
+
+        t2 (List[float]):
+            List of times corresponding with polygons in group2
+
+        poly_merge_method (str):
+            Codename for the algorithm used. Can be "v1", "v2", "v3", or "v3_noop".
+
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import * # NOQA
+        >>> from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+        >>> #
+        >>> p1 = [kwimage.Polygon.random().scale(0.2).to_shapely() for _ in range(1)]
+        >>> t1 = list(range(len(p1)))
+        >>> p2 = [kwimage.Polygon.random().to_shapely() for _ in range(1)]
+        >>> t2 = list(range(len(p2)))
+        >>> poly_merge_method = 'v3'
+        >>> #
+        >>> _merge_polys(p1, t1, p2, t2, poly_merge_method)
     Ignore:
         from watch.tasks.tracking.from_heatmap import * # NOQA
         from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
