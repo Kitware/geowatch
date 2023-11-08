@@ -931,6 +931,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> import kwimage
         >>> from kwutil import util_time
+        >>> import numpy as np
         >>> from watch.tasks.tracking.from_heatmap import _GidPolyConfig  # NOQA
         >>> config = _GidPolyConfig()
         >>> heatmaps = np.zeros((7, 64, 64))

@@ -22,8 +22,9 @@ def _norm(heatmaps, norm_ord):
         https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pmean.html
 
     Example:
-        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
-        >>> from watch.tasks.tracking.from_heatmap import _norm
+        >>> from watch.tasks.tracking.agg_functions import *  # NOQA
+        >>> from watch.tasks.tracking.agg_functions import _norm
+        >>> import ubelt as ub
         >>> import kwimage
         >>> import numpy as np
         >>> num_frames = 16
