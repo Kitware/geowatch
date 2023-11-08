@@ -331,9 +331,59 @@ def _boxes_snap_to_edges(given_box, snap_target):
 
 class NestedPool(list):
     """
+    Manages a sampling from a tree of indexes (represented as nested lists).
+
+    Helps with balancing samples over multiple criteria
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.data_utils import NestedPool
+        >>> # Lets say that you have a grid of sample locations with information
+        >>> # about them - say a source region and what category they contain.
+        >>> # In this case region1 occurs more often than region2 and there is
+        >>> # a rare category that only appears twice.
+        >>> sample_grid = [
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'rare'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region1', 'category': 'background'},
+        >>>     {'region': 'region2', 'category': 'background'},
+        >>>     {'region': 'region2', 'category': 'background'},
+        >>>     {'region': 'region2', 'category': 'rare'},
+        >>> ]
+        >>> #
+        >>> # First we can just create a flat uniform sampling grid
+        >>> # And inspect the imbalance that causes.
+        >>> sample_idxs = list(range(len(sample_grid)))
+        >>> self = NestedPool(sample_idxs)
+        >>> print(f'self={self}')
+        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
+        >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
+        >>> #
+        >>> # We can subdivide the indexes based on region to improve balance.
+        >>> self.subdivide([g['region'] for g in sample_grid])
+        >>> print(f'self={self}')
+        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> hist1 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
+        >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
+        >>> #
+        >>> # We can further subdivide by category.
+        >>> self.subdivide([g['category'] for g in sample_grid])
+        >>> print(f'self={self}')
+        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> hist2 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
+        >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
+
     Example:
         >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
+        >>> list(nested1.leafs())
+
         >>> print({nested1.sample() for i in range(100)})
         >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
         >>> print({nested2.sample() for i in range(100)})
@@ -341,26 +391,70 @@ class NestedPool(list):
         >>> print({nested3.sample() for i in range(100)})
         >>> print(ub.urepr(ub.dict_hist(nested3.sample() for i in range(100))))
     """
-    def __init__(nested, pools, rng=None):
+    def __init__(self, pools, rng=None):
         super().__init__(pools)
-        nested.rng = rng = kwarray.ensure_rng(rng)
-        nested.pools = pools
+        self.rng = rng = kwarray.ensure_rng(rng)
+        self.pools = pools
 
-    def sample(nested):
+    def _sample_many(self, num, items):
+        for _ in range(num):
+            idx = self.sample()
+            item = items[idx]
+            yield item
+
+    def subdivide(self, items, key=None):
+        """
+        Args:
+            items (List):
+                a list of items that the indexes index into.
+                If these are not the attributes to split nodes on, then
+                key must be specified:
+
+            key (None | Callable):
+                if specified, for each ``items[i]`` found transform it into
+                the group-id based on ``key(items[i])``.
+        """
+        for leaf in self.leafs():
+            if key is not None:
+                groupids = list(map(key, ub.take(items, leaf)))
+            else:
+                groupids = list(ub.take(items, leaf))
+            new_subleafs = list(ub.group_items(leaf, groupids).values())
+            if len(new_subleafs) > 1:
+                # Clear the current leaf and replace it with new subleafs
+                leaf[:] = new_subleafs
+
+    def leafs(self):
+        """
+        Iterate over the deepest index lists in this pool.
+        """
+        stack = [self]
+        while stack:
+            curr = stack.pop()
+            assert ub.iterable(curr)
+            if len(curr) == 0 or not ub.iterable(curr[0]):
+                # Found a leaf
+                yield curr
+            else:
+                for child in curr:
+                    stack.append(child)
+
+    def sample(self):
         # Hack for empty lists
-        chosen = nested
+        chosen = self
         i = 0
         while ub.iterable(chosen):
-            chosen = nested
+            chosen = self
             i += 1
             while ub.iterable(chosen):
                 i += 1
                 num = len(chosen)
+                # Fixme: not robust
                 if i > 100000:
                     raise Exception('Too many samples. Bad balance?')
                 if not num:
                     break
-                idx = nested.rng.randint(0, num)
+                idx = self.rng.randint(0, num)
                 chosen = chosen[idx]
         return chosen
 
