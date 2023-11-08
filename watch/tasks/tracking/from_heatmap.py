@@ -1240,52 +1240,6 @@ def _gids_polys(sub_dset, **kwargs):
 #     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
 
 
-def _resolve_deprecated_args(self):
-    """
-    Ignore:
-        # Logic to check the conversion constant is correct
-        import pint
-        ureg = pint.UnitRegistry()
-        sqm = ureg.meters ** 2
-        sqkm = ureg.kilometers ** 2
-        sqm_to_skqm_scale_factor = float(((1 * sqkm) / (1 * sqm)).to_base_units())
-        print(f'sqm_to_skqm_scale_factor={sqm_to_skqm_scale_factor}')
-        print((0.072 * sqkm).to(sqm))
-        print(0.072 * sqm_to_skqm_scale_factor)
-        0.072 * sqkm
-    """
-    sqm_to_skqm_scale_factor = 1_000_000
-
-    if self.min_area_sqkm is not None:
-        ub.schedule_deprecation(
-            'watch', 'min_area_sqkm', 'tracking param',
-            migration='use min_area_square_meters instead',
-            deprecate='now', error='now')
-
-        if self.min_area_square_meters is not None:
-            raise ValueError('Cannot specify min_area_sqkm and min_area_square_meters')
-
-        self.min_area_square_meters = self.min_area_sqkm * sqm_to_skqm_scale_factor
-        self.min_area_sqkm = None
-
-    if self.max_area_sqkm is not None:
-        ub.schedule_deprecation(
-            'watch', 'max_area_sqkm', 'tracking param',
-            migration='use max_area_square_meters instead',
-            deprecate='now', error='now')
-
-        if self.max_area_square_meters is not None:
-            raise ValueError('Cannot specify min_area_sqkm and max_area_square_meters')
-
-        self.max_area_square_meters = self.max_area_sqkm * sqm_to_skqm_scale_factor
-        self.max_area_sqkm = None
-
-
-def _resolve_arg_values(self):
-    if isinstance(self.norm_ord, str) and self.norm_ord.lower() == 'inf':
-        self.norm_ord = float('inf')
-
-
 class _GidPolyConfig(scfg.DataConfig):
     # This is the base config that all from-heatmap trackers have in common
     # which has to do with how heatmaps are loaded, normalized, and aggregated.
@@ -1452,13 +1406,10 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
 
 
 class CommonTrackFn(NewTrackFunction, TimeAggregatedPolysConfig):
-    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD  # deprecate
-    max_area_sqkm: Optional[float] = None  # was 2.25  # deprecate
-
     def __post_init__(self):
         super().__post_init__()
-        _resolve_deprecated_args(self)
-        _resolve_arg_values(self)
+        if isinstance(self.norm_ord, str) and self.norm_ord.lower() == 'inf':
+            self.norm_ord = float('inf')
 
 
 class TrackFnWithSV(CommonTrackFn):
