@@ -293,7 +293,7 @@ class TimeSplitFilter:
         def buffer_by(tracks, by):
             new_tracks = []
             for start, end in tracks:
-                new_tracks.append((start-by, end+by))
+                new_tracks.append((start - by, end + by))
             return new_tracks
 
         def merge_neighbors(tracks):
