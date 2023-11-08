@@ -3344,7 +3344,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         item_summary['video_name'] = vidname
         item_summary['video_hw'] = (vid_h, vid_w)
 
-        if timestamps:
+        if len(timestamps) > 1:
             deltas = np.diff(timestamps)
             deltas = [d.total_seconds() for d in deltas]
             item_summary['min_time'] = ub.timestamp(min(timestamps))

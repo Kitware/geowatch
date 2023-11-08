@@ -1812,7 +1812,7 @@ class SiteModelCollection(ModelCollection):
         return region_model
 
 
-def _infer_region_header_from_site_summaries(region_header, site_summaries, strict):
+def _infer_region_header_from_site_summaries(region_header, site_summaries, strict=True):
     """
     Given a RegionHeader use site_summaries to fill missing data.
     """

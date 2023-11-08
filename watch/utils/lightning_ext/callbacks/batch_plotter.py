@@ -226,7 +226,7 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_train_batch_end")
             print("========")
             print(traceback.format_exc())
             print(repr(e))
@@ -240,7 +240,7 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_validation_batch_end")
             print("========")
             print(traceback.format_exc())
             print(repr(e))
@@ -250,7 +250,7 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_test_batch_end")
             print("========")
             print(traceback.format_exc())
             print(repr(e))
