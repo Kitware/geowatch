@@ -3337,12 +3337,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame.get('ann_aids') is not None:
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
-        vidname = item['video_name']
-        video = self.coco_dset.index.name_to_video[vidname]
-        vid_w = video['width']
-        vid_h = video['height']
-        item_summary['video_name'] = vidname
-        item_summary['video_hw'] = (vid_h, vid_w)
+        vidname = item.get('video_name', None)
+        if vidname is not None:
+            item_summary['video_name'] = vidname
+            try:
+                video = self.coco_dset.index.name_to_video[vidname]
+                vid_w = video['width']
+                vid_h = video['height']
+                item_summary['video_hw'] = (vid_h, vid_w)
+            except KeyError:
+                item_summary['video_hw'] = '?'
 
         if len(timestamps) > 1:
             deltas = np.diff(timestamps)
