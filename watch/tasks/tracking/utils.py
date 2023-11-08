@@ -364,8 +364,8 @@ def _build_annot_gdf(coco_dset, aids=None, cnames=None, resolution=None):
     flat_scales = []
     for image_id, anns in gid_to_anns.items():
         coco_img = coco_dset.coco_image(image_id)
-        img_polys = _annot_segmentations(coco_img, anns, space='video',
-                                         resolution=resolution)
+        img_polys = coco_img._annot_segmentations(anns, space='video',
+                                                  resolution=resolution)
         flat_polys.extend(img_polys)
         flat_gids.extend([image_id] * len(img_polys))
         flat_track_ids.extend([ann['track_id'] for ann in anns])
@@ -631,42 +631,3 @@ def _validate_keys(key, bg_key):
             raise ValueError('cannot have a key in foreground and background')
 
     return key, bg_key
-
-
-def _warp_for_resolution(self, space, resolution=None):
-    """
-    Compute a transform from image-space to the requested space at a
-    target resolution.
-
-    Note:
-        Will be part of CocoImage in kwcoco 0.6.5
-    """
-    import kwimage
-    if space == 'image':
-        warp_space_from_img = kwimage.Affine(None)
-    elif space == 'video':
-        warp_space_from_img = self.warp_vid_from_img
-    else:
-        raise NotImplementedError(space)  # auxiliary/asset space
-
-    if resolution is None:
-        warp_final_from_img = warp_space_from_img
-    else:
-        # Requested the annotation at a resolution, so we need to apply a
-        # scale factor
-        scale = self._scalefactor_for_resolution(space=space,
-                                                 resolution=resolution)
-        warp_final_from_space = kwimage.Affine.scale(scale)
-        warp_final_from_img = warp_final_from_space @ warp_space_from_img
-    return warp_final_from_img
-
-
-def _annot_segmentations(self, anns, space='video', resolution=None):
-    import kwimage
-    warp_final_from_img = _warp_for_resolution(self, space=space, resolution=resolution)
-    warped_ssegs = []
-    for ann in anns:
-        img_sseg = kwimage.MultiPolygon.coerce(ann['segmentation'])
-        warped_sseg = img_sseg.warp(warp_final_from_img)
-        warped_ssegs.append(warped_sseg)
-    return warped_ssegs
