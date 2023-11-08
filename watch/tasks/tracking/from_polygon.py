@@ -1,4 +1,4 @@
-from watch.tasks.tracking.utils import TrackFunction
+from watch.tasks.tracking.abstract_classes import TrackFunction
 import scriptconfig as scfg
 
 

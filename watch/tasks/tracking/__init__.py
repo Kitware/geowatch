@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-__dev__ = """
-mkinit ~/code/watch/watch/tasks/template/__init__.py --noattrs --lazy -w
-"""
-
-
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os
@@ -33,7 +28,7 @@ def lazy_import(module_name, submodules, submod_attrs):
         return attr
 
     if os.environ.get('EAGER_IMPORT', ''):
-        for name in name_to_submod.values():
+        for name in submodules:
             __getattr__(name)
 
         for attrs in submod_attrs.values():
@@ -45,6 +40,7 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
+        'abstract_classes',
         'normalize',
         'from_heatmap',
         'from_polygon',
@@ -57,5 +53,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = ['normalize', 'from_heatmap', 'from_polygon']
+__all__ = ['abstract_classes', 'agg_functions', 'from_heatmap', 'from_polygon',
+           'normalize', 'phase', 'utils', 'visualize']

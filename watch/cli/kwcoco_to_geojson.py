@@ -1393,7 +1393,7 @@ def main(argv=None, **kwargs):
     track_fn = args.track_fn
     if track_fn is None:
         track_fn = (
-            watch.tasks.tracking.utils.NoOpTrackFunction
+            watch.tasks.tracking.abstract_classes.NoOpTrackFunction
             if args.default_track_fn is None else
             args.default_track_fn
         )

@@ -6,7 +6,7 @@ import ubelt as ub
 from typing import Dict, List, Any
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
-from watch.tasks.tracking.utils import TrackFunction
+from watch.tasks.tracking.abstract_classes import TrackFunction
 from watch.tasks.tracking.utils import check_only_bg
 try:
     from xdev import profile

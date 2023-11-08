@@ -7,16 +7,15 @@ SeeAlso:
 import ubelt as ub
 import itertools
 import math
-from typing import Optional
 from typing import Tuple
 from typing import Literal
 import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
-from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
 from watch.tasks.tracking import agg_functions
+from watch.tasks.tracking.abstract_classes import NewTrackFunction
+
 from watch.tasks.tracking.utils import (
-    NewTrackFunction,
     mask_to_polygons,
     _validate_keys,
     score_track_polys,

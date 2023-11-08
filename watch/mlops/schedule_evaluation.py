@@ -448,7 +448,6 @@ Ignore:
 
     list(watch.tasks.fusion.predict.make_predict_config().__dict__.keys())
 
-    from watch.tasks.tracking.from_heatmap import NewTrackFunction
     from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
     from watch.tasks.tracking.from_heatmap import TimeAggregatedSC
     # from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
@@ -457,7 +456,6 @@ Ignore:
     parser = jsonargparse.ArgumentParser()
     parser.add_class_arguments(TimeAggregatedBAS, nested_key='bas_poly')
     parser.add_class_arguments(TimeAggregatedSC, nested_key='sc_poly')
-    # parser.add_subclass_arguments(NewTrackFunction, nested_key='poly')
     parser.print_help()
 
     parser.parse_known_args([])
