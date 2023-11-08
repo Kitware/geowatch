@@ -155,8 +155,8 @@ lark_cython >= 0.0.15
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.21
-kwcoco>=0.7.1
+kwimage>=0.9.22
+kwcoco>=0.7.3
 delayed_image>=0.2.10
 albumentations==1.0.0  # pinned for invariants model
 ndsampler>=0.7.6
