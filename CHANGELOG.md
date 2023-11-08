@@ -11,6 +11,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Initial support for ndsampler backends (version >0.7.6)
 
+* Support for v3 polygon extraction / merging to allow temporally disjoint polygons at the same location !540
+
+* Support WV and S2 landcover at AC time in smartflow
+
 ### Changed
 
 * SMARTTrainer now writes helpful scripts to visualize batches as an independent process (works around ddp issue) 

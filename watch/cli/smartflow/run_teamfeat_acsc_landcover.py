@@ -81,9 +81,6 @@ def main():
 
     input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
 
-    # output_kwcoco_fpath = ub.Path(input_kwcoco_fpath).augment(
-    #     stemsuffix='_mae', ext='.kwcoco.zip', multidot=True)
-
     # TOOD: better passing of configs
 
     # Use the existing prepare teamfeat script to get the features invocation.
@@ -103,6 +100,8 @@ def main():
         cmdline=0,
         with_wv_landcover=1,
         with_s2_landcover=1,
+        num_wv_landcover_hidden=0,
+        num_s2_landcover_hidden=0,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=base_fpath,
         assets_dname='_teamfeats',
@@ -129,7 +128,7 @@ def main():
     (teamfeat_dpath / 'dummy').touch()
     ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = teamfeat_dpath
     # This is the kwcoco file with the all teamfeature outputs (i.e. previous
-    # team features + MAE)
+    # team features + this one)
     ingressed_assets['enriched_acsc_kwcoco_file'] = full_output_kwcoco_fpath
 
     node_state.print_current_state(ingress_dir)
