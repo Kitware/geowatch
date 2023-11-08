@@ -67,6 +67,11 @@ class BasFusionConfig(scfg.DataConfig):
             config for bas tracking.
             '''))
 
+    time_dense = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Use time_dense imagery. Defaults to False and uses time averaged data.
+            '''))
+
 
 def main():
     config = BasFusionConfig.cli(strict=True)
@@ -106,15 +111,22 @@ def run_bas_fusion_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
+    assets = [
+        'enriched_bas_kwcoco_file',
+        'enriched_bas_kwcoco_teamfeats',
+        'enriched_bas_kwcoco_rawbands',
+        {"key": 'hacked_cold_assets', "allow_missing": True},
+        {"key": 'landcover_assets', "allow_missing": True},
+    ]
+    if config.time_dense:
+        assets += [
+            'timedense_bas_kwcoco_file',
+            'timedense_bas_kwcoco_rawbands',
+        ]
+
     ingressed_assets = smartflow_ingress(
         input_path=input_path,
-        assets=[
-            'enriched_bas_kwcoco_file',
-            'enriched_bas_kwcoco_teamfeats',
-            'enriched_bas_kwcoco_rawbands',
-            {"key": 'hacked_cold_assets', "allow_missing": True},
-            {"key": 'landcover_assets', "allow_missing": True},
-        ],
+        assets=assets,
         outdir=ingress_dir,
         aws_profile=aws_profile,
         dryrun=dryrun

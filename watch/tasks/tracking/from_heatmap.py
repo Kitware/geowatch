@@ -277,6 +277,93 @@ class TimePolygonFilter:
         return result
 
 
+class TimeSplitFilter:
+    """
+    Splits tracks based on start and end of each subtracks min response.
+    """
+
+    def __init__(self, threshold, frame_buffer):
+        self.threshold = threshold
+        self.frame_buffer = frame_buffer
+
+    def __call__(self, gdf):
+        import geopandas as gpd
+        import pandas as pd
+
+        def buffer_by(tracks, by):
+            new_tracks = []
+            for start, end in tracks:
+                new_tracks.append((start - by, end + by))
+            return new_tracks
+
+        def merge_neighbors(tracks):
+            new_tracks = []
+            prev = None
+            for curr in tracks:
+                if prev is None:
+                    prev = curr
+                    continue
+
+                if curr[0] <= prev[1]:
+                    prev = (prev[0], curr[1])
+                else:
+                    new_tracks.append(prev)
+                    prev = curr
+
+            new_tracks.append(prev)
+            return new_tracks
+
+        def _edit(scores):
+            magic_thresh = 0.5
+            track_start = None
+            sub_tracks = []
+            for idx, score in enumerate(scores):
+
+                if (score > magic_thresh) and (track_start is None):
+                    # print(f"track started at {idx}")
+                    track_start = idx
+
+                if (score < magic_thresh) and (track_start is not None):
+                    # print(f"track ended at {idx-1}")
+                    sub_tracks.append((track_start, idx))
+                    track_start = None
+
+            if (track_start is not None):
+                sub_tracks.append((track_start, len(scores)))
+
+            return sub_tracks
+
+        if len(gdf) > 0:
+            subtracks = []
+            subtrack_idx = 1
+            for track_id, group in gdf.groupby('track_idx'):
+
+                subtrack_startstops = _edit(list(group[('fg', self.threshold)]))
+                subtrack_startstops = buffer_by(subtrack_startstops, self.frame_buffer)
+                subtrack_startstops = merge_neighbors(subtrack_startstops)
+
+                if len(subtrack_startstops) == 0:
+                    return gpd.GeoDataFrame()
+
+                if subtrack_startstops[0][0] < 0:
+                    subtrack_startstops[0] = (0, subtrack_startstops[0][1])
+                if subtrack_startstops[-1][0] >= len(group):
+                    subtrack_startstops[-1] = (subtrack_startstops[-1][0], len(group))
+
+                for sub_id, (start, stop) in enumerate(subtrack_startstops):
+                    subtrack = group.iloc[start:stop]
+                    subtrack["track_idx"] = subtrack_idx
+                    subtrack_idx += 1
+
+                    subtracks.append(subtrack)
+            result = gpd.GeoDataFrame(
+                pd.concat(subtracks, ignore_index=True)
+            )
+        else:
+            result = gdf
+        return result
+
+
 class ResponsePolygonFilter:
     """
     Filters each track based on the average response of all tracks.
@@ -690,6 +777,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
         thrs.add(-1)
     if config.time_thresh:
         thrs.add(config.time_thresh * config.thresh)
+    if config.time_split_thresh:
+        thrs.add(config.time_split_thresh)
     #####
     ## Jon C: I'm not sure about this. Going from a set to a list, and then having
     ## the resulting function depend on the order of the list makes me nerevous.
@@ -729,6 +818,14 @@ def time_aggregated_polys(sub_dset, **kwargs):
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
+    if config.time_split_thresh:
+        split_filter = TimeSplitFilter(config.time_split_thresh, config.time_split_frame_buffer)
+        n_orig = gpd_len(_TRACKS)
+        _TRACKS = split_filter(_TRACKS)
+        n_result = gpd_len(_TRACKS)
+        print('filter based on time splitting: remaining tracks '
+              f'{n_result} / {n_orig}')
+
     # The tracker assumes the polygons will be output in video space.
     if scale_vid_from_trk is not None and len(_TRACKS):
         # If a tracking resolution was specified undo the extra scale factor
@@ -745,11 +842,41 @@ def time_aggregated_polys(sub_dset, **kwargs):
 #
 
 
-def _merge_polys(p1, p2, poly_merge_method=None):
+def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
     """
     Given two lists of polygons, p1 and p2, merge these according to:
       - add all unique polygons in the merged list
       - for overlapping polygons, add the union of both polygons
+
+    Args:
+        p1 (List[shapely.geometry.polygon.Polygon]):
+            List of polygons in group1
+
+        t1 (List[float]):
+            List of times corresponding with polygons in group1
+
+        p2 (List[shapely.geometry.polygon.Polygon]):
+            List of polygons in group1
+
+        t2 (List[float]):
+            List of times corresponding with polygons in group2
+
+        poly_merge_method (str):
+            Codename for the algorithm used. Can be "v1", "v2", "v3", or "v3_noop".
+
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import * # NOQA
+        >>> from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+        >>> import kwimage
+        >>> import numpy as np
+        >>> #
+        >>> p1 = [kwimage.Polygon.random().scale(0.2).to_shapely() for _ in range(1)]
+        >>> t1 = np.arange(len(p1) * 2).reshape(-1, 2)
+        >>> p2 = [kwimage.Polygon.random().to_shapely() for _ in range(1)]
+        >>> t2 = np.arange(len(p2) * 2).reshape(-1, 2)
+        >>> poly_merge_method = 'v3'
+        >>> #
+        >>> _merge_polys(p1, t1, p2, t2, poly_merge_method)
 
     Ignore:
         from watch.tasks.tracking.from_heatmap import * # NOQA
@@ -786,10 +913,65 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     """
     import numpy as np
     merged_polys = []
+    merged_times = []
+
     if poly_merge_method is None:
         poly_merge_method = 'v1'
 
-    if poly_merge_method == 'v2':
+    if poly_merge_method == 'v3_noop':
+        merged_polys = p1 + p2
+        merged_times = t1 + t2
+
+    if poly_merge_method == 'v3':
+        from shapely.ops import unary_union
+
+        p1_seen = set()
+        p2_seen = set()
+        # add all polygons that overlap
+        for j, (_p1, _t1) in enumerate(zip(p1, t1)):
+            if j in p1_seen:
+                continue
+            for i, (_p2, _t2) in enumerate(zip(p2, t2)):
+
+                # if timestamps dont line up, skip
+                if _t1[1] != _t2[0]:
+                    continue
+                if (i in p2_seen) or (i > len(p2) - 1):
+                    continue
+
+                if _p1.intersects(_p2):
+                    combo = unary_union([_p1, _p2])
+                    if combo.geom_type == 'Polygon':
+                        merged_polys.append(combo)
+                    elif combo.geom_type == 'MultiPolygon':
+                        # Can this ever happen? It seems to have occurred in a test
+                        # run. Bowties can cause this.
+                        # import warnings
+                        # warnings.warn('Found two intersecting polygons where the
+                        # union was a multipolygon')
+                        merged_polys.extend(list(combo.geoms))
+                    else:
+                        raise AssertionError(
+                            f'Unexpected type {combo.geom_type} from {_p1} and {_p2}')
+
+                    p1_seen.add(j)
+                    p2_seen.add(i)
+
+        # all polygons that did not overlap with any polygon
+        all_p1 = set(np.arange(len(p1)))
+        remaining_p1 = all_p1 - p1_seen
+
+        for index in remaining_p1:
+            merged_polys.append(p1[index])
+            merged_times.append(t1[index])
+
+        all_p2 = set(np.arange(len(p2)))
+        remaining_p2 = all_p2 - p2_seen
+        for index in remaining_p2:
+            merged_polys.append(p2[index])
+            merged_times.append(t2[index])
+
+    elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
         from watch.utils import util_gis
         import geopandas as gpd
@@ -818,6 +1000,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                     # merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
+
     elif poly_merge_method == 'v1':
         from shapely.ops import unary_union
         p1_seen = set()
@@ -861,7 +1044,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     else:
         raise ValueError(poly_merge_method)
 
-    return merged_polys
+    return merged_polys, merged_times
 
 
 def _process(track, _heatmaps, image_dates, gids, config):
@@ -924,6 +1107,8 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
 
+    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+
     if isinstance(config.inner_window_size, str):
         # TODO: generalize if needed
         assert heatmap_dates is not None
@@ -939,19 +1124,30 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         from kwutil import util_time
         import kwarray
         delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
-        image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
         bucket_ids = (image_unixtimes // delta).astype(int)
+
         unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+
         new_heatmaps = []
         for idxs in groupxs:
             inner = _norm(heatmaps[idxs], norm_ord=inner_ord)
             new_heatmaps.append(inner)
         new_heatmaps = np.array(new_heatmaps)
         heatmaps = new_heatmaps
+
+        new_heatmap_dates = []
+        for idxs in groupxs:
+            new_start_date = np.min(image_unixtimes[idxs])
+            new_end_date = np.max(image_unixtimes[idxs])
+            new_heatmap_dates.append([new_start_date, new_end_date])
+        new_heatmap_dates = np.array(new_heatmap_dates)
+        image_unixtimeframes = new_heatmap_dates
+
     else:
         if config.inner_window_size is not None:
             raise NotImplementedError(
                 'only temporal deltas for inner agg window for now')
+        image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
@@ -965,11 +1161,13 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
     h_init = heatmaps[:final_size]
+    t_init = image_unixtimeframes[:final_size]
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
         step = 0
         polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step, config)
+        times_final = [[t_init[0][0], t_init[-1][1]]] * len(polys_final)
         prog.step()
 
         if n_steps > 1:
@@ -978,10 +1176,17 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             for step in range(1, n_steps):
                 prog.step()
                 h1 = heatmaps[step * final_size:(step + 1) * final_size]
+                t1 = image_unixtimeframes[step * final_size:(step + 1) * final_size]
+
                 p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
+                t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
                 p1 = convert_to_shapely(p1)
-                polys_final = _merge_polys(polys_final, p1,
-                                           poly_merge_method=config.poly_merge_method)
+
+                polys_final, times_final = _merge_polys(
+                    polys_final, times_final,
+                    p1, t1,
+                    poly_merge_method=config.poly_merge_method,
+                )
 
             polys_final = convert_to_kwimage_poly(polys_final)
     return polys_final
@@ -1264,6 +1469,18 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     bg_key = scfg.Value(None, help=ub.paragraph(
         '''
         Zero or more channels to use as the negative class for polygon scoring.
+        '''))
+
+    time_split_thresh = scfg.Value(None, help=ub.paragraph(
+        '''
+        time splitting parameter. if set, tracks will be broken into subtracks
+        based on when the score is above this threshold.
+        '''))
+
+    time_split_frame_buffer = scfg.Value(2, help=ub.paragraph(
+        '''
+        time splitting parameter. if set, subtracks will be buffered by the specified
+        number of frames. if this causes subtracks to overlap, they are merged together.
         '''))
 
     time_thresh = scfg.Value(1, help=ub.paragraph(
