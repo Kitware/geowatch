@@ -1,93 +1,15 @@
-#!/usr/bin/env python3
+"""
+TODO: rectify with run_teamfeat_landcover.py
+"""
 import ubelt as ub
 import scriptconfig as scfg
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
 
 
-__debugging__ = r"""
-
-
-IMAGE_NAME=watch:0.11.0-42f5cc56a-strict-pyenv3.11.2-20231013T095024-0400-from-dc16b29e
-
-docker run \
-    --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow/ingress":/tmp/ingress \
-    --volume $HOME/.aws:/root/.aws:ro \
-    --volume "$HOME/code":/extern_code:ro \
-    --volume "$HOME/data":/extern_data:ro \
-    --volume "$HOME"/.cache/pip:/pip_cache \
-    --env AWS_PROFILE=iarpa \
-    -it "$IMAGE_NAME" bash
-
-(cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
-(cd /root/code/watch && git fetch tmp)
-(cd /root/code/watch && git checkout dev/0.11.0)
-(cd /root/code/watch && git pull tmp)
-
-(cd /root/data/smart_expt_dvc && dvc remote add tmp /extern_data/dvc-repos/smart_expt_dvc/.dvc/cache)
-(cd /root/data/smart_expt_dvc && dvc pull -r tmp models/wu/wu_mae_2023_04_21.dvc)
-
-ipython
-
-import sys, ubelt
-sys.path.append(ubelt.expandpath('~/code/watch'))
-from watch.cli.smartflow.run_teamfeat_mae import *  # NOQA
-
-
-# Copied from a smartflow run that failed,
-
-config = TeamFeatMAE(**{
-    'input_path'       : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/site-cropped-kwcoco/items.jsonl',
-    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson',
-    'output_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/acsc_mae/items.jsonl',
-    'aws_profile'      : None,
-    'dryrun'           : False,
-    'outbucket'        : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/acsc_mae',
-    'newline'          : True,
-    'expt_dvc_dpath'   : '/root/data/smart_expt_dvc',
-})
-
-
-###
-
-python -m watch.tasks.mae.predict \
-        --input_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc.json \
-        --mae_ckpt_path=/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt \
-        --output_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc_wu_mae.kwcoco.zip \
-        --workers=2 \
-        --assets_dname=_teamfeats
-
-
-
-import sys, ubelt
-sys.path.append(ubelt.expandpath('~/code/watch'))
-from watch.tasks.mae.predict import *  # NOQA
-kwargs = {
-    'device': 'cuda:0',
-    'mae_ckpt_path': '/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt',
-    'batch_size': 1,
-    'workers': 2,
-    'io_workers': 8,
-    'window_resolution': 1.0,
-    'sensor': [
-        'S2',
-        'L8',
-    ],
-    'bands': [
-        'shared',
-    ],
-    'patch_overlap': 0.25,
-    'input_kwcoco': '/tmp/ingress/cropped_kwcoco_for_sc.json',
-    'output_kwcoco': '/tmp/ingress/cropped_kwcoco_for_sc_wu_mae.kwcoco.zip',
-    'assets_dname': '_teamfeats',
-}
-
-"""
-
-
-class TeamFeatMAE(scfg.DataConfig):
+class TeamFeatLandcover(scfg.DataConfig):
     """
+    Run DZYNE landcover feature computation as baseline framework component
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
@@ -111,14 +33,11 @@ class TeamFeatMAE(scfg.DataConfig):
             '''
             Output as simple newline separated STAC items
             '''))
-
     expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
 
 
 def main():
-    # import os
-    # os.environ['NO_COLOR'] = '1'
-    config = TeamFeatMAE.cli(strict=True)
+    config = TeamFeatLandcover.cli(strict=True)
 
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
@@ -162,6 +81,9 @@ def main():
 
     input_kwcoco_fpath = ingressed_assets['enriched_acsc_kwcoco_file']
 
+    # output_kwcoco_fpath = ub.Path(input_kwcoco_fpath).augment(
+    #     stemsuffix='_mae', ext='.kwcoco.zip', multidot=True)
+
     # TOOD: better passing of configs
 
     # Use the existing prepare teamfeat script to get the features invocation.
@@ -179,7 +101,8 @@ def main():
 
     teamfeat_info = prepare_teamfeats.main(
         cmdline=0,
-        with_mae=1,
+        with_wv_landcover=1,
+        with_s2_landcover=1,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=base_fpath,
         assets_dname='_teamfeats',
@@ -205,7 +128,8 @@ def main():
     teamfeat_dpath = (ingress_dir / '_teamfeats').ensuredir()
     (teamfeat_dpath / 'dummy').touch()
     ingressed_assets['enriched_acsc_kwcoco_teamfeats'] = teamfeat_dpath
-    # This is the kwcoco file with the all teamfeature outputs
+    # This is the kwcoco file with the all teamfeature outputs (i.e. previous
+    # team features + MAE)
     ingressed_assets['enriched_acsc_kwcoco_file'] = full_output_kwcoco_fpath
 
     node_state.print_current_state(ingress_dir)
