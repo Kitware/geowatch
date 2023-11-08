@@ -797,20 +797,23 @@ def mask_to_polygons(probs,
                      use_rasterio=True,
                      thresh_hysteresis=None):
     """
+    Extract a polygon from a 2D heatmap. Optionally within the bounds of
+    another mask or polygon.
+
     Args:
         probs (ndarray): aka heatmap, image of probability values
 
-        thresh: to turn probs into a hard mask
+        thresh (float): to turn probs into a hard mask
 
-        bounds: a kwimage or shapely polygon to crop the results to
+        bounds (kwimage.Polygon): a kwimage or shapely polygon to crop the results to
 
-        use_rasterio: use rasterio.features module instead of kwimage
+        use_rasterio (bool): use rasterio.features module instead of kwimage
 
         thresh_hysteresis: if not None, only keep polygons with at least one
             pixel of score >= thresh_hysteresis
 
-    Returns:
-        Iterable[kwcoco.Polygon]
+    Yields:
+        kwcoco.Polygon: extracted polygons.
 
     Example:
         >>> from watch.tasks.tracking.utils import mask_to_polygons
@@ -865,18 +868,17 @@ def mask_to_polygons(probs,
 
     pixels_are = 'areas' if use_rasterio else 'points'
     if bounds is not None:
-        try:  # is this a shapely or geojson object?
-            # asShape is being deprecated:
-            # https://github.com/shapely/shapely/issues/1100
+        try:
             bounds = shapely.geometry.shape(bounds)
-        except ValueError:  # is this a kwimage object?
-            bounds = bounds.to_shapely()
-        bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
-            probs.shape, pixels_are=pixels_are).numpy().data.astype(np.uint8)
-        binary_mask *= bounds_mask
+        except ValueError:
+            ...
+        bounds_poly = kwimage.Polygon.coerce(bounds)
+        bounds_mask = bounds_poly.to_mask(probs.shape, pixels_are=pixels_are)
+        bounds_mask_ = bounds_mask.numpy().data.astype(np.uint8)
+        binary_mask *= bounds_mask_
 
-    polygons = kwimage.Mask(
-        binary_mask, 'c_mask').to_multi_polygon(pixels_are=pixels_are)
+    final_mask = kwimage.Mask(binary_mask, 'c_mask')
+    polygons = final_mask.to_multi_polygon(pixels_are=pixels_are)
 
     yield from polygons
 

@@ -14,6 +14,7 @@ import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
+from watch.tasks.tracking import agg_functions
 from watch.tasks.tracking.utils import (
     NewTrackFunction,
     mask_to_polygons,
@@ -27,221 +28,6 @@ try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-#
-# --- aggregation functions for heatmaps ---
-#
-
-
-def _norm(heatmaps, norm_ord):
-    """
-    Computes the generalized mean over axis=0.
-
-    Args:
-        heatmaps (List[ndarray]) pixel aligned heatmaps
-        norm_ord (int | float): the exponent of the generalized mean.
-
-    Returns:
-        ndarray : the axis=0 is marginalized over.
-
-    Notes:
-        like np.linalg.norm but with special nan handling and a division factor
-
-    References:
-        https://en.wikipedia.org/wiki/Generalized_mean
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pmean.html
-
-    Example:
-        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
-        >>> from watch.tasks.tracking.from_heatmap import _norm
-        >>> import kwimage
-        >>> import numpy as np
-        >>> num_frames = 16
-        >>> num_sequences = 6
-        >>> # Setup 5 sequences to norm
-        >>> heatmaps = [np.empty(num_sequences) for _ in range(num_frames)]
-        >>> heatmaps = np.array(heatmaps)
-        >>> # Sequence 0 is all nan
-        >>> heatmaps[:, 0] = np.nan
-        >>> # Sequence 1 is random
-        >>> heatmaps[:, 1] = np.random.rand(num_frames)
-        >>> # Sequence 2 is Sequence1, but half of the data is nan
-        >>> heatmaps[0:, 2] = heatmaps[:, 1]
-        >>> heatmaps[0:num_frames // 2, 2] = np.nan
-        >>> # Sequence 3 is all zero except for an impulse
-        >>> heatmaps[0:, 3] = 0
-        >>> heatmaps[num_frames // 2, 3] = 1
-        >>> # Sequence 4 is a gaussian response
-        >>> heatmaps[0:, 4] = kwimage.gaussian_patch(shape=(1, num_frames))[0]
-        >>> # Sequence 5 is a a gaussian response 1 / 4 nans
-        >>> heatmaps[0:, 5] = kwimage.gaussian_patch(shape=(1, num_frames))[0]
-        >>> heatmaps[0:num_frames // 4, 5] = np.nan
-        >>> norm_ord = 1
-        >>> x = _norm(heatmaps, norm_ord)
-        >>> y = np.linalg.norm(heatmaps, ord=norm_ord, axis=0)
-        >>> print('heatmaps = {}'.format(ub.urepr(heatmaps, nl=1, precision=2)))
-        >>> print(x)
-        >>> print(y)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> # Visualize how this works for random signals
-        >>> import kwplot
-        >>> sns = kwplot.sns
-        >>> kwplot.plt.ion()
-        >>> # kwplot.close_figures()
-        >>> # Add in the original signals
-        >>> rows = []
-        >>> for c in range(num_sequences):
-        >>>     for x in range(num_frames):
-        >>>         rows.append(
-        >>>             {'x': x, 'col': c, 'ord': 'raw-signal', 'value': heatmaps[x, c]})
-        >>> #
-        >>> import pandas as pd
-        >>> import scipy.stats
-        >>> for norm_ord in [1, 2, 3, float('inf')]:
-        >>>     v1 = _norm(heatmaps, norm_ord)
-        >>>     v2 = scipy.stats.pmean(heatmaps, p=norm_ord, axis=0, nan_policy='omit')
-        >>>     print(f'norm_ord={norm_ord}')
-        >>>     print(f'v1={v1}')
-        >>>     print(f'v2={v2}')
-        >>>     for c in range(num_sequences):
-        >>>         for x in range(num_frames):
-        >>>             rows.append({'x': x, 'col': c, 'ord': norm_ord, 'value': v1[c]})
-        >>>     ...
-        >>> df = pd.DataFrame(rows)
-        >>> pnum_ = kwplot.PlotNums(nSubplots=num_sequences)
-        >>> for c in range(num_sequences):
-        >>>     kwplot.figure(fnum=1, pnum=pnum_())
-        >>>     subdata = df[df['col'] == c]
-        >>>     sns.lineplot(data=subdata, x='x', y='value', hue='ord')
-    """
-    import numpy as np
-    heatmaps = np.array(heatmaps)
-    if norm_ord == 0:
-        import scipy.stats
-        probs = scipy.stats.pmean(heatmaps, p=norm_ord, axis=0, nan_policy='omit')
-        probs = np.nan_to_num(probs)
-    elif norm_ord == np.inf:
-        probs = np.nanmax(heatmaps, axis=0)
-    else:
-        # The np.linalg.norm part
-        probs = np.power(np.nansum(np.power(heatmaps, norm_ord), axis=0),
-                         1. / norm_ord)
-        if norm_ord > 0:
-            n_nonzero = np.count_nonzero(~np.isnan(heatmaps), axis=0)
-            # Force the denominator to be positive.
-            n_nonzero[n_nonzero == 0] = 1
-            probs /= np.power(n_nonzero, 1. / norm_ord)
-    return probs
-
-
-# give all these the same signature so they can be swapped out
-
-
-def binary(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
-    import kwimage
-    probs = _norm(heatmaps, norm_ord)
-
-    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
-
-    return hard_probs.astype('float')
-
-
-def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999, viz_dpath=None):
-    import kwimage
-    import kwarray
-    import numpy as np
-    probs = _norm(heatmaps, norm_ord)
-    probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
-
-    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
-
-    return hard_probs.astype('float')
-
-
-def probs(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
-    import kwimage
-    probs = _norm(heatmaps, norm_ord)
-
-    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
-    modulated_probs = probs * hard_probs
-
-    if viz_dpath is not None:
-        kwimage.imwrite(viz_dpath / 'probs_raw.png', kwimage.ensure_uint255(probs))
-        kwimage.imwrite(viz_dpath / 'probs_hard.png', kwimage.ensure_uint255(hard_probs))
-        kwimage.imwrite(viz_dpath / 'probs_modulated.png', kwimage.ensure_uint255(modulated_probs))
-
-    return modulated_probs
-
-
-def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999, viz_dpath=None):
-    import kwimage
-    import kwarray
-    import numpy as np
-    probs = _norm(heatmaps, norm_ord)
-    probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
-
-    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
-    modulated_probs = probs * hard_probs
-
-    return modulated_probs
-
-
-def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None, viz_dpath=None):
-    """
-    Normalize average_heatmap by applying a scaling based on max(heatmaps) and
-    max(average_heatmap)
-    """
-    import numpy as np
-    import kwimage
-    average = _norm(heatmaps, norm_ord)
-
-    scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
-    print('max heatmaps', np.max(heatmaps))
-    print('max average', np.max(average))
-
-    # average *= scale_factor
-    average = 0.75 * average * scale_factor
-    print('scale_factor', scale_factor)
-    print('After scaling, max:', np.max(average))
-
-    average = kwimage.morphology(average, 'dilate', morph_kernel)
-
-    return average
-
-
-def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3, viz_dpath=None):
-    """
-    Convert a list of heatmaps to an aggregated score, averaging is computed
-    based on samples for every pixel
-    """
-    import kwimage
-    import numpy as np
-    heatmaps = np.array(heatmaps)
-
-    masks = 1 * (heatmaps > thresh)
-    pixel_wise_samples = masks.sum(0) + 1e-9
-    print('pixel_wise_samples', pixel_wise_samples)
-
-    # compute sum
-    aggregated_probs = _norm(masks * heatmaps, norm_ord)
-
-    # divide by number of samples for every pixel
-    aggregated_probs /= pixel_wise_samples
-
-    aggregated_probs = kwimage.morphology(aggregated_probs, 'dilate',
-                                          morph_kernel)
-
-    return aggregated_probs
-
-
-AGG_FN_REGISTRY = {
-    'frequency_weighted_mean': frequency_weighted_mean,
-    'mean_normalized': mean_normalized,
-    'rescaled_probs': rescaled_probs,
-    'probs': probs,
-    'rescaled_binary': rescaled_binary,
-    'binary': binary,
-}
 
 #
 # --- track/polygon filters ---
@@ -955,19 +741,18 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
                     raise Exception('!')
     """
     import numpy as np
+    from shapely.ops import unary_union
     merged_polys = []
     merged_times = []
 
     if poly_merge_method is None:
         poly_merge_method = 'v1'
 
-    if poly_merge_method == 'v3_noop':
+    elif poly_merge_method == 'v3_noop':
         merged_polys = p1 + p2
         merged_times = t1 + t2
 
-    if poly_merge_method == 'v3':
-        from shapely.ops import unary_union
-
+    elif poly_merge_method == 'v3':
         p1_seen = set()
         p2_seen = set()
         # add all polygons that overlap
@@ -1045,7 +830,6 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
 
     elif poly_merge_method == 'v1':
-        from shapely.ops import unary_union
         p1_seen = set()
         p2_seen = set()
         # add all polygons that overlap
@@ -1128,15 +912,43 @@ def _process(track, _heatmaps, image_dates, gids, config):
             yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
 
 
-viz_n_window = 0  # FIXME, no dynamic globals
-
-
 @profile
 def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     """
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
+
+    Args:
+        heatmaps (ndarray): A [T, H, W] heatmap
+
+        track_bounds (kwimage.MultiPolygon | None):
+            a valid region in the heatmaps where new polygons can be extracted.
+
+        heatmap_dates (List[datetime] | None):
+            dates corresponding with each heatmap time dimension
+
+        config (_GidPolyConfig): polygon extraction config
+
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> import kwimage
+        >>> from kwutil import util_time
+        >>> from watch.tasks.tracking.from_heatmap import _GidPolyConfig  # NOQA
+        >>> config = _GidPolyConfig()
+        >>> heatmaps = np.zeros((7, 64, 64))
+        >>> heatmaps[2, 20:40, 20:40] = 1
+        >>> heatmaps[5, 30:50, 30:50] = 1
+        >>> heatmap_dates = [util_time.coerce_datetime(x) for x in [
+        >>>     '2020-01-01', '2020-02-01', '2020-03-01', '2020-04-01',
+        >>>     '2020-05-01', '2020-06-01', '2020-07-01', ]]
+        >>> track_bounds = kwimage.Polygon.random(rng=0).scale((64, 64))
+        >>> # V1 merges everything together across all time
+        >>> config.poly_merge_method = 'v1'
+        >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
+        >>> # V3 does some time separation
+        >>> config.poly_merge_method = 'v3'
+        >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
     """
-    global viz_n_window
+    from kwutil import util_time
     import numpy as np
 
     # TODO: rename moving window size to "outer_window_size"
@@ -1149,9 +961,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     # outer agg function
-    _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
-
-    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+    _agg_fn = agg_functions.AGG_FN_REGISTRY[config.agg_fn]
 
     if config.inner_window_size is not None:
         # TODO: generalize if needed
@@ -1170,33 +980,29 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             heatmap_dates=heatmap_dates)
 
         new_heatmaps = []
-        new_heatmap_dates = []
+        new_intervals = []
         for idxs in groupxs:
-            # Is min over the dates the right thing to do?
-            new_date = min(ub.take(heatmap_dates, idxs))
-            inner = _norm(heatmaps[idxs], norm_ord=inner_ord)
-            new_heatmap_dates.append(new_date)
+            new_start_date = min(ub.take(heatmap_dates, idxs))
+            new_end_date = max(ub.take(heatmap_dates, idxs))
+            inner = agg_functions._norm(heatmaps[idxs], norm_ord=inner_ord)
+            new_intervals.append((new_start_date, new_end_date))
             new_heatmaps.append(inner)
-        new_heatmaps = np.array(new_heatmaps)
-        heatmaps = new_heatmaps
 
-        new_heatmap_dates = []
-        for idxs in groupxs:
-            new_start_date = np.min(image_unixtimes[idxs])
-            new_end_date = np.max(image_unixtimes[idxs])
-            new_heatmap_dates.append([new_start_date, new_end_date])
-        new_heatmap_dates = np.array(new_heatmap_dates)
-        image_unixtimeframes = new_heatmap_dates
-
+        heatmap_date_intervals = new_intervals
+        heatmaps = np.array(new_heatmaps)
     else:
         if config.inner_window_size is not None:
             raise NotImplementedError(
                 'only temporal deltas for inner agg window for now')
-        image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
-        heatmap_dates = new_heatmap_dates
 
-    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
-    image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
+        if heatmap_dates is None:
+            heatmap_dates = [util_time.coerce_datetime(0)] * len(heatmaps)
+        heatmap_date_intervals = [(t, t) for t in heatmap_dates]
+
+    heatmap_unixtime_intervals = np.array([
+        (a.timestamp(), b.timestamp())
+        for a, b in heatmap_date_intervals
+    ], dtype=np.float64)
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
@@ -1208,7 +1014,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     n_steps = len(groupxs)
     xs_init = groupxs[0]
     h_init = heatmaps[xs_init]
-    t_init = image_unixtimeframes[xs_init]
+    t_init = heatmap_unixtime_intervals[xs_init]
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     # prog.begin()
@@ -1225,7 +1031,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
                 idxs = groupxs[step_idx]
                 prog.step()
                 h1 = heatmaps[idxs]
-                t1 = image_unixtimeframes[idxs]
+                t1 = heatmap_unixtime_intervals[idxs]
 
                 p1 = _process_1_step(h1, _agg_fn, track_bounds, step_idx, config)
                 t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
@@ -1283,6 +1089,17 @@ def _compute_time_window(window, num_frames=None, heatmap_dates=None):
 
 
 def _process_1_step(heatmaps, _agg_fn, track_bounds, step_idx, config):
+    """
+    Args:
+        heatmaps (ndarray):
+        _agg_fn (Callable):
+        track_bounds (None | Coercable[kwimage.MultiPolygon]):
+        step_idx (int):
+        config (DataConfig):
+
+    Returns:
+        List[kwimage.Polygon]
+    """
     # FIXME: no dynamic globals.
     if config.viz_out_dir is not None:
         viz_dpath = (config.viz_out_dir / f'heatmaps_{step_idx}').ensuredir()
@@ -1484,7 +1301,7 @@ class _GidPolyConfig(scfg.DataConfig):
         '''
         The aggregation method to preprocess heatmaps.
         See ``AGG_FN_REGISTRY`` for available options.
-        '''))
+        '''), alias=['outer_agg_fn'])
 
     thresh = scfg.Value(0.0, help=ub.paragraph(
         '''
@@ -1502,7 +1319,7 @@ class _GidPolyConfig(scfg.DataConfig):
         I dont remember. Help wanted to document this
         '''))
 
-    # TODO: rename to outer_agg_fn
+    # TODO: Consolidate into agg_fn
     norm_ord = scfg.Value(1, help=ub.paragraph(
         '''
         The generalized mean order used to average heatmaps over the
