@@ -22,8 +22,6 @@ from watch.tasks.tracking.utils import (
     trackid_is_default,
     gpd_sort_by_gid, gpd_len,
     gpd_compute_scores)
-import geopandas as gpd
-import pandas as pd
 
 try:
     from xdev import profile
@@ -289,6 +287,8 @@ class TimeSplitFilter:
         self.frame_buffer = frame_buffer
 
     def __call__(self, gdf):
+        import geopandas as gpd
+        import pandas as pd
 
         def buffer_by(tracks, by):
             new_tracks = []
