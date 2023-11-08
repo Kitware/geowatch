@@ -3294,7 +3294,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             summary = ub.udict(summary) - {'frame_summaries'}
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
-            canvas = kwimage.stack_images([header, canvas])
+            canvas = kwimage.stack_images([canvas, header])
 
         return canvas
 
