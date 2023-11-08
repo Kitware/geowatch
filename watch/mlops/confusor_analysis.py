@@ -1870,8 +1870,14 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             # cell_canvas = kwimage.draw_header_text(cell_canvas, '\n'.join(header_lines), fit='grow')
         cells.append(cell_canvas)
 
+    case = case.copy()
+
+    if video_id is not None:
+        case['video_name'] = coco_dset.index.videos[video_id]['name']
+
     toshow = ub.udict(case) & {
         'name',
+        'video_name',
         'pred_coco_site_id',
         'pred_area',
         'te_associated',
@@ -1894,8 +1900,6 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
         'time_iop',
         'type',
     }
-
-    case = case.copy()
 
     case['img_dates'] = all_images.lookup('date_captured')
 
