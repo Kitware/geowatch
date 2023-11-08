@@ -3349,9 +3349,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             deltas = [d.total_seconds() for d in deltas]
             item_summary['min_time'] = ub.timestamp(min(timestamps))
             item_summary['max_time'] = ub.timestamp(max(timestamps))
-            item_summary['min_delta'] = min(deltas)
-            item_summary['max_delta'] = max(deltas)
-            item_summary['mean_delta'] = np.mean(deltas)
+            if len(deltas):
+                item_summary['min_delta'] = min(deltas)
+                item_summary['max_delta'] = max(deltas)
+                item_summary['mean_delta'] = np.mean(deltas)
         item_summary['input_gsd'] = item['input_gsd']
         item_summary['output_gsd'] = item['output_gsd']
 
