@@ -274,7 +274,7 @@ def ensure_false_color(canvas, method='ortho'):
             h, tau = np.linalg.qr(seedmat, mode='raw')
             false_colored = (canvas @ h)
             rgb_canvas = kwimage.normalize(false_colored)
-        elif method == 'PCA':
+        elif method.lower() == 'pca':
             import sklearn
             ndim = canvas.ndim
             dims = canvas.shape[0:2]

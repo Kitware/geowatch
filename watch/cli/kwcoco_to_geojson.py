@@ -1439,6 +1439,7 @@ def main(argv=None, **kwargs):
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
+
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
                                                args.region_id)
         cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
