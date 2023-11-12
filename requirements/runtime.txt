@@ -249,3 +249,5 @@ cmd_queue >= 0.1.18
 fsspec>=2023.6.0
 # fsspec>=2022.10.0
 s3fs>=2023.6.0
+
+portion>=2.4.1

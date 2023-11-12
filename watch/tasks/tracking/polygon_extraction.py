@@ -1,3 +1,7 @@
+import portion  # NOQA
+import ubelt as ub
+
+
 class PolygonExtractor:
     """
     Given a timesequence of heatmaps, extract spatially static polygons.
@@ -142,7 +146,6 @@ class PolygonExtractor:
         import sklearn
         import sklearn.cluster
         import sklearn.decomposition
-        import ubelt as ub
 
         _t, _h, _w, _c = self.heatmap_thwc.shape
         orig_dims = _t * _c
@@ -178,10 +181,10 @@ class PolygonExtractor:
             cluster_algo = mean_shift
             max_dims = min(32, orig_dims)
             scale_factor = 4
-
         elif algo == 'kmeans':
             from sklearn.cluster import MiniBatchKMeans
-            mb_kmeans = MiniBatchKMeans(n_clusters=64, batch_size=4096, n_init='auto')
+            mb_kmeans = MiniBatchKMeans(n_clusters=64, batch_size=4096,
+                                        n_init='auto', random_state=1)
             cluster_algo = mb_kmeans
             scale_factor = 2
             max_dims = orig_dims
@@ -199,76 +202,167 @@ class PolygonExtractor:
 
         # Run Algorithm
 
-        self.heatmap_thwc.shape
+        def PRINT_STEP(msg, _n=[1]):
+            import rich
+            n = _n[0]
+            rich.print(f'Step {n}: {msg}')
+            _n[0] += 1
+
+        raw_heatmap = self.heatmap_thwc
 
         if self.bounds is not None:
             mask = self.bounds.to_mask(dims=(_h, _w)).data
 
-        raw_heatmap = self.heatmap_thwc
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
-        if self.config.get('robust_normalize'):
-            norm_heatmap = kwarray.robust_normalize(raw_heatmap)
-            rich.print('* Step 1. Robust Normalize')
-        else:
-            norm_heatmap = raw_heatmap
-            rich.print('* Step 1. Skip Robust Normalize')
-
-        rich.print('* Step 2. Impute NaN')
-        filled_norm_heatmap = impute_nans(norm_heatmap)
-        rich.print('... Finished Impute')
-
         # TODO: better downscaling?
-        small_heatmap = filled_norm_heatmap[:, ::scale_factor, ::scale_factor, :]
+        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
-        rich.print(f'* Step 3. Downscale to: {small_heatmap.shape}')
-        small_heatmap = small_heatmap.copy()
+        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+        downscaled = downscaled.copy()
+
+        PRINT_STEP('Impute NaN')
+        imputed = impute_nans(downscaled)
+        rich.print('... Finished Impute')
 
         if mask is not None:
-            rich.print('* Step 3.5. Masking Small Heatmap')
-            small_heatmap = small_heatmap * small_mask[None, :, :, None]
+            PRINT_STEP('Masking Small Heatmap')
+            masked = imputed * small_mask[None, :, :, None]
+        else:
+            masked = imputed
+
+        if 0:
+            import kwplot
+            cube = FeatureCube(masked,
+                               TimeIntervalSequence.coerce(self.heatmap_time_intervals),
+                               self.classes)
+            agg_cube = cube.window_max('12 months')
+            kwplot.imshow(agg_cube.draw())
+            cube1 = agg_cube.take_channels('ac_salient')
+            cube2 = agg_cube.take_channels('No Activity')
+            cube3 = agg_cube.take_channels('Site Preparation')
+            cube4 = agg_cube.take_channels('Active Construction')
+            cube5 = agg_cube.take_channels('Post Construction')
+
+            cube6 = cube2 * cube1
+            cube7 = cube3 * cube1
+            cube8 = cube4 * cube1
+            cube9 = cube5 * cube1
+
+            thresh = 0.3
+
+            cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
+            cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
+            cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
+            cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
+
+            cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
+            cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
+            cube8.heatmap_thwc = (cube8.heatmap_thwc > thresh).astype(np.float32)
+            cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
+
+            kwplot.imshow(cube1.draw(), pnum=(3, 4, 1), fnum=2)
+
+            kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
+            kwplot.imshow(cube3.draw(), pnum=(3, 4, 6), fnum=2)
+            kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
+            kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
+
+            kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
+            kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
+            kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
+            kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
+
+            from scipy import ndimage
+            from watch.utils import util_kwimage
+            max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
+
+            vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
+            labels1 = vol_label.max(axis=0)[..., 0]
+            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}))
+            unique_labels = np.setdiff1d(np.unique(labels1), [0])
+
+            markers = np.zeros_like(max_saliency, dtype=np.int32)
+            for labelid in unique_labels:
+                mask = labels1 == labelid
+                idxmax = (max_saliency * mask).argmax()
+                highval = np.unravel_index(idxmax, mask.shape)
+                markers[highval[0], highval[1]] = labelid
+
+            from skimage.segmentation import watershed
+            labels = watershed(-max_saliency, markers=markers, mask=small_mask)
+            kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}))
+
+        SMART_HACK = 1
+        if SMART_HACK:
+            # from skimage.segmentation import watershed
+            # from skimage.feature import peak_local_max
+            cx1 = salient_cidx = self.classes.index('ac_salient')  # NOQA
+            cx2 = active_cidx = self.classes.index('Active Construction')  # NOQA
+            cx3 = siteprep_cidx = self.classes.index('Site Preparation')  # NOQA
+            salient_chan = c1 = imputed[..., cx1]
+            PRINT_STEP('Stacking Modulated Features')
+            active_chan = c2 = imputed[..., cx2]
+            siteprep_chan = c3 = imputed[..., cx3]
+            c4 = c1 * c2
+            c5 = c1 * c3
+            to_stack = [c1, c2, c3, c4, c5]
+
+            self._intermediates['salient_chan'] = salient_chan
+            self._intermediates['siteprep_chan'] = siteprep_chan
+            self._intermediates['active_chan'] = active_chan
+            self._intermediates['small_bounds'] = self.bounds.scale(1 / scale_factor)
+
+            small_heatmap = np.stack(to_stack, axis=3)
+            rich.print(f'small_heatmap.shape={small_heatmap.shape}')
+
+            PRINT_STEP('Modulate By Saliency')
+            max_saliency = salient_chan.max(axis=0, keepdims=1)
+            small_heatmap = small_heatmap
+
+            max_saliency_2d = max_saliency[0, :, :, 0]
+        else:
+            small_heatmap = imputed
+            max_saliency_2d = None
+
+        if self.config.get('robust_normalize'):
+            small_heatmap = kwarray.robust_normalize(small_heatmap)
+            PRINT_STEP('Robust Normalize')
+        else:
+            small_heatmap = small_heatmap
+            PRINT_STEP('Skip Robust Normalize')
 
         t, h, w, c = small_heatmap.shape
 
-        try:
-            salient_idx = self.classes.index('ac_salient')
-            rich.print('* Step 3.6. Modulate By Saliency')
-            max_saliency = small_heatmap[..., salient_idx][..., None].max(axis=0, keepdims=1)
-            small_heatmap = small_heatmap * max_saliency
-
-            max_saliency_2d = max_saliency[0, :, :, 0]
-            # from skimage.segmentation import watershed
-            # from skimage.feature import peak_local_max
-
-        except Exception:
-            max_saliency_2d = None
-
         X = einops.rearrange(small_heatmap, 't h w c -> (h w) (t c)')
-        rich.print(f'* Step 4. Rearange (combine time / channels) to: X.shape={X.shape}')
+        PRINT_STEP(f'Rearange (combine time / channels) to: X.shape={X.shape}')
 
         Xhat = reduce_dims_algo.fit_transform(X)
-        rich.print(f'* Step 5. Reduce dimensionality: Xhat.shape={Xhat.shape}')
+        PRINT_STEP(f'Reduce dimensionality: Xhat.shape={Xhat.shape}')
 
         if self.config.get('positional_encoding'):
             scale = self.config.get('positional_encoding_scale', 1)
-            rr, cc = np.meshgrid(np.linspace(-scale, scale, h), np.linspace(-scale, scale, w))
+            rr, cc = np.meshgrid(
+                np.linspace(-scale, scale, h),
+                np.linspace(-scale, scale, w)
+            )
             Xhat2 = np.concatenate([Xhat, rr.T.ravel()[:, None], cc.T.ravel()[:, None]], axis=1)
-            rich.print(f'* Step 5.5. Append Positional Encoding. Xhat2.shape={Xhat2.shape}')
+            PRINT_STEP(f'* Append Positional Encoding. Xhat2.shape={Xhat2.shape}')
         else:
             Xhat2 = Xhat
 
-        rich.print('* Step 6. Run Clustering Algorithm')
+        PRINT_STEP('Run Clustering Algorithm')
         yhat = cluster_algo.fit_predict(Xhat2) + 1
         rich.print('... Finished Clustering Algorithm')
 
         small_label_img = einops.rearrange(yhat, '(h w) -> h w', w=w, h=h)
-        rich.print(f'* Step 7. Convert back to spatial arangement: small_label_img.shape={small_label_img.shape}')
+        PRINT_STEP(f'* Convert back to spatial arangement: small_label_img.shape={small_label_img.shape}')
         small_label_img = np.ascontiguousarray(small_label_img).astype(np.uint8)
 
         if mask is not None:
-            rich.print('* Step 7.5 Masking label img')
-            # small_label_img = small_mask * small_label_img
+            PRINT_STEP('Masking label img')
+            small_label_img = small_mask * small_label_img
 
         if max_saliency_2d is not None:
             saliency_mask = max_saliency_2d > 0.2
@@ -281,8 +375,11 @@ class PolygonExtractor:
                 # canvas = util_kwimage.colorize_label_image(lbl)
                 kwplot.imshow(max_saliency_2d, fnum=1, doclf=1)
                 kwplot.imshow(saliency_mask, fnum=1, doclf=1)
+                kwplot.imshow(util_kwimage.colorize_label_image(small_label_img, label_to_color={0: 'black'}))
 
-        small_label_img = kwimage.morphology(small_label_img, 'close', kernel=5, element='ellipse')
+        # PRINT_STEP('Morphology on Label')
+        # small_label_img = kwimage.morphology(
+        #     small_label_img, 'close', kernel=5, element='ellipse')
 
         if 0:
             small_feat = Xhat2.reshape(h, w, -1)
@@ -331,7 +428,7 @@ class PolygonExtractor:
             small_label_img = new_small_label_img
 
         label_img = kwimage.imresize(small_label_img, scale=(scale_factor, scale_factor), interpolation='nearest')
-        rich.print(f'* Step 8. Resize back to full scale: label_img.shape={label_img.shape}')
+        PRINT_STEP(f'* Step 8. Resize back to full scale: label_img.shape={label_img.shape}')
 
         rich.print("[green]--- End PolygonExtractor Predict ---")
 
@@ -359,6 +456,35 @@ class PolygonExtractor:
         kwplot.autompl()
         stacked = self.draw_timesequence()
         kwplot.imshow(stacked)
+
+    def draw_intermediate(self):
+        import kwimage
+        import numpy as np
+        from watch.utils import util_kwimage
+        salient = self._intermediates['salient_chan']
+        active = self._intermediates['active_chan']
+        siteprep = self._intermediates['siteprep_chan']
+        small_bounds = self._intermediates['small_bounds']
+
+        # heatmaps = np.stack([salient, active, siteprep], axis=3)
+        heatmaps = np.stack([salient], axis=3)
+        heatmaps = (heatmaps > 0.5).astype(np.float32)
+
+        name_to_color = {cat['name']: kwimage.Color.coerce(cat['color']).as01()
+                          for cat in self.classes.cats.values()}
+        channel_colors = [name_to_color[n] for n in [
+            'ac_salient', 'Site Preparation', 'Active Construction']]
+        channel_colors = ['red']
+
+        to_show_frames = [kwimage.nodata_checkerboard(
+            util_kwimage.perchannel_colorize(h.astype(np.float32), channel_colors=channel_colors)
+        ) for h in heatmaps]
+
+        if self.bounds is not None:
+            to_show_frames = [small_bounds.draw_on(frame, edgecolor='white', fill=False) for frame in to_show_frames]
+
+        stacked = kwimage.stack_images_grid(to_show_frames, pad=10, bg_value='kitware_green')
+        return stacked
 
     def draw_timesequence(self):
         import kwimage
@@ -528,6 +654,18 @@ class PolygonExtractor:
         canvas = rng.rand(*frame_shape).astype(np.float32) * 0.01
 
         heatmap_frames = [canvas.copy() for _ in range(16)]
+
+        import kwutil
+        base = kwutil.util_time.datetime.coerce('2020-01-01')
+        delta = kwutil.util_time.timedelta.coerce('2 weeks')
+        heatmap_time_intervals = [
+            (base + (delta * idx), base + (delta * (idx + 1)))
+            for idx in range(len(heatmap_frames))
+        ]
+        heatmap_time_intervals = [
+            TimeInterval.coerce(d) for d in heatmap_time_intervals
+        ]
+
         for key in polys.keys():
             poly = polys[key]
             seq = sequences[key]
@@ -550,6 +688,7 @@ class PolygonExtractor:
             'bounds': bounds,
             'heatmap_thwc': heatmap_thwc,
             'classes': classes,
+            'heatmap_time_intervals': heatmap_time_intervals,
         }
         return kwargs
 
@@ -559,12 +698,17 @@ def impute_nans(data):
     interpolate to fill nan values
 
     TODO: tests
+
+    data = np.random.rand(5, 3, 3, 2)
+    data[data < 0.1] = np.nan
+    data[:] = np.nan
     '''
     from scipy.interpolate import NearestNDInterpolator
     import numpy as np
     mask = np.isfinite(data)
     valid_points = np.stack(np.where(mask), axis=1)
     valid_data = data[mask].ravel()
+    # TODO: just do interpolation on the time-axis.
     f_nearest = NearestNDInterpolator(valid_points, valid_data)
     invalid_points = np.stack(np.where(~mask), axis=1)
     fill_data = f_nearest(invalid_points)
@@ -573,59 +717,236 @@ def impute_nans(data):
     return new_data
 
 
-class Interval:
+class FeatureCube(ub.NiceRepr):
     """
-    import kwutil
-    kwutil.util_time.datetime()
+    Container for a [T, H, W, C] heatmap and corresponding T-lengthed time
+    intervals.
+
+    Ignore:
+        self = FeatureCube.demo()
+        print(f'self={self}')
+        new = self.window_max('1 month')
+        self.heatmap_time_intervals
+        new.heatmap_time_intervals
+
+        channels = ['ac_salient']
+
+        import kwplot
+        kwplot.autompl()
+        kwplot.imshow(self.draw(), pnum=(1, 3, 1))
+        kwplot.imshow(new.draw(), pnum=(1, 3, 2))
+
+        new2 = new.take_channels(['ac_salient'])
+        kwplot.imshow(new2.draw(), pnum=(1, 3, 3))
     """
-    def __init__(self, start, stop=None):
-        self.start = start
-        self.stop = stop
+    def __init__(self, heatmap_thwc, heatmap_time_intervals=None, classes=None):
+        self.heatmap_thwc = heatmap_thwc
+        self.heatmap_time_intervals = heatmap_time_intervals
+        self.classes = classes
+
+    def __nice__(self):
+        return f'{self.heatmap_thwc.shape}'
+
+    def take_channels(self, channels):
+        if isinstance(channels, str):
+            import kwcoco
+            channels = kwcoco.FusedChannelSpec.coerce(channels).as_list()
+        chan_idxs = [self.classes.index(c) for c in channels]
+        new_heatmaps = self.heatmap_thwc[..., chan_idxs]
+
+        new_graph = self.classes.graph.subgraph(channels)
+        new_classes = self.classes.__class__(new_graph)
+        new = FeatureCube(new_heatmaps, self.heatmap_time_intervals, classes=new_classes)
+        return new
+
+    def window_max(self, window):
+        import numpy as np
+        groupxs = self.heatmap_time_intervals._compute_time_window(window)
+        new_intervals = self.heatmap_time_intervals.apply_grouping(groupxs)
+        new_heatmaps = []
+        for idxs in groupxs:
+            combo = np.nanmax(self.heatmap_thwc[idxs], axis=0)
+            new_heatmaps.append(combo)
+        new_heatmaps = np.array(new_heatmaps)
+        new = FeatureCube(new_heatmaps, new_intervals, classes=self.classes)
+        return new
 
     @classmethod
-    def random(cls):
+    def demo(self):
+        p = PolygonExtractor.demo(real_categories=1)
+        intervals = TimeIntervalSequence.coerce(p.heatmap_time_intervals)
+        self = FeatureCube(p.heatmap_thwc, intervals, p.classes)
+        return self
+
+    def draw(self):
+        import kwimage
+        import numpy as np
+        import kwarray
+        from watch.utils import util_kwimage
+        heatmaps = self.heatmap_thwc
+        norm_heatmaps = kwarray.robust_normalize(heatmaps)
+
+        if self.classes is not None:
+            channel_colors = [kwimage.Color.coerce(cat['color']).as01()
+                              for cat in self.classes.cats.values()]
+            to_show_frames = [kwimage.nodata_checkerboard(
+                util_kwimage.perchannel_colorize(h.astype(np.float32), channel_colors=channel_colors)
+            ) for h in norm_heatmaps]
+        else:
+            to_show_frames = [kwimage.nodata_checkerboard(util_kwimage.ensure_false_color(h.astype(np.float32)))
+                              for h in norm_heatmaps]
+        # if self.bounds is not None:
+        #     to_show_frames = [self.bounds.draw_on(frame, edgecolor='white', fill=False) for frame in to_show_frames]
+        stacked = kwimage.stack_images_grid(to_show_frames, pad=10, bg_value='kitware_green')
+        return stacked
+
+    def __mul__(self, other):
+        new_heatmap = self.heatmap_thwc * other.heatmap_thwc
+        new = FeatureCube(new_heatmap, self.heatmap_time_intervals, self.classes)
+        return new
+
+
+class TimeIntervalSequence(list):
+    """
+    A list of non-overlapping time intervals
+
+    Ignore:
+        from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        a = TimeInterval.coerce(('2020-01-01', '2020-02-01'))
+        b = TimeInterval.coerce(('2020-02-01', '2020-03-01'))
+        c = TimeInterval.coerce(('2020-03-01', '2020-03-15'))
+        d = TimeInterval.coerce(('2020-03-07', '2020-04-01'))
+        e = TimeInterval.coerce(('2020-04-15', '2020-05-01'))
+        seq = TimeIntervalSequence([a, b, c, d, e])
+        seq._compute_time_window('1 month')
+    """
+
+    def apply_grouping(self, groupxs):
+        from functools import reduce
+        new = TimeIntervalSequence()
+        for idxs in groupxs:
+            part = list(ub.take(self, idxs))
+            new_part = reduce(TimeInterval.union, part[1:], part[0]).enclosure
+            new.append(new_part)
+        return new
+
+    @classmethod
+    def coerce(self, data):
+        if isinstance(data, TimeIntervalSequence):
+            self = data
+        else:
+            self = TimeIntervalSequence([TimeInterval.coerce(d) for d in data])
+        return self
+
+    def _compute_time_window(self, window):
+        """
+        Example:
+            >>> window = '7days'
+            >>> from kwutil import util_time
+            >>> self = heatmap_dates = TimeIntervalSequence(map(TimeInterval.coerce, [
+            >>>     '2020-01-01', '2020-01-02', '2020-02-01',
+            >>>     '2020-02-02', '2020-03-14', '2020-03-23',
+            >>>     '2020-04-01', '2020-06-23', '2020-06-26',
+            >>>     '2020-06-27', '2020-06-28', ]))
+            >>> groupxs = heatmap_dates._compute_time_window(window)
+            >>> new = self.apply_grouping(groupxs)
+            >>> print(f'groupxs={groupxs}')
+            >>> print(f'new={new}')
+            >>> groupxs = heatmap_dates._compute_time_window(None)
+            >>> new = self.apply_grouping(groupxs)
+            >>> print(f'groupxs={groupxs}')
+            >>> print(f'new={new}')
+            >>> groupxs = heatmap_dates._compute_time_window(3)
+            >>> new = self.apply_grouping(groupxs)
+            >>> print(f'groupxs={groupxs}')
+            >>> print(f'new={new}')
+        """
+        import kwarray
+        from kwutil import util_time
+        import numpy as np
+        num_frames = len(self)
+        if window is None:
+            bucket_ids = np.arange(num_frames)
+        elif isinstance(window, str):
+            delta = util_time.coerce_timedelta(window).total_seconds()
+            start_unixtimes = np.array([x.start.timestamp() for x in self])
+            start_unixtimes = start_unixtimes - start_unixtimes[0]
+            bucket_ids = (start_unixtimes // delta).astype(int)
+        elif isinstance(window, int):
+            assert num_frames is not None
+            frame_indexes = np.arange(num_frames)
+            bucket_ids = frame_indexes // window
+        else:
+            raise NotImplementedError('')
+        unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+        return groupxs
+
+
+class TimeInterval(portion.Interval):
+    """
+    Represents an interval in time.
+
+    Example:
+        from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        a = TimeInterval.coerce(('2020-01-01', '2020-02-01'))
+        b = TimeInterval.coerce(('2020-02-01', '2020-03-01'))
+        c = TimeInterval.coerce(('2020-03-01', '2020-03-15'))
+        d = TimeInterval.coerce(('2020-03-07', '2020-04-01'))
+        e = TimeInterval.coerce(('2020-04-15', '2020-05-01'))
+    """
+
+    @property
+    def start(self):
+        return self.lower
+
+    @property
+    def stop(self):
+        return self.upper
+
+    @classmethod
+    def coerce(TimeInterval, data):
+        import kwutil
+        if isinstance(data, TimeInterval):
+            self = data
+        elif isinstance(data, str):
+            start = kwutil.util_time.datetime.coerce(data)
+            stop = start
+            self = TimeInterval.closed(start, stop)
+        elif ub.iterable(data) and len(data) == 2:
+            start, stop = data
+            start = kwutil.util_time.datetime.coerce(start)
+            stop = kwutil.util_time.datetime.coerce(stop)
+            self = TimeInterval.closed(start, stop)
+        else:
+            raise TypeError
+        return self
+
+    @classmethod
+    def closed(TimeInterval, start, stop=None):
+        """
+        """
+        if start is None:
+            start = -float('inf')
+        if stop is None:
+            start = -float('inf')
+        self = TimeInterval.from_atomic(portion.CLOSED, start, stop, portion.CLOSED)
+        return self
+        ...
+
+    @classmethod
+    def random(TimeInterval):
         import kwutil
         a = kwutil.util_time.datetime.random()
         b = kwutil.util_time.datetime.random()
         a, b = sorted([a, b])
-        self = cls(a, b)
+        self = TimeInterval.closed(a, b)
         return self
-
-    def union(self, other):
-        start = min(self.start, other.start)
-        stop = max(self.stop, other.stop)
-        return self.__class__(start, stop)
-
-    def intersection(self, other):
-        if other.start > self.stop:
-            ...
-        if self.start > other.stop:
-            ...
-
-        start = min(self.start, other.start)
-        stop = max(self.stop, other.stop)
-        return self.__class__(start, stop)
 
 
 def toydata_demo():
     """
-    Real Data:
-    ipython -i -c "if 1:
-        fpath = '/home/joncrall/.cache/xdev/snapshot_states/state_2023-11-08T212918-5.pkl'
-        from xdev.embeding import load_snapshot
-        load_snapshot(fpath, globals())
-        heatmap_thwc = heatmaps[:, :, :, None]
-        bounds = None
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch/tests'))
-        from test_ac_refine import *  # NOQA
-        self = PolygonExtractor(heatmap_thwc, bounds)
-    "
-
     Example:
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch/tests'))
-        from test_ac_refine import *  # NOQA
+        from watch.tasks.tracking.polygon_extraction import *  # NOQA
         cls = PolygonExtractor(heatmaps, bounds)
         self = PolygonExtractor.demo()
     """
@@ -671,7 +992,6 @@ def real_data_demo_case_1():
     import kwimage
     import kwarray
     import kwplot
-    import ubelt as ub
     import numpy as np
 
     api_url = 'https://data.kitware.com/api/v1'
@@ -758,8 +1078,8 @@ def real_data_demo_case_1():
     stacked = self.draw_timesequence()
     kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=5)
 
-    # label_img = self.predict()
-    label_img = self.predict_leotta()
+    label_img = self.predict()
+    # label_img = self.predict_leotta()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=5)
@@ -772,7 +1092,6 @@ def real_data_demo_case_2():
     import kwimage
     import kwarray
     import kwplot
-    import ubelt as ub
     import numpy as np
 
     api_url = 'https://data.kitware.com/api/v1'
@@ -873,14 +1192,12 @@ def real_data_demo_case_2():
 
 
 def real_data_demo_case3():
-
     from watch.utils import util_girder
     from watch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
     import kwplot
-    import ubelt as ub
     import numpy as np
 
     api_url = 'https://data.kitware.com/api/v1'
@@ -945,7 +1262,8 @@ def real_data_demo_case3():
                             heatmap_time_intervals=heatmap_time_intervals,
                             classes=classes, config={
                                 # 'algo': 'meanshift',
-                                'algo': 'leotta',
+                                'algo': 'kmeans',
+                                # 'algo': 'leotta',
                             })
 
     label_img = self.predict()
@@ -959,14 +1277,12 @@ def real_data_demo_case3():
 
 
 def real_data_demo_case1_fixed():
-
     from watch.utils import util_girder
     from watch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
     import kwplot
-    import ubelt as ub
     import numpy as np
 
     api_url = 'https://data.kitware.com/api/v1'
@@ -1048,7 +1364,6 @@ def real_data_demo_case1_fixed():
 def generate_real_example():
     import kwcoco
     import kwutil
-    import ubelt as ub
     import pickle  # NOQA
     import numpy as np
     import kwimage  # NOQA
@@ -1165,7 +1480,6 @@ def generate_real_example():
 
 
 def coco_make_track_gdf(coco_dset, video_id, resolution=None):
-    import ubelt as ub
     import geopandas as gpd
     from shapely.ops import unary_union
     from geowatch import heuristics
@@ -1202,7 +1516,6 @@ def coco_make_track_gdf(coco_dset, video_id, resolution=None):
 
 def imread_many(dset, gids, channels=None, space='video', resolution=None, workers=0):
     import kwutil
-    import ubelt as ub
     load_jobs = ub.JobPool(mode='process', max_workers=workers)
     pman = kwutil.util_progress.ProgressManager()
     with load_jobs, pman:
