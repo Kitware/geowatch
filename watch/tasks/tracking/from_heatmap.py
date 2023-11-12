@@ -1003,6 +1003,8 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         (a.timestamp(), b.timestamp())
         for a, b in heatmap_date_intervals
     ], dtype=np.float64)
+    heatmap_dates = [util_time.coerce_datetime(a) for (a, b) in
+                     heatmap_unixtime_intervals]
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
