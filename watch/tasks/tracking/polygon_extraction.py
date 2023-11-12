@@ -87,6 +87,10 @@ class PolygonExtractor:
         # import kwarray
         # heatmap_thwc = kwarray.robust_normalize(heatmap_thwc)
 
+        _t, _h, _w, _c = self.heatmap_thwc.shape
+        if self.bounds is not None:
+            mask = self.bounds.to_mask(dims=(_h, _w)).data
+
         salient_idx = self.classes.index('ac_salient')
         active_index = self.classes.index('Active Construction')
         # active_index = 2
@@ -94,14 +98,15 @@ class PolygonExtractor:
         # commbine active and saliency and remove NANs
         active_vol = heatmap_thwc[:, :, :, active_index]
         saliency_vol = heatmap_thwc[:, :, :, salient_idx]
-        vol = impute_nans(np.multiply(active_vol, saliency_vol))
+        vol = impute_nans(np.multiply(active_vol, saliency_vol)) * mask[None, :, :]
 
         # morphological clean-up, a little more in the time direction
         vol = ndimage.grey_closing(vol, (7, 3, 3))
         vol = ndimage.grey_opening(vol, (7, 3, 3))
 
         # Threshold and connected components
-        vol_label, label_count = ndimage.label(vol > 0.3)
+        leotta_thresh = self.config.get('leotta_thresh', 0.3)
+        vol_label, label_count = ndimage.label(vol > leotta_thresh)
 
         # Flatten over time, max label is a heuristic
         max_label = np.max(vol_label, 0)
@@ -151,6 +156,10 @@ class PolygonExtractor:
         workers = kwutil.util_parallel.coerce_num_workers(self.config['workers'])
 
         algo = self.config['algo']
+
+        if algo == 'leotta':
+            return self.predict_leotta()
+
         if algo == 'dbscan':
             dbscan = sklearn.cluster.DBSCAN(
                 eps=.009, min_samples=5, metric='cosine', metric_params=None,
@@ -575,7 +584,27 @@ class Interval:
 
     @classmethod
     def random(cls):
-        ...
+        import kwutil
+        a = kwutil.util_time.datetime.random()
+        b = kwutil.util_time.datetime.random()
+        a, b = sorted([a, b])
+        self = cls(a, b)
+        return self
+
+    def union(self, other):
+        start = min(self.start, other.start)
+        stop = max(self.stop, other.stop)
+        return self.__class__(start, stop)
+
+    def intersection(self, other):
+        if other.start > self.stop:
+            ...
+        if self.start > other.stop:
+            ...
+
+        start = min(self.start, other.start)
+        stop = max(self.stop, other.stop)
+        return self.__class__(start, stop)
 
 
 def toydata_demo():
@@ -883,8 +912,6 @@ def real_data_demo_case3():
     print('end_time = {}'.format(ub.urepr(end_time, nl=1)))
 
     classes = data['classes']
-    print(list(classes))
-    list(classes.graph.nodes())
     channel_colors = [kwimage.Color.coerce(cat['color']).as01()
                       for cat in classes.cats.values()]
 
@@ -908,19 +935,91 @@ def real_data_demo_case3():
 
     truth_canvas = bounds.draw_on(truth_canvas, fill=False, edgecolor='white')
 
-    # Color truth by status
-    # import numpy as np
-    # from geowatch import heuristics
-    # truth_canvas2 = kwimage.atleast_3channels(np.zeros_like(truth_labels)).astype(np.uint8) + 255
-    # status_to_color = {}
-    # for item in ub.ProgIter(list(truth_info.values()), desc='draw truth'):
-    #     poly = kwimage.MultiPolygon.coerce(item['geometry_pxl'])
-    #     color = heuristics.IARPA_STATUS_TO_INFO[item['status']]['color']
-    #     edgecolor = kwimage.Color.random()
-    #     truth_canvas2 = poly.draw_on(truth_canvas2, facecolor=color, edgecolor=edgecolor)
-    #     status_to_color[item['status']] = color
-    # legend_img = kwplot.make_legend_img(status_to_color)
-    # truth_canvas2 = kwimage.stack_images([truth_canvas2, legend_img], axis=1)
+    kwplot.autompl()
+    kwplot.imshow(frame0_canvas, title=f'Frame 0 Colorized: {start_time}', fnum=1)
+    kwplot.imshow(frameN_canvas, title=f'Frame N Colorized: {end_time}', fnum=2)
+    kwplot.imshow(truth_canvas, title='Truth Labels', fnum=3)
+    kwplot.imshow(truth_colorized, title='Truth Status', fnum=4)
+
+    self = PolygonExtractor(heatmap_thwc, bounds=bounds,
+                            heatmap_time_intervals=heatmap_time_intervals,
+                            classes=classes, config={
+                                # 'algo': 'meanshift',
+                                'algo': 'leotta',
+                            })
+
+    label_img = self.predict()
+    # label_img = self.predict_leotta()
+
+    canvas = util_kwimage.colorize_label_image(label_img)
+    kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
+
+    stacked = self.draw_timesequence()
+    kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=6)
+
+
+def real_data_demo_case1_fixed():
+
+    from watch.utils import util_girder
+    from watch.utils import util_kwimage
+    import pickle
+    import kwimage
+    import kwarray
+    import kwplot
+    import ubelt as ub
+    import numpy as np
+
+    api_url = 'https://data.kitware.com/api/v1'
+    data_fpath = ub.Path(util_girder.grabdata_girder(
+        api_url, '654eab24314693d6b1df2658', hash_prefix='358bc1e7ec9ab7ba'))
+
+    data = pickle.loads(data_fpath.read_bytes())
+    heatmap_thwc = data['heatmap_thwc']
+    bounds = kwimage.MultiPolygon.from_shapely(data['bas_gdf'].geometry.unary_union)
+    heatmap_time_intervals = data['heatmap_time_intervals']
+    truth_gdf = data['truth_gdf']
+
+    t, h, w, c = heatmap_thwc.shape
+
+    truth_colorized = np.ones((h, w, 3))
+    truth_labels = np.zeros((h, w), dtype=np.int32)
+    idx = 1
+    for _, row in truth_gdf.iterrows():
+        true_poly = kwimage.MultiPolygon.coerce(row['geometry'])
+        truth_colorized = true_poly.draw_on(truth_colorized, color=row['color'])
+        if row['status'] not in {'negative', 'ignore'}:
+            truth_labels = true_poly.fill(truth_labels, value=idx)
+            idx += 1
+
+    truth_labels
+    start_time = heatmap_time_intervals[0][0]
+    end_time = heatmap_time_intervals[-1][1]
+    print('start_time = {}'.format(ub.urepr(start_time, nl=1)))
+    print('end_time = {}'.format(ub.urepr(end_time, nl=1)))
+
+    classes = data['classes']
+    channel_colors = [kwimage.Color.coerce(cat['color']).as01()
+                      for cat in classes.cats.values()]
+
+    unique_labels = np.unique(truth_labels)
+    unique_colors = kwimage.Color.distinct(len(unique_labels))
+    label_to_color = ub.dzip(unique_labels, unique_colors)
+    label_to_color[0] = kwimage.Color.coerce('black').as01()
+
+    truth_canvas = util_kwimage.colorize_label_image(truth_labels, label_to_color=label_to_color)
+
+    frame0_canvas = kwarray.robust_normalize(heatmap_thwc[0])
+    frame0_canvas = util_kwimage.perchannel_colorize(frame0_canvas, channel_colors=channel_colors)
+    frame0_canvas = util_kwimage.ensure_false_color(frame0_canvas)
+    frame0_canvas = kwimage.nodata_checkerboard(frame0_canvas)
+    frame0_canvas = bounds.draw_on(frame0_canvas, fill=False, edgecolor='white')
+
+    frameN_canvas = kwarray.robust_normalize(heatmap_thwc[-1])
+    frameN_canvas = util_kwimage.perchannel_colorize(frameN_canvas, channel_colors=channel_colors)
+    frameN_canvas = kwimage.nodata_checkerboard(frameN_canvas)
+    frameN_canvas = bounds.draw_on(frameN_canvas, fill=False, edgecolor='white')
+
+    truth_canvas = bounds.draw_on(truth_canvas, fill=False, edgecolor='white')
 
     kwplot.autompl()
     kwplot.imshow(frame0_canvas, title=f'Frame 0 Colorized: {start_time}', fnum=1)
@@ -932,10 +1031,12 @@ def real_data_demo_case3():
                             heatmap_time_intervals=heatmap_time_intervals,
                             classes=classes, config={
                                 # 'algo': 'meanshift',
+                                'algo': 'leotta',
+                                'leotta_threah': 0.2,
                             })
 
     label_img = self.predict()
-    label_img = self.predict_leotta()
+    # label_img = self.predict_leotta()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
@@ -974,10 +1075,10 @@ def generate_real_example():
     true_dset = reproject_annotations.main(dst='return', src=true_dset, sites=sites, role='truth')
 
     # Choose a Video
-    video_id = dset.videos()[8]
+    video_id = dset.videos()[0]
     images = dset.images(video_id=video_id)
 
-    resolution = '2GSD'
+    resolution = '8GSD'
 
     # Construct spatial truth and prediction summary
     bas_gdf = coco_make_track_gdf(dset, video_id, resolution)
@@ -1045,7 +1146,7 @@ def generate_real_example():
 
     if 0:
         # Upload data
-        pickle_fpath = ub.Path.appdir('watch/polyextract').ensuredir() / 'demo3.pkl'
+        pickle_fpath = ub.Path.appdir('watch/polyextract').ensuredir() / 'demo0-fixed.pkl'
         pickle_fpath.write_bytes(pickle.dumps(data))
 
         hash_prefix = ub.hash_file(pickle_fpath)[0:16]
