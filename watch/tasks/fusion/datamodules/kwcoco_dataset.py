@@ -1040,7 +1040,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Do this for unique video ids otherwise SQLviews will take forever
         unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
-        unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        coco_dset = self.sampler.dset
+        try:
+            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        except KeyError:
+            # hack for loose images
+            unique_vidnames = []
+            for video_id in unique_vidids:
+                if video_id in coco_dset.index.videos:
+                    vidname = coco_dset.index.videos[video_id]['name']
+                else:
+                    vidname = video_id
+                unique_vidnames.append(vidname)
+
         vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
 
         # if 0:
@@ -1512,6 +1524,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         try:
             return self.getitem(index)
         except FailedSample:
+            raise
             return None
 
     @profile
@@ -1586,7 +1599,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # hack for single image datasets
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
 
         resolution_info = self._resolve_resolution(target_, video)
 
@@ -1947,7 +1966,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         coco_dset = self.sampler.dset
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # Hack for loose images
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
+            is_loose_img = True
+        else:
+            is_loose_img = False
 
         with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
@@ -1972,7 +2000,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
         num_images_wanted = len(target_['gids'])
-        if resample_invalid:
+        if resample_invalid and not is_loose_img:
             if resample_invalid is True:
                 max_tries = 3
             else:
@@ -1986,6 +2014,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
+            import xdev
+            xdev.embed()
             raise FailedSample('Cannot force a good sample')
 
         final_gids = ub.oset(video_gids) & good_gids

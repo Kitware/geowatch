@@ -128,6 +128,137 @@ class PolygonExtractor:
         # idx, cnts = np.unique(max_label, return_counts=True)
         return label_img
 
+    def predict_crall(self):
+        import rich
+        raw_heatmap = self.heatmap_thwc
+
+        SHOW = 0
+
+        scale_factor = 2
+        _t, _h, _w, _c = self.heatmap_thwc.shape
+
+        if self.bounds is not None:
+            mask = self.bounds.to_mask(dims=(_h, _w)).data
+
+        def PRINT_STEP(msg, _n=[1]):
+            import rich
+            n = _n[0]
+            rich.print(f'Step {n}: {msg}')
+            _n[0] += 1
+
+        rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
+
+        # TODO: better downscaling?
+        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+        if mask is not None:
+            small_mask = mask[::scale_factor, ::scale_factor]
+        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+        downscaled = downscaled.copy()
+
+        PRINT_STEP('Impute NaN')
+        imputed = impute_nans(downscaled)
+        rich.print('... Finished Impute')
+
+        if mask is not None:
+            PRINT_STEP('Masking Small Heatmap')
+            masked = imputed * small_mask[None, :, :, None]
+        else:
+            masked = imputed
+
+        import kwplot
+        import numpy as np
+        from scipy import ndimage
+        from watch.utils import util_kwimage
+        cube = FeatureCube(masked,
+                           TimeIntervalSequence.coerce(self.heatmap_time_intervals),
+                           self.classes)
+        agg_cube = cube.window_max('12 months')
+
+        if SHOW:
+            kwplot.imshow(agg_cube.draw())
+        cube1 = agg_cube.take_channels('ac_salient')
+        cube2 = agg_cube.take_channels('No Activity')
+        cube3 = agg_cube.take_channels('Site Preparation')
+        cube4 = agg_cube.take_channels('Active Construction')
+        cube5 = agg_cube.take_channels('Post Construction')
+
+        cube6 = cube2 * cube1
+        cube7 = cube3 * cube1
+        cube8 = cube4 * cube1
+        cube9 = cube5 * cube1
+
+        thresh = 0.3
+
+        # cube1.heatmap_thwc = ndimage.grey_closing(cube1.heatmap_thwc, (3, 5, 5, 1))
+        # cube1.heatmap_thwc = ndimage.grey_opening(cube1.heatmap_thwc, (3, 5, 5, 1))
+        cube4.heatmap_thwc = ndimage.grey_closing(cube4.heatmap_thwc, (3, 5, 5, 1))
+        cube4.heatmap_thwc = ndimage.grey_opening(cube4.heatmap_thwc, (3, 5, 5, 1))
+
+        # Spatial dilation
+        cube1.heatmap_thwc = ndimage.grey_dilation(cube1.heatmap_thwc, (1, 5, 5, 1))
+        cube4.heatmap_thwc = ndimage.grey_dilation(cube4.heatmap_thwc, (1, 5, 5, 1))
+        # cube8.heatmap_thwc = ndimage.grey_closing(cube8.heatmap_thwc, (3, 5, 5, 1))
+        # cube8.heatmap_thwc = ndimage.grey_opening(cube8.heatmap_thwc, (3, 5, 5, 1))
+
+        cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
+        cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
+        cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
+        cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
+
+        cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
+        cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
+        cube8.heatmap_thwc = (cube8.heatmap_thwc > thresh).astype(np.float32)
+        cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
+
+        if SHOW:
+            kwplot.imshow(cube1.draw(), pnum=(3, 4, 1), fnum=2)
+
+            kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
+            kwplot.imshow(cube3.draw(), pnum=(3, 4, 6), fnum=2)
+            kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
+            kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
+
+            kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
+            kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
+            kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
+            kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
+
+        max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
+
+        vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
+        # Remove small seeds
+        idx, cnts = np.unique(vol_label, return_counts=True)
+        max_cnts = max(cnts)
+        if max_cnts > 200:
+            count_thresh = min(50, max_cnts)
+            to_remove = idx[cnts < count_thresh]
+            vol_label[np.isin(vol_label, to_remove)] = 0
+
+        labels1 = vol_label.max(axis=0)[..., 0]
+        if SHOW:
+            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}))
+        unique_labels = np.setdiff1d(np.unique(labels1), [0])
+
+        self._intermediates['small_bounds'] = self.bounds.scale(1 / scale_factor)
+
+        if SHOW:
+            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=3)
+            self._intermediates['small_bounds'].draw(edgecolor='white', fill=0)
+
+        markers = np.zeros_like(max_saliency, dtype=np.int32)
+        for labelid in unique_labels:
+            mask = labels1 == labelid
+            idxmax = (max_saliency * mask).argmax()
+            highval = np.unravel_index(idxmax, mask.shape)
+            markers[highval[0], highval[1]] = labelid
+
+        from skimage.segmentation import watershed
+        labels = watershed(-max_saliency, markers=markers, mask=small_mask)
+
+        if SHOW:
+            kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}), fnum=4)
+        return labels
+
     def predict(self):
         """
         Predict the spatial polygons
@@ -232,68 +363,6 @@ class PolygonExtractor:
         else:
             masked = imputed
 
-        if 0:
-            import kwplot
-            cube = FeatureCube(masked,
-                               TimeIntervalSequence.coerce(self.heatmap_time_intervals),
-                               self.classes)
-            agg_cube = cube.window_max('12 months')
-            kwplot.imshow(agg_cube.draw())
-            cube1 = agg_cube.take_channels('ac_salient')
-            cube2 = agg_cube.take_channels('No Activity')
-            cube3 = agg_cube.take_channels('Site Preparation')
-            cube4 = agg_cube.take_channels('Active Construction')
-            cube5 = agg_cube.take_channels('Post Construction')
-
-            cube6 = cube2 * cube1
-            cube7 = cube3 * cube1
-            cube8 = cube4 * cube1
-            cube9 = cube5 * cube1
-
-            thresh = 0.3
-
-            cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
-            cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
-            cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
-            cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
-
-            cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
-            cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
-            cube8.heatmap_thwc = (cube8.heatmap_thwc > thresh).astype(np.float32)
-            cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
-
-            kwplot.imshow(cube1.draw(), pnum=(3, 4, 1), fnum=2)
-
-            kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
-            kwplot.imshow(cube3.draw(), pnum=(3, 4, 6), fnum=2)
-            kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
-            kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
-
-            kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
-            kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
-            kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
-            kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
-
-            from scipy import ndimage
-            from watch.utils import util_kwimage
-            max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
-
-            vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
-            labels1 = vol_label.max(axis=0)[..., 0]
-            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}))
-            unique_labels = np.setdiff1d(np.unique(labels1), [0])
-
-            markers = np.zeros_like(max_saliency, dtype=np.int32)
-            for labelid in unique_labels:
-                mask = labels1 == labelid
-                idxmax = (max_saliency * mask).argmax()
-                highval = np.unravel_index(idxmax, mask.shape)
-                markers[highval[0], highval[1]] = labelid
-
-            from skimage.segmentation import watershed
-            labels = watershed(-max_saliency, markers=markers, mask=small_mask)
-            kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}))
-
         SMART_HACK = 1
         if SMART_HACK:
             # from skimage.segmentation import watershed
@@ -301,10 +370,10 @@ class PolygonExtractor:
             cx1 = salient_cidx = self.classes.index('ac_salient')  # NOQA
             cx2 = active_cidx = self.classes.index('Active Construction')  # NOQA
             cx3 = siteprep_cidx = self.classes.index('Site Preparation')  # NOQA
-            salient_chan = c1 = imputed[..., cx1]
+            salient_chan = c1 = masked[..., cx1]
             PRINT_STEP('Stacking Modulated Features')
-            active_chan = c2 = imputed[..., cx2]
-            siteprep_chan = c3 = imputed[..., cx3]
+            active_chan = c2 = masked[..., cx2]
+            siteprep_chan = c3 = masked[..., cx3]
             c4 = c1 * c2
             c5 = c1 * c3
             to_stack = [c1, c2, c3, c4, c5]
@@ -321,9 +390,9 @@ class PolygonExtractor:
             max_saliency = salient_chan.max(axis=0, keepdims=1)
             small_heatmap = small_heatmap
 
-            max_saliency_2d = max_saliency[0, :, :, 0]
+            max_saliency_2d = max_saliency[0, :, :]
         else:
-            small_heatmap = imputed
+            small_heatmap = masked
             max_saliency_2d = None
 
         if self.config.get('robust_normalize'):
@@ -1182,7 +1251,8 @@ def real_data_demo_case_2():
                             })
 
     # label_img = self.predict()
-    label_img = self.predict_leotta()
+    # label_img = self.predict_leotta()
+    label_img = self.predict_crall()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
@@ -1191,7 +1261,7 @@ def real_data_demo_case_2():
     kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=6)
 
 
-def real_data_demo_case3():
+def real_data_demo_case_3():
     from watch.utils import util_girder
     from watch.utils import util_kwimage
     import pickle
@@ -1266,8 +1336,9 @@ def real_data_demo_case3():
                                 # 'algo': 'leotta',
                             })
 
-    label_img = self.predict()
+    # label_img = self.predict()
     # label_img = self.predict_leotta()
+    label_img = self.predict_crall()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
@@ -1276,7 +1347,7 @@ def real_data_demo_case3():
     kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=6)
 
 
-def real_data_demo_case1_fixed():
+def real_data_demo_case_1_fixed():
     from watch.utils import util_girder
     from watch.utils import util_kwimage
     import pickle
@@ -1347,8 +1418,9 @@ def real_data_demo_case1_fixed():
                             heatmap_time_intervals=heatmap_time_intervals,
                             classes=classes, config={
                                 # 'algo': 'meanshift',
-                                'algo': 'leotta',
-                                'leotta_threah': 0.2,
+                                # 'algo': 'leotta',
+                                'algo': 'kmeans',
+                                # 'leotta_threah': 0.2,
                             })
 
     label_img = self.predict()
