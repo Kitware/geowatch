@@ -9,6 +9,38 @@ from watch.mlops import smart_pipeline
 from kwutil.util_yaml import Yaml
 
 
+_debug_notes_ = r"""
+
+docker run \
+    --runtime=nvidia \
+    --volume "$HOME/temp/debug_smartflow_v2/ingress":/tmp/ingress \
+    --volume $HOME/.aws:/root/.aws:ro \
+    --volume "$HOME/code":/extern_code:ro \
+    --volume "$HOME/data":/extern_data:ro \
+    --volume "$HOME"/.cache/pip:/pip_cache \
+    --env AWS_PROFILE=iarpa \
+    -it registry.smartgitlab.com/kitware/watch:0.12.1-98697830f-strict-pyenv3.11.2-20231112T181927-0500-from-de082898 bash
+
+ipython
+
+from watch.cli.smartflow.run_sv_datagen import *  # NOQA
+config = {
+    'input_path'        : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion/items.jsonl',
+    'input_region_path' : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson',
+    'output_path'       : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/split/mono/products/site-cropped-kwcoco-for-sv/items.jsonl',
+    'aws_profile'       : None,
+    'dryrun'            : False,
+    'outbucket'         : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/split/mono/products/site-cropped-kwcoco-for-sv',
+    'newline'           : True,
+    'jobs'              : 16,
+    'dont_recompute'    : False,
+    'sv_cropping_config': 'context_factor: 1.6\nforce_min_gsd: 1GSD\nminimum_size: 256x256@3GSD\nnum_end_frames: 3.0\nnum_start_frames: 3.0\ntarget_gsd: 2GSD',
+}
+config = SVDatasetConfig(**config)
+
+"""
+
+
 class SVDatasetConfig(scfg.DataConfig):
     """
     Generate cropped KWCOCO dataset for SC
@@ -53,18 +85,22 @@ def main():
     run_generate_sv_cropped_kwcoco(**config)
 
 
-def run_generate_sv_cropped_kwcoco(input_path,
-                                   input_region_path,
-                                   output_path,
-                                   outbucket,
-                                   aws_profile=None,
-                                   dryrun=False,
-                                   newline=False,
-                                   jobs=1,
-                                   dont_recompute=False,
-                                   sv_cropping_config=None):
+def run_generate_sv_cropped_kwcoco(config):
     from watch.utils import util_framework
     from watch.utils import util_fsspec
+
+    input_path = config.input_path
+    input_region_path = config.input_region_path
+    output_path = config.output_path
+    outbucket = config.outbucket
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+
+    # newline = config.newline
+    # jobs = config.jobs
+
+    dont_recompute = config.dont_recompute
+    sv_cropping_config = config.sv_cropping_config
 
     if aws_profile is not None:
         # This should be sufficient, but it is not tested.
