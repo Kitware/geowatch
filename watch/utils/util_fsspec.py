@@ -641,6 +641,12 @@ class S3Path(RemotePath):
     def _as_gdal_vsi(self):
         return '/vsis3/' + self[len(self.__protocol__) + 3:]
 
+    def ensuredir(self, mode=0o0777):
+        # Does nothing on S3 because you cannot create an empty directory
+        # they are always auto-created for you.
+        ...
+        return self
+
 
 class SSHPath(RemotePath):
     """

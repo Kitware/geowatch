@@ -164,6 +164,7 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
         >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
+        >>> # A REAL AWS PATH WE HAVE ACCESS TO
         >>> outbucket = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/tests/test-egress')
         >>> if 0:
         >>>     outbucket.delete()
@@ -225,8 +226,9 @@ def smartflow_egress(assetnames_and_local_paths,
 
     # Make a temporary output path for a transactional upload.
     tmp_prefix = 'tmp-' + ub.timestamp() + '-' + ub.hash_data(uuid.uuid4())[0:8] + '-'
-    tmp_outbucket = (
-        outbucket.parent / (tmp_prefix + outbucket.name))
+    tmp_parent = (outbucket.parent / 'tmp').ensuredir()
+    tmp_outbucket = tmp_parent / (tmp_prefix + outbucket.name)
+    tmp_outbucket.ensuredir()
 
     # TODO: Can use fsspec to grab multiple files in parallel
     assetnames_and_s3_paths = {}
