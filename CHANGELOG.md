@@ -17,6 +17,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* Smartflow egress writes to its outbucket are now transactional.
+
+* Smartflow egress now cleans its output location before writing to it.
+
 * SMARTTrainer now writes helpful scripts to visualize batches as an independent process (works around ddp issue) 
 
 * Reorganized mlops analysis plots for more user control and stability

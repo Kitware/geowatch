@@ -165,7 +165,7 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> local_dpath = (dpath / 'local').ensuredir()
         >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
         >>> outbucket = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/tests/test-egress')
-        >>> if 1:
+        >>> if 0:
         >>>     outbucket.delete()
         >>> output_path = join(outbucket, 'items.jsonl')
         >>> region = RegionModel.random()
@@ -206,9 +206,27 @@ def smartflow_egress(assetnames_and_local_paths,
     # TODO: handle aws_profile.
     from watch.utils.util_fsspec import FSPath
     print('--- BEGIN EGRESS ---')
+    print(f'outbucket   = {outbucket}')
+    print(f'output_path = {output_path}')
 
     assert aws_profile is None, 'unhandled'
     outbucket = FSPath.coerce(outbucket)
+
+    PRE_DELETE_HACK = 1
+    if PRE_DELETE_HACK:
+        # HACK: delete everything in the outbucket to prevent conflicting
+        # results and ensure the next step always gets exactly this output
+        # and nothing more.
+        if outbucket.exists():
+            print(f'DELETE EXISTING: outbucket={outbucket}')
+            outbucket.delete()
+        else:
+            print('Outbucket doesnt exist yet')
+
+    # Make a temporary output path for a transactional upload.
+    tmp_prefix = 'tmp-' + ub.timestamp() + '-' + ub.hash_data(uuid.uuid4())[0:8] + '-'
+    tmp_outbucket = (
+        outbucket.parent / (tmp_prefix + outbucket.name))
 
     # TODO: Can use fsspec to grab multiple files in parallel
     assetnames_and_s3_paths = {}
@@ -216,24 +234,22 @@ def smartflow_egress(assetnames_and_local_paths,
     items = list(assetnames_and_local_paths.items())
     seen = set()  # Prevent duplicate uploads
     for asset, local_path in ub.ProgIter(items, desc='Egress data', verbose=3):
-        # Assets with paths already on S3 simply pass a reference through
         local_path = FSPath.coerce(local_path)
         if local_path.startswith('s3'):
-            asset_s3_outpath = local_path
+            # Assets with paths already on S3 simply pass a reference through
+            final_asset_s3_outpath = local_path
+            tmp_asset_s3_outpath = None
         else:
-            asset_s3_outpath = outbucket / local_path.name
+            # Otherwise do a copy. Mark the temporary transaction location
+            # and the real final location.
+            final_asset_s3_outpath = outbucket / local_path.name
+            tmp_asset_s3_outpath = tmp_outbucket / local_path.name
             if local_path not in seen:
-                fallback_copy(local_path, asset_s3_outpath)
-                # local_path.copy(asset_s3_outpath)
-                # from retry.api import retry_call
-                # logger = PrintLogger()
-                # retry_call(local_path.copy, fargs=[asset_s3_outpath],
-                #            fkwargs=dict(verbose=3), tries=3, backoff=2,
-                #            exceptions=(PermissionError,), delay=3, logger=logger)
+                fallback_copy(local_path, tmp_asset_s3_outpath)
                 # local_path.copy(asset_s3_outpath)
                 seen.add(local_path)
 
-        assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
+        assetnames_and_s3_paths[asset] = {'href': str(final_asset_s3_outpath)}
 
     output_stac_item = _build_stac_item(region_path,
                                         assetnames_and_s3_paths)
@@ -248,6 +264,11 @@ def smartflow_egress(assetnames_and_local_paths,
                          'type': 'FeatureCollection',
                          'features': output_stac_items}}
 
+    # Finish transaction
+    tmp_outbucket.move(outbucket)
+
+    # Write the final file after the move because it often will write into the
+    # final directory.
     with tempfile.NamedTemporaryFile() as temporary_file:
         with open(temporary_file.name, 'w') as f:
             if newline:
@@ -280,16 +301,21 @@ def fallback_copy(local_path, asset_s3_outpath):
     # callback = TqdmCallback(tqdm_kwargs={"desc": "Copying"})
     if local_path.is_dir() and isinstance(asset_s3_outpath, util_fsspec.S3Path):
         if DO_FALLBACK:
-            # In the case where we are moving a directory from the local to s3
-            # we *should* just be able to use copy, but because that seems to
-            # be breaking, we are falling back on an explicit aws cli command
-            profile = asset_s3_outpath.fs.storage_options.get('profile', None)
-            aws_kwargs = {}
-            if profile is not None:
-                aws_kwargs['profile'] = profile
-            aws_cmd = util_framework.AWS_S3_Command(
-                'sync', local_path, asset_s3_outpath, **aws_kwargs)
-            aws_cmd.run()
+            try:
+                local_path.copy(asset_s3_outpath, verbose=3)
+            except Exception:
+                print('fsspec copy failed, fallback to aws CLI')
+                # In the case where we are moving a directory from the local to
+                # s3 we *should* just be able to use copy, but because that
+                # seems to be breaking, we are falling back on an explicit aws
+                # cli command
+                profile = asset_s3_outpath.fs.storage_options.get('profile', None)
+                aws_kwargs = {}
+                if profile is not None:
+                    aws_kwargs['profile'] = profile
+                aws_cmd = util_framework.AWS_S3_Command(
+                    'sync', local_path, asset_s3_outpath, **aws_kwargs)
+                aws_cmd.run()
         else:
             local_path.copy(asset_s3_outpath, verbose=3)
             #callback=callback)

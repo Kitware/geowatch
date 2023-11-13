@@ -133,22 +133,25 @@ class FSPath(str):
     def touch(self, truncate=False, **kwargs):
         self.fs.touch(self, truncate=truncate, **kwargs)
 
-    def move(self, path1, path2, recursive='auto', maxdepth=None, **kwargs):
+    def move(self, path2, recursive='auto', maxdepth=None, verbose=1, **kwargs):
         if recursive == 'auto':
             recursive = self.is_dir()
+        if verbose:
+            print(f'Move {self} -> {path2}')
         self.fs.move(self, path2, recursive=recursive, maxdepth=maxdepth,
                      **kwargs)
 
-    def delete(self, recursive='auto', maxdepth=True):
+    def delete(self, recursive='auto', maxdepth=True, verbose=1):
         """
         Deletes this file or this directory (and all of its contents)
 
         Unlike fs.delete, this will not error if the file doesnt exist. See
         :func:`FSPath.rm` if you want standard error-ing behavior.
         """
+        if verbose:
+            print(f'Delete {self}')
         if recursive == 'auto':
             recursive = self.is_dir()
-
         try:
             return self.fs.delete(self, recursive=recursive, maxdepth=maxdepth)
         except FileNotFoundError:
