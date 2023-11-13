@@ -178,6 +178,11 @@ def main(cmdline=1, **kwargs):
             summary_df['status'].value_counts()
             summary_df = summary_df.sort_values('status')
             summary_utm = util_gis.project_gdf_to_local_utm(summary_df, mode=1)
+
+            # Find spatial intersection within the region
+            if 1:
+                gdf_site_overlaps(summary_utm)
+
             display_summary = summary_utm.drop(['type', 'geometry'], axis=1)
             display_summary['area_square_meters'] = summary_utm.geometry.area
             # rich.print(display_summary)
@@ -239,6 +244,75 @@ def main(cmdline=1, **kwargs):
         viz_dpath = ub.Path(viz_dpath).ensuredir()
         viz_site_stats(unique_region_ids, region_to_obs_accum,
                        region_to_site_accum, viz_dpath)
+
+
+def gdf_site_overlaps(summary_utm):
+    import kwutil
+    from watch.utils import util_gis
+    import numpy as np
+    import pandas as pd
+    overlap_rows = []
+    idx_to_idxs = util_gis.geopandas_pairwise_overlaps(summary_utm, summary_utm)
+    for idx, idxs in idx_to_idxs.items():
+        other_idxs = np.setdiff1d(idxs, [idx])
+        if len(other_idxs):
+            geoms1 = summary_utm.iloc[[idx]]
+            geoms2 = summary_utm.iloc[other_idxs]
+            s1 = geoms1.iloc[0]
+
+            start1 = kwutil.util_time.datetime.coerce(s1['start_date'])
+            end1 = kwutil.util_time.datetime.coerce(s1['end_date'])
+            delta1 = end1 - start1
+
+            g1 = s1.geometry
+            isects = [g1.intersection(g2) for g2 in geoms2.geometry]
+            unions = [g1.union(g2) for g2 in geoms2.geometry]
+            isect_areas = np.array([g.area for g in isects])
+            union_areas = np.array([g.area for g in unions])
+            ious = isect_areas / union_areas
+            site_id1 = geoms1['site_id'].iloc[0]
+            for _ix, site_id2 in enumerate(geoms2['site_id']):
+                s2 = geoms2.iloc[_ix]
+                g2 = s2.geometry
+                start2 = kwutil.util_time.datetime.coerce(s2['start_date'])
+                end2 = kwutil.util_time.datetime.coerce(s2['end_date'])
+                delta2 = end2 - start2
+
+                start3 = max(start1, start2)
+                end3 = min(end1, end2)
+
+                start4 = min(start1, start2)
+                end4 = max(end1, end2)
+
+                isect_delta = end3 - start3
+                union_delta = end4 - start4
+                iot = isect_delta / union_delta
+
+                overlap_rows.append({
+                    'site_id1': site_id1,
+                    'site_id2': site_id2,
+                    'space_iou': ious[_ix],
+                    'time_iou': iot,
+                    'space_io1': isect_areas[_ix] / g1.area,
+                    'space_io2': isect_areas[_ix] / g2.area,
+                    'time_io1': isect_delta / delta1,
+                    'time_io2': isect_delta / delta2,
+                })
+    overlaps = pd.DataFrame(overlap_rows)
+    piv = overlaps.pivot(index='site_id1', columns='site_id2', values=['space_iou', 'time_iou'])
+    piv = piv.fillna(0)
+
+    # piv.sort_values('space_iou')
+    # piv = piv.loc[piv.sum(axis=1).argsort().index[::-1]]
+    # piv = piv[piv.sum(axis=1).sort_values().index[::-1]]
+    site_order = piv['space_iou'].sum(axis=0).sort_values().index[::-1]
+    piv = piv.loc[site_order]
+    piv = piv.swaplevel(axis=1)[site_order]
+    piv = piv[site_order]
+
+    import rich
+    piv[piv == 0] = '-'
+    rich.print(piv)
 
 
 def viz_site_stats(unique_region_ids, region_to_obs_accum, region_to_site_accum, viz_dpath):
