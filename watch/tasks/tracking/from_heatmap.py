@@ -918,7 +918,7 @@ def _process(track, _heatmaps, image_dates, gids, config):
 
 
 @profile
-def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=None):
+def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     """
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
 
@@ -949,8 +949,7 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
         >>> track_bounds = kwimage.Polygon.random(rng=0).scale((64, 64))
         >>> # V1 merges everything together across all time
         >>> config.poly_merge_method = 'v1'
-        >>> polygons_final1 = heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
-        >>> polygons_final2 = heatmaps_to_polys_old(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
+        >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
         >>> # V3 does some time separation
         >>> config.poly_merge_method = 'v3'
         >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
@@ -1062,116 +1061,6 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
 
             polys_final = convert_to_kwimage_poly(polys_final)
     return polys_final
-
-
-def heatmaps_to_polys_old(heatmaps, track_bounds, heatmap_dates=None, config=None):
-    """
-    Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
-    """
-    global viz_n_window
-    import numpy as np
-
-    # TODO: rename moving window size to "outer_window_size"
-
-    def convert_to_shapely(polys):
-        return [p.to_shapely() for p in polys]
-
-    def convert_to_kwimage_poly(shapely_polys):
-        import kwimage
-        return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
-
-    _agg_fn = agg_functions.AGG_FN_REGISTRY[config.agg_fn]
-
-    image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
-
-    if isinstance(config.inner_window_size, str):
-        # TODO: generalize if needed
-        assert heatmap_dates is not None
-
-        if config.inner_agg_fn == 'mean':
-            inner_ord = 1
-        elif config.inner_agg_fn == 'max':
-            inner_ord = float('inf')
-        else:
-            raise NotImplementedError(config.inner_agg_fn)
-
-        # Do inner aggregation before outer aggregation
-        from kwutil import util_time
-        import kwarray
-        delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
-        bucket_ids = (image_unixtimes // delta).astype(int)
-
-        unique_ids, groupxs = kwarray.group_indices(bucket_ids)
-
-        new_heatmaps = []
-        for idxs in groupxs:
-            inner = agg_functions._norm(heatmaps[idxs], norm_ord=inner_ord)
-            new_heatmaps.append(inner)
-        new_heatmaps = np.array(new_heatmaps)
-        heatmaps = new_heatmaps
-
-        new_heatmap_dates = []
-        for idxs in groupxs:
-            new_start_date = np.min(image_unixtimes[idxs])
-            new_end_date = np.max(image_unixtimes[idxs])
-            new_heatmap_dates.append([new_start_date, new_end_date])
-        new_heatmap_dates = np.array(new_heatmap_dates)
-        image_unixtimeframes = new_heatmap_dates
-
-    else:
-        if config.inner_window_size is not None:
-            raise NotImplementedError(
-                'only temporal deltas for inner agg window for now')
-        image_unixtimeframes = np.stack([image_unixtimes, image_unixtimes], axis=-1)
-
-    # calculate number of moving-window steps, based on window_size and number
-    # of heatmaps
-    if config.moving_window_size is not None:
-        total_n = len(heatmaps)
-        final_size = int(total_n // np.ceil((total_n / config.moving_window_size)))
-        n_steps = total_n // final_size
-    else:
-        final_size = len(heatmaps)
-        n_steps = 1
-
-    # initialize heatmaps and initial polygons on the first set of heatmaps
-    h_init = heatmaps[:final_size]
-    t_init = image_unixtimeframes[:final_size]
-
-    print(f'n_steps={n_steps}')
-    print('!!!!')
-    prog = ub.ProgIter(total=n_steps, desc='process-step')
-    with prog:
-        step = 0
-        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step, config)
-        times_final = [[t_init[0][0], t_init[-1][1]]] * len(polys_final)
-        prog.step()
-
-        if n_steps > 1:
-            polys_final = convert_to_shapely(polys_final)
-
-            for step in range(1, n_steps):
-                prog.step()
-                prog.ensure_newline()
-                h1 = heatmaps[step * final_size:(step + 1) * final_size]
-                t1 = image_unixtimeframes[step * final_size:(step + 1) * final_size]
-                print(h1.sum())
-
-                p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
-                t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
-                p1 = convert_to_shapely(p1)
-
-                polys_final, times_final = _merge_polys(
-                    polys_final, times_final,
-                    p1, t1,
-                    poly_merge_method=config.poly_merge_method,
-                )
-
-            polys_final = convert_to_kwimage_poly(polys_final)
-    return polys_final
-
-
-heatmaps_to_polys = heatmaps_to_polys_new
 
 
 def _compute_time_window(window, num_frames=None, heatmap_dates=None):
