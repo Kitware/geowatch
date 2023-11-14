@@ -490,7 +490,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
     #
 
     # polys are in "tracking-space", i.e. video-space up to a scale factor.
-    gid_poly_config = _GidPolyConfig(**ub.udict(config).subdict(_GidPolyConfig.__default__.keys()))
+    gid_poly_config = PolygonExtractConfig(**ub.udict(config).subdict(PolygonExtractConfig.__default__.keys()))
     gids_polys = _gids_polys(sub_dset, **gid_poly_config)
 
     orig_gid_polys = list(gids_polys)  # 26% of runtime
@@ -874,6 +874,12 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
 
 
 def _process(track, _heatmaps, image_dates, gids, config):
+    """
+    Yields:
+        Tuple[List[int], MultiPolygon] -
+            a list of image ids a polygon is valid for, and
+            the single polygon corresponding.
+    """
     from shapely.ops import unary_union
     import kwimage
     import numpy as np
@@ -925,15 +931,15 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         heatmap_dates (List[datetime] | None):
             dates corresponding with each heatmap time dimension
 
-        config (_GidPolyConfig): polygon extraction config
+        config (PolygonExtractConfig): polygon extraction config
 
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> import kwimage
         >>> from kwutil import util_time
         >>> import numpy as np
-        >>> from watch.tasks.tracking.from_heatmap import _GidPolyConfig  # NOQA
-        >>> config = _GidPolyConfig()
+        >>> from watch.tasks.tracking.from_heatmap import PolygonExtractConfig  # NOQA
+        >>> config = PolygonExtractConfig()
         >>> heatmaps = np.zeros((7, 64, 64))
         >>> heatmaps[2, 20:40, 20:40] = 1
         >>> heatmaps[5, 30:50, 30:50] = 1
@@ -1124,7 +1130,7 @@ def _process_1_step(heatmaps, _agg_fn, track_bounds, step_idx, config):
 
 def _gids_polys(sub_dset, **kwargs):
     """
-    This is associated with :class:`_GidPolyConfig`
+    This is associated with :class:`PolygonExtractConfig`
 
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
@@ -1150,15 +1156,19 @@ def _gids_polys(sub_dset, **kwargs):
         >>>     resolution=resolution,
         >>>     outer_window_size=outer_window_size,
         >>>     use_boundaries=None)
-        >>> results = list(_gids_polys(sub_dset, **kwargs))
+        >>> results1 = list(_gids_polys(sub_dset, **kwargs))
+        >>> kwargs['new_algo'] = 'crall'
+        >>> results2 = list(_gids_polys(sub_dset, **kwargs))
 
     Returns:
-        Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
+        Iterable[Tuple[List[int], MultiPolygon]] -
+            For each track return a list of image ids and a single associated
+            polygon.
     """
     from kwutil import util_time
     import numpy as np
     import rich
-    config = _GidPolyConfig(**kwargs)
+    config = PolygonExtractConfig(**kwargs)
 
     if config.use_boundaries:  # for SC
         raw_boundary_tracks = score_track_polys(sub_dset, [SITE_SUMMARY_CNAME])
@@ -1202,45 +1212,51 @@ def _gids_polys(sub_dset, **kwargs):
 
     _heatmaps_thwc = np.stack(_heatmaps, axis=0)
 
-    if 0:
+    if config.new_algo is not None:
         from watch.tasks.tracking import polygon_extraction
         extractor = polygon_extraction.PolygonExtractor(
             _heatmaps_thwc,
             heatmap_time_intervals=image_dates,
             bounds=None, classes=channels_list,
             config=config.asdict())
-        extractor.predict()
+        polygons = extractor.predict_polygons()
 
-    print(f'(presum) _heatmaps_thwc.shape={_heatmaps_thwc.shape}')
-    _heatmaps = _heatmaps_thwc.sum(axis=-1)  # sum over channels
-    print(f'_heatmaps.shape={_heatmaps.shape}')
-    missing_ix = np.array([channels not in i.channels for i in coco_images])
-
-    num_missing = missing_ix.sum()
-    rich.print(f'[yellow]There are {num_missing} images that are missing {channels} channels')
-
-    # TODO this was actually broken in orig, so turning it off here for now
-    interpolate = 0
-    if interpolate:
-        diffed = np.concatenate((np.diff(missing_ix), [False]))
-        src = ~missing_ix & diffed
-        _heatmaps[missing_ix] = _heatmaps[src]
-        if missing_ix[0]:
-            _heatmaps[:np.searchsorted(diffed, True)] = 0
-        assert np.isnan(_heatmaps).all(axis=(1, 2)).sum() == 0
+        # Conform to expected output
+        result_gen = []
+        for poly in polygons:
+            single_result = (gids, poly)
+            result_gen.append(single_result)
     else:
-        _heatmaps[missing_ix] = 0
+        print(f'(presum) _heatmaps_thwc.shape={_heatmaps_thwc.shape}')
+        _heatmaps = _heatmaps_thwc.sum(axis=-1)  # sum over channels
+        print(f'_heatmaps.shape={_heatmaps.shape}')
+        missing_ix = np.array([channels not in i.channels for i in coco_images])
 
-    # no benefit so far
-    proc_jobs = ub.JobPool('process', max_workers=0)
-    with proc_jobs:
+        num_missing = missing_ix.sum()
+        rich.print(f'[yellow]There are {num_missing} images that are missing {channels} channels')
 
-        for _, track in ub.ProgIter(boundary_tracks, desc='submit proc jobs'):
-            proc_jobs.submit(_process, track, _heatmaps, image_dates, gids, config)
+        # TODO this was actually broken in orig, so turning it off here for now
+        interpolate = 0
+        if interpolate:
+            diffed = np.concatenate((np.diff(missing_ix), [False]))
+            src = ~missing_ix & diffed
+            _heatmaps[missing_ix] = _heatmaps[src]
+            if missing_ix[0]:
+                _heatmaps[:np.searchsorted(diffed, True)] = 0
+            assert np.isnan(_heatmaps).all(axis=(1, 2)).sum() == 0
+        else:
+            _heatmaps[missing_ix] = 0
 
-        result_gen = itertools.chain.from_iterable(
-            j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
-        result_gen = list(result_gen)
+        # no benefit so far
+        proc_jobs = ub.JobPool('process', max_workers=0)
+        with proc_jobs:
+
+            for _, track in ub.ProgIter(boundary_tracks, desc='submit proc jobs'):
+                proc_jobs.submit(_process, track, _heatmaps, image_dates, gids, config)
+
+            result_gen = itertools.chain.from_iterable(
+                j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
+            result_gen = list(result_gen)
     return result_gen
 
 #
@@ -1251,10 +1267,15 @@ def _gids_polys(sub_dset, **kwargs):
 #     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
 
 
-class _GidPolyConfig(scfg.DataConfig):
+class PolygonExtractConfig(scfg.DataConfig):
     # This is the base config that all from-heatmap trackers have in common
     # which has to do with how heatmaps are loaded, normalized, and aggregated.
     # This is associated with :func:`_gids_polys`
+
+    new_algo = scfg.Value(None, help=ub.paragraph(
+        '''
+        If None, use the old algorithm, otherwise use one of the new algorithm
+        '''))
 
     key = scfg.Value('salient', help=ub.paragraph(
         '''
@@ -1339,7 +1360,7 @@ class _GidPolyConfig(scfg.DataConfig):
         '''))
 
 
-class TimeAggregatedPolysConfig(_GidPolyConfig):
+class TimeAggregatedPolysConfig(PolygonExtractConfig):
     """
     This is an intermediate config that we will use to transition between the
     current dataclass configuration and a new scriptconfig based one.

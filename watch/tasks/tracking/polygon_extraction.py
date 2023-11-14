@@ -16,23 +16,24 @@ class PolygonExtractor:
         >>> from watch.tasks.tracking.polygon_extraction import *  # NOQA
         >>> cls = PolygonExtractor
         >>> self = PolygonExtractor.demo(real_categories=True)
+        >>> self.config['algo'] = 'crall'
         >>> print(f'self.heatmap_thwc.shape={self.heatmap_thwc.shape}')
 
-        >>> #label_img = self.predict()
-        >>> label_img = self.predict_leotta()
+        >>> polys, info = self.predict_polygons(return_info=True)
+        >>> label_mask = info['label_mask']
 
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> from watch.utils import util_kwimage
         >>> kwplot.autompl()
         >>> stacked = self.draw_timesequence()
-        >>> canvas = util_kwimage.colorize_label_image(label_img)
-        >>> pnum_ = kwplot.PlotNums(nSubplots=2 + len(self._intermediates))
+        >>> canvas = label_mask.colorize()
+        >>> for p in polys:
+        >>>     canvas = p.draw_on(canvas, fill=0, edgecolor='black')
+        >>> pnum_ = kwplot.PlotNums(nSubplots=2)
         >>> kwplot.imshow(stacked, pnum=pnum_(), title='Colorized Time Series')
         >>> kwplot.imshow(canvas, pnum=pnum_(), title='Cluster Labels')
         >>> kwplot.show_if_requested()
-        >>> for k, v in self._intermediates.items():
-        >>>     kwplot.imshow(v, pnum=pnum_(), title=k)
     """
 
     def __init__(self, heatmap_thwc, heatmap_time_intervals=None, bounds=None,
@@ -77,12 +78,14 @@ class PolygonExtractor:
             'robust_normalize': False,
             'positional_encoding': True,
             'positional_encoding_scale': 1.0,
+            'scale_factor': 'auto',
+            'thresh': 0.3,
         }
         if config is None:
             config = {}
         self.config = self.default_config | config
 
-    def predict_leotta(self):
+    def _predict_leotta(self):
         import numpy as np
         from scipy import ndimage
         heatmap_thwc = self.heatmap_thwc
@@ -102,7 +105,7 @@ class PolygonExtractor:
         # commbine active and saliency and remove NANs
         active_vol = heatmap_thwc[:, :, :, active_index]
         saliency_vol = heatmap_thwc[:, :, :, salient_idx]
-        vol = impute_nans(np.multiply(active_vol, saliency_vol)) * mask[None, :, :]
+        vol = impute_nans2(np.multiply(active_vol, saliency_vol)) * mask[None, :, :]
 
         # morphological clean-up, a little more in the time direction
         vol = ndimage.grey_closing(vol, (7, 3, 3))
@@ -128,13 +131,16 @@ class PolygonExtractor:
         # idx, cnts = np.unique(max_label, return_counts=True)
         return label_img
 
-    def predict_crall(self):
+    def _predict_crall(self):
         import rich
         raw_heatmap = self.heatmap_thwc
 
         SHOW = 0
+        scale_factor = self.config['scale_factor']
+        thresh = self.config['thresh']
+        if scale_factor == 'auto':
+            scale_factor = 4
 
-        scale_factor = 4
         _t, _h, _w, _c = self.heatmap_thwc.shape
 
         if self.bounds is not None:
@@ -158,7 +164,7 @@ class PolygonExtractor:
         downscaled = downscaled.copy()
 
         PRINT_STEP('Impute NaN')
-        imputed = impute_nans(downscaled)
+        imputed = impute_nans2(downscaled)
         rich.print('... Finished Impute')
 
         if mask is not None:
@@ -179,18 +185,17 @@ class PolygonExtractor:
         if SHOW:
             kwplot.imshow(agg_cube.draw())
         cube1 = agg_cube.take_channels('ac_salient')
-        cube2 = agg_cube.take_channels('No Activity')
+        # cube2 = agg_cube.take_channels('No Activity')
         cube3 = agg_cube.take_channels('Site Preparation')
         cube4 = agg_cube.take_channels('Active Construction')
-        cube5 = agg_cube.take_channels('Post Construction')
+        # cube5 = agg_cube.take_channels('Post Construction')
 
-        cube6 = cube2 * cube1
+        # cube6 = cube2 * cube1
         cube7 = cube3 * cube1
         cube8 = cube4 * cube1
-        cube9 = cube5 * cube1
+        # cube9 = cube5 * cube1
 
-        thresh = 0.3
-
+        PRINT_STEP('Morphology')
         # cube1.heatmap_thwc = ndimage.grey_closing(cube1.heatmap_thwc, (3, 5, 5, 1))
         # cube1.heatmap_thwc = ndimage.grey_opening(cube1.heatmap_thwc, (3, 5, 5, 1))
         cube4.heatmap_thwc = ndimage.grey_closing(cube4.heatmap_thwc, (3, 5, 5, 1))
@@ -202,31 +207,33 @@ class PolygonExtractor:
         # cube8.heatmap_thwc = ndimage.grey_closing(cube8.heatmap_thwc, (3, 5, 5, 1))
         # cube8.heatmap_thwc = ndimage.grey_opening(cube8.heatmap_thwc, (3, 5, 5, 1))
 
-        cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
+        # cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
         cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
         cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
-        cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
+        # cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
 
-        cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
+        # cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
         cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
         cube8.heatmap_thwc = (cube8.heatmap_thwc > thresh).astype(np.float32)
-        cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
+        # cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
 
         if SHOW:
             kwplot.imshow(cube1.draw(), pnum=(3, 4, 1), fnum=2)
 
-            kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
+            # kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
             kwplot.imshow(cube3.draw(), pnum=(3, 4, 6), fnum=2)
-            kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
-            kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
+            # kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
+            # kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
 
-            kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
+            # kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
             kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
             kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
-            kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
+            # kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
 
+        PRINT_STEP('Max Saliency')
         max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
 
+        PRINT_STEP('Volume Labeling')
         vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
         # Remove small seeds
         idx, cnts = np.unique(vol_label, return_counts=True)
@@ -247,6 +254,7 @@ class PolygonExtractor:
             kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=3)
             self._intermediates['small_bounds'].draw(edgecolor='white', fill=0)
 
+        PRINT_STEP('Initialize Seed Points')
         markers = np.zeros_like(max_saliency, dtype=np.int32)
         for labelid in unique_labels:
             mask = labels1 == labelid
@@ -254,6 +262,7 @@ class PolygonExtractor:
             highval = np.unravel_index(idxmax, mask.shape)
             markers[highval[0], highval[1]] = labelid
 
+        PRINT_STEP('Watershed')
         from skimage.segmentation import watershed
         labels = watershed(-max_saliency, markers=markers, mask=small_mask)
 
@@ -294,7 +303,10 @@ class PolygonExtractor:
         algo = self.config['algo']
 
         if algo == 'leotta':
-            return self.predict_leotta()
+            return self._predict_leotta()
+
+        if algo == 'crall':
+            return self._predict_crall()
 
         if algo == 'dbscan':
             dbscan = sklearn.cluster.DBSCAN(
@@ -358,7 +370,7 @@ class PolygonExtractor:
         downscaled = downscaled.copy()
 
         PRINT_STEP('Impute NaN')
-        imputed = impute_nans(downscaled)
+        imputed = impute_nans2(downscaled)
         rich.print('... Finished Impute')
 
         if mask is not None:
@@ -523,6 +535,17 @@ class PolygonExtractor:
             kwplot.imshow(feature_pca, fnum=2, doclf=1)
 
         return label_img
+
+    def predict_polygons(self, return_info=False):
+        label_img = self.predict()
+        label_mask = LabelMask(label_img)
+        polys = label_mask.to_multi_polygons()
+        if return_info:
+            info = {}
+            info['label_mask'] = label_mask
+            return polys, info
+        else:
+            return polys
 
     def show(self):
         import kwplot
@@ -774,6 +797,20 @@ def impute_nans(data):
 
     data = np.random.rand(5, 3, 3, 2)
     data[data < 0.1] = np.nan
+
+    data = np.random.rand(54, 295, 296, 5)
+    data[data < 0.1] = np.nan
+
+    import timerit
+    ti = timerit.Timerit(1, bestof=1, verbose=3)
+
+    for timer in ti.reset('impute_nans2'):
+        with timer:
+            impute_nans2(data)
+
+    for timer in ti.reset('impute_nans'):
+        with timer:
+            impute_nans(data)
     '''
     from scipy.interpolate import NearestNDInterpolator
     import numpy as np
@@ -798,6 +835,23 @@ def impute_nans(data):
 
     new_data = data.copy()
     new_data[tuple(invalid_points.T)] = fill_data
+    return new_data
+
+
+def impute_nans2(data):
+    import numpy as np
+    bad_value_mask = ~np.isfinite(data)
+    new_data = data.copy()
+    frame_new_prev = None
+    for idx in range(data.shape[0]):
+        frame_mask = bad_value_mask[idx]
+        frame_new = new_data[idx]
+        if frame_new_prev is None:
+            frame_new[frame_mask] = 0
+        else:
+            # Impute values from previous frame
+            frame_new[frame_mask] = frame_new_prev[frame_mask]
+        frame_new_prev = frame_new
     return new_data
 
 
@@ -970,6 +1024,13 @@ class TimeInterval(portion.Interval):
     """
     Represents an interval in time.
 
+    Ignore:
+        import liberator
+        lib = liberator.Liberator()
+        lib.add_dynamic(portion.Interval)
+        lib.expand(['portion'])
+        print(lib.current_sourcecode())
+
     Example:
         from watch.tasks.tracking.polygon_extraction import *  # NOQA
         a = TimeInterval.coerce(('2020-01-01', '2020-02-01'))
@@ -1015,7 +1076,6 @@ class TimeInterval(portion.Interval):
             start = -float('inf')
         self = TimeInterval.from_atomic(portion.CLOSED, start, stop, portion.CLOSED)
         return self
-        ...
 
     @classmethod
     def random(TimeInterval):
@@ -1163,7 +1223,7 @@ def real_data_demo_case_1():
     kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=5)
 
     label_img = self.predict()
-    # label_img = self.predict_leotta()
+    # label_img = self._predict_leotta()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=5)
@@ -1266,8 +1326,8 @@ def real_data_demo_case_2():
                             })
 
     # label_img = self.predict()
-    # label_img = self.predict_leotta()
-    label_img = self.predict_crall()
+    # label_img = self._predict_leotta()
+    label_img = self._predict_crall()
 
     canvas = util_kwimage.colorize_label_image(label_img)
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
@@ -1347,15 +1407,19 @@ def real_data_demo_case_3():
                             heatmap_time_intervals=heatmap_time_intervals,
                             classes=classes, config={
                                 # 'algo': 'meanshift',
-                                'algo': 'kmeans',
+                                # 'algo': 'crall',
                                 # 'algo': 'leotta',
                             })
 
-    # label_img = self.predict()
-    # label_img = self.predict_leotta()
-    label_img = self.predict_crall()
+    self.config['algo'] = 'crall'
+    self.config['scale_factor'] = 1
 
-    canvas = util_kwimage.colorize_label_image(label_img)
+    polygons, info = self.predict_polygons(return_info=True)
+    label_mask = info['label_mask']
+
+    canvas = label_mask.colorize()
+    for p in polygons:
+        canvas = p.draw_on(canvas, fill=0, edgecolor='black')
     kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
 
     stacked = self.draw_timesequence()
@@ -1431,19 +1495,22 @@ def real_data_demo_case_1_fixed():
 
     self = PolygonExtractor(heatmap_thwc, bounds=bounds,
                             heatmap_time_intervals=heatmap_time_intervals,
-                            classes=classes, config={
-                                # 'algo': 'meanshift',
-                                # 'algo': 'leotta',
-                                'algo': 'kmeans',
-                                # 'leotta_threah': 0.2,
-                            })
+                            classes=classes, config={})
 
-    # label_img = self.predict()
-    label_img = self.predict_crall()
-    # label_img = self.predict_leotta()
+    # self.config['algo'] = 'meanshift'
+    # self.config['algo'] = 'leotta'
+    # self.config['leotta_threah'] = 0.2
+    # self.config['algo'] = 'kmeans'
+    self.config['algo'] = 'crall'
+    self.config['scale_factor'] = 8
 
-    canvas = util_kwimage.colorize_label_image(label_img)
-    kwplot.imshow(canvas, pnum=(1, 2, 2), fnum=6)
+    polygons, info = self.predict_polygons(return_info=True)
+    label_mask = info['label_mask']
+
+    canvas = label_mask.resize(scale=4).colorize()
+    for p in polygons:
+        canvas = p.scale(4).draw_on(canvas, fill=0, edgecolor='black')
+    kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=6)
 
     stacked = self.draw_timesequence()
     kwplot.imshow(stacked, pnum=(1, 2, 1), fnum=6)
@@ -1565,6 +1632,92 @@ def generate_real_example():
                 654d10a9fdc1508d8bec1bb6 \
                 {pickle_fpath}
             '''), verbose=3, shell=True)
+
+
+class LabelMask:
+    """
+    Ignore:
+        from watch.utils import util_kwimage
+        import kwplot
+        kwplot.autompl()
+        self = LabelMask.demo()
+        canvas = self.colorize()
+        kwplot.imshow(canvas, doclf=1)
+        polys = self.to_multi_polygons()
+        for p in polys:
+            p.draw(fill=0, edgecolor='black')
+    """
+    def __init__(self, data):
+        self.data = data
+
+    def colorize(self):
+        from watch.utils import util_kwimage
+        canvas = util_kwimage.colorize_label_image(self.data, legend_dpi=300)
+        return canvas
+
+    def resize(self, scale=None, dsize=None):
+        import kwimage
+        new_data = kwimage.imresize(self.data, scale=scale, interpolation='nearest')
+        new = self.__class__(new_data)
+        return new
+
+    @classmethod
+    def demo(LabelMask):
+        import numpy as np
+        import kwimage
+        H, W = 512, 512
+        label_img = np.zeros((H, W), dtype=np.int32)
+        poly1 = kwimage.Polygon.random().scale((H, W))
+        poly2 = kwimage.Polygon.random().scale((H, W))
+        label_img = poly1.fill(label_img, value=1)
+        label_img = poly2.fill(label_img, value=2)
+        self = LabelMask(label_img)
+        return self
+
+    def to_multi_polygons(self):
+        import kwimage
+        label_img = self.data
+        poly_datas = _rasterio_labelimg_to_polygons(label_img)
+        value_to_polys = ub.group_items(poly_datas, key=lambda p: p['value'])
+        multi_polygons = []
+        for value, subpolys in value_to_polys.items():
+            kwpolys = [
+                kwimage.Polygon(**p, metakeys=['value'])
+                for p in subpolys
+            ]
+            mpoly = kwimage.MultiPolygon(kwpolys, meta={'value': value})
+            multi_polygons.append(mpoly)
+        return multi_polygons
+
+
+def _rasterio_labelimg_to_polygons(label_img):
+    """
+    Note:
+        The :func:`rasterio.features.shapes` is capable of multi-label polygon
+        extraction.
+
+    TODO:
+        - [ ] Kwimage needs a good multi-label image polygon extraction tool
+
+    Ignore:
+    """
+    import numpy as np
+    from rasterio import features
+    poly_datas = []
+    if label_img.size > 0:
+        shapes = list(features.shapes(label_img, connectivity=8))
+        translate = np.array([-0.5, -0.5]).ravel()[None, :]
+        for shape, value in shapes:
+            if value > 0:
+                coords = shape['coordinates']
+                exterior = np.array(coords[0]) + translate
+                interiors = [np.array(p) + translate for p in coords[1:]]
+                poly_datas.append({
+                    'exterior': exterior,
+                    'interiors': interiors,
+                    'value': value,
+                })
+    return poly_datas
 
 
 def coco_make_track_gdf(coco_dset, video_id, resolution=None):
