@@ -531,8 +531,8 @@ class PolygonExtractor:
         import numpy as np
         from watch.utils import util_kwimage
         salient = self._intermediates['salient_chan']
-        active = self._intermediates['active_chan']
-        siteprep = self._intermediates['siteprep_chan']
+        # active = self._intermediates['active_chan']
+        # siteprep = self._intermediates['siteprep_chan']
         small_bounds = self._intermediates['small_bounds']
 
         # heatmaps = np.stack([salient, active, siteprep], axis=3)
