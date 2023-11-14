@@ -1157,6 +1157,7 @@ def _gids_polys(sub_dset, **kwargs):
     """
     from kwutil import util_time
     import numpy as np
+    import rich
     config = _GidPolyConfig(**kwargs)
 
     if config.use_boundaries:  # for SC
@@ -1201,8 +1202,6 @@ def _gids_polys(sub_dset, **kwargs):
 
     _heatmaps_thwc = np.stack(_heatmaps, axis=0)
 
-    import xdev
-    xdev.embed()
     if 0:
         from watch.tasks.tracking import polygon_extraction
         extractor = polygon_extraction.PolygonExtractor(
@@ -1215,11 +1214,10 @@ def _gids_polys(sub_dset, **kwargs):
     print(f'(presum) _heatmaps_thwc.shape={_heatmaps_thwc.shape}')
     _heatmaps = _heatmaps_thwc.sum(axis=-1)  # sum over channels
     print(f'_heatmaps.shape={_heatmaps.shape}')
-    missing_ix = np.array([key not in i.channels for i in coco_images])
+    missing_ix = np.array([channels not in i.channels for i in coco_images])
 
     num_missing = missing_ix.sum()
-    import rich
-    rich.print(f'[yellow]There are {num_missing} images that are missing {key} channels')
+    rich.print(f'[yellow]There are {num_missing} images that are missing {channels} channels')
 
     # TODO this was actually broken in orig, so turning it off here for now
     interpolate = 0
