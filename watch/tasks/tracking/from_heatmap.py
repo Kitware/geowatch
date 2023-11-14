@@ -949,7 +949,8 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
         >>> track_bounds = kwimage.Polygon.random(rng=0).scale((64, 64))
         >>> # V1 merges everything together across all time
         >>> config.poly_merge_method = 'v1'
-        >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
+        >>> polygons_final1 = heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
+        >>> polygons_final2 = heatmaps_to_polys_old(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
         >>> # V3 does some time separation
         >>> config.poly_merge_method = 'v3'
         >>> polygons_final = heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=heatmap_dates, config=config)
@@ -1014,9 +1015,13 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
-    groupxs = _compute_time_window(
-        config.inner_window_size, num_frames=len(heatmaps),
-        heatmap_dates=heatmap_dates)
+    if config.moving_window_size is None:
+        # Hack: none meant window size is infinite here.
+        groupxs = [np.arange(len(heatmaps))]
+    else:
+        groupxs = _compute_time_window(
+            config.moving_window_size, num_frames=len(heatmaps),
+            heatmap_dates=heatmap_dates)
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
     n_steps = len(groupxs)
@@ -1024,6 +1029,8 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
     h_init = heatmaps[xs_init]
     t_init = heatmap_unixtime_intervals[xs_init]
 
+    print(f'n_steps={n_steps}')
+    print('!!!!')
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     # prog.begin()
     with prog:
@@ -1038,8 +1045,10 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
             for step_idx in range(1, n_steps):
                 idxs = groupxs[step_idx]
                 prog.step()
+                prog.ensure_newline()
                 h1 = heatmaps[idxs]
                 t1 = heatmap_unixtime_intervals[idxs]
+                print(h1.sum())
 
                 p1 = _process_1_step(h1, _agg_fn, track_bounds, step_idx, config)
                 t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
@@ -1055,7 +1064,7 @@ def heatmaps_to_polys_new(heatmaps, track_bounds, heatmap_dates=None, config=Non
     return polys_final
 
 
-def heatmaps_to_polys_orig(heatmaps, track_bounds, heatmap_dates=None, config=None):
+def heatmaps_to_polys_old(heatmaps, track_bounds, heatmap_dates=None, config=None):
     """
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     """
@@ -1129,6 +1138,8 @@ def heatmaps_to_polys_orig(heatmaps, track_bounds, heatmap_dates=None, config=No
     h_init = heatmaps[:final_size]
     t_init = image_unixtimeframes[:final_size]
 
+    print(f'n_steps={n_steps}')
+    print('!!!!')
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
         step = 0
@@ -1141,8 +1152,10 @@ def heatmaps_to_polys_orig(heatmaps, track_bounds, heatmap_dates=None, config=No
 
             for step in range(1, n_steps):
                 prog.step()
+                prog.ensure_newline()
                 h1 = heatmaps[step * final_size:(step + 1) * final_size]
                 t1 = image_unixtimeframes[step * final_size:(step + 1) * final_size]
+                print(h1.sum())
 
                 p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
                 t1 = [[t1[0][0], t1[-1][1]]] * len(p1)
@@ -1158,7 +1171,7 @@ def heatmaps_to_polys_orig(heatmaps, track_bounds, heatmap_dates=None, config=No
     return polys_final
 
 
-heatmaps_to_polys = heatmaps_to_polys_orig
+heatmaps_to_polys = heatmaps_to_polys_new
 
 
 def _compute_time_window(window, num_frames=None, heatmap_dates=None):
