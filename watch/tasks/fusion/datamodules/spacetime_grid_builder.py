@@ -406,7 +406,7 @@ def sample_video_spacetime_targets(dset,
         selected_vidid_per_gid = dset.images(selected_gids).lookup('video_id', default=None)
         selected_vidid_to_gids = ub.group_items(selected_gids, selected_vidid_per_gid)
 
-        loose_gids = selected_vidid_to_gids.pop(None)
+        loose_gids = selected_vidid_to_gids.pop(None, [])
 
         # Hack: pretend loose images are videos of length 1
         for gid in loose_gids:

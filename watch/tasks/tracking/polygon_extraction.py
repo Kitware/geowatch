@@ -132,9 +132,9 @@ class PolygonExtractor:
         import rich
         raw_heatmap = self.heatmap_thwc
 
-        SHOW = 0
+        SHOW = 1
 
-        scale_factor = 2
+        scale_factor = 4
         _t, _h, _w, _c = self.heatmap_thwc.shape
 
         if self.bounds is not None:
@@ -770,17 +770,25 @@ def impute_nans(data):
 
     data = np.random.rand(5, 3, 3, 2)
     data[data < 0.1] = np.nan
-    data[:] = np.nan
     '''
     from scipy.interpolate import NearestNDInterpolator
     import numpy as np
     mask = np.isfinite(data)
     valid_points = np.stack(np.where(mask), axis=1)
-    valid_data = data[mask].ravel()
-    # TODO: just do interpolation on the time-axis.
-    f_nearest = NearestNDInterpolator(valid_points, valid_data)
     invalid_points = np.stack(np.where(~mask), axis=1)
-    fill_data = f_nearest(invalid_points)
+
+    t, h, w, c = data.shape
+
+    valid_data = data[mask].ravel()
+
+    # Hack: scale space to force interpolation over time first space second,
+    # and channel last. Ideally we would never interpolate over space or
+    # channel, but not sure how to do that atm. Is there a way to only fill in
+    # values over the time axis?
+    multiplier = np.array([1 / t, 10 * t, 10 * t, t * w * h * 10])[None, :]
+    f_nearest = NearestNDInterpolator(valid_points * multiplier, valid_data)
+    fill_data = f_nearest(invalid_points * multiplier)
+
     new_data = data.copy()
     new_data[tuple(invalid_points.T)] = fill_data
     return new_data
@@ -1423,7 +1431,8 @@ def real_data_demo_case_1_fixed():
                                 # 'leotta_threah': 0.2,
                             })
 
-    label_img = self.predict()
+    # label_img = self.predict()
+    label_img = self.predict_crall()
     # label_img = self.predict_leotta()
 
     canvas = util_kwimage.colorize_label_image(label_img)
