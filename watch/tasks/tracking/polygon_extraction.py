@@ -780,16 +780,19 @@ def impute_nans(data):
     mask = np.isfinite(data)
     valid_points = np.stack(np.where(mask), axis=1)
     invalid_points = np.stack(np.where(~mask), axis=1)
-
-    t, h, w, c = data.shape
-
     valid_data = data[mask].ravel()
 
-    # Hack: scale space to force interpolation over time first space second,
-    # and channel last. Ideally we would never interpolate over space or
-    # channel, but not sure how to do that atm. Is there a way to only fill in
-    # values over the time axis?
-    multiplier = np.array([1 / t, 10 * t, 10 * t, t * w * h * 10])[None, :]
+    if len(data.shape) == 4:
+        t, h, w, c = data.shape
+        # Hack: scale space to force interpolation over time first space second,
+        # and channel last. Ideally we would never interpolate over space or
+        # channel, but not sure how to do that atm. Is there a way to only fill in
+        # values over the time axis?
+        multiplier = np.array([1 / t, 10 * t, 10 * t, t * w * h * 10])[None, :]
+    elif len(data.shape) == 3:
+        t, h, w = data.shape
+        multiplier = np.array([1 / t, 10 * t, 10 * t])[None, :]
+
     f_nearest = NearestNDInterpolator(valid_points * multiplier, valid_data)
     fill_data = f_nearest(invalid_points * multiplier)
 
