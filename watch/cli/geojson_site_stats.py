@@ -250,6 +250,7 @@ def gdf_site_overlaps(summary_utm):
     import kwutil
     from watch.utils import util_gis
     import numpy as np
+    import rich
     import pandas as pd
     overlap_rows = []
     idx_to_idxs = util_gis.geopandas_pairwise_overlaps(summary_utm, summary_utm)
@@ -299,20 +300,22 @@ def gdf_site_overlaps(summary_utm):
                     'time_io2': isect_delta / delta2,
                 })
     overlaps = pd.DataFrame(overlap_rows)
-    piv = overlaps.pivot(index='site_id1', columns='site_id2', values=['space_iou', 'time_iou'])
-    piv = piv.fillna(0)
+    if len(overlaps):
+        piv = overlaps.pivot(index='site_id1', columns='site_id2', values=['space_iou', 'time_iou'])
+        piv = piv.fillna(0)
 
-    # piv.sort_values('space_iou')
-    # piv = piv.loc[piv.sum(axis=1).argsort().index[::-1]]
-    # piv = piv[piv.sum(axis=1).sort_values().index[::-1]]
-    site_order = piv['space_iou'].sum(axis=0).sort_values().index[::-1]
-    piv = piv.loc[site_order]
-    piv = piv.swaplevel(axis=1)[site_order]
-    piv = piv[site_order]
+        # piv.sort_values('space_iou')
+        # piv = piv.loc[piv.sum(axis=1).argsort().index[::-1]]
+        # piv = piv[piv.sum(axis=1).sort_values().index[::-1]]
+        site_order = piv['space_iou'].sum(axis=0).sort_values().index[::-1]
+        piv = piv.loc[site_order]
+        piv = piv.swaplevel(axis=1)[site_order]
+        piv = piv[site_order]
 
-    import rich
-    piv[piv == 0] = '-'
-    rich.print(piv)
+        piv[piv == 0] = '-'
+        rich.print(piv)
+    else:
+        rich.print('[green]no overlaps')
 
 
 def viz_site_stats(unique_region_ids, region_to_obs_accum, region_to_site_accum, viz_dpath):
