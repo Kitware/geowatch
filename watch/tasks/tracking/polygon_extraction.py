@@ -132,13 +132,15 @@ class PolygonExtractor:
         import rich
         raw_heatmap = self.heatmap_thwc
 
-        SHOW = 1
+        SHOW = 0
 
         scale_factor = 4
         _t, _h, _w, _c = self.heatmap_thwc.shape
 
         if self.bounds is not None:
             mask = self.bounds.to_mask(dims=(_h, _w)).data
+        else:
+            mask = None
 
         def PRINT_STEP(msg, _n=[1]):
             import rich
@@ -343,6 +345,8 @@ class PolygonExtractor:
 
         if self.bounds is not None:
             mask = self.bounds.to_mask(dims=(_h, _w)).data
+        else:
+            mask = None
 
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
@@ -363,7 +367,7 @@ class PolygonExtractor:
         else:
             masked = imputed
 
-        SMART_HACK = 1
+        SMART_HACK = 0
         if SMART_HACK:
             # from skimage.segmentation import watershed
             # from skimage.feature import peak_local_max
@@ -985,7 +989,7 @@ class TimeInterval(portion.Interval):
         import kwutil
         if isinstance(data, TimeInterval):
             self = data
-        elif isinstance(data, str):
+        elif isinstance(data, (str, kwutil.util_time.datetime_cls, float, int)):
             start = kwutil.util_time.datetime.coerce(data)
             stop = start
             self = TimeInterval.closed(start, stop)

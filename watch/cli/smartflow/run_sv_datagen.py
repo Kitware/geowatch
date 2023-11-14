@@ -82,7 +82,7 @@ class SVDatasetConfig(scfg.DataConfig):
 def main():
     config = SVDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_generate_sv_cropped_kwcoco(**config)
+    run_generate_sv_cropped_kwcoco(config)
 
 
 def run_generate_sv_cropped_kwcoco(config):

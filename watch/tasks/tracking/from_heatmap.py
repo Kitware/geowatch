@@ -451,6 +451,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
     #
     import kwimage
     import geopandas as gpd
+    import rich
     config = TimeAggregatedPolysConfig(**kwargs)
     config.key, config.bg_key = _validate_keys(config.key, config.bg_key)
 
@@ -495,7 +496,6 @@ def time_aggregated_polys(sub_dset, **kwargs):
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
 
-    import rich
     if len(gids_polys):
         rich.print('[green] time aggregation: number of polygons: ', len(gids_polys))
     else:
@@ -1132,7 +1132,7 @@ def _gids_polys(sub_dset, **kwargs):
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=True, geodata=True, heatmap=True)
         >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
-        >>> key = 'salient'
+        >>> key = ['salient']
         >>> agg_fn = 'probs'
         >>> thresh = 0.001
         >>> morph_kernel = 3
@@ -1141,9 +1141,7 @@ def _gids_polys(sub_dset, **kwargs):
         >>> resolution = None
         >>> outer_window_size = None
         >>> inner_window_size = '1year'
-        >>> results = list(_gids_polys(
-        >>>     sub_dset,
-        >>>     key=key,
+        >>> kwargs = dict(key=key,
         >>>     agg_fn=agg_fn,
         >>>     thresh=thresh,
         >>>     morph_kernel=morph_kernel,
@@ -1151,8 +1149,8 @@ def _gids_polys(sub_dset, **kwargs):
         >>>     norm_ord=norm_ord,
         >>>     resolution=resolution,
         >>>     outer_window_size=outer_window_size,
-        >>>     use_boundaries=None,
-        >>> ))
+        >>>     use_boundaries=None)
+        >>> results = list(_gids_polys(sub_dset, **kwargs))
 
     Returns:
         Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
@@ -1182,17 +1180,18 @@ def _gids_polys(sub_dset, **kwargs):
                    for d in images.lookup('date_captured')]
     # image_years = [d.year for d in image_dates]
 
-    key = '|'.join(config.key)
+    channels_list = config.key
+    channels = '|'.join(config.key)
     coco_images = sub_dset.images(gids).coco_images
 
     load_workers = 0  # TODO: configure
     load_jobs = ub.JobPool(mode='process', max_workers=load_workers)
 
-    print(f'Reading heatmaps with: key={key}')
+    print(f'Reading heatmaps with: channels={channels}')
 
     with load_jobs:
         for coco_img in ub.ProgIter(coco_images, desc='submit heatmap jobs'):
-            delayed = coco_img.imdelay(channels=key, space='video', resolution=config.resolution)
+            delayed = coco_img.imdelay(channels=channels, space='video', resolution=config.resolution)
             load_jobs.submit(delayed.finalize)
 
         _heatmaps = []
@@ -1200,9 +1199,21 @@ def _gids_polys(sub_dset, **kwargs):
             _heatmap = job.result()
             _heatmaps.append(_heatmap)
 
-    _heatmaps = np.stack(_heatmaps, axis=0)
-    print(f'(presum) _heatmaps.shape={_heatmaps.shape}')
-    _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
+    _heatmaps_thwc = np.stack(_heatmaps, axis=0)
+
+    import xdev
+    xdev.embed()
+    if 0:
+        from watch.tasks.tracking import polygon_extraction
+        extractor = polygon_extraction.PolygonExtractor(
+            _heatmaps_thwc,
+            heatmap_time_intervals=image_dates,
+            bounds=None, classes=channels_list,
+            config=config.asdict())
+        extractor.predict()
+
+    print(f'(presum) _heatmaps_thwc.shape={_heatmaps_thwc.shape}')
+    _heatmaps = _heatmaps_thwc.sum(axis=-1)  # sum over channels
     print(f'_heatmaps.shape={_heatmaps.shape}')
     missing_ix = np.array([key not in i.channels for i in coco_images])
 
