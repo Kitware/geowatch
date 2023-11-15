@@ -160,6 +160,8 @@ class PolygonExtractor:
         downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
+        else:
+            small_mask = None
         PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
         downscaled = downscaled.copy()
 
@@ -184,36 +186,62 @@ class PolygonExtractor:
 
         if SHOW:
             kwplot.imshow(agg_cube.draw())
-        cube1 = agg_cube.take_channels('ac_salient')
+
+        if 'ac_salient' in self.classes:
+            cube1 = agg_cube.take_channels('ac_salient')
+        else:
+            cube1 = agg_cube.take_channels('salient')
+
         # cube2 = agg_cube.take_channels('No Activity')
-        cube3 = agg_cube.take_channels('Site Preparation')
-        cube4 = agg_cube.take_channels('Active Construction')
+        if 'Site Preparation' in self.classes:
+            cube3 = agg_cube.take_channels('Site Preparation')
+        else:
+            cube3 = None
+
+        if 'Active Construction' in self.classes:
+            cube4 = agg_cube.take_channels('Active Construction')
+        else:
+            cube4 = None
+
+        if 1:
+            # hack for old model
+            if cube4 is not None:
+                mask = (cube1.heatmap_thwc == 0)
+                cube1.heatmap_thwc[mask] = cube4.heatmap_thwc[mask]
         # cube5 = agg_cube.take_channels('Post Construction')
 
+        if cube4 is None:
+            cube8 = cube1
+        else:
+            cube8 = cube4 * cube1
         # cube6 = cube2 * cube1
-        cube7 = cube3 * cube1
-        cube8 = cube4 * cube1
+        # cube7 = cube3 * cube1
         # cube9 = cube5 * cube1
 
         PRINT_STEP('Morphology')
         # cube1.heatmap_thwc = ndimage.grey_closing(cube1.heatmap_thwc, (3, 5, 5, 1))
         # cube1.heatmap_thwc = ndimage.grey_opening(cube1.heatmap_thwc, (3, 5, 5, 1))
-        cube4.heatmap_thwc = ndimage.grey_closing(cube4.heatmap_thwc, (3, 5, 5, 1))
-        cube4.heatmap_thwc = ndimage.grey_opening(cube4.heatmap_thwc, (3, 5, 5, 1))
+        if cube4 is not None:
+            cube4.heatmap_thwc = ndimage.grey_closing(cube4.heatmap_thwc, (3, 5, 5, 1))
+            cube4.heatmap_thwc = ndimage.grey_opening(cube4.heatmap_thwc, (3, 5, 5, 1))
 
         # Spatial dilation
         cube1.heatmap_thwc = ndimage.grey_dilation(cube1.heatmap_thwc, (1, 5, 5, 1))
-        cube4.heatmap_thwc = ndimage.grey_dilation(cube4.heatmap_thwc, (1, 5, 5, 1))
+
+        if cube4 is not None:
+            cube4.heatmap_thwc = ndimage.grey_dilation(cube4.heatmap_thwc, (1, 5, 5, 1))
         # cube8.heatmap_thwc = ndimage.grey_closing(cube8.heatmap_thwc, (3, 5, 5, 1))
         # cube8.heatmap_thwc = ndimage.grey_opening(cube8.heatmap_thwc, (3, 5, 5, 1))
 
         # cube2.heatmap_thwc = (cube2.heatmap_thwc > thresh).astype(np.float32)
-        cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
-        cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
+        if cube3 is not None:
+            cube3.heatmap_thwc = (cube3.heatmap_thwc > thresh).astype(np.float32)
+        if cube4 is not None:
+            cube4.heatmap_thwc = (cube4.heatmap_thwc > thresh).astype(np.float32)
         # cube5.heatmap_thwc = (cube5.heatmap_thwc > thresh).astype(np.float32)
 
         # cube6.heatmap_thwc = (cube6.heatmap_thwc > thresh).astype(np.float32)
-        cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
+        # cube7.heatmap_thwc = (cube7.heatmap_thwc > thresh).astype(np.float32)
         cube8.heatmap_thwc = (cube8.heatmap_thwc > thresh).astype(np.float32)
         # cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
 
@@ -226,12 +254,15 @@ class PolygonExtractor:
             # kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
 
             # kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
-            kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
+            # kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
             kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
             # kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
 
         PRINT_STEP('Max Saliency')
         max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
+        import kwarray
+        max_saliency_stats = kwarray.stats_dict(max_saliency)
+        print('max_saliency_stats = {}'.format(ub.urepr(max_saliency_stats, nl=1)))
 
         PRINT_STEP('Volume Labeling')
         vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
@@ -248,7 +279,8 @@ class PolygonExtractor:
             kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}))
         unique_labels = np.setdiff1d(np.unique(labels1), [0])
 
-        self._intermediates['small_bounds'] = self.bounds.scale(1 / scale_factor)
+        if self.bounds is not None:
+            self._intermediates['small_bounds'] = self.bounds.scale(1 / scale_factor)
 
         if SHOW:
             kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=3)

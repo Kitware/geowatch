@@ -82,7 +82,7 @@ class TrackFunction:
                 if collisions:
                     old_tid_to_aids = ub.group_items(sub_annots, sub_tids)
                     assert len(old_tid_to_aids) == len(existing_tids)
-                    print(f'Resolve {len(collisions)} track collisions')
+                    print(f'Resolve {len(collisions)} track-id collisions')
                     # Change the track ids of any collisions
                     for old_tid in collisions:
                         new_tid = next(new_trackids)

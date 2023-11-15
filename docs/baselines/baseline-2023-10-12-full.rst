@@ -136,9 +136,12 @@ Currrently WIP, might not be totally right yet. Help wanted.
 
             sc_poly.thresh:
                 - 0.07
-            sc_poly.boundaries_as: polys
+            sc_poly.boundaries_as:
+                - polys
+                - bounds
             sc_poly.resolution: 8GSD
             sc_poly.min_area_square_meters: 7200
+            sc_poly.new_algo: crall
 
             #############################
             ## AC/SC POLY EVAL PARAMS  ##
@@ -166,5 +169,5 @@ Currrently WIP, might not be totally right yet. Help wanted.
         --devices="0," --tmux_workers=4 \
         --backend=tmux --queue_name "_baseline_2023-10-12_full_pipeline" \
         --skip_existing=1 \
-        --run=1
+        --run=0
 
