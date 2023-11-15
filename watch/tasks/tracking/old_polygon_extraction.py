@@ -36,17 +36,23 @@ class PolygonExtractConfig(scfg.DataConfig):
         '''
         The aggregation method to preprocess heatmaps.
         See ``AGG_FN_REGISTRY`` for available options.
+        (3d heatmaps -> 2d heatmaps), calling convention TBD
         '''), alias=['outer_agg_fn'])
 
     thresh = scfg.Value(0.0, help=ub.paragraph(
         '''
         The threshold for polygon extraction from heatmaps.
         E.g. this threshold binarizes the heatmaps.
+
+        For each frame, if sum of foreground heatmaps > thresh,
+            class is max(foreground keys).
+            else, class is max(background keys).
         '''))
 
     morph_kernel = scfg.Value(3, help=ub.paragraph(
         '''
         Morphology kernel for preprocessing the heatmaps with dilation.
+        Height/width in px of close or dilate kernel
         '''))
 
     thresh_hysteresis = scfg.Value(None, help=ub.paragraph(
@@ -60,6 +66,12 @@ class PolygonExtractConfig(scfg.DataConfig):
         The generalized mean order used to average heatmaps over the
         "outer_window_size". A value of 1 is the normal mean. A value of inf
         is the max function. Note: this is effectively an outer_agg_fn.
+
+        order of norm to aggregate heatmap pixels across time.
+        1: average [default]
+        2: euclidean
+        0: sum
+        np.inf, 'inf', or None: max
         '''))
 
     # TODO: rename to outer_window_size
@@ -723,10 +735,3 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
         raise ValueError(poly_merge_method)
 
     return merged_polys, merged_times
-
-#
-# --- wrappers ---
-#
-# Note:
-#     The following are valid choices of `track_fn` in
-#     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py

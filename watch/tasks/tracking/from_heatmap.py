@@ -383,29 +383,9 @@ def time_aggregated_polys(sub_dset, **kwargs):
     Args:
         sub_dset (kwcoco.CocoDataset): a kwcoco dataset with exactly 1 video
 
-        **kwargs: see TimeAggregatedPolysConfig
-
-        key (String | List[String]): foreground key(s).
-
-        bg_key (String | List[String] | None): background key(s).
-            If None, background heatmaps become 1 - sum(foreground keys)
-
-        thresh (float): For each frame, if sum of foreground heatmaps > thresh,
-            class is max(foreground keys).
-            else, class is max(background keys).
-
-        morph_kernel (int): height/width in px of close or dilate kernel
-
-        norm_ord: order of norm to aggregate heatmap pixels across time.
-            1: average [default]
-            2: euclidean
-            0: sum
-            np.inf, 'inf', or None: max
-
-        agg_fn: (3d heatmaps -> 2d heatmaps), calling convention TBD
-
-        resolution (str | None):
-            A resolution in units understood by kwcoco. E.g. "10GSD"
+        **kwargs:
+            see :class:`TimeAggregatedPolysConfig` and
+            :class:`PolygonExtractConfig`.
 
     Ignore:
         # For debugging
@@ -540,14 +520,29 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
     polys = [p.to_shapely() for p in polys]
 
-    _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
-
+    # At this point each row corresponds to a single track and the each gid
+    # cell contains a list of image ids.
+    _TRACKS_COMPACT = gpd.GeoDataFrame({'gid': gids, 'poly': polys}, geometry='poly')
     if config.polygon_simplify_tolerance is not None:
-        _TRACKS['poly'] = _TRACKS['poly'].simplify(tolerance=config.polygon_simplify_tolerance)
+        _TRACKS_COMPACT['poly'] = _TRACKS_COMPACT['poly'].simplify(tolerance=config.polygon_simplify_tolerance)
+    _TRACKS_COMPACT = _TRACKS_COMPACT.reset_index(names='track_idx')
 
-    # _TRACKS['track_idx'] = range(len(_TRACKS))
-    _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
-    _TRACKS = _TRACKS.explode('gid')
+    # Explode takes each row with multiple gids and expands it creating a new
+    # row for each item in the exploeded column. That means we go from a
+    # dataframe that looks like:
+    # [
+    #   {'gid': [1, 2, 3], 'track_idx': 0, 'poly': POLY1},
+    #   {'gid': [5, 7], 'track_idx': 1, 'poly': POLY2},
+    # ]
+    # TO:
+    # [
+    #   {'gid': 1, 'track_idx': 0, 'poly': POLY1},
+    #   {'gid': 2, 'track_idx': 0, 'poly': POLY1},
+    #   {'gid': 3, 'track_idx': 0, 'poly': POLY1},
+    #   {'gid': 5, 'track_idx': 1, 'poly': POLY2},
+    #   {'gid': 7, 'track_idx': 1, 'poly': POLY2},
+    # ]
+    _TRACKS = _TRACKS_COMPACT.explode('gid')
 
     # ensure index is sorted in video order
     sorted_gids = sub_dset.images(vidid=video['id']).gids
@@ -574,13 +569,12 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # USE_DASK = True
     USE_DASK = False
     print('Begin compute track scores:')
-    print(_TRACKS)
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
                                  USE_DASK=USE_DASK,
                                  resolution=config.resolution)
 
-    print('Finished computing track scores:')
-    print(_TRACKS)
+    rich.print('[green]Finished computing track scores:')
+    rich.print(_TRACKS)
     if _TRACKS.empty:
         return _TRACKS
 
@@ -620,8 +614,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # TODO: do we need to convert to MultiPolygon here? Or can that be handled
     # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
-    print('Returning Tracks')
-    print(_TRACKS)
+    rich.print('[green]Returning Tracks')
+    rich.print(_TRACKS)
     return _TRACKS
 
 
@@ -674,9 +668,11 @@ def _determine_tracking_scale(config, sub_dset, video_gids, video):
 
 
 #
-# --- time_aggregated_polys utilities ---
+# --- wrappers ---
 #
-
+# Note:
+#     The following are valid choices of `track_fn` in
+#     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
 
 class TimeAggregatedPolysConfig(PolygonExtractConfig):
     """
@@ -692,6 +688,9 @@ class TimeAggregatedPolysConfig(PolygonExtractConfig):
     bg_key = scfg.Value(None, help=ub.paragraph(
         '''
         Zero or more channels to use as the negative class for polygon scoring.
+
+        bg_key (String | List[String] | None): background key(s).
+            If None, background heatmaps become 1 - sum(foreground keys)
         '''))
 
     time_split_thresh = scfg.Value(None, help=ub.paragraph(
