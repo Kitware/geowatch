@@ -35,7 +35,7 @@ class PolygonExtractConfig(scfg.DataConfig):
     agg_fn = scfg.Value('probs', help=ub.paragraph(
         '''
         The aggregation method to preprocess heatmaps.
-        See ``AGG_FN_REGISTRY`` for available options.
+        See ``agg_functions.AGG_FN_REGISTRY`` for available options.
         (3d heatmaps -> 2d heatmaps), calling convention TBD
         '''), alias=['outer_agg_fn'])
 
@@ -57,7 +57,7 @@ class PolygonExtractConfig(scfg.DataConfig):
 
     thresh_hysteresis = scfg.Value(None, help=ub.paragraph(
         '''
-        I dont remember. Help wanted to document this
+        I dont remember. Help wanted to document this, or remove it.
         '''))
 
     # TODO: Consolidate into agg_fn
@@ -206,7 +206,7 @@ def _gids_polys(sub_dset, **kwargs):
     _heatmaps_thwc = np.stack(_heatmaps, axis=0)
 
     if config.new_algo is not None:
-        # Hack in new algo
+        # HACK in new algo
         import kwimage
         if config.use_boundaries:
             raw_boundary_tracks = score_track_polys(

@@ -342,7 +342,6 @@ def score_track_polys(coco_dset,
 
 
 def _build_annot_gdf(coco_dset, aids=None, cnames=None, resolution=None):
-    # TODO could refactor to work on coco_dset.annots() and integrate
     import geopandas as gpd
     import numpy as np
 

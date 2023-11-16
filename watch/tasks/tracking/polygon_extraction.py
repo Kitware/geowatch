@@ -80,6 +80,7 @@ class PolygonExtractor:
             'positional_encoding_scale': 1.0,
             'scale_factor': 'auto',
             'thresh': 0.3,
+            'viz_out_dir': None,
         }
         if config is None:
             config = {}

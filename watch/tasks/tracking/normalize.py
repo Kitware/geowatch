@@ -650,6 +650,8 @@ def run_tracking_pipeline(
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     """
+    import rich
+    rich.print('[cyan]--- run_tracking_pipeline ---')
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
@@ -695,7 +697,6 @@ def run_tracking_pipeline(
     tracker: TrackFunction = track_fn(**track_kwargs)
     print('track_kwargs = {}'.format(ub.urepr(track_kwargs, nl=1)))
     # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
-    import rich
     rich.print(ub.urepr(tracker))
     # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)

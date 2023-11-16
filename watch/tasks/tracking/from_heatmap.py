@@ -580,6 +580,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # USE_DASK = True
     USE_DASK = False
     print('Begin compute track scores:')
+    # Note: this is the function also called by
+    # :func:`score_track_polys`
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
                                  USE_DASK=USE_DASK,
                                  resolution=config.resolution)
@@ -864,7 +866,7 @@ class TimeAggregatedSC(TrackFnWithSV):
         else:
             # Need to extract and score
             aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
-            aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
+            aggkw['use_boundaries'] = self.get('boundaries_as', 'none') != 'none'
             tracks = time_aggregated_polys(sub_dset, **aggkw)
         print('Tracks:')
         print(tracks)
