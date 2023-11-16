@@ -562,6 +562,17 @@ def time_aggregated_polys(sub_dset, **kwargs):
     #####
     thrs = list(thrs)
 
+    """
+    Cases:
+        For BAS:
+            ks = {'fg': ['salient'], 'bg': []}
+
+        For AC:
+            {'fg': ['Site Preparation', 'Active Construction', 'Post Construction', 'No Activity', 'ac_salient'],
+             'bg': ['No Activity']}
+
+    """
+
     ks = {'fg': config.key, 'bg': config.bg_key}
 
     # TODO dask gives different results on polys that overlap nodata area, need

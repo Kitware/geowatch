@@ -62,7 +62,9 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
     TODO: This needs docs and examples for the BAS and SC/AC cases.
 
     Args:
-        gdf (gdf.GeoDataFrame): input data frame
+        gdf (gdf.GeoDataFrame):
+            input data frame tracks dataframe containing
+            track_idx, gid, and poly columns.
 
         sub_dset (kwcoco.CocoDataset):
             dataset with reference to images

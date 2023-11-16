@@ -378,6 +378,8 @@ def main(cmdline=True, **kwargs):
     # split sites by region
     out_dirs = []
     grouped_sites = ub.group_items(pred_sites, lambda site: site['features'][0]['properties']['region_id'])
+    import xdev
+    xdev.embed()
 
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()

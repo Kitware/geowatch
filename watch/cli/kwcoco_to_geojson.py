@@ -203,6 +203,9 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
 
     sensor_warnings = scfg.Value(True, help='if False, disable sensor warnings')
 
+    time_pad_before = scfg.Value(None, help='A time delta to extend start times')
+    time_pad_after = scfg.Value(None, help='A time delta to extend end times')
+
     #### New Eval 16 params
 
     smoothing = scfg.Value(None, help=ub.paragraph(
@@ -685,6 +688,15 @@ def classify_site(site, config):
             status = 'system_rejected'
             site_header['properties']['cache']['reject_reason'] = 'failed_site_score_thresh'
 
+    # Hack to modify time bounds
+    import kwutil
+    if config.time_pad_before is not None:
+        delta_before = kwutil.util_time.timedelta.coerce(config.time_pad_before)
+        start_date = (kwutil.util_time.datetime.coerce(start_date) - delta_before).date().isoformat()
+    if config.time_pad_after is not None:
+        delta_after = kwutil.util_time.timedelta.coerce(config.time_pad_after)
+        end_date = (kwutil.util_time.datetime.coerce(end_date) + delta_after).date().isoformat()
+
     site_header['properties'].update({
         'score': site_score,
         'status': status,
@@ -801,14 +813,23 @@ def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
         >>>             json.dump(site, open(f.name, 'w'))
         >>>             SiteStack(f.name)
     """
+    import itertools as it
+    counter = it.count()
     sites = []
     for vidid, video in coco_dset.index.videos.items():
         region_id = video.get('name', default_region_id)
         gids = coco_dset.index.vidid_to_gids[vidid]
-        sub_dset = coco_dset.subset(gids=gids)
+        region_annots = coco_dset.images(gids).annots
+        region_track_ids = sorted(set(ub.flatten(region_annots.lookup('track_id'))))
 
-        for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-            site = coco_track_to_site(sub_dset, trackid, region_id, site_idx)
+        # SUPER HACK:
+        # There isn't a good mechanism to get the region id,
+        # This is fragile, but currently works. Need better mechanism.
+        if '_CLUSTER' in region_id:
+            region_id = region_id.split('_CLUSTER')[0]
+
+        for site_idx, trackid in zip(counter, region_track_ids):
+            site = coco_track_to_site(coco_dset, trackid, region_id, site_idx)
             sites.append(site)
 
     return sites
@@ -841,8 +862,9 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
             site_idx = trackid
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
     else:
-        site_id = trackid
+        # HACK:
         # TODO make more robust
+        site_id = trackid
         region_id = '_'.join(site_id.split('_')[:2])
 
     site_header = coco_create_site_header(region_id, site_id, trackid, observations)

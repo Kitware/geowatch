@@ -238,7 +238,12 @@ class PolygonPrediction(ProcessNode):
     def command(self):
         fmtkw = self.final_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        external_args = {'site_summary', 'boundary_region', 'site_score_thresh', 'smoothing', 'append_mode'}
+        external_args = {
+            'site_summary', 'boundary_region', 'site_score_thresh',
+            'smoothing', 'append_mode',
+            'time_pad_before',
+            'time_pad_after',
+        }
         track_kwargs = self.final_algo_config.copy() - external_args
         track_kwargs = track_kwargs - {'pred_pxl_fpath'}  # not sure why this is needed
         fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
