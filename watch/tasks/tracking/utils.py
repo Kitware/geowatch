@@ -365,6 +365,7 @@ def _build_annot_gdf(coco_dset, aids=None, cnames=None, resolution=None):
     flat_scales = []
     for image_id, anns in gid_to_anns.items():
         coco_img = coco_dset.coco_image(image_id)
+
         img_polys = coco_img._annot_segmentations(anns, space='video',
                                                   resolution=resolution)
         flat_polys.extend(img_polys)

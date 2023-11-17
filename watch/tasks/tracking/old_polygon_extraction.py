@@ -164,7 +164,8 @@ def _gids_polys(sub_dset, **kwargs):
     config = PolygonExtractConfig(**kwargs)
 
     if config.use_boundaries:  # for SC
-        raw_boundary_tracks = score_track_polys(sub_dset, [SITE_SUMMARY_CNAME])
+        raw_boundary_tracks = score_track_polys(sub_dset, [SITE_SUMMARY_CNAME],
+                                                resolution=config.resolution)
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
         gids = raw_boundary_tracks['gid'].unique()
         print('generating polys in bounds: number of bounds: ',
@@ -209,14 +210,16 @@ def _gids_polys(sub_dset, **kwargs):
         # HACK in new algo
         import kwimage
         if config.use_boundaries:
-            raw_boundary_tracks = score_track_polys(
-                sub_dset, [SITE_SUMMARY_CNAME],
-                resolution=config.resolution)
-            assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
-            bounds = kwimage.MultiPolygon.from_shapely(raw_boundary_tracks.unary_union)
+            # HACK TO LOAD BOUNDS FOR POLYGONS
+            from watch.tasks.tracking.utils import _build_annot_gdf
+            cnames = [SITE_SUMMARY_CNAME]
+            resolution = config.resolution
+            gdf, flat_scales = _build_annot_gdf(sub_dset, cnames=cnames, resolution=resolution)
+            assert len(gdf) > 0, 'need valid site boundaries!'
+            union_poly = gdf.unary_union
+            bounds = kwimage.MultiPolygon.from_shapely(union_poly)
         else:
             bounds = None
-        print('bounds = {}'.format(ub.urepr(bounds, nl=1)))
 
         from watch.tasks.tracking import polygon_extraction
         import kwcoco
@@ -230,6 +233,7 @@ def _gids_polys(sub_dset, **kwargs):
                 'scale_factor': 1,
                 'thresh': config.thresh,
                 'algo': config.new_algo,
+                'viz_out_dir': config.viz_out_dir,
             })
         polygons = extractor.predict_polygons()
 

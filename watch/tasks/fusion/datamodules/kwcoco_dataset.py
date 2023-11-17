@@ -4,6 +4,12 @@ Defines a torch Dataset for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
+# import liberator
+# lib = liberator.Liberator()
+# lib.add_dynamic(KWCocoVideoDataset)
+# lib.expand(['watch'])
+# print(lib.current_sourcecode())
+
 
 For notes on Spaces, see
     ~/code/watch/docs/coding_conventions.rst

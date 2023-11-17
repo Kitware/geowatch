@@ -276,6 +276,7 @@ def run_bas_fusion_for_baseline(config):
     min_area_square_meters = bas_tracking_config.get('min_area_square_meters', None)
     time_pad_after = bas_tracking_config.pop('time_pad_after', None)
     time_pad_before = bas_tracking_config.pop('time_pad_before', None)
+    # TODO: use smart_pipeline.BAS_PolygonPrediction
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
     ub.cmd([
