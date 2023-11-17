@@ -274,7 +274,8 @@ def run_bas_fusion_for_baseline(config):
                            | Yaml.coerce(config.bas_poly_config or {}))
 
     min_area_square_meters = bas_tracking_config.get('min_area_square_meters', None)
-
+    time_pad_after = bas_tracking_config.pop('time_pad_after', None)
+    time_pad_before = bas_tracking_config.pop('time_pad_before', None)
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
     ub.cmd([
@@ -283,11 +284,12 @@ def run_bas_fusion_for_baseline(config):
         '--out_sites_dir', bas_site_models_outdir,
         '--out_sites_fpath', site_models_manifest_outpath,
         '--out_site_summaries_dir', bas_region_models_outdir,
-        '--out_site_summaries_fpath',
-        region_models_manifest_outpath,
+        '--out_site_summaries_fpath', region_models_manifest_outpath,
         '--out_kwcoco', tracked_bas_kwcoco_path,
         '--default_track_fn', 'saliency_heatmaps',
         '--append_mode', 'True',
+        '--time_pad_after', str(time_pad_after),
+        '--time_pad_before', str(time_pad_before),
         # TODO:
         # use boundary_region here?
         '--track_kwargs', json.dumps(bas_tracking_config)],

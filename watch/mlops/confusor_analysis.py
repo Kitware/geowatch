@@ -1739,10 +1739,28 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             tostack.append(det_true_canvas)
 
         if main_pred_aids:
+            # For some reason this isn't the real "main" prediction.
             is_main_pred = [a in main_pred_aids for a in dets.data['aids']]
             pred_dets = rel_dets.compress(is_main_pred)
             det_pred_canvas = np.ones_like(tci_canvas)
             det_pred_canvas = pred_dets.draw_on(det_pred_canvas, alpha=0.9, color='classes')
+
+            # Highlight the the actual singular main case:
+            if case.get('main_pred_site', None) is not None:
+                actual_main_aid = None
+                annots = coco_dset.annots(dets.data['aids'])
+                for aid, tid in zip(annots, annots.lookup('track_id')):
+                    # FIXME: this will break when tids become integers
+                    if tid.replace('_kit', '') == case['main_pred_site'].site_id:
+                        actual_main_aid = aid
+
+                if actual_main_aid is not None:
+                    is_actual_main_pred = [a == actual_main_aid for a in dets.data['aids']]
+                    actual_main_pred_dets = rel_dets.compress(is_actual_main_pred)
+                    det_pred_canvas = actual_main_pred_dets.data['boxes'].draw_on(det_pred_canvas, alpha=0.9, color='kitware_orange')
+                    det_pred_canvas = kwimage.draw_text_on_image(
+                        det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
+
             det_pred_canvas = kwimage.draw_text_on_image(
                 det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
             tostack.append(det_pred_canvas)
