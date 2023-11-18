@@ -44,6 +44,9 @@ class BatchPlotter(pl.callbacks.Callback):
             view. if False separate annotations / images for a less
             cluttered view.
 
+    FIXME:
+        - [ ] This breaks when using strategy=DDP and multiple gpus
+
     TODO:
         - [ ] Doctest
 
@@ -164,7 +167,9 @@ class BatchPlotter(pl.callbacks.Callback):
                 'Implement draw_batch in your datamodule',
                 org=(1, 1))
         else:
+            stage = trainer.state.stage.value
             canvas = datamodule.draw_batch(batch, outputs=outputs,
+                                           stage=stage,
                                            **self.draw_batch_kwargs)
 
         canvas = np.nan_to_num(canvas)

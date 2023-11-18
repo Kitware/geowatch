@@ -3364,6 +3364,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
 
+            if 0:
+                dset = self.sampler.dset
+                for gid in item['requested_target']['gids']:
+                    assert gid in dset.imgs
+
             annots = self.sampler.dset.annots(frame['ann_aids'])
             cids = annots.lookup('category_id')
             class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
