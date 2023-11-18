@@ -168,6 +168,8 @@ class BatchPlotter(pl.callbacks.Callback):
                 org=(1, 1))
         else:
             stage = trainer.state.stage.value
+            if stage == 'validate':
+                stage = 'vali'
             canvas = datamodule.draw_batch(batch, outputs=outputs,
                                            stage=stage,
                                            **self.draw_batch_kwargs)
