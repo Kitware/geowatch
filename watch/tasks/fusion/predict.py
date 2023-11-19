@@ -2,10 +2,24 @@
 """
 Fusion prediction script.
 
+Given a kwcoco file and a packaged model, run prediction and output a new
+kwcoco file where predicted heatmaps are new raster bands.
+
+This is the module that handles heatmap prediction over a kwcoco file.
+There are SMART-specific parts, but it's mostly general. It makes heavy use of
+:class:`CocoStitchingManager` and :class:`KWCocoVideoDataModule`. The critical
+loop is a simple custom for loop over a dataloader. We currently do not
+integrate with LightningCLI here, but we may want to in the future (it is
+unclear).
+
 TODO:
     - [ ] Prediction caching?
     - [ ] Reduce memory usage?
     - [ ] Pseudo Live.
+    - [ ] Investigate benefits of LightningCLI integration?
+    - [ ] Option to keep annotations and only loop over relevant areas for
+          drawing interesting validation / test batches.
+    - [ ] Optimize for the case where we have an image-only dataset.
 """
 import torch
 import ubelt as ub
