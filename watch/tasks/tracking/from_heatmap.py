@@ -582,9 +582,15 @@ def time_aggregated_polys(sub_dset, **kwargs):
     print('Begin compute track scores:')
     # Note: this is the function also called by
     # :func:`score_track_polys`
+
+    modulate = None
+    if config.modulate_post_construction:
+        modulate['Post Construction'] = config.modulate_post_construction
+
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
                                  USE_DASK=USE_DASK,
-                                 resolution=config.resolution)
+                                 resolution=config.resolution,
+                                 modulate=modulate)
 
     rich.print('[green]Finished computing track scores:')
     rich.print(_TRACKS)
@@ -758,6 +764,11 @@ class TimeAggregatedPolysConfig(PolygonExtractConfig):
         '''
         The pixel size (at the specified heatmap resolution) to use for polygon
         simplification.
+        '''))
+
+    modulate_post_construction = scfg.Value(None, help=ub.paragraph(
+        '''
+        Hacked in POC command to multiply post scores.
         '''))
 
     def __post_init__(self):

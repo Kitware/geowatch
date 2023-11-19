@@ -18,6 +18,8 @@ References:
 
 SeeAlso:
     * ../tasks/tracking/from_heatmap.py
+    * ../tasks/tracking/old_polygon_extraction.py
+    * ../tasks/tracking/polygon_extraction.py
     * ../tasks/tracking/utils.py
     * ../../tests/test_tracker.py
 

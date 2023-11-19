@@ -57,7 +57,7 @@ def gpd_len(gdf):
 
 @profile
 def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
-                       resolution=None):
+                       resolution=None, modulate=None):
     """
     TODO: This needs docs and examples for the BAS and SC/AC cases.
 
@@ -109,7 +109,9 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
     ks = {k: v for k, v in ks.items() if v}
     _valid_keys = list(set().union(itertools.chain.from_iterable(
         ks.values())))  # | ks.keys()
-    score_cols = list(itertools.product(_valid_keys, thrs))
+
+    # score_cols = list(itertools.product(_valid_keys, thrs))
+    score_cols = list(itertools.product(thrs, _valid_keys))
 
     if USE_DASK:  # 63% runtime
         import dask_geopandas
@@ -125,7 +127,7 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
                            keys=_valid_keys,
                            meta=meta,
                            resolution=resolution,
-                           sub_dset=sub_dset)
+                           sub_dset=sub_dset, modulate=modulate)
         # raises this, which is probably fine:
         # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
         # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
@@ -143,7 +145,7 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
         grp.name = grp.iloc[0].gid
         """
         gdf = grouped.apply(_compute_group_scores, thrs=thrs, _valid_keys=_valid_keys,
-                            resolution=resolution, sub_dset=sub_dset)
+                            resolution=resolution, sub_dset=sub_dset, modulate=modulate)
 
     # fill nan scores from nodata pxls
     # groupby track instead of gid
@@ -169,7 +171,8 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
     return scored_gdf
 
 
-def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dset=None):
+def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None,
+                          sub_dset=None, modulate=None):
     """
     Helper for :func:`gpd_compute_scores`.
     """
@@ -207,13 +210,14 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dse
         >>> from watch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
         >>> _valid_keys = ['r', 'g', 'b']
         >>> sub_dset = kwcoco.CocoDataset.demo('vidshapes1')
-        >>> aids = list(coco_dset.images().annots[0])
-        >>> grp, _ = _build_annot_gdf(coco_dset, aids=aids)
+        >>> aids = list(sub_dset.images().annots[0])
+        >>> grp, _ = _build_annot_gdf(sub_dset, aids=aids)
         >>> thrs = [-1, 'mean', 'max', 'min', 'median']
-        >>> gdf2 = _compute_group_scores(grp, thrs=thrs, _valid_keys=_valid_keys, sub_dset=sub_dset)
+        >>> modulate = {'r': 0.0001}
+        >>> gdf2 = _compute_group_scores(grp, thrs=thrs, _valid_keys=_valid_keys, sub_dset=sub_dset, modulate=modulate)
         >>> print(gdf2)
     """
-
+    import numpy as np
     gid = getattr(grp, 'name', None)
     if gid is None:
         if len(grp) > 0:
@@ -228,14 +232,26 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dse
         # Load the channels to score
         channels = kwcoco.FusedChannelSpec.coerce(_valid_keys)
         heatmaps_hwc = img.imdelay(channels, space='video', resolution=resolution).finalize()
-        heatmaps = heatmaps_hwc.transpose(2, 0, 1)
+        heatmaps_chw = heatmaps_hwc.transpose(2, 0, 1)
+        if heatmaps_chw.dtype.kind != 'f':
+            heatmaps_chw = heatmaps_chw.astype(np.float32)
+        heatmaps_chw = np.ascontiguousarray(heatmaps_chw)
+        if modulate is not None:
+            chan_list = channels.to_list()
+            for k, v in modulate.items():
+                idx = chan_list.index(k)
+                assert idx >= 0
+                heatmaps_chw[idx] *= v
 
-        score_cols = list(itertools.product(_valid_keys, thrs))
+        assert isinstance(thrs, list)
+        # score_cols = list(itertools.product(_valid_keys, thrs))
+        score_cols = list(itertools.product(thrs, _valid_keys))
+        print('score_cols = {}'.format(ub.urepr(score_cols, nl=1)))
 
         # Compute scores for each polygon.
         new_scores_rows = []
         for poly in grp['poly']:
-            poly_scores_ = score_poly(poly, heatmaps, threshold=thrs)
+            poly_scores_ = score_poly(poly, heatmaps_chw, threshold=thrs)
             # awk, making this serializable for kwcoco dataset
             poly_scores = list(ub.flatten(poly_scores_))
             col_to_score = dict(zip(score_cols, poly_scores))
@@ -246,7 +262,7 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None, sub_dse
         #     lambda p: pd.Series(dict(zip(
         #         score_cols,
         #         # awk, making this serializable for kwcoco dataset
-        #         list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
+        #         list(ub.flatten(score_poly(p, heatmaps_chw, threshold=thrs)))))
         #     ))
         # grp[score_cols] = scores
     return grp
@@ -477,6 +493,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
             'warning: scoring a polygon against an img with no overlap!')
         zeros = np.zeros(probs.shape[:-2])
         return [zeros] * len(threshold) if _return_list else zeros
+    # sl_y, sl_x = box.to_slice()
     x, y, w, h = box.data
     pixels_are = 'areas' if use_rasterio else 'points'
     # kwimage inverse
