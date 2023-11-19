@@ -654,9 +654,14 @@ class ConfusionAnalysis:
         for row in true_confusion_rows:
             site = id_to_true_site[row['true_site_id']]
             site.header['properties']['cache']['confusion'] = row
+
         for row in pred_confusion_rows:
-            site = id_to_pred_site[row['pred_site_id']]
-            site.header['properties']['cache']['confusion'] = row
+            try:
+                pred_site_id = row['pred_site_id']
+                site = id_to_pred_site[pred_site_id]
+                site.header['properties']['cache']['confusion'] = row
+            except Exception:
+                print('warning: unexpected key error')
 
         # TODO: need to figure out if it was correctly or incorrectly
         # rejected, and what stage rejected it.
