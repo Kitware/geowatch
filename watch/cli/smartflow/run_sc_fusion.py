@@ -252,6 +252,7 @@ def run_sc_fusion_for_baseline(config):
                 'site_summary': ub.Path(input_site_summary_dpath) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
             } | sc_track_kwargs
+            # See: ~/code/watch/watch/mlops/smart_pipeline.py
             sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
             sc_poly.configure(final_sc_poly_config)
             command = sc_poly.command()

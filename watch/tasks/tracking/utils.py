@@ -111,7 +111,7 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
         ks.values())))  # | ks.keys()
 
     # score_cols = list(itertools.product(_valid_keys, thrs))
-    score_cols = list(itertools.product(thrs, _valid_keys))
+    score_cols = [t[::-1] for t in itertools.product(thrs, _valid_keys)]
 
     if USE_DASK:  # 63% runtime
         import dask_geopandas
@@ -245,8 +245,7 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None,
 
         assert isinstance(thrs, list)
         # score_cols = list(itertools.product(_valid_keys, thrs))
-        score_cols = list(itertools.product(thrs, _valid_keys))
-        print('score_cols = {}'.format(ub.urepr(score_cols, nl=1)))
+        score_cols = [t[::-1] for t in itertools.product(thrs, _valid_keys)]
 
         # Compute scores for each polygon.
         new_scores_rows = []

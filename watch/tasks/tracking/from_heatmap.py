@@ -626,12 +626,12 @@ def time_aggregated_polys(sub_dset, **kwargs):
               f'{n_result} / {n_orig}')
 
     # The tracker assumes the polygons will be output in video space.
-    rich.print('[red]!!!!!!!!!')
-    print(f'scale_vid_from_trk={scale_vid_from_trk}')
-    print(f'scale_vid_from_trk={scale_vid_from_trk}')
-    print(f'scale_vid_from_trk={scale_vid_from_trk}')
-    print(f'scale_vid_from_trk={scale_vid_from_trk}')
-    rich.print('[red]!!!!!!!!!')
+    # rich.print('[red]!!!!!!!!!')
+    # print(f'scale_vid_from_trk={scale_vid_from_trk}')
+    # print(f'scale_vid_from_trk={scale_vid_from_trk}')
+    # print(f'scale_vid_from_trk={scale_vid_from_trk}')
+    # print(f'scale_vid_from_trk={scale_vid_from_trk}')
+    # rich.print('[red]!!!!!!!!!')
     if scale_vid_from_trk is not None and len(_TRACKS):
         # If a tracking resolution was specified undo the extra scale factor
         _TRACKS['poly'] = _TRACKS['poly'].scale(*scale_vid_from_trk, origin=(0, 0))
