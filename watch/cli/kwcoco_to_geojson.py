@@ -164,6 +164,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             coco_dset_sc, thresh, key. Any file paths will be loaded as
             CocoDatasets if possible.
 
+            IN THE FUTURE THESE MEMBERS WILL LIKELY BECOME FLAT CONFIG OPTIONS.
+
             Valid params for each track_fn are: {_trackfn_details_docs}
             '''), group='track')
     viz_out_dir = scfg.Value(None, help=ub.paragraph(

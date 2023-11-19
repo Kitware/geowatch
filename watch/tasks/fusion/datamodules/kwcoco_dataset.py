@@ -663,7 +663,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, mode='fit', **kwargs):
+    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
         """
         Args:
             sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
@@ -764,6 +764,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         )
         # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
 
+        grid_kw = common_grid_kw.copy()
+
+        negative_classes = (
+            self.ignore_classes | self.background_classes | self.negative_classes)
+
+        annot_helper_kws = dict(
+            negative_classes=negative_classes,
+            keepbound=False,
+            use_annot_info=True,
+            use_centered_positives=config['use_centered_positives'],
+            use_grid_positives=config['use_grid_positives'],
+            use_grid_negatives=config['use_grid_negatives'],
+        )
+
         if mode == 'custom':
             new_sample_grid = None
             self.length = 1
@@ -771,27 +785,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # FIXME: something is wrong with the cache when using an sqlview.
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
+
+            if test_with_annot_info:
+                grid_kw.update(annot_helper_kws)
+            else:
+                grid_kw.update(dict(
+                    keepbound=True,
+                    use_annot_info=False,
+                ))
+
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset,
-                keepbound=True,
-                use_annot_info=False,
-                **common_grid_kw
+                dset=sampler.dset, **grid_kw
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
         else:
-            negative_classes = (
-                self.ignore_classes | self.background_classes | self.negative_classes)
-
+            grid_kw.update(annot_helper_kws)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset,
-                negative_classes=negative_classes,
-                keepbound=False,
-                use_annot_info=True,
-                use_centered_positives=config['use_centered_positives'],
-                use_grid_positives=config['use_grid_positives'],
-                use_grid_negatives=config['use_grid_negatives'],
-                **common_grid_kw
+                sampler.dset, **grid_kw
             )
             new_sample_grid = builder.build()
 
