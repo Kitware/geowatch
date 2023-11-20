@@ -584,8 +584,9 @@ def time_aggregated_polys(sub_dset, **kwargs):
     # :func:`score_track_polys`
 
     modulate = None
-    if config.modulate_post_construction:
-        modulate['Post Construction'] = config.modulate_post_construction
+    if config.modulate_post_construction is not None:
+        modulate = {}
+        modulate['Post Construction'] = float(config.modulate_post_construction)
 
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks,
                                  USE_DASK=USE_DASK,
