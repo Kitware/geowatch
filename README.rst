@@ -7,7 +7,9 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 
 .. The large version wont work because github strips rst image rescaling.
 .. .. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
-.. image:: https://ipfs.io/ipfs/bafybeia3xfmrj2mzgg5jwlxvhpoi6vuyftyphbdezppbpjgn4uqvqtxlcu/smart_watch.svg
+.. .. image:: https://ipfs.io/ipfs/bafybeia3xfmrj2mzgg5jwlxvhpoi6vuyftyphbdezppbpjgn4uqvqtxlcu/smart_watch.svg
+
+.. image:: https://i.imgur.com/0HESHf7.png
    :height: 100px
    :align: left
 
