@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.13.0 - Released 2023-12-xx
 
+### Changed
+
+* The code has moved from the "watch" module to the "geowatch" module.
+
 
 ## Version 0.12.1 - Released 2023-11-21
 
