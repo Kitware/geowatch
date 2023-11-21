@@ -1,5 +1,5 @@
 r"""
-python -m watch.tasks.fusion fit --help
+python -m geowatch.tasks.fusion fit --help
 
 Testing ddp
 
@@ -19,7 +19,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_invariants_30GSD_V016
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
@@ -29,7 +29,7 @@ python -m watch.tasks.fusion fit \
     --data.input_space_scale=30GSD \
     --data.window_space_scale=30GSD \
     --data.output_space_scale=30GSD \
-    --model=watch.tasks.fusion.methods.HeterogeneousModel \
+    --model=geowatch.tasks.fusion.methods.HeterogeneousModel \
     --model.name="$EXPERIMENT_NAME" \
     --optimizer=torch.optim.AdamW \
     --optimizer.lr=1e-3 \
@@ -43,7 +43,7 @@ python -m watch.tasks.fusion fit \
 def test_noop_model_training():
     import pytest
     pytest.skip()
-    from watch.tasks.fusion import fit_lightning
+    from geowatch.tasks.fusion import fit_lightning
     import ubelt as ub
     config = ub.codeblock(
         '''
@@ -52,8 +52,8 @@ def test_noop_model_training():
             model:
               class_path: NoopModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
+              train_dataset: geowatch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: geowatch-msi-dates-geodata-gsize64-videos2-frames10
               chip_size: 64
               num_workers: 0
               batch_size: 1
@@ -68,7 +68,7 @@ def test_noop_model_training():
 
 def test_fit_cli_training():
     """
-    python -m watch.tasks.fusion fit --model.help
+    python -m geowatch.tasks.fusion fit --model.help
     """
     import pytest
     pytest.skip()
@@ -78,21 +78,21 @@ def test_fit_cli_training():
 
 def real_test_train():
     """
-    xdoctest ~/code/watch/tests/test_lightning_cli_fit.py real_test_train
+    xdoctest ~/code/geowatch/tests/test_lightning_cli_fit.py real_test_train
     python -c "from test_lightning_cli_fit import real_test_train; real_test_train()"
     from test_lightning_cli_fit import real_test_train
     real_test_train()
     """
-    from watch.tasks.fusion import fit_lightning
+    from geowatch.tasks.fusion import fit_lightning
     import ubelt as ub
-    dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_real').ensuredir()
+    dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_real').ensuredir()
     config = ub.codeblock(
         f'''
         subcommand: fit
         fit:
             data:
-              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
+              train_dataset: geowatch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: geowatch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 8
               batch_size: 16
               time_steps: 2
@@ -105,18 +105,18 @@ def real_test_train():
               time_span: 2y
               verbose: 1
             model:
-              class_path: watch.tasks.fusion.methods.HeterogeneousModel
+              class_path: geowatch.tasks.fusion.methods.HeterogeneousModel
               init_args:
                 token_width: 8
                 token_dim: 64
                 position_encoder:
-                  class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+                  class_path: geowatch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
                   init_args:
                     in_dims: 3
                     max_freq: 3
                     num_freqs: 16
                 backbone:
-                  class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
+                  class_path: geowatch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
                   init_args:
                     encoder_depth: 2
                     decoder_depth: 2
@@ -168,13 +168,13 @@ def real_test_train():
 
 
 def test_partial_init_callback():
-    from watch.tasks.fusion import fit_lightning
+    from geowatch.tasks.fusion import fit_lightning
     import ubelt as ub
 
     import pytest
     pytest.skip('todo: make this test run faster')
 
-    dpath1 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/base_model').ensuredir()
+    dpath1 = ub.Path.appdir('geowatch/tests/test_fusion_fit/partial_init/base_model').ensuredir()
     dpath1.delete().ensuredir()
     # Get the package we just trained and init from it
     # avail_package_fpaths = (sorted((dpath1 / 'lightning_logs/').glob('*'))
@@ -191,10 +191,10 @@ def test_partial_init_callback():
         subcommand: fit
         fit:
             model:
-              class_path: watch.tasks.fusion.methods.HeterogeneousModel
+              class_path: geowatch.tasks.fusion.methods.HeterogeneousModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
+              train_dataset: geowatch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: geowatch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 0
               batch_size: 1
               time_steps: 2
@@ -216,17 +216,17 @@ def test_partial_init_callback():
 
     package_fpath = avail_package_fpaths[-1]
 
-    dpath2 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/preinit_model')
+    dpath2 = ub.Path.appdir('geowatch/tests/test_fusion_fit/partial_init/preinit_model')
     dpath2.delete().ensuredir()
     config = ub.codeblock(
         f'''
         subcommand: fit
         fit:
             model:
-              class_path: watch.tasks.fusion.methods.HeterogeneousModel
+              class_path: geowatch.tasks.fusion.methods.HeterogeneousModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
+              train_dataset: geowatch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: geowatch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 0
               batch_size: 1
               time_steps: 2
@@ -251,6 +251,6 @@ def test_partial_init_callback():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/tests/test_lightning_cli_fit.py
+        python ~/code/geowatch/tests/test_lightning_cli_fit.py
     """
     test_partial_init_callback()

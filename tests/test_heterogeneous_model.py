@@ -4,15 +4,15 @@ def test_heterogeneous_with_split_attention_backbone():
     Setup a test dataset, make a heterogenous model and a multimodal model and
     check weights transfer between the two
     """
-    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
-    from watch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
-    from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
+    from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+    from geowatch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
+    from geowatch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
     import ubelt as ub
 
-    from watch.tasks.fusion import datamodules
+    from geowatch.tasks.fusion import datamodules
     print('(STEP 0): SETUP THE DATA MODULE')
     datamodule = datamodules.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes-watch', num_workers=4, channels='auto')
+        train_dataset='special:vidshapes-geowatch', num_workers=4, channels='auto')
     datamodule.setup('fit')
     dataset = datamodule.torch_datasets['train']
     print('(STEP 1): ESTIMATE DATASET STATS')

@@ -9,11 +9,11 @@ def test_tracker_with_sv():
     import kwcoco
     import pandas as pd
     import ubelt as ub
-    from watch.cli import kwcoco_to_geojson
-    from watch.utils import util_gis
-    import watch
+    from geowatch.cli import kwcoco_to_geojson
+    from geowatch.utils import util_gis
+    import geowatch
 
-    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+    coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
 
     video0 = coco_dset.videos().objs[0]
     video0_images = coco_dset.images(video_id=video0['id'])
@@ -22,7 +22,7 @@ def test_tracker_with_sv():
         'should be on different dates')
 
     #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-    dpath = ub.Path.appdir('watch', 'test', 'tracking', 'unit_test1').ensuredir()
+    dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'unit_test1').ensuredir()
     dpath.delete().ensuredir()
 
     coco_dset.reroot(absolute=True)
@@ -147,19 +147,19 @@ def test_tracker_bas_with_boundary_region():
         pytest tests/test_tracker.py -k test_tracker_bas_with_boundary_region -s
     """
 
-    from watch.demo.smart_kwcoco_demodata import random_inscribed_polygon
+    from geowatch.demo.smart_kwcoco_demodata import random_inscribed_polygon
     import json
     import kwcoco
     import ubelt as ub
-    from watch.cli import kwcoco_to_geojson
-    import watch
-    from watch.geoannots import geomodels
-    from watch.geoannots.geococo_objects import CocoGeoVideo
-    from watch.utils import util_gis
+    from geowatch.cli import kwcoco_to_geojson
+    import geowatch
+    from geowatch.geoannots import geomodels
+    from geowatch.geoannots.geococo_objects import CocoGeoVideo
+    from geowatch.utils import util_gis
     import kwimage
     import kwarray
 
-    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True,
+    coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True,
                                     dates=True, image_size=(96, 96))
     coco_dset.clear_annotations()
 
@@ -204,7 +204,7 @@ def test_tracker_bas_with_boundary_region():
     assert len(set(video0_images.lookup('date_captured'))) > 5, (
         'should be on different dates')
 
-    dpath = ub.Path.appdir('watch', 'test', 'tracking', 'unit_test2').ensuredir()
+    dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'unit_test2').ensuredir()
     dpath.delete().ensuredir()
 
     dpath1 = (dpath / 'with_boundary_region').ensuredir()
@@ -330,10 +330,10 @@ def test_tracker_nan_params():
     import json
     import kwcoco
     import ubelt as ub
-    from watch.cli import kwcoco_to_geojson
-    import watch
+    from geowatch.cli import kwcoco_to_geojson
+    import geowatch
 
-    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+    coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
 
     video0 = coco_dset.videos().objs[0]
     video0_images = coco_dset.images(video_id=video0['id'])
@@ -342,7 +342,7 @@ def test_tracker_nan_params():
         'should be on different dates')
 
     #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-    dpath = ub.Path.appdir('watch', 'test', 'tracking', 'unit_test1').ensuredir()
+    dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'unit_test1').ensuredir()
     dpath.delete().ensuredir()
 
     coco_dset.reroot(absolute=True)

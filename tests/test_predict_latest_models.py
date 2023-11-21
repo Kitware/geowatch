@@ -1,11 +1,11 @@
 import kwcoco
 import pytest
-import watch
+import geowatch
 import ubelt as ub
 
 
 def get_production_model_test_info(task):
-    from watch.tasks.fusion import production
+    from geowatch.tasks.fusion import production
     import json
     candidates = []
 
@@ -29,7 +29,7 @@ def get_production_model_test_info(task):
     tags = model_info.get('tags', 'phase2_expt')
 
     try:
-        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags=tags)
+        expt_dvc_dpath = geowatch.find_smart_dvc_dpath(tags=tags)
     except Exception:
         pytest.skip('dvc path does not exist')
 
@@ -64,18 +64,18 @@ def get_production_model_test_info(task):
 
     model_info['pred_params']['package_fpath'] = model_fpath
 
-    from watch.utils.simple_dvc import SimpleDVC
+    from geowatch.utils.simple_dvc import SimpleDVC
     dvc = SimpleDVC()
     dvc.request(model_fpath)
 
-    from watch.cli import torch_model_stats
+    from geowatch.cli import torch_model_stats
     torch_model_stats.main(cmdline=False, src=model_fpath)
     return model_info
 
 
 def get_test_dataset_fpath(task):
     try:
-        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
+        data_dvc_dpath = geowatch.find_smart_dvc_dpath(tags='phase2_data')
     except Exception:
         pytest.skip('dvc path does not exist')
     if task == 'BAS':
@@ -101,7 +101,7 @@ def test_predict_latest_bas_model():
     model_info = get_production_model_test_info(task='BAS')
     pred_params = model_info['pred_params']
 
-    output_dpath = ub.Path.appdir('watch/tests/pred/bas_latest').ensuredir()
+    output_dpath = ub.Path.appdir('geowatch/tests/pred/bas_latest').ensuredir()
 
     vali_fpath = get_test_dataset_fpath(task='BAS')
     dset = kwcoco.CocoDataset(vali_fpath)
@@ -109,7 +109,7 @@ def test_predict_latest_bas_model():
 
     pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
 
-    from watch.tasks.fusion import predict as predict_mod
+    from geowatch.tasks.fusion import predict as predict_mod
     pred_kwargs = ub.udict(pred_params) | {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
@@ -124,7 +124,7 @@ def test_predict_latest_bas_model():
         import xdev
         xdev.view_directory(pred_fpath.parent)
 
-        from watch.cli import coco_visualize_videos
+        from geowatch.cli import coco_visualize_videos
         coco_visualize_videos.main(cmdline=0, src=pred_fpath,
                                    channels='red|green|blue,salient',
                                    stack='only', skip_missing=False, animate=True)
@@ -136,7 +136,7 @@ def test_predict_latest_sc_model():
     model_info = get_production_model_test_info(task='SC')
     pred_params = model_info['pred_params']
 
-    output_dpath = ub.Path.appdir('watch/tests/pred/sc_latest').ensuredir()
+    output_dpath = ub.Path.appdir('geowatch/tests/pred/sc_latest').ensuredir()
 
     vali_fpath = get_test_dataset_fpath(task='SC')
     dset = kwcoco.CocoDataset(vali_fpath)
@@ -144,7 +144,7 @@ def test_predict_latest_sc_model():
 
     pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
 
-    from watch.tasks.fusion import predict as predict_mod
+    from geowatch.tasks.fusion import predict as predict_mod
     pred_kwargs = ub.udict(pred_params) | {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
@@ -159,7 +159,7 @@ def test_predict_latest_sc_model():
         import xdev
         xdev.view_directory(pred_fpath.parent)
 
-        from watch.cli import coco_visualize_videos
+        from geowatch.cli import coco_visualize_videos
         coco_visualize_videos.main(cmdline=0, src=pred_fpath, channels='auto',
                                    stack='only', workers=0)
 
@@ -167,7 +167,7 @@ def test_predict_latest_sc_model():
 def make_small_kwcoco_subset(dset, output_dpath):
     import pytest
     import numpy as np
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
 
     if 1:
         # Find a spot with a lot of changes.
@@ -216,7 +216,7 @@ def make_small_kwcoco_subset(dset, output_dpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/tests/test_predict_latest_models.py
+        python ~/code/geowatch/tests/test_predict_latest_models.py
     """
     # test_predict_latest_bas_model()
     test_predict_latest_sc_model()

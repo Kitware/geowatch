@@ -4,9 +4,9 @@ Checks that the scheduler builds appropriate commands.
 
 
 def test_bas_pipline_schedule_default_params():
-    from watch.mlops import schedule_evaluation
+    from geowatch.mlops import schedule_evaluation
     import ubelt as ub
-    dpath = ub.Path.appdir('watch/unit_tests/scheduler/unit0').ensuredir()
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/unit0').ensuredir()
 
     dvc_data_dpath = ub.Path('/my_data_dvc')
 
@@ -39,9 +39,9 @@ def test_bas_pipline_schedule_default_params():
 
 
 def test_bas_pipline_schedule1():
-    from watch.mlops import schedule_evaluation
+    from geowatch.mlops import schedule_evaluation
     import ubelt as ub
-    dpath = ub.Path.appdir('watch/unit_tests/scheduler/unit1').ensuredir()
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/unit1').ensuredir()
 
     dvc_data_dpath = ub.Path('/my_data_dvc')
     dvc_expt_dpath = ub.Path('/my_expt_dvc')
@@ -80,9 +80,9 @@ def test_bas_pipline_schedule1():
 
 
 def test_joint_bas_sc_pipline_schedule1():
-    from watch.mlops import schedule_evaluation
+    from geowatch.mlops import schedule_evaluation
     import ubelt as ub
-    dpath = ub.Path.appdir('watch/unit_tests/scheduler/unit2').ensuredir()
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/unit2').ensuredir()
 
     dvc_data_dpath = ub.Path('/my_data_dvc')
     dvc_expt_dpath = ub.Path('/my_expt_dvc')
