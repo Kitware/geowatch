@@ -4,7 +4,10 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.12.1 - Released 2023-12-xx
+## Version 0.13.0 - Released 2023-12-xx
+
+
+## Version 0.12.1 - Released 2023-11-21
 
 
 ### Added
