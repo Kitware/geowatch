@@ -1076,7 +1076,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+geowatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 
 
 ## Yardrat long train run
@@ -1385,7 +1385,7 @@ models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V4
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+geowatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"
 
 

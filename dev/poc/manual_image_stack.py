@@ -5,7 +5,7 @@ Also need to run:
 
 ALIGNED_KWCOCO_BUNDLE=$HOME/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022
 
-smartwatch visualize --src \
+geowatch visualize --src \
     $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --any3=only \
     --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \

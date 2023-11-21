@@ -44,7 +44,7 @@ Ignore:
             poly_merge_method: v1
         "
 
-        smartwatch visualize /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco_tracked3.json --smart
+        geowatch visualize /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco_tracked3.json --smart
 """
 import os
 import scriptconfig as scfg

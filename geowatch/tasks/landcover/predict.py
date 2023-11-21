@@ -35,9 +35,9 @@ CommandLine:
         --with_hidden=6 \
         --output="$OUTPUT_DATASET_FPATH"
 
-    smartwatch stats $OUTPUT_DATASET_FPATH
+    geowatch stats $OUTPUT_DATASET_FPATH
 
-    smartwatch visualize $OUTPUT_DATASET_FPATH \
+    geowatch visualize $OUTPUT_DATASET_FPATH \
         --animate=True --channels="red|green|blue,barren|forest|water,landcover_hidden.0:3,landcover_hidden.3:6" \
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 """

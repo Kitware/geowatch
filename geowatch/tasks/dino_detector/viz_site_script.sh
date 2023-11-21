@@ -81,20 +81,20 @@ POLY_PRED_FPATH=$BAS_POLY_DPATH/poly.kwcoco.zip
 
 geowatch stats "$BAS_PXL_FPATH"
 
-smartwatch visualize "$BAS_PXL_FPATH" --smart \
+geowatch visualize "$BAS_PXL_FPATH" --smart \
     --viz_dpath $ANALYSIS_DPATH/_viz_bas_heatmaps
 
-smartwatch visualize "$BAS_PXL_FPATH" --smart \
+geowatch visualize "$BAS_PXL_FPATH" --smart \
     --viz_dpath $ANALYSIS_DPATH/_viz_bas_landcover_hidden \
     --include_sensors=S2 \
     --channels="red|green|blue,pan,landcover_hidden.0:3,landcover_hidden.3:6,landcover_hidden.6:9"
 
-smartwatch visualize "$BAS_PXL_FPATH" --smart \
+geowatch visualize "$BAS_PXL_FPATH" --smart \
     --viz_dpath $ANALYSIS_DPATH/_viz_bas_landcover_output \
     --include_sensors=S2 \
     --channels="red|green|blue,pan,impervious|forest|water,barren|field|water"
 
-smartwatch visualize "$BAS_PXL_FPATH" --smart \
+geowatch visualize "$BAS_PXL_FPATH" --smart \
     --viz_dpath $ANALYSIS_DPATH/_viz_bas_invariants \
     --include_sensors=S2 \
     --channels="red|green|blue,pan,invariants.0:3,invariants.3:6,invariants.6:9"

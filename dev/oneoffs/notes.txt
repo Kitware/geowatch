@@ -100,10 +100,10 @@ python -m geowatch.tasks.fusion.predict \
     --batch_size=1
 
 
-smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json --channels="Site Preparation|Active Construction|Post Construction"
+geowatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json --channels="Site Preparation|Active Construction|Post Construction"
 
 
-smartwatch intensity_histograms /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+geowatch intensity_histograms /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
 
 python -m geowatch.tasks.fusion.evaluate \

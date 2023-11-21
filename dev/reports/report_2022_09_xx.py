@@ -1,6 +1,6 @@
 r"""
 
-smartwatch mlops status
+geowatch mlops status
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -20,7 +20,7 @@ if [ ! -f "$VALI_DATASET_SUBSET" ]; then
     VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
     kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
     jq .videos[0] $VALI_DATASET_SUBSET
-    smartwatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
+    geowatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
     jq .videos[0] $VALI_DATASET_SUBSET
 fi
 
@@ -30,7 +30,7 @@ if [ ! -f "$VALI_DATASET_SUBSET" ]; then
     VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
     kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
     jq .videos[0] $VALI_DATASET_SUBSET
-    smartwatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
+    geowatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
     jq .videos[0] $VALI_DATASET_SUBSET
 fi
 
@@ -232,7 +232,7 @@ def main():
                 # TODO: allow specification of truth fpath as well?
                 viz_track_cmd = ub.codeblock(
                     fr'''
-                    smartwatch visualize \
+                    geowatch visualize \
                         "{pred_act_poly_kwcoco}" \
                         --channels="red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction" \
                         --viz_dpath={row_dpath}/_viz \
@@ -596,7 +596,7 @@ NEWEST
 
 2022-09-28 EVAL RUN
 
-AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR geowatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
     --target_gsd=4 \
     --enable_video_stats=True \
     --enable_valid_region=True \
@@ -692,7 +692,7 @@ ALT:
 
 
 
-AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR geowatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
     --target_gsd=4 \
     --enable_video_stats=True \
     --enable_valid_region=True \

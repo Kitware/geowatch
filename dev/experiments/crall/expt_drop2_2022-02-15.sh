@@ -202,14 +202,14 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v61
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -250,14 +250,14 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v62
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -299,14 +299,14 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_scratch_v63
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -346,14 +346,14 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_scratch_v64
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -396,7 +396,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
@@ -443,7 +443,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -490,7 +490,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -537,7 +537,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -586,7 +586,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -633,7 +633,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -684,7 +684,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 ARCH=smt_it_stm_p8
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 CHANNELS="blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 python -m geowatch.tasks.fusion.fit \
@@ -828,7 +828,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -876,7 +876,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -1061,7 +1061,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="1"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
@@ -1112,7 +1112,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="0"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
@@ -1165,7 +1165,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="0"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
@@ -1216,7 +1216,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="1"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
@@ -1267,7 +1267,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="2"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
@@ -1317,7 +1317,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="3"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \

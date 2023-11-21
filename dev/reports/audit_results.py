@@ -15,7 +15,7 @@ from watch.mlops import schedule_evaluation
 def check_crop():
     """
 
-    smartwatch stats kwcoco_for_bas.json
+    geowatch stats kwcoco_for_bas.json
 
     source $HOME/code/watch/secrets/secrets
     DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/nov-one/debug13_KIT_TA2_20221121_KR_R001/bas-fusion

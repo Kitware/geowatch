@@ -348,7 +348,7 @@ def _sitevisit_2023_april_report():
 def _gather_namek_shortlist_results():
     """
 
-    smartwatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
+    geowatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
 
     """
     from watch.mlops.aggregate import AggregateEvluationConfig

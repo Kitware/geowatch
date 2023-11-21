@@ -132,7 +132,7 @@ _CLI = __config__
 if __name__ == '__main__':
     """
     CommandLine:
-        smartwatch find_dvc
+        geowatch find_dvc
         python ~/code/watch/geowatch/cli/find_dvc.py
         python -m geowatch.cli.find_dvc --register
         python -m geowatch.cli.find_dvc --mode=list

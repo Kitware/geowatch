@@ -55,23 +55,23 @@ echo "
 Inspect Generated Kwcoco Files
 ------------------------------
 
-Now that we have generated the kwcoco files, lets get used to the 'smartwatch'
+Now that we have generated the kwcoco files, lets get used to the 'geowatch'
 and 'kwcoco' command tooling to insepct the content of the files.
 
 Printing statistics is a good first step. The kwcoco stats are for basic
-image-level statistics, whereas the smartwatch stats will give information
+image-level statistics, whereas the geowatch stats will give information
 relevant to the watch project, i.e. about videos, sensors, and channels.
 "
 # First try the kwcoco stats (can pass multiple files)
 kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 
-# Next try the smartwatch stats
-smartwatch stats "$TRAIN_FPATH"
+# Next try the geowatch stats
+geowatch stats "$TRAIN_FPATH"
 
 
 echo "
 
-Another important CLI tool is 'smartwatch visualize' which can be used to
+Another important CLI tool is 'geowatch visualize' which can be used to
 visually inspect the contents of a kwcoco file. It does this by simply dumping
 image files to disk.  This is most useful when the underlying dataset has data
 outside of the visual range, but it will work on 'regular' rgb data too!
@@ -79,7 +79,7 @@ outside of the visual range, but it will work on 'regular' rgb data too!
 Running visualize by default will write images for all channels in the exiting
 'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
 hash corresponding to the state of the kwcoco file. It will also output all the
-channels by default. Use 'smartwatch visualize --help' for a list of additional
+channels by default. Use 'geowatch visualize --help' for a list of additional
 options. 
 
 Some useful options are:
@@ -90,7 +90,7 @@ Some useful options are:
 "
 
 # Try visualizing the training path
-smartwatch visualize "$TRAIN_FPATH"
+geowatch visualize "$TRAIN_FPATH"
 
 
 echo "
@@ -162,10 +162,10 @@ how the model was trained, which is critical for performing robust analysis on
 large numbers of models. 
 
 We provide a CLI tool to summarize the info contained in a torch model via
-"smartwatch torch_model_stats". Lets try that on the model we just built.
+"geowatch torch_model_stats". Lets try that on the model we just built.
 '
 
-smartwatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
+geowatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
 
 
 echo '
@@ -213,11 +213,11 @@ python -m geowatch.tasks.fusion.predict \
 echo '
 The output of the predictions is just another kwcoco file, but it augments the
 input images with new channels corresponding to predicted heatmaps. We can use
-the "smartwatch stats" command to inspect what these new channels are.
+the "geowatch stats" command to inspect what these new channels are.
 '
 
 # Inspect the channels in the prediction file
-smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+geowatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 
 echo '
@@ -226,12 +226,12 @@ which corresponds to the BAS saliency task, and "star", "eff", and "superstar"
 which correspond to the classification head (for SC), and lastly the "change"
 channel, which is from the change head.
 
-Because these are just rasters, we can visualize them using "smartwatch
+Because these are just rasters, we can visualize them using "geowatch
 visualize"
 '
 
 # Visualize the channels in the prediction file
-smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+geowatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 
 echo '

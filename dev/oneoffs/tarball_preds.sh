@@ -26,4 +26,4 @@ python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation         
 DVC_DPATH=$(geowatch_dvc --hardware=hdd)
 PRED_KWCOCO_DPATH=$DVC_DPATH/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_train.kwcoco/predcfg_1c530993/pred.kwcoco.json
 
-smartwatch visualize "$PRED_KWCOCO_DPATH" --channels="salient" --animate=True --workers=8 --draw_imgs=False --draw_anns=True --only_boxes=True
+geowatch visualize "$PRED_KWCOCO_DPATH" --channels="salient" --animate=True --workers=8 --draw_imgs=False --draw_anns=True --only_boxes=True

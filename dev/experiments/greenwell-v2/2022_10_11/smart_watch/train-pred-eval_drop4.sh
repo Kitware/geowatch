@@ -35,7 +35,7 @@ python -m geowatch.tasks.fusion.predict \
 
 
 # Inspect the channels in the prediction file
-smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+geowatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 
 # Evaluate 

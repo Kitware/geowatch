@@ -17,7 +17,7 @@ class WatchCocoStats(scfg.DataConfig):
         * Per video summaries
 
     CommandLine:
-        smartwatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-geowatch
+        geowatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-geowatch
 
     TODO:
         - [ ] Add other useful geowatch stats to this script
@@ -164,7 +164,7 @@ class WatchCocoStats(scfg.DataConfig):
 
         print('Other helpful commands:')
         for fpath in fpaths:
-            'smartwatch visualize {fpath:!r} --channels='
+            'geowatch visualize {fpath:!r} --channels='
             pass
 
 
@@ -436,6 +436,6 @@ if __name__ == '__main__':
     CommandLine:
         python -m geowatch.cli.watch_coco_stats --src=special:vidshapes8-multispectral
 
-        smartwatch stats drop1/data.kwcoco.json
+        geowatch stats drop1/data.kwcoco.json
     """
     WatchCocoStats.main()

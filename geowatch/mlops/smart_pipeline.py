@@ -129,7 +129,7 @@ class FeatureComputation(ProcessNode):
     def command(self):
         command = ub.codeblock(
             r'''
-            smartwatch teamfeat invariant # TODO
+            geowatch teamfeat invariant # TODO
             ''')
         return command
 
@@ -142,7 +142,7 @@ class FeatureComputation(ProcessNode):
 
 class FeatureUnion(ProcessNode):
     name = 'featunion'
-    executable = 'smartwatch feature_union'
+    executable = 'geowatch feature_union'
     group_dname = PREDICT_NAME
     in_paths = {'src'}
     out_paths = {
@@ -410,7 +410,7 @@ class KWCocoVisualization(ProcessNode):
         # viz_pred_trk_poly_kw['viz_channels'] = "red|green|blue,salient"
         command = ub.codeblock(
             r'''
-            smartwatch visualize \
+            geowatch visualize \
                 "{poly_kwcoco_fpath}" \
                 --viz_dpath={viz_dpath} \
                 --channels="auto" \

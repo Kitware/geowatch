@@ -254,7 +254,7 @@ if __name__ == '__main__':
         description="",
         entry_points={
             'console_scripts': [
-                'smartwatch= geowatch.cli.__main__:main',
+                'geowatch= geowatch.cli.__main__:main',
                 'smartwatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 'geowatch= geowatch.cli.__main__:main',
                 'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',

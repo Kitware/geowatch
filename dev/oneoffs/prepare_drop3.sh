@@ -197,21 +197,21 @@ hack_fix_empty_imges(){
     dvc pull splits_v2.zip.dvc -r aws
     7z x splits_v2.zip
         
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="matseg_0|matseg_1|matseg_2" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
         --skip_missing=True \
         --select_videos='.name | startswith("AE_C003")'
 
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="bare_ground|forest|water" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
         --skip_missing=True \
         --select_videos='.name | startswith("AE_C003")'
 
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="red|green|blue" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
@@ -366,7 +366,7 @@ cropped_with_more_context(){
     echo "$DVC_DPATH"
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
     NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
-    #smartwatch stats "$INPUT_FPATH"
+    #geowatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
 

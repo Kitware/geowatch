@@ -616,7 +616,7 @@ prepare_qfabric_horologic(){
 #### FIXUP
 fixup_nodata(){
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    smartwatch clean_geotiffs \
+    geowatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
         --prefilter_channels="red" \
@@ -628,7 +628,7 @@ fixup_nodata(){
 
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    smartwatch clean_geotiffs \
+    geowatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
         --prefilter_channels="red" \

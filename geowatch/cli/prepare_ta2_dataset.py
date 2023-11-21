@@ -62,7 +62,7 @@ CommandLine:
         --backend=serial \
         --run=1
 
-    smartwatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
+    geowatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 TODO:
     handl GE01 and WV01 platforms

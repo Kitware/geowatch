@@ -88,7 +88,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
-smartwatch clean_geotiffs \
+geowatch clean_geotiffs \
     --src "$COCO_FPATH" \
     --channels="red|green|blue|nir|swir16|swir22" \
     --prefilter_channels="red" \
@@ -328,7 +328,7 @@ update_from_dmj_constructions(){
     # On horologic
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
-    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    #geowatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
     ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
 

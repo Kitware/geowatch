@@ -15,7 +15,7 @@ min_python = 3.8
 [tool.xcookie.entry_points]
 # the console_scripts entry point creates the xdoctest executable
 console_scripts = [
-    "smartwatch = geowatch.cli.__main__:main",
+    "geowatch = geowatch.cli.__main__:main",
     "smartwatch_dvc= geowatch.cli.find_dvc:_CLI.main",
     "geowatch= geowatch.cli.__main__:main",
     "geowatch_dvc= geowatch.cli.find_dvc:_CLI.main",

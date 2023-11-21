@@ -578,7 +578,7 @@ if __name__ == '__main__':
             --io_workers 0 \
             --assets_dname="teamfeats"
 
-        smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD-V2/imganns-AE_R001_sam.kwcoco.zip \
+        geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD-V2/imganns-AE_R001_sam.kwcoco.zip \
             --channels "red|green|blue,pan,sam.0:3,sam.3:6,sam.6:9" --smart
 
     """

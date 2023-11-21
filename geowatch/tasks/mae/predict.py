@@ -19,7 +19,7 @@ Baseline Example:
         --io_workers=8
 
     # After your model predicts the outputs, you should be able to use the
-    # smartwatch visualize tool to inspect your features.
+    # geowatch visualize tool to inspect your features.
     python -m geowatch visualize "$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip" \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False

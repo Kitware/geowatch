@@ -44,7 +44,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
 #--include_channels="blue|green|red|nir|swir16|swir22" \
 
 
-#smartwatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
+#geowatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
 #cd "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC-1
 
 codeblock  "

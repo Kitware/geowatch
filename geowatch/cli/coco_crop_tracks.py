@@ -207,7 +207,7 @@ def main(cmdline=0, **kwargs):
         new_dset.dump(file, newlines=True, indent='    ')
 
     r"""
-    smartwatch visualize \
+    geowatch visualize \
         /home/joncrall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
         --channels="red|green|blue" \
         --animate=True \

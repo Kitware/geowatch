@@ -91,7 +91,7 @@ compute_features \
     "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
 
 # After your model predicts the outputs, you should be able to use the
-# smartwatch visualize tool to inspect your features. The specific channels you
+# geowatch visualize tool to inspect your features. The specific channels you
 # select will depend on the output of your predict script.
 python -m geowatch visualize "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json \
     --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
@@ -189,7 +189,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_invariants.kwcoco.json
 PRETRAINED_STATE="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 # You can use the model_stats command to inspect details about any fusion model.
-smartwatch model_stats "$PRETRAINED_STATE"
+geowatch model_stats "$PRETRAINED_STATE"
 
 # shellcheck disable=SC2016
 __doc_channel_conf__='
@@ -332,7 +332,7 @@ DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-smartwatch model_stats "$BASELINE_PACKAGE_FPATH"
+geowatch model_stats "$BASELINE_PACKAGE_FPATH"
 
 # NOTE:
 # The schedule evaluation script originally ran on a single coco file that

@@ -78,13 +78,13 @@ def test_predict_old_fusion_model():
     """
     # For devs
     cd $HOME/.cache/geowatch/tests/pred/oldmodel/
-    smartwatch visualize ./test_input.kwcoco.json --viz_dpath=./_viz_test_input
-    smartwatch visualize ./pred_bundle/pred.kwcoco.json --viz_dpath=./old_viz_check
+    geowatch visualize ./test_input.kwcoco.json --viz_dpath=./_viz_test_input
+    geowatch visualize ./pred_bundle/pred.kwcoco.json --viz_dpath=./old_viz_check
 
-    smartwatch intensity_histograms ./pred_bundle/pred.kwcoco.json --dst=./intensity_histo.png --stat probability \
+    geowatch intensity_histograms ./pred_bundle/pred.kwcoco.json --dst=./intensity_histo.png --stat probability \
             --valid_range=0:1 --exclude_channels=cirrus
 
-    smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
+    geowatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
     """
 
 

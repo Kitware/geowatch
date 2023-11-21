@@ -18,7 +18,7 @@ Basline Example:
         --tasks before_after pretext
 
     # After your model predicts the outputs, you should be able to use the
-    # smartwatch visualize tool to inspect your features.
+    # geowatch visualize tool to inspect your features.
     python -m geowatch visualize $DVC_DATA_DPATH/Drop4-BAS/all_tests/model_thirteen_epoch/data_vali_invariants.kwcoco.json \
         --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False

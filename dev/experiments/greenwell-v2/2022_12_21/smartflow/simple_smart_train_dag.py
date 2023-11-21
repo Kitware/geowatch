@@ -133,7 +133,7 @@ with DAG(
                     --trainer.precision=16 \
                     --trainer.devices="0,"
 
-                smartwatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
+                geowatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
                 """
             )
         ],
@@ -165,7 +165,7 @@ with DAG(
 
     The output of the predictions is just another kwcoco file, but it augments the
     input images with new channels corresponding to predicted heatmaps. We can use
-    the "smartwatch stats" command to inspect what these new channels are.
+    the "geowatch stats" command to inspect what these new channels are.
     """
     predict = create_pod_task(
         task_id="predict",
@@ -193,7 +193,7 @@ with DAG(
                     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
                     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
-                smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+                geowatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
                 """
             )
         ],

@@ -154,7 +154,7 @@ special_evaluation(){
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     source "$HOME"/local/init/utils.sh
-    #smartwatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
+    #geowatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
 
 
     #models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
@@ -776,7 +776,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="red|green|blue|depth,red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_wvonly_D_V010
@@ -825,7 +825,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="red|green|blue|near-ir1|near-ir2|depth,red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_wvonly_D_V011
@@ -877,7 +877,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver7_V012
@@ -926,7 +926,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver7_V013
@@ -1025,7 +1025,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver11_V014
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
@@ -1078,7 +1078,7 @@ ls "$KWCOCO_BUNDLE_DPATH"
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver11_V015
 INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
@@ -1127,7 +1127,7 @@ ls "$KWCOCO_BUNDLE_DPATH"
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver7_V016
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
@@ -1788,7 +1788,7 @@ CHANNELS="blue|green|red,invariants:0:16"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 #true || \
-#    smartwatch stats "$VALI_FPATH"
+#    geowatch stats "$VALI_FPATH"
 #true || \
 #    kwcoco validate "$VALI_FPATH" --require_relative=True
 python -m geowatch.tasks.fusion.fit \

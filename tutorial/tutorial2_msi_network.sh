@@ -38,7 +38,7 @@ generate_data(){
 print_stats(){
     # Print stats
     kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
-    smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+    geowatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 }
 
 if [[ ! -e "$TRAIN_FPATH" ]]; then
@@ -184,10 +184,10 @@ python -m geowatch.tasks.fusion.predict \
 # Dump stats of truth vs prediction.
 # We should see soft segmentation masks in pred, but not in truth
 kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
-smartwatch stats "$TEST_FPATH" "$PRED_FPATH"
+geowatch stats "$TEST_FPATH" "$PRED_FPATH"
 
 # Visualize pixel predictions with a raw band, predicted saliency, and predicted class.
-smartwatch visualize "$PRED_FPATH" --channels='B11,salient,star|superstar|eff' --smart=True
+geowatch visualize "$PRED_FPATH" --channels='B11,salient,star|superstar|eff' --smart=True
 
 # Evaluate the predictions
 python -m geowatch.tasks.fusion.evaluate \

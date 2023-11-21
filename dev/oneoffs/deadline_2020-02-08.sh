@@ -217,7 +217,7 @@ field': 593,
         --any3=False 
 
 
-    smartwatch stats "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json"
+    geowatch stats "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json"
 
     python -m geowatch visualize \
         --src "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json" \
@@ -348,12 +348,12 @@ field': 593,
         --animate=True \
         --extra_header="BAS_TA1_c001_v082_epoch=42-step=88063.pt"
 
-    smartwatch visualize \
+    geowatch visualize \
         "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-TA1_FULL_SEQ_KR_S001_CLOUD_LT_10/dzyne_landcover.kwcoco.json" \
         --channels="red|green|blue,bare_ground|forest|wetland" --animate=True --with_anns=False
 
-        smartwatch stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" 
-    smartwatch visualize \
+        geowatch stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" 
+    geowatch visualize \
         "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
         --channels="No Activity|Active Construction|Site Preparation" --animate=True 
 }

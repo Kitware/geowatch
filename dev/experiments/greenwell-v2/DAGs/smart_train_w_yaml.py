@@ -84,7 +84,7 @@ with DAG(
                     --trainer.precision=16 \
                     --trainer.devices="0,"
 
-                smartwatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
+                geowatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
                 """
             )
         ],
@@ -122,7 +122,7 @@ with DAG(
                     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
                     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
-                smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+                geowatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
                 """
             )
         ],

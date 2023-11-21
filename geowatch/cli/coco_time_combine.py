@@ -226,7 +226,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.zip
 
     Example:
         >>> # 1: Check cloudmasking.
@@ -249,7 +249,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001.kwcoco.zip
 
     Example:
         >>> # 2: Check that resolution can be updated.
@@ -273,7 +273,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask.kwcoco.zip
 
     Example:
         >>> # 3: Median combining.
@@ -298,7 +298,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-median.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-median.kwcoco.zip
 
     Example:
         >>> # 4: Median combining with cloudmask.
@@ -324,7 +324,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.zip
 
     Example:
         >>> # 5: Dont separate sensors.
@@ -350,7 +350,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.zip
 
     Example:
         >>> # 6: Adjust the effect of S2 imagery.
@@ -377,7 +377,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
         >>> # 7: Tile images instead of computing average all at once.
@@ -404,7 +404,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
         >>> # 8: Tile images on large kwcoco file.
@@ -432,7 +432,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
         >>> # 9: Exclude winter seasons for time average.
@@ -459,7 +459,7 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
+        geowatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     """
     config = TimeCombineConfig.cli(cmdline=cmdline, data=kwargs, strict=True)

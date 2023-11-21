@@ -65,17 +65,17 @@ dvc checkout
 
 ## using mlops to checkout a model
 
-`smartwatch mlops` is an alias for `python -m geowatch.cli.mlops_cli` or `python -m geowatch.mlops.expt_manager`. The entrypoint in code is `watch/mlops/expt_manager.py`.
+`geowatch mlops` is an alias for `python -m geowatch.cli.mlops_cli` or `python -m geowatch.mlops.expt_manager`. The entrypoint in code is `watch/mlops/expt_manager.py`.
 
 Let's choose a model and do stuff with it!
 ```bash
-smartwatch mlops --help
+geowatch mlops --help
 
 MODEL="Drop4_BAS_Retrain_V002"
 
-smartwatch mlops "pull packages" --model_pattern="${MODEL}*"
-smartwatch mlops "pull evals" --model_pattern="${MODEL}*"
-smartwatch mlops "status"
+geowatch mlops "pull packages" --model_pattern="${MODEL}*"
+geowatch mlops "pull evals" --model_pattern="${MODEL}*"
+geowatch mlops "status"
 python -m geowatch.mlops.expt_manager "list" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
 python -m geowatch.mlops.expt_manager "report" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
 ```
@@ -98,7 +98,7 @@ evals on disk live in `$(geowatch_dvc --tags="phase2_expt")/models/fusion/${DATA
 
 ## using mlops to run an evaluation
 
-smartwatch mlops "evaluate" should work as an alias but doesn't right now
+geowatch mlops "evaluate" should work as an alias but doesn't right now
 
 if you haven't used this TEST_DATASET yet, remember to unzip its splits.zip first
 
@@ -243,7 +243,7 @@ python -m geowatch.cli.run_metrics_framework \
         --merge_fpath "${TRK_ROOT}/${TRK_EXPT}/merged/summary2.json" \
 
 # viz
-smartwatch visualize \
+geowatch visualize \
         "${TRK_ROOT}/${TRK_EXPT}/tracks.kwcoco.json" \
         --channels="red|green|blue,salient" \
         --stack=only \
