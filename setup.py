@@ -255,8 +255,6 @@ if __name__ == '__main__':
         entry_points={
             'console_scripts': [
                 'geowatch= geowatch.cli.__main__:main',
-                'smartwatch_dvc= geowatch.cli.find_dvc:_CLI.main',
-                'geowatch= geowatch.cli.__main__:main',
                 'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
             ],
@@ -276,10 +274,11 @@ if __name__ == '__main__':
             ],
         },
         packages=find_packages(include=[
-            'watch', 'watch.*',
-            # Alias the module while we transition to a new name.
             'geowatch', 'geowatch.*',
             'geowatch_tpl', 'geowatch_tpl.*',
+            # Alias of the old module name to maintain backwards compatability
+            # while we transition.
+            'watch', 'watch.*',
         ]),
         url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
