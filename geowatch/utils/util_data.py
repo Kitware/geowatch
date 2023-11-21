@@ -47,7 +47,14 @@ class DataRegistry:
 
     def __init__(self, registry_fpath=None):
         if registry_fpath is None:
-            watch_config_dpath = ub.Path.appdir(type='config', appname='geowatch')
+            old_watch_config_dpath = ub.Path.appdir(type='config', appname='watch')
+            new_watch_config_dpath = ub.Path.appdir(type='config', appname='geowatch')
+            if old_watch_config_dpath.exists():
+                watch_config_dpath = old_watch_config_dpath
+                import warnings
+                warnings.warn(f'Using old watch config directory {old_watch_config_dpath}. Please move all contents to the new directory {new_watch_config_dpath}')
+            else:
+                watch_config_dpath = new_watch_config_dpath
             registry_dpath = (watch_config_dpath / 'registry').ensuredir()
             registry_fpath = registry_dpath / 'watch_dvc_registry.shelf'
 
