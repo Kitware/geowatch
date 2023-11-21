@@ -97,15 +97,15 @@ def mask(raster: Union[rasterio.DatasetReader, str],
 
     Ignore:
         raster = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/../drop1/_assets/google-cloud/LS/LC08_L1TP_016039_20160216_20170224_01_T1/LC08_L1TP_016039_20160216_20170224_01_T1_B1.TIF'  # noqa
-        from watch.utils.util_raster import *
+        from geowatch.utils.util_raster import *
         mask_img = mask(raster, as_poly=False)
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_raster import *
+        >>> from geowatch.utils.util_raster import *
         >>> # FIXME; this demo path no longer has any nodata values
         >>> # Find a better demo with nodata
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
         >>> #
         >>> mask_img = mask(path, as_poly=False)
@@ -135,9 +135,9 @@ def mask(raster: Union[rasterio.DatasetReader, str],
     Example:
         >>> # Test how the "save" functionality modifies the data
         >>> import kwimage
-        >>> from watch.utils.util_raster import *
+        >>> from geowatch.utils.util_raster import *
         >>> import pathlib
-        >>> dpath = ub.Path.appdir('watch/tests/empty_raster').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/empty_raster').ensuredir()
         >>> raster = dpath / 'empty.tif'
         >>> ub.delete(raster)
         >>> kwimage.imwrite(raster, np.zeros((3, 3, 5)))
@@ -327,8 +327,8 @@ class ResampledRaster(ExitStack):
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.utils.util_raster import *
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
         >>> #
         >>> current_gsd_meters = 60

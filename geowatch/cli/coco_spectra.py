@@ -12,7 +12,7 @@ TODO:
     - [x] Rename to coco_spectra
 
 CommandLine:
-    smartwatch spectra --src special:watch-msi --show=True --stat=density
+    smartwatch spectra --src special:geowatch-msi --show=True --stat=density
     smartwatch spectra --src special:photos --show=True --fill=False
     smartwatch spectra --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
@@ -179,12 +179,12 @@ class HistAccum:
 def main(cmdline=True, **kwargs):
     r"""
     CommandLine:
-        XDEV_PROFILE=1 xdoctest -m watch.cli.coco_spectra main
+        XDEV_PROFILE=1 xdoctest -m geowatch.cli.coco_spectra main
 
     Example:
-        >>> from watch.cli.coco_spectra import *  # NOQA
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
         >>> import kwcoco
-        >>> test_dpath = ub.Path.appdir('watch/tests/cli/spectra').ensuredir()
+        >>> test_dpath = ub.Path.appdir('geowatch/tests/cli/spectra').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes-msi-multisensor-videos1-frames2-gsize8')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
@@ -197,12 +197,12 @@ def main(cmdline=True, **kwargs):
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
-        >>> from watch.cli.coco_spectra import *  # NOQA
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
         >>> import kwcoco
-        >>> import watch
-        >>> test_dpath = ub.Path.appdir('watch/tests/cli/spectra').ensuredir()
+        >>> import geowatch
+        >>> test_dpath = ub.Path.appdir('geowatch/tests/cli/spectra').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi')
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi')
         >>> kwargs = {
         >>>     'src': coco_dset,
         >>>     'dst': image_fpath,
@@ -214,9 +214,9 @@ def main(cmdline=True, **kwargs):
         >>> kwargs['element'] = 'step'
         >>> main(cmdline=False, **kwargs)
     """
-    from watch.utils import kwcoco_extensions
-    from watch.utils import util_parallel
-    import watch
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.utils import util_parallel
+    import geowatch
     import kwcoco
     import numpy as np
 
@@ -224,7 +224,7 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    coco_dset = watch.coerce_kwcoco(config['src'])
+    coco_dset = geowatch.coerce_kwcoco(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -471,10 +471,10 @@ def ensure_intensity_sidecar(fpath, recompute=False):
     Write statistics next to the image
 
     Example:
-        >>> from watch.cli.coco_spectra import *  # NOQA
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
         >>> import kwimage
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/tests/intensity_sidecar').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/intensity_sidecar').ensuredir()
         >>> dpath.delete().ensuredir()
         >>> img = kwimage.grab_test_image(dsize=(16, 16))
         >>> img01 = kwimage.ensure_float01(img)

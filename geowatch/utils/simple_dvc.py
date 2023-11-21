@@ -76,7 +76,7 @@ class SimpleDVC(ub.NiceRepr):
     Ignore:
         >>> # xdoctest: +REQUIRES(--dvc-test)
         >>> import sys, ubelt
-        >>> from watch.utils.simple_dvc import *  # NOQA
+        >>> from geowatch.utils.simple_dvc import *  # NOQA
         >>> dvc_dpath = SimpleDVC.demo_dpath(reset=0)
         >>> self = SimpleDVC(dvc_dpath)
         >>> a_file_fpath = dvc_dpath / 'a_file.txt'
@@ -590,8 +590,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python -m watch.utils.simple_dvc --help
-        python -m watch.utils.simple_dvc request --help
-        python -m watch.utils.simple_dvc cache_dir
+        python -m geowatch.utils.simple_dvc --help
+        python -m geowatch.utils.simple_dvc request --help
+        python -m geowatch.utils.simple_dvc cache_dir
     """
     SimpleDVC_CLI.main()

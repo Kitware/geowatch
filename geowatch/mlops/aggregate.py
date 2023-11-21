@@ -24,7 +24,7 @@ Ignore:
     # SC
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=sc \
         --root_dpath="$DVC_EXPT_DPATH/_testsc"
 
@@ -32,14 +32,14 @@ Ignore:
     # BAS
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=bas \
         --root_dpath="$DVC_EXPT_DPATH/_testpipe"
 
     # BAS
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=bas \
         --io_workers=0 \
         --target \
@@ -49,11 +49,11 @@ Ignore:
         --export_tables=True
 
     # BAS
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --target ./my_aggregate/*.csv.zip \
         --stdout_report=True --rois KR_R001,KR_R002
 
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --target ./my_aggregate/bas_pxl_eval_2023-02-22T215702-5.csv.zip \
         --plot_params=True --rois KR_R001,KR_R002
 
@@ -125,7 +125,7 @@ class AggregateLoader(DataConfig):
     @profile
     def coerce_aggregators(config):
         from kwutil import util_path
-        from watch.mlops.aggregate_loader import build_tables
+        from geowatch.mlops.aggregate_loader import build_tables
         import pandas as pd
         input_targets = util_path.coerce_patterned_paths(config.target)
         eval_type_to_tables = ub.ddict(list)
@@ -214,10 +214,10 @@ def main(cmdline=True, **kwargs):
     """
 
     Ignore:
-        >>> from watch.mlops.aggregate import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> from geowatch.mlops.aggregate import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = {
         >>>     'target': [expt_dvc_dpath / '_testpipe', expt_dvc_dpath / '_timekernel_test_drop4'],
@@ -227,7 +227,7 @@ def main(cmdline=True, **kwargs):
 
         config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
         agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
-        from watch.mlops.aggregate_loader import build_tables
+        from geowatch.mlops.aggregate_loader import build_tables
         eval_type_to_results = build_tables(config)
         eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
         agg = ub.peek(eval_type_to_aggregator.values())
@@ -335,7 +335,7 @@ def main(cmdline=True, **kwargs):
                 subagg = agg.filterto(param_hashids=config.inspect if ub.iterable(config.inspect) else [config.inspect])
                 if len(subagg):
                     subagg.make_summary_analysis(config)
-                    # from watch.mlops import confusor_analysis
+                    # from geowatch.mlops import confusor_analysis
                     # for region_id, group in subagg.index.groupby('region_id'):
                     #     group_agg = subagg.filterto(index=group.index)
                     #     # confusor_analysis.main(cmdline=0, )
@@ -357,8 +357,8 @@ class AggregatorAnalysisMixin:
     """
     def macro_analysis(agg):
         import pandas as pd
-        from watch.utils import result_analysis
-        from watch.utils import util_pandas
+        from geowatch.utils import result_analysis
+        from geowatch.utils import util_pandas
 
         macro_keys = list(agg.macro_key_to_regions.keys())
         if len(macro_keys) == 0:
@@ -411,7 +411,7 @@ class AggregatorAnalysisMixin:
         return analysis, table
 
     def varied_param_counts(agg, min_variations=2, dropna=False):
-        from watch.utils.result_analysis import varied_value_counts
+        from geowatch.utils.result_analysis import varied_value_counts
         params = agg.resolved_params
         params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
         varied_counts = varied_value_counts(params, dropna=dropna, min_variations=min_variations)
@@ -423,7 +423,7 @@ class AggregatorAnalysisMixin:
         Does a stats analysis on each varied parameter. Note this makes
         independence assumptions that may not hold in general.
         """
-        from watch.utils import result_analysis
+        from geowatch.utils import result_analysis
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
             # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
@@ -432,7 +432,7 @@ class AggregatorAnalysisMixin:
         metrics = agg.metrics[metrics_of_interest]
         params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
-        from watch.utils.result_analysis import varied_value_counts
+        from geowatch.utils.result_analysis import varied_value_counts
         varied_counts = varied_value_counts(params, dropna=True)
 
         if 1:
@@ -494,7 +494,7 @@ class AggregatorAnalysisMixin:
         import rich
         import pandas as pd
         import numpy as np
-        from watch.utils import util_pandas
+        from geowatch.utils import util_pandas
 
         if isinstance(per_group, float) and math.isinf(per_group):
             per_group = None
@@ -606,7 +606,7 @@ class AggregatorAnalysisMixin:
         top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
         if verbose:
-            from watch.utils.result_analysis import varied_value_counts
+            from geowatch.utils.result_analysis import varied_value_counts
 
             PARAMTER_DISPLAY_MODE = 'auto'
 
@@ -917,7 +917,7 @@ class AggregatorAnalysisMixin:
             ...
         if plot_config is None:
             plot_config = {}
-        from watch.mlops import aggregate_plots
+        from geowatch.mlops import aggregate_plots
         # agg.macro_key_to_regions
         plotter = aggregate_plots.build_plotter(agg, rois, plot_config)
         return plotter
@@ -927,11 +927,11 @@ class AggregatorAnalysisMixin:
         plotter.plot_all()
 
     def _wip_build_per_region_variance_tables(agg):
-        from watch.utils import util_pandas
+        from geowatch.utils import util_pandas
         table = util_pandas.DataFrame(agg.table)
 
         def stats_aggregate(subgroup, metric_keys):
-            from watch.utils import util_dotdict
+            from geowatch.utils import util_dotdict
             metric_description = subgroup[metric_keys].describe()
             stats_row = {}
             for key, stats in metric_description.T.iterrows():
@@ -1033,7 +1033,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         agg.output_dpath = output_dpath
 
-        from watch.utils import util_pandas
+        from geowatch.utils import util_pandas
         if not isinstance(table, util_pandas.DataFrame):
             table = util_pandas.DataFrame(table)
 
@@ -1070,7 +1070,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             num (int): number of rows
 
         Example:
-            >>> from watch.mlops.aggregate import *  # NOQA
+            >>> from geowatch.mlops.aggregate import *  # NOQA
             >>> agg = Aggregator.demo(rng=0, num=100)
             >>> print(agg.table)
             >>> agg.build()
@@ -1167,8 +1167,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Inspect the aggregator's table and build supporting information
         """
-        from watch.mlops.smart_global_helper import SMART_HELPER
-        from watch.utils import util_pandas
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.utils import util_pandas
         agg.__dict__.update(**agg.config)
 
         if len(agg.table) == 0:
@@ -1290,7 +1290,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             Aggregator: A new aggregator with a subset of data
 
         Example:
-            >>> from watch.mlops.aggregate import *  # NOQA
+            >>> from geowatch.mlops.aggregate import *  # NOQA
             >>> agg = Aggregator.demo(rng=0, num=100)
             >>> agg.build()
             >>> subagg = agg.filterto(query='df["context.demo_node.uuid"].str.startswith("c")')
@@ -1416,8 +1416,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         """
         import pandas as pd
-        from watch.utils import util_pandas
-        from watch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.utils import util_pandas
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
         params = self.params
         effective_params = params.copy()
 
@@ -1466,7 +1466,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             # dev helper to check which params are being varied. This can help
             # find ones that you would not expect to be varied, so they can
             # be manually excluded.
-            from watch.utils.result_analysis import varied_value_counts
+            from geowatch.utils.result_analysis import varied_value_counts
             varied_value_counts(effective_params, min_variations=2)
 
         if 0:
@@ -1632,7 +1632,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         import pandas as pd
         import numpy as np
-        from watch.utils.util_pandas import DotDictDataFrame
+        from geowatch.utils.util_pandas import DotDictDataFrame
         # Given a specific group of regions,
 
         regions_of_interest = agg._coerce_rois(rois)
@@ -1703,7 +1703,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
-    from watch.utils import util_pandas
+    from geowatch.utils import util_pandas
     # eval_fpath = group_agg.fpaths[id]
     eval_fpath = ub.Path(group_agg.table['fpath'].loc[id])
     param_hashid = row['param_hashid']
@@ -1727,15 +1727,15 @@ def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
         kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
 
         # FIXME
-        import watch
-        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        # expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        import geowatch
+        data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        # expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         true_region_dpath = data_dvc_dpath / 'annotations/drop6/region_models'
         true_site_dpath = data_dvc_dpath / 'annotations/drop6/site_models'
 
         confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
         if len(confusion_fpaths) == 0:
-            from watch.mlops import confusor_analysis
+            from geowatch.mlops import confusor_analysis
             src_kwcoco = list((node_dpath / '.pred/bas_poly/').glob('*/poly.kwcoco.zip'))[0]
             pred_sites_dpath = list((node_dpath / '.pred/bas_poly/').glob('*/sites'))[0]
             confusor_config = confusor_analysis.ConfusorAnalysisConfig(
@@ -1778,10 +1778,10 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
 
     TODO:
         - [ ] optimize this
-        - [ ] Rectify with ~/code/watch/watch/utils/util_pandas.py :: aggregate_columns
+        - [ ] Rectify with ~/code/watch/geowatch/utils/util_pandas.py :: aggregate_columns
 
     Example:
-        >>> from watch.mlops.aggregate import *  # NOQA
+        >>> from geowatch.mlops.aggregate import *  # NOQA
         >>> import pandas as pd
         >>> agg = Aggregator.demo(num=3)
         >>> agg.build()
@@ -1948,6 +1948,6 @@ __config__.main = main
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/mlops/aggregate_evaluation.py --help
+        python ~/code/watch/geowatch/mlops/aggregate_evaluation.py --help
     """
     main()

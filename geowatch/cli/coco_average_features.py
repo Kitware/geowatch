@@ -206,14 +206,14 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
     Example:
         >>> # TEST 1: Merge two kwcoco files with the same number of images and plot results.
-        >>> from watch.cli.coco_average_features import *  # NOQA
-        >>> import watch
+        >>> from geowatch.cli.coco_average_features import *  # NOQA
+        >>> import geowatch
         >>> import kwimage
         >>> import numpy as np
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features')
+        >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
@@ -223,8 +223,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         ...      video['resolution'] = '10GSD'
         >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
         >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
         >>> dset1.dump(dset1.fpath)
         >>> dset2.dump(dset2.fpath)
         >>> # Build method args
@@ -280,21 +280,21 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
     Example:
         >>> # TEST 2: Merge two kwcoco files with geo information.
-        >>> from watch.cli.coco_average_features import *  # NOQA
-        >>> import watch
+        >>> from geowatch.cli.coco_average_features import *  # NOQA
+        >>> import geowatch
         >>> import kwimage
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
         >>> import numpy as np
-        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features')
+        >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
         >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
         >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423555)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132666)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423555)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132666)
         >>> dset1.dump(dset1.fpath)
         >>> dset2.dump(dset2.fpath)
         >>> # Build method args
@@ -353,9 +353,9 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         import xdev
         globals().update(xdev.get_func_kwargs(merge_kwcoco_channels))
     """
-    from watch.utils.kwcoco_extensions import transfer_geo_metadata
-    from watch.tasks.fusion.coco_stitcher import quantize_image
-    from watch import exceptions
+    from geowatch.utils.kwcoco_extensions import transfer_geo_metadata
+    from geowatch.tasks.fusion.coco_stitcher import quantize_image
+    from geowatch import exceptions
     from tqdm import tqdm
     import kwimage
     import kwarray
@@ -603,14 +603,14 @@ def main(cmdline=True, **kw):
     TODO: Add examples
 
     Example:
-        >>> from watch.cli.coco_average_features import *  # NOQA
-        >>> import watch
+        >>> from geowatch.cli.coco_average_features import *  # NOQA
+        >>> import geowatch
         >>> import kwimage
         >>> import numpy as np
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> dpath = ub.Path.appdir('watch/test/coco_average_features_main')
-        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features_main')
+        >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
@@ -620,8 +620,8 @@ def main(cmdline=True, **kw):
         ...      video['resolution'] = '10GSD'
         >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
         >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
+        >>> geowatch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
         >>> dset1.dump(dset1.fpath)
         >>> dset2.dump(dset2.fpath)
         >>> output_kwcoco_path = dpath / 'output.kwcoco.zip'

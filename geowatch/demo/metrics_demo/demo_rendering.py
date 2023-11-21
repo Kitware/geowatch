@@ -28,8 +28,8 @@ def render_toy_georeferenced_image(img_dpath, renderable, rng=None):
          https://github.com/rasterio/rasterio/issues/2565
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_rendering import *  # NOQA
-        >>> from watch.demo.metrics_demo import demo_utils
+        >>> from geowatch.demo.metrics_demo.demo_rendering import *  # NOQA
+        >>> from geowatch.demo.metrics_demo import demo_utils
         >>> import tempfile
         >>> import kwarray
         >>> from datetime import datetime as datetime_cls
@@ -142,7 +142,7 @@ def write_demo_geotiff(img_fpath=None, imdata=None, wld_polygon=None,
     will be randomly generated.
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_rendering import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_rendering import *  # NOQA
         >>> img_fpath = write_demo_geotiff()
 
     """
@@ -151,7 +151,7 @@ def write_demo_geotiff(img_fpath=None, imdata=None, wld_polygon=None,
     if img_fpath is None:
         import ubelt as ub
         import tempfile
-        dpath = ub.Path.appdir('watch/test/geotiff/demo').ensuredir()
+        dpath = ub.Path.appdir('geowatch/test/geotiff/demo').ensuredir()
         img_fpath = tempfile.mktemp(dir=dpath, prefix='demo_geotiff_', suffix='.tif')
 
     # Generate unspecified data
@@ -177,7 +177,7 @@ def write_demo_geotiff(img_fpath=None, imdata=None, wld_polygon=None,
         }
 
     if wld_polygon is None:
-        from watch.demo.metrics_demo import demo_utils
+        from geowatch.demo.metrics_demo import demo_utils
         wld_polygon = demo_utils.random_geo_polygon(rng=rng)
 
     # Setup the geo metadata

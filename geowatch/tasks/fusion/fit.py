@@ -19,8 +19,8 @@ SeeAlso:
 def coerce_initializer(init):
     import os
     import ubelt as ub
-    from watch.monkey import monkey_torchmetrics
-    from watch.monkey import monkey_torch
+    from geowatch.monkey import monkey_torchmetrics
+    from geowatch.monkey import monkey_torch
     monkey_torchmetrics.fix_torchmetrics_compatability()
 
     initializer = None
@@ -32,7 +32,7 @@ def coerce_initializer(init):
 
     if maybe_packaged_model:
         try:
-            from watch.tasks.fusion import utils
+            from geowatch.tasks.fusion import utils
             other_model = utils.load_model_from_package(init)
             monkey_torch.fix_gelu_issue(other_model)
         except Exception:
@@ -74,8 +74,8 @@ def coerce_initializer(init):
             initializer.other_model = other_model
 
     if initializer is None:
-        # Try a netharn method (todo: port to watch to remove netharn deps)
-        from watch.utils import util_netharn
+        # Try a netharn method (todo: port to geowatch to remove netharn deps)
+        from geowatch.utils import util_netharn
         init_cls, init_kw = util_netharn.Initializer.coerce(init=init)
         initializer = init_cls(**init_kw)
 

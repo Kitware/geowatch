@@ -16,11 +16,11 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 current_path = os.getcwd().split("/")
 
@@ -502,7 +502,7 @@ class Trainer(object):
 
 if __name__ == "__main__":
 
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
 

@@ -48,7 +48,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.predict \
+    python -m geowatch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
         --sensors='L8' \
@@ -84,7 +84,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.predict \
+    python -m geowatch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip" \
         --out_dpath="$DATA_DVC_DPATH/Aligned-Drop7/_pycold_L8S2_HTR" \
         --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly_KR_R001_cold-L8S2-HTR.kwcoco.zip" \
@@ -104,7 +104,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.transfer_features \
+    python -m geowatch.tasks.cold.transfer_features \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
         --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
         --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
@@ -132,7 +132,7 @@ CommandLine:
 
     echo "$DVC_DATA_DPATH"
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath \
             "$BUNDLE_DPATH"/imganns-*AE_[RC]*.kwcoco.zip \
             "$BUNDLE_DPATH"/imganns-*BH_[RC]*.kwcoco.zip \
@@ -223,13 +223,13 @@ def cold_predict_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.predict --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
+        python -m geowatch.tasks.cold.predict --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.predict cold_predict_main
 
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.predict import cold_predict_main
-        >>> from watch.tasks.cold.predict import *
+        >>> from geowatch.tasks.cold.predict import cold_predict_main
+        >>> from geowatch.tasks.cold.predict import *
         >>> kwargs= dict(
         >>>    coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly-KR_R001.kwcoco.json'),
         >>>    out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/_pycold_combine_V2'),
@@ -252,24 +252,24 @@ def cold_predict_main(cmdline=1, **kwargs):
         >>> cmdline=0
         >>> cold_predict_main(cmdline, **kwargs)
     """
-    from watch.tasks.cold import prepare_kwcoco
-    from watch.tasks.cold import tile_processing_kwcoco
-    from watch.tasks.cold import export_cold_result_kwcoco
-    from watch.tasks.cold import assemble_cold_result_kwcoco
+    from geowatch.tasks.cold import prepare_kwcoco
+    from geowatch.tasks.cold import tile_processing_kwcoco
+    from geowatch.tasks.cold import export_cold_result_kwcoco
+    from geowatch.tasks.cold import assemble_cold_result_kwcoco
 
     config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    from watch.utils import process_context
-    from watch.utils import util_parallel
+    from geowatch.utils import process_context
+    from geowatch.utils import util_parallel
     from kwutil import util_progress
-    from watch.utils import util_json
+    from geowatch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
 
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.cold.predict',
+        name='geowatch.tasks.cold.predict',
         type='process',
         config=resolved_config,
         track_emissions=config['track_emissions'],

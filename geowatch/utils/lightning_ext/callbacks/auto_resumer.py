@@ -17,13 +17,13 @@ class AutoResumer(pl.callbacks.Callback):
     THIS SEEMS TO BE BROKEN WITH NEW LIGHTNING VERSIONS
 
     Example:
-        >>> from watch.utils.lightning_ext.callbacks.auto_resumer import AutoResumer
+        >>> from geowatch.utils.lightning_ext.callbacks.auto_resumer import AutoResumer
         >>> from kwutil import util_path
-        >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
-        >>> from watch.utils.lightning_ext.callbacks import StateLogger
+        >>> from geowatch.utils.lightning_ext.demo import LightningToyNet2d
+        >>> from geowatch.utils.lightning_ext.callbacks import StateLogger
         >>> import pytorch_lightning as pl
         >>> import ubelt as ub
-        >>> from watch.monkey import monkey_lightning
+        >>> from geowatch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> default_root_dir = ub.Path.appdir('lightning_ext/test/auto_resume')
         >>> default_root_dir.delete()
@@ -78,14 +78,14 @@ class AutoResumer(pl.callbacks.Callback):
     # def add_argparse_args(cls, parent_parser):
     #     """
     #     Example:
-    #         >>> from watch.utils.lightning_ext.callbacks.auto_resumer import *  # NOQA
-    #         >>> from watch.utils.configargparse_ext import ArgumentParser
+    #         >>> from geowatch.utils.lightning_ext.callbacks.auto_resumer import *  # NOQA
+    #         >>> from geowatch.utils.configargparse_ext import ArgumentParser
     #         >>> cls = AutoResumer
     #         >>> parent_parser = ArgumentParser(formatter_class='defaults')
     #         >>> cls.add_argparse_args(parent_parser)
     #         >>> parent_parser.print_help()
     #     """
-    #     from watch.utils.lightning_ext import argparse_ext
+    #     from geowatch.utils.lightning_ext import argparse_ext
     #     arg_infos = argparse_ext.parse_docstring_args(cls)
     #     argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
     #     return parent_parser

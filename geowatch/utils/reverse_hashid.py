@@ -19,7 +19,7 @@ class ReverseHashTable:
     /home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Continue_10GSD_BGR_V003/Drop4_BAS_Continue_10GSD_BGR_V003_epoch=93-step=48128.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali.kwcoco/predcfg_1c530993/pred.kwcoco.json
 
     Example:
-        >>> from watch.utils.reverse_hashid import *  # NOQA
+        >>> from geowatch.utils.reverse_hashid import *  # NOQA
         >>> data = {'test': 'data'}
         >>> key = ub.hash_data(data)[0:8]
         >>> self = ReverseHashTable(type='test-rhash')
@@ -32,7 +32,7 @@ class ReverseHashTable:
 
     def __init__(self, type='global'):
         from kwutil.util_locks import Superlock
-        self.rlut_dpath = ub.Path.appdir('watch/hash_rlut', type).ensuredir()
+        self.rlut_dpath = ub.Path.appdir('geowatch/hash_rlut', type).ensuredir()
         self.shelf_fpath = self.rlut_dpath / 'hash_rlut.shelf'
         self.text_fpath = self.rlut_dpath / 'hash_rlut.txt'
         self.file_dpath = (self.rlut_dpath / 'hash_rlut').ensuredir()
@@ -101,7 +101,7 @@ class ReverseHashTable:
         If the type of the hash is unknown, we can search in a few different
         locations for it.
         """
-        rlut_root = ub.Path.appdir('watch/hash_rlut')
+        rlut_root = ub.Path.appdir('geowatch/hash_rlut')
         dpaths = [path for path in rlut_root.iterdir() if path.is_dir()]
         candidates = []
         for dpath in ub.ProgIter(dpaths, desc='rlut is searching', verbose=verbose):
@@ -129,7 +129,7 @@ def condense_config(params, type, human_opts=None, register=True):
     reverse hash lookup table. Some config parts can be given human readable
     descriptions.
     """
-    from watch.utils.reverse_hashid import ReverseHashTable
+    from geowatch.utils.reverse_hashid import ReverseHashTable
     if human_opts is None:
         human_opts = {}
     params = ub.udict(params)

@@ -68,10 +68,10 @@ class ProcessContext:
         PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY to opt out.
 
     CommandLine:
-        xdoctest -m watch.utils.process_context ProcessContext
+        xdoctest -m geowatch.utils.process_context ProcessContext
 
     Example:
-        >>> from watch.utils.process_context import *
+        >>> from geowatch.utils.process_context import *
         >>> import torch
         >>> import rich
         >>> device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
@@ -391,7 +391,7 @@ class ProcessContext:
         if not self.enable_most_telemetry:
             return
         try:
-            from watch.utils import util_hardware
+            from geowatch.utils import util_hardware
             # Get information about disk used in this process
             disk_info = util_hardware.disk_info_of_path(path)
         except Exception as ex:
@@ -402,7 +402,7 @@ class ProcessContext:
 
 # def _test_offline():
 #     """
-#     xdoctest -m watch.utils.process_context ProcessContext
+#     xdoctest -m geowatch.utils.process_context ProcessContext
 #     """
 #     from codecarbon import OfflineEmissionsTracker
 #     emissions_tracker = OfflineEmissionsTracker(
@@ -471,6 +471,6 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/utils/process_context.py
+        python ~/code/watch/geowatch/utils/process_context.py
     """
     main()

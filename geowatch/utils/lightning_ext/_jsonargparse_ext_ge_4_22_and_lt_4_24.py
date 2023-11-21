@@ -6,7 +6,7 @@ Refactor references:
     ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/core.py
     ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/signatures.py
 
-Keep in sync with ~/code/watch/watch/utils/lightning_ext/lightning_cli_ext.py
+Keep in sync with ~/code/watch/geowatch/utils/lightning_ext/lightning_cli_ext.py
 See if we can do something to land this functionality upstream
 """
 from argparse import Action as ArgparseAction

@@ -4,7 +4,7 @@
 The following example simply produces the script under different variations.
 
 CommandLine:
-    xdoctest -m watch.cli.prepare_teamfeats __doc__
+    xdoctest -m geowatch.cli.prepare_teamfeats __doc__
 
 SeeAlso:
     ../tasks/invariants/predict.py
@@ -15,14 +15,14 @@ SeeAlso:
     ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
 Example:
-    >>> from watch.cli.prepare_teamfeats import *  # NOQA
+    >>> from geowatch.cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './pretend_bundle/data.kwcoco.json',
     >>>     'gres': [0, 1],
     >>>     'expt_dvc_dpath': './pretend_expt_dvc',
     >>> #
-    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'virtualenv_cmd': 'conda activate geowatch',
     >>> #
     >>>     #'with_s2_landcover': 1,
     >>>     #'with_materials': 1,
@@ -47,13 +47,13 @@ Example:
 
 Example:
     >>> # Test landcover commands
-    >>> from watch.cli.prepare_teamfeats import *  # NOQA
+    >>> from geowatch.cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './PRETEND_BUNDLE/data.kwcoco.json',
     >>>     'gres': [0, 1],
     >>>     'expt_dvc_dpath': './PRETEND_EXPT_DVC',
-    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'virtualenv_cmd': 'conda activate geowatch',
     >>>     'with_s2_landcover': 1,
     >>>     'with_wv_landcover': 1,
     >>>     'num_wv_landcover_hidden': 0,
@@ -76,7 +76,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=0 \
@@ -92,7 +92,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
@@ -110,7 +110,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_s2_landcover=1 \
@@ -124,7 +124,7 @@ Ignore:
         --gres=0, --tmux_workers=1 --backend=tmux --run=0
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --src_kwcocos=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
         --constructive_mode=True \
         --suffix=I2LS \
@@ -135,12 +135,12 @@ Ignore:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
     OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-    python -m watch reproject \
+    python -m geowatch reproject \
         --src $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_vali_I2LS_split6.kwcoco.zip \
         --inplace \
         --site_models=$TRUE_SITE_DPATH
 
-    python -m watch reproject \
+    python -m geowatch reproject \
         --src $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_train_I2LS_split6.kwcoco.zip \
         --inplace \
         --site_models=$TRUE_SITE_DPATH
@@ -169,7 +169,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
             '''
             The DVC directory where team feature model weights can be
             found. If "auto" uses the
-            ``watch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
+            ``geowatch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
             infer the location.
             '''), group='inputs')
 
@@ -255,8 +255,8 @@ def prep_feats(cmdline=True, **kwargs):
         gres = [gres]
 
     if config['expt_dvc_dpath'] == 'auto':
-        import watch
-        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        import geowatch
+        expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
 
@@ -272,7 +272,7 @@ def prep_feats(cmdline=True, **kwargs):
     base_fpath_list = list(util_path.coerce_patterned_paths(
         base_fpath_pat, globfallback=True))
 
-    from watch.mlops.pipeline_nodes import Pipeline
+    from geowatch.mlops.pipeline_nodes import Pipeline
 
     dag_nodes = []
     final_output_paths = []
@@ -320,9 +320,9 @@ def prep_feats(cmdline=True, **kwargs):
 
 
 def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
-    from watch.mlops.pipeline_nodes import ProcessNode
-    from watch.utils import util_parallel
-    from watch.utils import simple_dvc
+    from geowatch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.utils import util_parallel
+    from geowatch.utils import simple_dvc
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
@@ -411,7 +411,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         # Landcover is fairly fast to run
         node = ProcessNode(
             name=key + name_suffix,
-            executable='python -m watch.tasks.landcover.predict',
+            executable='python -m geowatch.tasks.landcover.predict',
             in_paths={
                 'dataset': src_fpath,
                 'deployed': model_fpaths['dzyne_s2_landcover'],
@@ -440,7 +440,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         # Landcover is fairly fast to run
         node = ProcessNode(
             name=key + name_suffix,
-            executable='python -m watch.tasks.landcover.predict',
+            executable='python -m geowatch.tasks.landcover.predict',
             in_paths={
                 'dataset': src_fpath,
                 'deployed': model_fpaths['dzyne_wv_landcover'],
@@ -466,7 +466,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
     if config[key]:
         node = ProcessNode(
             name=key + name_suffix,
-            executable='python -m watch.tasks.cold.predict',
+            executable='python -m geowatch.tasks.cold.predict',
             in_paths={
                 'coco_fpath': src_fpath,
             },
@@ -531,7 +531,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         depth_window_size = 1440
         node = ProcessNode(
             name=key + name_suffix,
-            executable='python -m watch.tasks.depth.predict',
+            executable='python -m geowatch.tasks.depth.predict',
             in_paths={
                 'dataset': src_fpath,
                 'deployed': model_fpaths['dzyne_depth'],
@@ -558,7 +558,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials_model_v4'])
         node = ProcessNode(
             name=key + name_suffix,
-            executable='python -m watch.tasks.rutgers_material_seg_v2.predict',
+            executable='python -m geowatch.tasks.rutgers_material_seg_v2.predict',
             in_paths={
                 'kwcoco_fpath': src_fpath,
                 'model_fpath': model_fpaths['rutgers_materials_model_v4'],
@@ -585,7 +585,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             name=key + name_suffix,
             executable=ub.codeblock(
                 '''
-                python -m watch.tasks.mae.predict
+                python -m geowatch.tasks.mae.predict
                 '''),
             in_paths={
                 'input_kwcoco': src_fpath,
@@ -618,7 +618,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             name=key + name_suffix,
             executable=ub.codeblock(
                 '''
-                python -m watch.tasks.invariants.predict
+                python -m geowatch.tasks.invariants.predict
                 '''),
             in_paths={
                 'input_kwcoco': src_fpath,
@@ -656,7 +656,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             name=key + name_suffix,
             executable=ub.codeblock(
                 '''
-                python -m watch.tasks.sam.predict
+                python -m geowatch.tasks.sam.predict
                 '''),
             in_paths={
                 'input_kwcoco': src_fpath,
@@ -704,7 +704,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
 
     combine_node = ProcessNode(
         name='combine_features' + name_suffix,
-        executable='python -m watch.cli.coco_combine_features',
+        executable='python -m geowatch.cli.coco_combine_features',
         in_paths={
             'src': tocombine,
         },
@@ -730,22 +730,22 @@ if __name__ == '__main__':
     """
     CommandLine:
         DVC_DPATH=$(geowatch_dvc)
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --src_kwcocos="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
             --with_depth=0 \
-            --run=False --skip_existing=False --virtualenv_cmd "conda activate watch" \
+            --run=False --skip_existing=False --virtualenv_cmd "conda activate geowatch" \
             --backend=serial
 
-        python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
-        python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
+        python -m geowatch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
+        python -m geowatch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
 
         # TODO: rename to schedule teamfeatures
 
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
         DVC_DPATH=$(geowatch_dvc)
-        python -m watch reproject_annotations \
+        python -m geowatch reproject_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
@@ -754,7 +754,7 @@ if __name__ == '__main__':
 
         # Team Features on Drop2
         DVC_DPATH=$(geowatch_dvc)
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --src_kwcocos=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  \
             --run=0
@@ -764,7 +764,7 @@ if __name__ == '__main__':
         DVC_DPATH=$(geowatch_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --src_kwcocos=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=1 \
@@ -774,7 +774,7 @@ if __name__ == '__main__':
             --skip_existing=0 --run=0
 
         # Simple demo
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --src_kwcocos=./mydata/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=0 \

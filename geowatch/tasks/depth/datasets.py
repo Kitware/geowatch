@@ -19,10 +19,10 @@ class WVRgbDataset(_CocoTorchDataset):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.depth.datasets import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.depth.datasets import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> input_dset = kwcoco.CocoDataset(coco_fpath)
         >>> self = WVRgbDataset(input_dset)

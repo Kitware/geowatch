@@ -3,7 +3,7 @@ import kwcoco
 import numpy as np
 import pandas as pd
 import itertools
-from watch.heuristics import CNAMES_DCT
+from geowatch.heuristics import CNAMES_DCT
 
 
 def visualize_videos(pred_dset,
@@ -17,7 +17,7 @@ def visualize_videos(pred_dset,
     else:
         keys = keys_to_score_sc
         # draw videos (sites) together within a region
-    from watch.cli import coco_visualize_videos
+    from geowatch.cli import coco_visualize_videos
 
     def add_panoptic_img(pred_dset, true_dset):
         '''
@@ -91,7 +91,7 @@ def are_bas_dct(dset):
 
 def viz_track_scores(dset, out_fpath, gt_dset=None):
     # import json
-    import watch
+    import geowatch
     import kwplot
     from matplotlib.collections import LineCollection
     from matplotlib.colors import to_rgba
@@ -134,8 +134,8 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
     df['orig'] = df[ordered_phases].idxmax(axis=1)
     df['y'] = df['orig'].map(dict(zip(ordered_phases, np.linspace(0, 1, len(ordered_phases)))))
 
-    palette = {c['name']: c['color'] for c in watch.heuristics.CATEGORIES}
-    palette['salient'] = watch.heuristics.CATEGORIES_DCT['positive']['unscored'][0]['color']
+    palette = {c['name']: c['color'] for c in geowatch.heuristics.CATEGORIES}
+    palette['salient'] = geowatch.heuristics.CATEGORIES_DCT['positive']['unscored'][0]['color']
 
     # fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 

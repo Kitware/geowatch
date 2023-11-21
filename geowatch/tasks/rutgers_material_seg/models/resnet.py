@@ -9,7 +9,7 @@ Adapted from: https://github.com/bearpaw/pytorch-classification
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from watch.tasks.rutgers_material_seg.models.encoding import Encoding
+from geowatch.tasks.rutgers_material_seg.models.encoding import Encoding
 
 
 class ASPP(nn.Module):

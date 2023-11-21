@@ -4,25 +4,25 @@ import torch
 import torch.nn as nn
 import torchvision.models as tv_models
 
-import watch.tasks.rutgers_material_change_detection.models.resnet as resnet
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import load_cfg_file
-from watch.tasks.rutgers_material_change_detection.models.timesformer import TimeSformer
-from watch.tasks.rutgers_material_change_detection.models.dynamic_unet import DynamicUNet
-from watch.tasks.rutgers_material_change_detection.models.mat_ed_framework import MatED, MTMatED
-from watch.tasks.rutgers_material_change_detection.models.simple_cnn_encoder import SimpleCNNEncoder
-from watch.tasks.rutgers_material_change_detection.models.peri_resnet import resnet34 as peri_resnet34
-from watch.tasks.rutgers_material_change_detection.models.simple_decoder import SimpleDecoder, Decoder
-from watch.tasks.rutgers_material_change_detection.models.late_fusion_framework import LateFusionFramework
-from watch.tasks.rutgers_material_change_detection.models.early_fusion_framework import EarlyFusionFramework
-from watch.tasks.rutgers_material_change_detection.models.discritizers import Gumbel_Softmax, VectorQuantizer2
-from watch.tasks.rutgers_material_change_detection.models.early_fusion_mat_framework import EarlyFusionMatFramework
-from watch.tasks.rutgers_material_change_detection.models.patch_transformer_framework import PatchTransformerFramework
+import geowatch.tasks.rutgers_material_change_detection.models.resnet as resnet
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import load_cfg_file
+from geowatch.tasks.rutgers_material_change_detection.models.timesformer import TimeSformer
+from geowatch.tasks.rutgers_material_change_detection.models.dynamic_unet import DynamicUNet
+from geowatch.tasks.rutgers_material_change_detection.models.mat_ed_framework import MatED, MTMatED
+from geowatch.tasks.rutgers_material_change_detection.models.simple_cnn_encoder import SimpleCNNEncoder
+from geowatch.tasks.rutgers_material_change_detection.models.peri_resnet import resnet34 as peri_resnet34
+from geowatch.tasks.rutgers_material_change_detection.models.simple_decoder import SimpleDecoder, Decoder
+from geowatch.tasks.rutgers_material_change_detection.models.late_fusion_framework import LateFusionFramework
+from geowatch.tasks.rutgers_material_change_detection.models.early_fusion_framework import EarlyFusionFramework
+from geowatch.tasks.rutgers_material_change_detection.models.discritizers import Gumbel_Softmax, VectorQuantizer2
+from geowatch.tasks.rutgers_material_change_detection.models.early_fusion_mat_framework import EarlyFusionMatFramework
+from geowatch.tasks.rutgers_material_change_detection.models.patch_transformer_framework import PatchTransformerFramework
 
-from watch.tasks.rutgers_material_change_detection.models.patch_transformer import (
+from geowatch.tasks.rutgers_material_change_detection.models.patch_transformer import (
     PatchTransformerEncoder,
     PatchTransformerDecoder,
 )
-from watch.tasks.rutgers_material_change_detection.models.self_attention import (
+from geowatch.tasks.rutgers_material_change_detection.models.self_attention import (
     SelfAttention,
     AsymmetricPyramidSelfAttention,
 )

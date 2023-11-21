@@ -437,7 +437,7 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
     Construct the json that can be used for a stac search
 
     Example:
-        >>> from watch.stac.stac_search_builder import build_search_json
+        >>> from geowatch.stac.stac_search_builder import build_search_json
         >>> start_date = '2017-01-01'
         >>> end_date = '2020-01-01'
         >>> sensors = 'L2-S2'
@@ -507,7 +507,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.stac.stac_search_builder import main
+        >>> from geowatch.stac.stac_search_builder import main
         >>> cmdline = 0
         >>> kwargs = {
         >>>     'start_date': '2017-01-01',
@@ -533,6 +533,6 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/stac/stac_search_build.py
+        python ~/code/watch/geowatch/stac/stac_search_build.py
     """
     main()

@@ -64,7 +64,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
 
     Example:
         >>> # xdoctest: +REQUIRES(module:dataframe_image)
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('kwplot/tests/test_dfi').ensuredir()
         >>> import pandas as pd
@@ -233,7 +233,7 @@ class LabelModifier:
     Example:
         >>> # xdoctest: +SKIP
         >>> import sys, ubelt
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> import pandas as pd
         >>> import kwarray
         >>> rng = kwarray.ensure_rng(0)
@@ -397,7 +397,7 @@ class FigureFinalizer(ub.NiceRepr):
         pil_kwargs :
 
     Example:
-        from watch.utils.util_kwplot import *  # NOQA
+        from geowatch.utils.util_kwplot import *  # NOQA
         self = FigureFinalizer()
         print('self = {}'.format(ub.urepr(self, nl=1)))
         self.update(dpi=300)
@@ -484,7 +484,7 @@ def fix_matplotlib_dates(dates, format='mdate'):
             add regular matplotlib test for a real demo of where this is useful
 
     Example:
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> from kwutil.util_time import coerce_datetime
         >>> from kwutil.util_time import coerce_timedelta
         >>> import pandas as pd
@@ -593,7 +593,7 @@ class ArtistManager:
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
         >>> import kwplot
         >>> sns = kwplot.autosns()
@@ -610,7 +610,7 @@ class ArtistManager:
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
         >>> import kwplot
         >>> sns = kwplot.autosns()
@@ -858,7 +858,7 @@ def time_sample_arcplot(time_samples, yloc=1, ax=None):
     Example:
         >>> import sys, ubelt
         >>> sys.path.append(ubelt.expandpath('~/code/watch'))
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> time_samples = [
         >>>     [1, 3, 5, 7, 9],
         >>>     [2, 3, 4, 6, 8],
@@ -955,7 +955,7 @@ class Palette(ub.udict):
     attempt to generate a distinct color.
 
     Example:
-        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> self1 = Palette()
         >>> self1.add_labels(labels=['a', 'b'])
         >>> self1.update({'foo': 'blue'})

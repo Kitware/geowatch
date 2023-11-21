@@ -1,7 +1,7 @@
 # flake8: noqa
 
 from PIL import Image
-import watch.tasks.rutgers_material_seg.utils.utils as utils
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
 import torchvision.transforms.functional as FT
 import torch
 import numpy as np
@@ -12,7 +12,7 @@ import torchvision
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.deterministic = True
 import itertools
-from watch.tasks.rutgers_material_seg.utils import utils
+from geowatch.tasks.rutgers_material_seg.utils import utils
 from tifffile import tifffile
 import geopandas
 import rasterio.mask

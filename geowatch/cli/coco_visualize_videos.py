@@ -23,9 +23,9 @@ CommandLine:
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
     python -m kwcoco toydata --key=vidshapes3-msi-multisensor-frames7 --dst=$KWCOCO_FPATH
 
-    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True --workers=0 --any3=only --max_dim=128
+    python -m geowatch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True --workers=0 --any3=only --max_dim=128
 
-    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=5 --animate=True
+    python -m geowatch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=5 --animate=True
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -40,17 +40,17 @@ class CocoVisualizeConfig(scfg.DataConfig):
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         COCO_FPATH=$DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
 
-        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --viz_dpath ./viz_out --channels="red|green|blue" --space="video"
+        python -m geowatch.cli.coco_visualize_videos --src $COCO_FPATH --viz_dpath ./viz_out --channels="red|green|blue" --space="video"
 
         COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/KR_R001/subdata.kwcoco.json
         COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/data.kwcoco.json
-        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --space="image"
+        python -m geowatch.cli.coco_visualize_videos --src $COCO_FPATH --space="image"
 
         # Also note you can make an animated gif
-        python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
+        python -m geowatch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
         # NEW: as of 2021-11-04 : helper animation script
-        python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
+        python -m geowatch.cli.animate_visualizations --viz_dpath ./viz_out
     """
 
     epilog = '''
@@ -208,10 +208,10 @@ def main(cmdline=True, **kwargs):
     """
     Example:
         >>> import kwcoco
-        >>> from watch.utils import kwcoco_extensions
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
+        >>> from geowatch.utils import kwcoco_extensions
+        >>> from geowatch.cli.coco_visualize_videos import *  # NOQA
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/viz_video1').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/viz_video1').delete().ensuredir()
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2, image_size=(64, 64), num_videos=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
@@ -227,12 +227,12 @@ def main(cmdline=True, **kwargs):
 
     Example:
         >>> import kwcoco
-        >>> from watch.utils import kwcoco_extensions
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
-        >>> import watch
+        >>> from geowatch.utils import kwcoco_extensions
+        >>> from geowatch.cli.coco_visualize_videos import *  # NOQA
+        >>> import geowatch
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/viz_video2').delete().ensuredir()
-        >>> dset = watch.coerce_kwcoco('watch-msi', num_frames=5, image_size=(64, 64), num_videos=1)
+        >>> dpath = ub.Path.appdir('geowatch/test/viz_video2').delete().ensuredir()
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi', num_frames=5, image_size=(64, 64), num_videos=1)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
         >>> kwargs = {
@@ -255,9 +255,9 @@ def main(cmdline=True, **kwargs):
     """
     config = CocoVisualizeConfig.cli(data=kwargs, cmdline=cmdline and
                                      {'strict': True}, strict=True)
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     from kwutil import util_resources
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     import kwcoco
     import kwarray
     import rich
@@ -287,7 +287,7 @@ def main(cmdline=True, **kwargs):
 
     if config['max_workers'] is not None:
         ub.schedule_deprecation(
-            'watch', 'max_workers', 'argument to coco_visualize_videos',
+            'geowatch', 'max_workers', 'argument to coco_visualize_videos',
             deprecate='now', error='later', remove='later')
         max_workers = util_parallel.coerce_num_workers(config['max_workers'])
     else:
@@ -298,7 +298,7 @@ def main(cmdline=True, **kwargs):
     rich.print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     rich.print('coco_dset = {!r}'.format(coco_dset))
 
-    from watch import heuristics
+    from geowatch import heuristics
     heuristics.ensure_heuristic_coco_colors(coco_dset)
 
     if channels == 'auto':
@@ -592,7 +592,7 @@ def main(cmdline=True, **kwargs):
                 raise
 
         rich.print('animate_config = {}'.format(ub.urepr(animate_config, nl=1)))
-        from watch.cli import animate_visualizations
+        from geowatch.cli import animate_visualizations
 
         # Hack: pretend that stack is a channel even though it is not.
         if config['stack']:
@@ -811,7 +811,7 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
 
 def __default_kwcoco_build_image_header_text(**kwargs):
     """
-    TODO: non watch dependant version
+    TODO: non geowatch dependant version
 
     A heuristic for what sort of info is useful to plot on the header of an
     image.
@@ -830,7 +830,7 @@ def __default_kwcoco_build_image_header_text(**kwargs):
         date_captured
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> img = {
         >>>     'id': 1,
         >>>     'frame_index': 0,
@@ -963,7 +963,7 @@ def _write_ann_visualizations2(coco_dset,
         rich.print(_body)
         rich.print('=' * len(_body))
 
-    from watch import heuristics
+    from geowatch import heuristics
     header_lines = heuristics.build_image_header_text(
         img=img,
         name=None,
@@ -1261,7 +1261,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     draw_boxes, draw_labels, draw_segmentations, role_to_dets,
                     valid_video_poly, stack, draw_header, stack_idx,
                     request_roles, ann_score_thresh, alpha):
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     import kwimage
     import kwarray
     import kwcoco
@@ -1392,7 +1392,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     chan_names = chan_row['chan'].to_list()
     channel_colors = []
 
-    from watch import heuristics
+    from geowatch import heuristics
     # For some reason predict is not preserving categories
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
@@ -1516,7 +1516,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         ONLY_BOXES = only_boxes
         if ONLY_BOXES:
             ub.schedule_deprecation(
-                'watch', 'only_boxes', 'argument',
+                'geowatch', 'only_boxes', 'argument',
                 deprecate='now', error='1.0.0', remove='1.1.0',
             )
             draw_on_kwargs = dict(sseg=False, labels=False)

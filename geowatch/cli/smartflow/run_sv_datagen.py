@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import os
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
-from watch.utils.util_framework import download_region
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
+from geowatch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
-from watch.mlops import smart_pipeline
+from geowatch.mlops import smart_pipeline
 from kwutil.util_yaml import Yaml
 
 
@@ -23,7 +23,7 @@ docker run \
 
 ipython
 
-from watch.cli.smartflow.run_sv_datagen import *  # NOQA
+from geowatch.cli.smartflow.run_sv_datagen import *  # NOQA
 config = {
     'input_path'        : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion/items.jsonl',
     'input_region_path' : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson',
@@ -86,8 +86,8 @@ def main():
 
 
 def run_generate_sv_cropped_kwcoco(config):
-    from watch.utils import util_framework
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_framework
+    from geowatch.utils import util_fsspec
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -109,7 +109,7 @@ def run_generate_sv_cropped_kwcoco(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 

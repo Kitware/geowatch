@@ -46,7 +46,7 @@ def _process_image_chunked_with_kwarray(image,
     output_shape = slider.input_shape
     stitcher = kwarray.Stitcher(output_shape)
 
-    from watch.tasks.fusion.predict import CocoStitchingManager
+    from geowatch.tasks.fusion.predict import CocoStitchingManager
     for sl in tqdm(slider, desc='sliding window'):
 
         chip = image[sl]
@@ -134,7 +134,7 @@ def process_image_chunked(image,
         chip_size : must be less than half of the overlap
 
     Example:
-        >>> from watch.tasks.depth.utils import *  # NOQA
+        >>> from geowatch.tasks.depth.utils import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> image = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))

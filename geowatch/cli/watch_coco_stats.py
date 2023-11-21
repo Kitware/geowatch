@@ -17,10 +17,10 @@ class WatchCocoStats(scfg.DataConfig):
         * Per video summaries
 
     CommandLine:
-        smartwatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-watch
+        smartwatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-geowatch
 
     TODO:
-        - [ ] Add other useful watch stats to this script
+        - [ ] Add other useful geowatch stats to this script
 
     SeeAlso:
         kwcoco stats
@@ -47,18 +47,18 @@ class WatchCocoStats(scfg.DataConfig):
     def main(cls, cmdline=True, **kw):
         """
         Example:
-            >>> from watch.cli import watch_coco_stats
-            >>> import watch
-            >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
-            >>> dset2 = watch.coerce_kwcoco('vidshapes8')
+            >>> from geowatch.cli import watch_coco_stats
+            >>> import geowatch
+            >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, heatmap=True)
+            >>> dset2 = geowatch.coerce_kwcoco('vidshapes8')
             >>> kw = dict(src=[dset1.fpath, dset2.fpath])
             >>> cmdline = 0
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
 
         Example:
-            >>> from watch.cli import watch_coco_stats
-            >>> import watch
-            >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
+            >>> from geowatch.cli import watch_coco_stats
+            >>> import geowatch
+            >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, heatmap=True)
             >>> kw = dict(src=dset1.fpath)
             >>> cmdline = 0
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
@@ -95,7 +95,7 @@ class WatchCocoStats(scfg.DataConfig):
             fpaths, workers=config.io_workers)
         for dset in dset_iter:
             print('\n--- Single Dataset Stats ---')
-            # dset = watch.coerce_kwcoco(fpath)
+            # dset = geowatch.coerce_kwcoco(fpath)
             print('dset = {!r}'.format(dset))
             stat_info = coco_watch_stats(
                 dset, with_video_info=config['with_video_info'])
@@ -177,14 +177,14 @@ def coco_watch_stats(dset, with_video_info=False):
         Dict[str, Any]: stat_info
 
     Example:
-        >>> from watch.cli.watch_coco_stats import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi-geodata-heatmap-dates')
+        >>> from geowatch.cli.watch_coco_stats import *  # NOQA
+        >>> import geowatch
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi-geodata-heatmap-dates')
         >>> stat_info = coco_watch_stats(dset)
     """
     from kwutil import slugify_ext
     from kwutil import util_time
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     import rich
     import pandas as pd
     num_videos = len(dset.index.videos)
@@ -376,7 +376,7 @@ def coco_sensorchan_gsd_stats(coco_dset):
     import math
     import numpy as np
     import kwimage
-    from watch.utils import util_pandas
+    from geowatch.utils import util_pandas
     longform_rows = []
     for image_id in coco_dset.images():
         coco_img = coco_dset.coco_image(image_id)
@@ -434,7 +434,7 @@ main = __config__.main
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.watch_coco_stats --src=special:vidshapes8-multispectral
+        python -m geowatch.cli.watch_coco_stats --src=special:vidshapes8-multispectral
 
         smartwatch stats drop1/data.kwcoco.json
     """

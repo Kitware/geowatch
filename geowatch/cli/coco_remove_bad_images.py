@@ -32,7 +32,7 @@ class CocoRemoveBadImagesConfig(scfg.DataConfig):
 def main(cmdline=True, **kwargs):
     """
     Ignore:
-        from watch.cli.coco_bad_empty_images import *  # NOQA
+        from geowatch.cli.coco_bad_empty_images import *  # NOQA
         kwargs = {}
         kwargs['src'] = 'imgonly_S2_L8_WV.kwcoco.json'
         kwargs['dst'] = 'imgonly_S2_L8_WV.kwcoco.json.tmp'
@@ -46,7 +46,7 @@ def main(cmdline=True, **kwargs):
     mode = config['mode']
 
     import kwcoco
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     from rich.prompt import Confirm
     import safer
     workers = util_parallel.coerce_num_workers(config['workers'])
@@ -311,6 +311,6 @@ __config__ = CocoRemoveBadImagesConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_bad_empty_images.py
+        python ~/code/watch/geowatch/cli/coco_bad_empty_images.py
     """
     main()

@@ -86,7 +86,7 @@ class OpenElevationDatabase(ElevationDatabase):
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> # xdoctest: +REQUIRES(--slow)
-        >>> from watch.gis.elevation import *  # NOQA
+        >>> from geowatch.gis.elevation import *  # NOQA
         >>> lat = 37.65026538818887
         >>> lon = 128.81096081618637
         >>> eldb = OpenElevationDatabase()
@@ -107,7 +107,7 @@ def _query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
     query_url = url + suffix
 
     cacher = ub.Cacher('elevation', depends=query_url,
-                       appname='watch/elevation_query', verbose=verbose)
+                       appname='geowatch/elevation_query', verbose=verbose)
     body = cacher.tryload()
     if body is None:
         for _i in range(attempts):
@@ -136,7 +136,7 @@ class DEM_Collection(ElevationDatabase):
         >>> # xdoctest: +REQUIRES(--network)
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Use the gtop30 DEM dataset from GIRDER to find elevation.
-        >>> from watch.gis.elevation import *  # NOQA
+        >>> from geowatch.gis.elevation import *  # NOQA
         >>> dems = DEM_Collection.gtop30()
         >>> lat, lon = (37.7455555555556, 128.780555555556)
         >>> print(dems.query(lat, lon))
@@ -165,8 +165,8 @@ class DEM_Collection(ElevationDatabase):
         >>> elevations = dems.query(lats, lons)
     """
     def __init__(dems, dem_paths):
-        from watch.gis.geotiff import geotiff_crs_info
-        from watch.utils import util_gis
+        from geowatch.gis.geotiff import geotiff_crs_info
+        from geowatch.utils import util_gis
         dem_infos = []
         for dem_fpath in dem_paths:
             dem_info = geotiff_crs_info(dem_fpath)
@@ -308,7 +308,7 @@ def ensure_girder_gtop30_elevation_maps():
         https://www.google.com/url?sa=j&url=https%3A%2F%2Fwww.usgs.gov%2Fcenters%2Feros%2Fscience%2Fusgs-eros-archive-digital-elevation-global-30-arc-second-elevation-gtopo30%3Fqt-science_center_objects%3D0%23qt-science_center_objects&uct=1599876275&usg=jBvv8w64RCBJd2SyQA3kUtKhMQ4.&source=chat
     """
     print('Building elevation map')
-    from watch.utils import util_girder
+    from geowatch.utils import util_girder
     api_url = 'https://data.kitware.com/api/v1'
     resource_id = '59fb784d8d777f31ac6480fb'
     dl_path = util_girder.grabdata_girder(api_url, resource_id)

@@ -15,10 +15,10 @@ obtained from:
 
 Example:
     >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
-    >>> from watch.cli.run_metrics_framework import *  # NOQA
-    >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
+    >>> from geowatch.cli.run_metrics_framework import *  # NOQA
+    >>> from geowatch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
     >>> cmdline = 0
-    >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+    >>> base_dpath = ub.Path.appdir('geowatch', 'tests', 'test-iarpa-metrics2')
     >>> data_dpath = base_dpath / 'inputs'
     >>> dpath = base_dpath / 'outputs'
     >>> demo_info1 = generate_demo_metrics_framework_data(
@@ -53,11 +53,11 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
-    >>> from watch.cli.run_metrics_framework import *  # NOQA
-    >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
+    >>> from geowatch.cli.run_metrics_framework import *  # NOQA
+    >>> from geowatch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
     >>> # Test single region case
     >>> cmdline = 0
-    >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics5')
+    >>> base_dpath = ub.Path.appdir('geowatch', 'tests', 'test-iarpa-metrics5')
     >>> data_dpath = (base_dpath / 'inputs').ensuredir()
     >>> dpath = (base_dpath / 'outputs').ensuredir()
     >>> demo_info1 = generate_demo_metrics_framework_data(
@@ -270,11 +270,11 @@ def ensure_thumbnails(image_root, region_id, sites):
 def main(cmdline=True, **kwargs):
     """
     CommandLine:
-        xdoctest -m watch.cli.run_metrics_framework main
+        xdoctest -m geowatch.cli.run_metrics_framework main
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwcoco.util import util_json
-    from watch.utils import process_context
+    from geowatch.utils import process_context
     from tempfile import TemporaryDirectory
     import safer
     config = MetricsConfig.cli(cmdline=cmdline, data=kwargs)
@@ -311,7 +311,7 @@ def main(cmdline=True, **kwargs):
 
     proc_context = process_context.ProcessContext(
         type='process',
-        name='watch.cli.run_metrics_framework',
+        name='geowatch.cli.run_metrics_framework',
         config=jsonified_config,
         extra={'iarpa_smart_metrics_version': iarpa_smart_metrics.__version__},
     )
@@ -354,8 +354,8 @@ def main(cmdline=True, **kwargs):
         if args.gt_dpath is not None:
             gt_dpath = ub.Path(args.gt_dpath).absolute()
         else:
-            import watch
-            data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            import geowatch
+            data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
             gt_dpath = data_dvc_dpath / 'annotations'
             print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
 
@@ -535,7 +535,7 @@ def main(cmdline=True, **kwargs):
             This is an auto-generated file that records the command used to
             generate this evaluation of multiple regions.
             "
-            python -m watch.mlops.confusor_analysis \
+            python -m geowatch.mlops.confusor_analysis \
                 --metrics_node_dpath={main_out_dir} \
                 --out_dpath={main_out_dir}/confusion_analysis \
                 --true_region_dpath={true_region_dpath} \
@@ -551,8 +551,8 @@ def main(cmdline=True, **kwargs):
 
     print('out_dirs = {}'.format(ub.urepr(out_dirs, nl=1)))
     if args.merge and out_dirs:
-        from watch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
-        from watch.tasks.metrics.merge_iarpa_metrics import iarpa_bas_color_legend
+        from geowatch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
+        from geowatch.tasks.metrics.merge_iarpa_metrics import iarpa_bas_color_legend
         import kwimage
 
         if args.merge_fpath is None:
@@ -608,7 +608,7 @@ def main(cmdline=True, **kwargs):
         # viz SC
         if config.enable_sc_viz:
             combined_viz_dpath.ensuredir()
-            from watch.tasks.metrics.viz_sc_results import viz_sc
+            from geowatch.tasks.metrics.viz_sc_results import viz_sc
             viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 
 

@@ -27,13 +27,13 @@ def grab_sentinel2_product(index=0, overwrite=False):
     Example:
         >>> # xdoctest: +SKIP("too many https errors")
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.demo.sentinel2_demodata import *  # NOQA
-        >>> from watch.utils.util_rgdc import bands_sentinel2
+        >>> from geowatch.demo.sentinel2_demodata import *  # NOQA
+        >>> from geowatch.utils.util_rgdc import bands_sentinel2
         >>> product = grab_sentinel2_product()
         >>> assert len(bands_sentinel2(product)) == 13
 
     SeeAlso:
-        watch.util.util_rgdc.bands_sentinel2
+        geowatch.util.util_rgdc.bands_sentinel2
     """
     try:
         from rgd_imagery_client import RasterDownload
@@ -48,8 +48,8 @@ def grab_sentinel2_product(index=0, overwrite=False):
     ]
     url = urls[index]
 
-    # By default cache to the $XDG_CACHE_HOME/watch
-    dset_dpath = ub.Path.appdir('watch/demo/grab_s2').ensuredir()
+    # By default cache to the $XDG_CACHE_HOME/geowatch
+    dset_dpath = ub.Path.appdir('geowatch/demo/grab_s2').ensuredir()
 
     # Cache the scene using the same path used by google cloud storage
     tile_hierarchy = os.path.sep.join(url.split('tiles/')[1].split('/')[:3])

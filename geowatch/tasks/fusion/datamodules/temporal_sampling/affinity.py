@@ -4,7 +4,7 @@ import kwimage
 import math
 import numpy as np
 import ubelt as ub
-from watch.utils import util_kwarray
+from geowatch.utils import util_kwarray
 from kwutil.util_time import coerce_timedelta
 from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
@@ -117,8 +117,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         * A quasi-random sampling approach to image retrieval
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
         >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -131,13 +131,13 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>                                return_info=True, deterministic=True)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
         >>> sns = kwplot.autosns()
         >>> plt = kwplot.autoplt()
         >>> show_affinity_sample_process(chosen, info)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -159,7 +159,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> print('info = {}'.format(ub.urepr(info, nl=4)))
 
     Ignore:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -171,13 +171,13 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
         >>> import kwarray
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
-        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> dset = geowatch.coerce_kwcoco(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> time_kernel_code = '-3m,-1w,0,3m,1y'
         >>> self = TimeWindowSampler.from_coco_video(
@@ -219,7 +219,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> import kwplot
         >>> kwplot.autompl()
         >>> info['title_suffix'] = chr(10) + time_kernel_code
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
         >>> show_affinity_sample_process(chosen, info, fnum=1)
     """
     rng = kwarray.ensure_rng(rng)
@@ -448,7 +448,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
 
     Example:
         >>> # Generates the time kernel visualization
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
         >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
         >>> relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
         >>> # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
@@ -498,7 +498,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
         >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
         >>> relative_unixtimes = [np.nan] * 10
         >>> # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
@@ -509,7 +509,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         raise Exception(f'Time kernel has a length of 1: time_kernel={time_kernel!r}')
 
     # Fix any possible missing values
-    from watch.tasks.fusion.datamodules.temporal_sampling.utils import guess_missing_unixtimes
+    from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import guess_missing_unixtimes
     relative_unixtimes = guess_missing_unixtimes(relative_unixtimes)
 
     first = time_kernel[0]
@@ -664,10 +664,10 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import geowatch
         >>> from kwutil import util_time
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
@@ -682,8 +682,8 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
         >>> time_kernel = '-1y-3m,-1w,0,1w,3m,1y'
         >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_kernel=time_kernel)
         >>> # xdoctest: +REQUIRES(--show)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
         >>> import kwplot
         >>> kwplot.autoplt()
         >>> kwplot.figure(fnum=1, doclf=1)
@@ -698,7 +698,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
 
         >>> # =====================
         >>> # Show Sample Pattern in heatmap
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
         >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
 
         >>> datetimes = np.array([datetime_mod.datetime.fromtimestamp(t) for t in unixtimes])
@@ -881,7 +881,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
     heuristic.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
         >>> low = datetime_mod.datetime.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -935,12 +935,12 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import geowatch
         >>> import kwimage
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
-        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> dset = geowatch.coerce_kwcoco(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, time_kernel='-1y,-3m,0,3m,1y', affinity_type='soft3')
         >>> unixtimes = self.unixtimes
@@ -1066,7 +1066,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
 
         # TODO: this info does not belong here. Pass this information in.
         if 'sensor_value' in heuristics:
-            from watch.heuristics import SENSOR_TEMPORAL_SAMPLING_VALUES
+            from geowatch.heuristics import SENSOR_TEMPORAL_SAMPLING_VALUES
             sensor_value = SENSOR_TEMPORAL_SAMPLING_VALUES
             values = np.array(list(ub.take(sensor_value, sensors, default=1))).astype(float)
             values /= values.max()
@@ -1160,7 +1160,7 @@ def hard_frame_affinity(unixtimes, sensors, time_window, time_kernel=None, time_
 def cython_aff_samp_mod():
     """ Old JIT code, no longer works """
     import os
-    from watch.tasks.fusion.datamodules import temporal_sampling
+    from geowatch.tasks.fusion.datamodules import temporal_sampling
     fpath = os.path.join(os.path.dirname(temporal_sampling.__file__), 'affinity_sampling.pyx')
     import xdev
     cython_mod = xdev.import_module_from_pyx(fpath, verbose=0, annotate=True)

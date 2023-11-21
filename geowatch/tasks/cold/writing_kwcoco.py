@@ -9,7 +9,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.writing_kwcoco \
+    python -m geowatch.tasks.cold.writing_kwcoco \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
         --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V1" \
@@ -37,7 +37,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.writing_kwcoco \
+    python -m geowatch.tasks.cold.writing_kwcoco \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH//Drop6/_pycold_combine_V2" \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
@@ -109,13 +109,13 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.writing_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.writing_kwcoco cold_writing_kwcoco_main
+        python -m geowatch.tasks.cold.writing_kwcoco --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.writing_kwcoco cold_writing_kwcoco_main
 
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.writing_kwcoco import cold_writing_kwcoco_main
-        >>> from watch.tasks.cold.writing_kwcoco import *
+        >>> from geowatch.tasks.cold.writing_kwcoco import cold_writing_kwcoco_main
+        >>> from geowatch.tasks.cold.writing_kwcoco import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly-KR_R001.kwcoco.json'),
         >>>   combined_coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'),
@@ -135,13 +135,13 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    from watch.utils import process_context
-    from watch.utils import util_json
+    from geowatch.utils import process_context
+    from geowatch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
 
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.cold.writing_kwcoco',
+        name='geowatch.tasks.cold.writing_kwcoco',
         type='process',
         config=resolved_config,
         track_emissions=config['track_emissions'],

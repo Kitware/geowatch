@@ -3,14 +3,14 @@ Tools to work with geotiff metadata.
 """
 import numpy as np
 import ubelt as ub
-from watch.gis import spatial_reference as watch_crs
-# from watch.utils.util_bands import LANDSAT7
-from watch.utils import util_gis
-from watch.utils.util_bands import SENTINEL2, LANDSAT8
+from geowatch.gis import spatial_reference as watch_crs
+# from geowatch.utils.util_bands import LANDSAT7
+from geowatch.utils import util_gis
+from geowatch.utils.util_bands import SENTINEL2, LANDSAT8
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
-from watch import exceptions
+from geowatch import exceptions
 
 
 def geotiff_metadata(gpath, elevation='gtop30', strict=False,
@@ -25,11 +25,11 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
         ...        'LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2/'
         ...        'LC08_L1GT_044034_20130330_20170310_01_T2_B11.TIF')
-        >>> gpath = ub.grabdata(url, appname='watch')
+        >>> gpath = ub.grabdata(url, appname='geowatch')
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
@@ -37,7 +37,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
         ...        'LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/'
         ...        'LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
-        >>> gpath = ub.grabdata(url, appname='watch')
+        >>> gpath = ub.grabdata(url, appname='geowatch')
 
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
@@ -50,12 +50,12 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
         export XDEV_PROFILE=1
         pyblock "
         gpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/52/S/DG/2020/4/13/20APR13020407-M1BS-014418171010_01_P004_ACC/20APR13020407-M1BS-014418171010_01_P004_ACC_B05.tif'
-        from watch.gis.geotiff import geotiff_metadata
+        from geowatch.gis.geotiff import geotiff_metadata
         info = geotiff_metadata(gpath)
         print(info)
         "
     """
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     infos = {}
     ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
 
@@ -92,9 +92,9 @@ def geotiff_header_info(gpath_or_ref):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> from geowatch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_header_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
@@ -102,7 +102,7 @@ def geotiff_header_info(gpath_or_ref):
         >>> info = geotiff_header_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
     """
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
@@ -171,8 +171,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> from geowatch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
@@ -182,7 +182,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> # xdoctest: +REQUIRES(--network)
         >>> gpath_or_ref = gpath = ub.grabdata(
         >>>     'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
-        >>>     appname='watch/demodata', hash_prefix='10a2ebcdcd95582')
+        >>>     appname='geowatch/demodata', hash_prefix='10a2ebcdcd95582')
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
@@ -190,7 +190,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         >>> # The public gateways seem to be too slow in serving the content
         >>> # xdoctest: +REQUIRES(--ipfs)
-        >>> from watch.demo.nitf_demodata import grab_nitf_fpath
+        >>> from geowatch.demo.nitf_demodata import grab_nitf_fpath
         >>> gpath_or_ref = gpath = grab_nitf_fpath('i_3004g.ntf')
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
@@ -201,7 +201,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     """
     import affine
     import kwimage
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     gdal = util_gdal.import_gdal()
     osr = util_gdal.import_osr()
 
@@ -521,8 +521,8 @@ def make_crs_info_object(osr_crs):
         osr_crs (osr.SpatialReference): an osr object from gdal
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.utils import util_gdal
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> from geowatch.utils import util_gdal
         >>> osr = util_gdal.import_osr()
         >>> osr_crs = osr.SpatialReference()
         >>> osr_crs.ImportFromEPSG(4326)
@@ -566,7 +566,7 @@ def axis_mapping_int_to_text(axis_mapping_int):
         * OAMS_CUSTOM means that the data axis are customly defined with
             SetDataAxisToSRSAxisMapping
     """
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     osr = util_gdal.import_osr()
     if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
         axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
@@ -641,7 +641,7 @@ def geotiff_filepath_info(gpath, fast=True):
         * parse_landsat_product_id - specific to the landsat spec
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> inputs = [
         >>>     '18JUN18071532-S3DMR1C2.NTF',
         >>>     'LC08_L1GT_029030_20151209_20160131_01_RT',
@@ -674,7 +674,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>>         assert info['filename_meta']
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1.TIF'
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
@@ -687,8 +687,8 @@ def geotiff_filepath_info(gpath, fast=True):
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> # Test extact info from real landsat product files
-        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> product = grab_landsat_product()
         >>> band_infos = [geotiff_filepath_info(gpath) for gpath in product['bands']]
         >>> meta_infos = [geotiff_filepath_info(gpath) for gpath in product['meta'].values()]
@@ -697,14 +697,14 @@ def geotiff_filepath_info(gpath, fast=True):
 
     Ignore:
         >>> # TODO : demodata for a digital globe archive
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> import ubelt as ub
         >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
     Ignore:
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> base_dpath = '/home/joncrall/data/grab_tiles_out/fels'
         >>> paths = sorted(walk_geotiff_products(base_dpath, with_product_dirs=1, with_loose_images=0))
         >>> infos = []
@@ -793,7 +793,7 @@ def geotiff_filepath_info(gpath, fast=True):
                 sensor_candidates.append('WV03')
 
         # Add DG information if it exists
-        from watch.gis import digital_globe as dg_parser
+        from geowatch.gis import digital_globe as dg_parser
         try:
             # technically, this does read files, so its not all about the path
             dg_bundle = dg_parser.DigitalGlobeBundle.from_pointer(gpath)
@@ -817,7 +817,7 @@ def geotiff_filepath_info(gpath, fast=True):
             # the original naming convention
             #
             # this opens the image to check for that case as a fallback
-            from watch.utils import util_gdal
+            from geowatch.utils import util_gdal
             gdal = util_gdal.import_gdal()
             info = gdal.Info(gpath, format='json')
             if len(info['bands']) == 3:
@@ -1046,12 +1046,12 @@ def parse_landsat_product_id(product_id):
             of a landsat product, as described in [LanSatName]_.
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> product_id = 'LC08_L1TP_037029_20130602_20170310_01_T1'
         >>> ls_meta = parse_landsat_product_id(product_id)
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1'
         >>> info = parse_landsat_product_id(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
@@ -1063,7 +1063,7 @@ def parse_landsat_product_id(product_id):
         >>> assert info['band_num'] == 1
 
 
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_CU_029005_20181208_20210503_02_QA_LINEAGE.TIF'
         >>> info = parse_landsat_product_id(gpath)
         >>> print('info = {}'.format(ub.urepr(info, nl=1)))
@@ -1071,8 +1071,8 @@ def parse_landsat_product_id(product_id):
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> # Test on real landsat data
-        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
-        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
         >>> product = grab_landsat_product()
         >>> band_prodids = [ub.augpath(gpath, dpath='', ext='') for gpath in product['bands']]
         >>> band_infos = [parse_landsat_product_id(product_id) for product_id in band_prodids]
@@ -1206,10 +1206,10 @@ def walk_geotiff_products(dpath, with_product_dirs=True,
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # xdoctest: +REQUIRES(--network)
         >>> # Test on real landsat data
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> import watch
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> import geowatch
         >>> from os.path import dirname
-        >>> product = watch.demo.landsat_demodata.grab_landsat_product()
+        >>> product = geowatch.demo.landsat_demodata.grab_landsat_product()
         >>> dpath = dirname(dirname(ub.peek(product['bands'])))
         >>> print(list(walk_geotiff_products(dpath)))
         >>> print(list(walk_geotiff_products(dpath, with_product_dirs=False)))

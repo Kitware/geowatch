@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 visualize_images = False
 coco_fpath = ub.expandpath('/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels.kwcoco.json')

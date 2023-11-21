@@ -6,7 +6,7 @@ import numpy as np
 import kwcoco
 import kwimage
 
-from watch.heuristics import CNAMES_DCT
+from geowatch.heuristics import CNAMES_DCT
 
 
 def viterbi(input_sequence, transition_probs, emission_probs):
@@ -110,7 +110,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>>     'supergiant', 'black_hole', 'giant', 'dwarf', 'dwarf']
         >>> input_sequence = np.array(
         >>>     [states.index(s) for s in observed_states], dtype=int)
-        >>> from watch.tasks.tracking.phase import viterbi
+        >>> from geowatch.tasks.tracking.phase import viterbi
         >>> best_path = viterbi(
         >>>     input_sequence, transition_probs, emission_probs)
         >>> predicted_states = [states[idx] for idx in best_path]
@@ -267,7 +267,7 @@ def class_label_smoothing(track_cats, transition_probs=None,
     # TODO make this work for subsites
 
     Example:
-        >>> from watch.tasks.tracking.phase import *  # NOQA
+        >>> from geowatch.tasks.tracking.phase import *  # NOQA
         >>> import ubelt as ub
         >>> track_cats = (
         >>>     ['No Activity'] * 2 +
@@ -527,7 +527,7 @@ def phase_prediction_baseline(annots) -> List[float]:
     Returns:
         float: number of days in the future
     """
-    # from watch.dev.check_transition_probs
+    # from geowatch.dev.check_transition_probs
     phase_avg_days = {
         'No Activity': 60,
         'Site Preparation': 57,

@@ -25,7 +25,7 @@ def guess_missing_unixtimes(unixtimes, assume_delta=86400):
             extrapolated values.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
         >>> import ubelt as ub
         >>> cases = [
         >>>     np.array([np.nan, np.nan, np.nan, np.nan, np.nan]),
@@ -90,7 +90,7 @@ def coerce_time_kernel(pattern):
         ndarray : ascending timedelta offsets in seconds
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
         >>> import ubelt as ub
         >>> valid_patterns = [
         >>>     '-1y,-30d,-1d,0,1d,30d,1y',
@@ -119,7 +119,7 @@ def coerce_time_kernel(pattern):
         >>> with pytest.raises(TypeError):
         >>>     coerce_time_kernel(3.14)
     """
-    from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
+    from geowatch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
     from kwutil.util_time import coerce_timedelta
     if isinstance(pattern, str):
         if '(' in pattern:
@@ -146,7 +146,7 @@ def coerce_multi_time_kernel(pattern):
     Obtain a list of time kernels from user input.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
         >>> import ubelt as ub
         >>> valid_patterns = [
         >>>     '(-1d,0,1d),(1,2)',
@@ -177,7 +177,7 @@ def coerce_multi_time_kernel(pattern):
         ]
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
         >>> import ubelt as ub
         >>> pattern = ('-3y', '-2.5y', '-2y', '-1.5y', '-1y', 0, '1y', '1.5y', '2y', '2.5y', '3y')
         >>> multi_kernel = coerce_multi_time_kernel(pattern)
@@ -190,7 +190,7 @@ def coerce_multi_time_kernel(pattern):
     """
     if pattern is None:
         return [None]
-    from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
+    from geowatch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
     from kwutil.util_time import coerce_timedelta
     if isinstance(pattern, str):
         multi_kernel = parse_multi_time_kernel(pattern)

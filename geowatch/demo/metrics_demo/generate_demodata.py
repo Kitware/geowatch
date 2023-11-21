@@ -5,9 +5,9 @@ import click
 import json
 import kwarray
 import ubelt as ub
-from watch.demo.metrics_demo import demo_truth
-from watch.demo.metrics_demo import demo_rendering
-from watch.demo.metrics_demo import site_perterbing
+from geowatch.demo.metrics_demo import demo_truth
+from geowatch.demo.metrics_demo import demo_rendering
+from geowatch.demo.metrics_demo import site_perterbing
 
 
 def generate_demo_metrics_framework_data(
@@ -23,7 +23,7 @@ def generate_demo_metrics_framework_data(
         **kwargs):
     """
     Example:
-        >>> from watch.demo.metrics_demo.generate_demodata import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.generate_demodata import *  # NOQA
         >>> demo_info = generate_demo_metrics_framework_data(
         >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
@@ -31,7 +31,7 @@ def generate_demo_metrics_framework_data(
         >>> # TODO: visualize
 
     Ignore:
-        from watch.demo.metrics_demo.generate_demodata import *  # NOQA
+        from geowatch.demo.metrics_demo.generate_demodata import *  # NOQA
         import xdev
         globals().update(xdev.get_func_kwargs(generate_demo_metrics_framework_data))
     """
@@ -171,6 +171,6 @@ def main(*args, **kwargs):
 if __name__ == "__main__":
     """
     CommandLine:
-        python -m watch.demo.metrics_demo.generate_demodata --noise=0.0
+        python -m geowatch.demo.metrics_demo.generate_demodata --noise=0.0
     """
     main()

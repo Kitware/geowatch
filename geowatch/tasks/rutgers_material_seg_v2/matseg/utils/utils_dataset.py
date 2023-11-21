@@ -6,7 +6,7 @@ import numpy as np
 from glob import glob
 from tqdm import tqdm
 
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import get_repo_paths
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import get_repo_paths
 
 MATERIAL_TO_MATID = {
     'unknown': 0,

@@ -16,10 +16,10 @@ def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
 
     Ignore:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
-        >>> from watch.cli.run_metrics_framework import *  # NOQA
-        >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
+        >>> from geowatch.cli.run_metrics_framework import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
         >>> cmdline = 0
-        >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> base_dpath = ub.Path.appdir('geowatch', 'tests', 'test-iarpa-metrics2')
         >>> data_dpath = base_dpath / 'inputs'
         >>> dpath = base_dpath / 'outputs'
         >>> demo_info3 = generate_demo_metrics_framework_data(
@@ -40,7 +40,7 @@ def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
         >>> }
         >>> main(cmdline=False, **kwargs)
         >>> #
-        >>> from watch.tasks.metrics.viz_sc_results import *  # NOQA
+        >>> from geowatch.tasks.metrics.viz_sc_results import *  # NOQA
         >>> region_dpaths = [save_dpath / 'region_metrics/DR_R003']
         >>> save_dpath = merge_fpath.parent
         >>> true_site_dpath = demo_info3['true_site_dpath']
@@ -48,7 +48,7 @@ def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
         >>> viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath)
         >>> # TODO: visualize
     """
-    from watch.tasks.metrics.merge_iarpa_metrics import RegionResult
+    from geowatch.tasks.metrics.merge_iarpa_metrics import RegionResult
     kwplot.autompl()
 
     results = []
@@ -100,7 +100,7 @@ def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
 
 
 def viz_sc_gantt(df, plot_title, save_fpath):
-    from watch.heuristics import PHASES as phases
+    from geowatch.heuristics import PHASES as phases
     plt = kwplot.autoplt()
     sns = kwplot.autosns()
     # TODO how to pick site boundary?
@@ -153,8 +153,8 @@ def viz_sc_gantt(df, plot_title, save_fpath):
 def viz_sc_multi(ph, plot_title, save_fpath,
                  date: Literal['absolute', 'from_start', 'from_active'] = 'absolute',
                  how: Literal['residual', 'strip'] = 'strip'):
-    from watch.heuristics import PHASES as phases
-    import watch.heuristics
+    from geowatch.heuristics import PHASES as phases
+    import geowatch.heuristics
     plt = kwplot.autoplt()
     sns = kwplot.autosns()
     df = ph
@@ -203,7 +203,7 @@ def viz_sc_multi(ph, plot_title, save_fpath,
         df['date'] = df['date'].dt.days
         x_var = 'days since final No Activity'
 
-    palette = {c['name']: c['color'] for c in watch.heuristics.CATEGORIES}
+    palette = {c['name']: c['color'] for c in geowatch.heuristics.CATEGORIES}
 
     if how == 'residual':
         jitter = 0.1

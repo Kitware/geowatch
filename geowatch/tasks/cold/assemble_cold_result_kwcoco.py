@@ -75,13 +75,13 @@ def assemble_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.assemble_cold_result_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.assemble_cold_result_kwcoco assemble_main
+        python -m geowatch.tasks.cold.assemble_cold_result_kwcoco --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.assemble_cold_result_kwcoco assemble_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.assemble_cold_result_kwcoco import assemble_main
-    >>> from watch.tasks.cold.assemble_cold_result_kwcoco import *
+    >>> from geowatch.tasks.cold.assemble_cold_result_kwcoco import assemble_main
+    >>> from geowatch.tasks.cold.assemble_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold/stacked/KR_R001/",
     >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold/reccg/KR_R001/",

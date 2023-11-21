@@ -14,7 +14,7 @@ import io
 import pandas as pd
 import re
 from kwutil import util_time
-from watch.utils import util_pattern
+from geowatch.utils import util_pattern
 
 
 @ub.memoize
@@ -22,7 +22,7 @@ def parse_json_header(fpath):
     """
     Ideally the information we need is in the first few bytes of the json file
     """
-    from watch.utils import ijson_ext
+    from geowatch.utils import ijson_ext
     import zipfile
     if zipfile.is_zipfile(fpath):
         # We have a compressed json file, but we can still read the header
@@ -196,7 +196,7 @@ def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     tracker_info = iarpa_json['parent_info']
 
     if 0:
-        from watch.utils.util_dotdict import indexable_to_graph
+        from geowatch.utils.util_dotdict import indexable_to_graph
         data = tracker_info
         graph = indexable_to_graph(data)
         for n in graph.nodes:
@@ -266,7 +266,7 @@ def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
 
 
 def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
-    from watch.mlops import expt_manager
+    from geowatch.mlops import expt_manager
     act_pxl_test_dset = param_types['act.pxl']['act.pxl.test_dataset']
     state = expt_manager.ExperimentState('*', '*')
 
@@ -321,8 +321,8 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
             This should be the "info" section of a tracker result (i.e. "info"
             in the kwcoco json or geojson manifest file), which is a list of
             process context dictionaries. One of these dictionaries will have a
-            process name "watch.cli.kwcoco_to_geojson" or
-            "watch.cli.run_tracker", and that item will contain the config used
+            process name "geowatch.cli.kwcoco_to_geojson" or
+            "geowatch.cli.run_tracker", and that item will contain the config used
             to run the tracker. It may also contain an "extra.pred_info"
             property containing the pixel prediction params, and that may
             contain the training configuration.
@@ -336,7 +336,7 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     track_item = _handle_process_item(track_item)
 
     if 0:
-        from watch.utils.util_dotdict import indexable_to_graph
+        from geowatch.utils.util_dotdict import indexable_to_graph
         graph = indexable_to_graph(track_item)
         for n in graph.nodes:
             name = n.split('.')[-1]
@@ -407,7 +407,7 @@ def _handle_process_item(item):
 
 def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_types=True):
     from kwcoco.coco_evaluator import CocoSingleResult
-    # from watch.utils import result_analysis
+    # from geowatch.utils import result_analysis
     # from kwutil import util_time
     measure_info = _load_json(fpath)
 
@@ -552,8 +552,8 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
                 break
 
         if found_idx is not None:
-            # import watch
-            # dvc_dpath = watch.find_dvc_dpath()
+            # import geowatch
+            # dvc_dpath = geowatch.find_dvc_dpath()
             pname = ub.Path(*path.parts[idx + 1:])
             pname_dvc = pname.augment(tail='.dvc')
             cwd = ub.Path('.').absolute()
@@ -761,7 +761,7 @@ def find_pred_pxl_item(pred_info):
     pred_items = list(find_info_items(
         pred_info,
         {'process', 'process_context'},
-        'watch.tasks.fusion.predict'
+        'geowatch.tasks.fusion.predict'
     ))
     assert len(pred_items) == 1
     pred_item = pred_items[0]
@@ -769,7 +769,7 @@ def find_pred_pxl_item(pred_info):
 
 
 def find_info_items(info, query_type, query_name=None):
-    from watch.utils import util_pattern
+    from geowatch.utils import util_pattern
     if query_name is None:
         query_name = '*'
     query_name_pattern = util_pattern.MultiPattern.coerce(query_name)
@@ -839,8 +839,8 @@ def _load_json(fpath):
 
 def find_track_item(tracker_info):
     tracker_alias = {
-        'watch.cli.kwcoco_to_geojson',
-        'watch.cli.run_tracker',
+        'geowatch.cli.kwcoco_to_geojson',
+        'geowatch.cli.run_tracker',
     }
     track_items = list(find_info_items(
         tracker_info,
@@ -860,7 +860,7 @@ def find_track_item(tracker_info):
 
 def find_metrics_framework_item(info):
     task_aliases = {
-        'watch.cli.run_metrics_framework',
+        'geowatch.cli.run_metrics_framework',
     }
     items = list(find_info_items(
         info,
@@ -880,7 +880,7 @@ def find_metrics_framework_item(info):
 
 def find_pxl_eval_item(info):
     task_aliases = {
-        'watch.tasks.fusion.evaluate',
+        'geowatch.tasks.fusion.evaluate',
     }
     items = list(find_info_items(
         info,

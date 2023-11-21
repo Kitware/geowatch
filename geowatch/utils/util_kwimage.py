@@ -104,7 +104,7 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
 def upweight_center_mask(shape):
     """
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> shapes = [32, 64, 96, 128, 256]
         >>> results = {}
         >>> for shape in shapes:
@@ -142,7 +142,7 @@ def perchannel_colorize(data, channel_colors=None):
             be probabilities between zero and one.
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import itertools as it
         >>> import kwarray
         >>> channel_colors = ['tomato', 'gold', 'lime', 'darkturquoise']
@@ -164,7 +164,7 @@ def perchannel_colorize(data, channel_colors=None):
         >>> kwplot.imshow(canvas, docla=1)
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import itertools as it
         >>> import kwarray
         >>> channel_colors = ['blue']
@@ -311,10 +311,10 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None,
             legend.
 
     CommandLine:
-        python -X importtime -m xdoctest watch.utils.util_kwimage colorize_label_image
+        python -X importtime -m xdoctest geowatch.utils.util_kwimage colorize_label_image
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> labels = (np.random.rand(32, 32) * 10).astype(np.uint8) % 5
         >>> label_to_color = {0: 'black'}
         >>> label_mapping = {0: 'background'}
@@ -330,7 +330,7 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None,
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> labels = (np.random.rand(4, 4) * 10) % 5
         >>> labels[0:2] = np.nan
         >>> label_to_color = {0: 'black'}
@@ -437,7 +437,7 @@ def local_variance(image, kernel, handle_nans=True):
 
     Example:
         >>> # Test with nans
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> shape = (512, 512)
@@ -495,7 +495,7 @@ def find_lowvariance_regions(image, kernel=7):
     We can postprocess this with floodfills to get nearly exacly what we want.
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> shape = (512, 512)
@@ -520,7 +520,7 @@ def find_lowvariance_regions(image, kernel=7):
 
     Example:
         >>> # Test with nans
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> shape = (512, 512)
@@ -606,7 +606,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         https://docs.opencv.org/3.4/d7/d1b/group__imgproc__misc.html#ga366aae45a6c1289b341d140839f18717
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> shape = (512, 512)
@@ -632,7 +632,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
     Example:
         >>> # Test with nans
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> shape = (512, 512)
@@ -660,7 +660,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> kwplot.imshow(canvas, pnum=(1, 2, 2), title='labeled regions')
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> w, h = 5, 4
         >>> image = (np.arange(w * h).reshape(h, w)).astype(np.uint8)
         >>> image[2, 2] = 0
@@ -680,7 +680,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
     Example:
         >>> # Check dtypes
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> dtypes = [np.uint8, np.float32, np.float64, int, np.int16, np.uint16]
         >>> failed = []
         >>> for dtype in dtypes:
@@ -694,7 +694,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
     Example:
         >>> # Check specifying valid values
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> w, h = 32, 32
         >>> image = np.zeros((h, w), dtype=np.uint8)
         >>> image[0:8, :] = 1
@@ -767,7 +767,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>>     with timer:
         >>>         labels = find_samecolor_regions(image, scale=0.25)
 
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image = kwimage.grab_test_image('amazon', dsize=(512, 512))[..., 0:1]
         >>> poly = kwimage.Polygon.random().scale(image.shape[0:2][::-1])
@@ -1007,7 +1007,7 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
 
     Ignore:
         >>> # Without value restriction
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
         >>> dsize = image1.shape[0:2][::-1]
@@ -1030,7 +1030,7 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
 
     Ignore:
         >>> # With value restriction
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
         >>> dsize = image1.shape[0:2][::-1]
@@ -1053,7 +1053,7 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
 
     Ignore:
         >>> # With value restriction
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> image = np.random.rand(32, 32) + 1
         >>> values = {0}
         >>> abs_thresh = 0.2
@@ -1127,7 +1127,7 @@ def polygon_distance_transform(poly, shape):
     The API needs work, but I think the idea could be useful
 
     Example:
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import cv2
         >>> import kwimage
         >>> poly = kwimage.Polygon.random().scale(32)
@@ -1152,7 +1152,7 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
     import kwimage
     import kwplot
     kwplot.autompl()
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     space_shape = (380, 380)
     weights1 = util_kwimage.upweight_center_mask(space_shape)
     weights2 = kwimage.normalize(kwimage.gaussian_patch(space_shape))
@@ -1236,7 +1236,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
 
     Example:
         >>> # Create random polygons as test data
-        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> from kwarray import distributions
@@ -1273,7 +1273,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
     import numpy as np
     import geopandas as gpd
     import ubelt as ub
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import networkx as nx
 
     polygons_sh = [p.to_shapely() for p in polygons]

@@ -13,7 +13,7 @@ __notes__ = r"""
             echo "_BANDS = $_BANDS"
             BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
             GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
-            python -m watch.cli.gifify --frames_per_second .7 \
+            python -m geowatch.cli.gifify --frames_per_second .7 \
                 --input "$BAND_DPATH" --output "$GIF_FPATH"
         done
     done
@@ -38,9 +38,9 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--ffmpeg-test')
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/ani_video').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/ani_video').delete().ensuredir()
         >>> import kwcoco
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=5)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
@@ -53,20 +53,20 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>>     'channels': channels,
         >>>     'zoom_to_tracks': False,
         >>> }
-        >>> from watch.cli.coco_visualize_videos import main
+        >>> from geowatch.cli.coco_visualize_videos import main
         >>> cmdline = False
         >>> main(cmdline=cmdline, **kwargs)
         >>> viz_dpath = dpath
         >>> channels = None
         >>> video_names = None
         >>> frame_per_second = 0.7
-        >>> from watch.cli.animate_visualizations import *  # NOQA
+        >>> from geowatch.cli.animate_visualizations import *  # NOQA
         >>> animate_visualizations(viz_dpath, verbose=1, workers=0)
     """
-    from watch.cli import gifify
+    from geowatch.cli import gifify
     import ubelt as ub
     import kwcoco
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
 
     if channels is not None:
         channels = kwcoco.ChannelSpec.coerce(channels)
@@ -221,7 +221,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/animate_visualizations.py
+        python ~/code/watch/geowatch/cli/animate_visualizations.py
     """
     import fire
     fire.Fire(animate_visualizations)

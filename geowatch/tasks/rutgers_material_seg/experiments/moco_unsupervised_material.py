@@ -26,10 +26,10 @@ import itertools
 import numpy as np
 
 # import moco.loader
-# import watch.tasks.rutgers_material_seg.utils.utils as utils
-# from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-import watch.tasks.rutgers_material_seg.models.moco as moco
+# import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+# from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+import geowatch.tasks.rutgers_material_seg.models.moco as moco
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -139,7 +139,7 @@ for index, item in enumerate(possible_combinations):
 
 # print(verbose_labels)
 
-# project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+# project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
 # main_config_path = f"{project_root}/configs/main.yaml"
 
 # initial_config = utils.load_yaml_as_dict(main_config_path)

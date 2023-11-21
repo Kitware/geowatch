@@ -7,8 +7,8 @@ import torch
 import numpy as np
 from tifffile import tifffile
 
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
-from watch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
+from geowatch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
 
 
 class PassiveEarthObservationDataset(BaseDataset):
@@ -755,8 +755,8 @@ class PassiveEarthObservationDataset(BaseDataset):
 
 
 if __name__ == "__main__":
-    from watch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
-    from watch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
 
     root_dir = get_dataset_root_dir("peo")
 

@@ -27,18 +27,18 @@ from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
 from torchvision import transforms
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
-from watch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+from geowatch.tasks.rutgers_material_seg.models.supcon import SupConResNet
+from geowatch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss
 from fast_pytorch_kmeans import KMeans
 from skimage.filters import threshold_otsu as otsu
-from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
-from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
+from geowatch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
+from geowatch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 
 
 torch.backends.cudnn.enabled = False
@@ -175,7 +175,7 @@ class Trainer(object):
         batch_index_to_show = config['visualization']['batch_index_to_show']
         for batch_index, batch in pbar:
             outputs = batch
-            if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
+            if config['data']['name'] == 'geowatch' or config['data']['name'] == 'onera':
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 negative_images = outputs['inputs']['negative_im'].data[0]
                 image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
@@ -940,7 +940,7 @@ if __name__ == "__main__":
     # dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     # train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
 
-    if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
+    if config['data']['name'] == 'geowatch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
         sampler = ndsampler.CocoSampler(dset)

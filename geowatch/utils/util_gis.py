@@ -37,7 +37,7 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc', predicate='intersect
         ..[1] https://en.wikipedia.org/wiki/DE-9IM
 
     TODO:
-        - [ ] This can move to watch.utils
+        - [ ] This can move to geowatch.utils
 
     Returns:
         dict:
@@ -45,7 +45,7 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc', predicate='intersect
             overlapping integer-iloc-indexes in gdf2
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import geopandas as gpd
         >>> gpd.GeoDataFrame()
         >>> gdf1 = gpd.read_file(
@@ -148,7 +148,7 @@ def latlon_text(lat, lon, precision=6):
                 2 - for ~1km accuracy,
 
     TODO:
-        - [ ] This can move to watch.utils
+        - [ ] This can move to geowatch.utils
 
     Notes:
         1 degree of latitude is *very* roughly the order of 100km, so the
@@ -263,7 +263,7 @@ def load_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
     Example:
         >>> import io
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> geojson_text = demo_regions_geojson_text()
         >>> file = io.StringIO()
         >>> file.write(geojson_text)
@@ -384,7 +384,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
 
     Example:
         >>> import geopandas as gpd
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import kwarray
         >>> import kwimage
         >>> rng = kwarray.ensure_rng(0)
@@ -399,7 +399,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
 
     Example:
         >>> import geopandas as gpd
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import kwarray
         >>> import kwimage
         >>> # If the data is too big for a single UTM zone,
@@ -414,7 +414,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
         >>>     gdf_utm = project_gdf_to_local_utm(gdf_crs84)
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwarray
         >>> import kwimage
@@ -436,7 +436,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
     # but all neighbors. Find a good example of this.
     # Example:
     #     >>> import geopandas as gpd
-    #     >>> from watch.utils.util_gis import *  # NOQA
+    #     >>> from geowatch.utils.util_gis import *  # NOQA
     #     >>> import kwarray
     #     >>> # If the data is too big for a single UTM zone,
     #     >>> rng = kwarray.ensure_rng(0)
@@ -525,7 +525,7 @@ def utm_epsg_from_latlon(lat, lon):
         https://gis.stackexchange.com/questions/365584/convert-utm-zone-into-epsg-code
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> epsg_code = utm_epsg_from_latlon(0, 0)
         >>> print('epsg_code = {!r}'.format(epsg_code))
         epsg_code = 32631
@@ -552,7 +552,7 @@ class UTM_TransformContext:
 
     Example:
         >>> import kwimage
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> data_crs84 = kwimage.Polygon.random()
         >>> with UTM_TransformContext(data_crs84) as self:
         >>>     orig_utm_poly = kwimage.Polygon.coerce(self.geoms_utm.iloc[0])
@@ -571,7 +571,7 @@ class UTM_TransformContext:
             data_crs84 (Coercible[GeoSeries]):
                 something we know how to transform into a GeoSeries
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         self.crs84 = util_gis.get_crs84()
         self.geoms_crs84 = self._coerce_geo_series(data_crs84, self.crs84)
         self.crs_utm = None
@@ -580,7 +580,7 @@ class UTM_TransformContext:
         self.final_geoms_crs84 = None
 
     def __enter__(self):
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         import geopandas as gpd
         gdf_crs84 = gpd.GeoDataFrame(geometry=self.geoms_crs84)
         gdf_utm = util_gis.project_gdf_to_local_utm(gdf_crs84)
@@ -705,7 +705,7 @@ def find_local_meter_epsg_crs(geom_crs84):
         [2] http://projfinder.com/
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import kwimage
         >>> geom_crs84 = kwimage.Polygon.random().translate(-0.5).scale((180, 90)).to_shapely()
         >>> epsg_zone = find_local_meter_epsg_crs(geom_crs84)
@@ -734,7 +734,7 @@ def check_latlons(lat, lon):
     Latitude (y) is always between -90 and 90 (degrees north)
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import pytest
         >>> assert not check_latlons(1000, 1000)
         >>> assert check_latlons(0, 0)
@@ -806,8 +806,8 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
 
     Example:
         >>> # xdoctest: +SKIP("failing on CI. unsure why")
-        >>> from watch.utils.util_gis import *  # NOQA
-        >>> from watch.demo.metrics_demo import generate_demodata
+        >>> from geowatch.utils.util_gis import *  # NOQA
+        >>> from geowatch.demo.metrics_demo import generate_demodata
         >>> info1 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R001')
         >>> info2 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R002')
         >>> info3 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R003')
@@ -871,7 +871,7 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
         >>> assert len(result) == 31
 
         >>> # Test raw loading and format swapping
-        >>> from watch.utils import util_gis
+        >>> from geowatch.utils import util_gis
         >>> arg = util_gis.demo_regions_geojson_text()
         >>> result1 = list(coerce_geojson_datas(arg, allow_raw=False))
         >>> assert len(result1) == 0
@@ -981,11 +981,11 @@ def coerce_geojson_paths(data, return_manifests=False):
             any intermediate manifest files.
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import json
-        >>> from watch.demo.metrics_demo import generate_demodata
+        >>> from geowatch.demo.metrics_demo import generate_demodata
         >>> # Setup a bunch of geojson files
-        >>> outdir = ub.Path.appdir("watch/tests/gis/coerce_geojson_v1")
+        >>> outdir = ub.Path.appdir("geowatch/tests/gis/coerce_geojson_v1")
         >>> # outdir.delete().ensuredir()
         >>> info1 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R001', outdir=outdir)
         >>> info2 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R002', outdir=outdir)
@@ -1136,9 +1136,9 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         * coerce_geojson_paths - only coerces paths
 
     Example:
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch', 'tests', 'util_gis', 'load_geojson_data')
+        >>> dpath = ub.Path.appdir('geowatch', 'tests', 'util_gis', 'load_geojson_data')
         >>> dpath.ensuredir()
         >>> fpath = dpath / 'data.geojson'
         >>> fpath.write_text(demo_regions_geojson_text())
@@ -1149,7 +1149,7 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         >>> assert isinstance(gdf, gpd.GeoDataFrame)
         >>> assert isinstance(dct, dict)
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_progress
     # sites = []
     if desc is None:
@@ -1228,10 +1228,10 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:LARGE_DOWNLOAD)
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import kwimage
-        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
+        >>> from geowatch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
         >>> # Case 1: Traditional CRS84 Geojson
@@ -1296,8 +1296,8 @@ def coerce_crs(crs_info):
     Get a pyproj CRS from something they should be inferrable from
 
     Example:
-        >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.utils.util_gis import *  # NOQA
+        >>> from geowatch.gis.geotiff import *  # NOQA
+        >>> from geowatch.utils.util_gis import *  # NOQA
         >>> coerce_crs('crs84')
         >>> coerce_crs(['EPSG', '4326'])
     """

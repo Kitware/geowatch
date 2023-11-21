@@ -86,7 +86,7 @@ def _global_multi_time_kernel_parser():
 def parse_multi_time_kernel(time_kernel):
     """
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import *  # NOQA
         >>> time_kernel = '-3h,-1h,-1min,0,1min,1h,3h'
         >>> multi_kernel = parse_multi_time_kernel(time_kernel)
         >>> print('multi_kernel = {}'.format(ub.urepr(multi_kernel, nl=1)))

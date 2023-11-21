@@ -7,10 +7,10 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import generate_image_slice_object
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models import build_model
+from geowatch.tasks.rutgers_material_seg_v2.matseg.datasets import build_dataset
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import generate_image_slice_object
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID
 
 
 def fit_model(cfg: DictConfig, overwrite_exp_dir=None) -> str:

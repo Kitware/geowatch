@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     """
     Example Usage:
-        python -W ignore -m watch.tasks.dzyne_misc.create_region_gif \
+        python -W ignore -m geowatch.tasks.dzyne_misc.create_region_gif \
             -i /smart_data_dvc/Validation-V1/positive_annotated/AE_R001_positive_annotated/data_filteredWV_depth_change.kwcoco.json \
             -o /smart_data_dvc/Validation-V1/positive_annotated/AE_R001_positive_annotated/_assets/gifs \
             -s WV -rc 'red|green|blue,depth' \

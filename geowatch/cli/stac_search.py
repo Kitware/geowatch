@@ -10,13 +10,13 @@ SeeAlso:
 
 CommandLine:
     # Create a demo region file
-    xdoctest watch.demo.demo_region demo_khq_region_fpath
+    xdoctest geowatch.demo.demo_region demo_khq_region_fpath
 
     DATASET_SUFFIX=DemoKHQ-2022-06-10-V2
-    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
+    DEMO_DPATH=$HOME/.cache/geowatch/demo/datasets
 
-    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
-    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/KHQ_R001_sites/*.geojson"
 
     START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
     END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
@@ -27,7 +27,7 @@ CommandLine:
     mkdir -p "$DEMO_DPATH"
 
     # Create the search json wrt the sensors and processing level we want
-    python -m watch.stac.stac_search_builder \
+    python -m geowatch.stac.stac_search_builder \
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
@@ -38,7 +38,7 @@ CommandLine:
     # Delete this to prevent duplicates
     rm -f "$RESULT_FPATH"
     # Create the .input file
-    python -m watch.cli.stac_search \
+    python -m geowatch.cli.stac_search \
         -rf "$REGION_FPATH" \
         -sj "$SEARCH_FPATH" \
         -m area \
@@ -46,7 +46,7 @@ CommandLine:
         -o "${RESULT_FPATH}"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath "${RESULT_FPATH}" \
         --collated False \
@@ -66,11 +66,11 @@ CommandLine:
 CommandLine:
     # Alternate invocation
     # Create a demo region file
-    xdoctest watch.demo.demo_region demo_khq_region_fpath
+    xdoctest geowatch.demo.demo_region demo_khq_region_fpath
 
     DATASET_SUFFIX=DemoKHQ-2022-06-10-V3
-    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
-    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+    DEMO_DPATH=$HOME/.cache/geowatch/demo/datasets
+    REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/KHQ_R001.geojson"
     REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
     RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
 
@@ -82,7 +82,7 @@ CommandLine:
     # Delete this to prevent duplicates
     rm -f "$RESULT_FPATH"
     # Create the .input file
-    python -m watch.cli.stac_search \
+    python -m geowatch.cli.stac_search \
         --region_file "$REGION_FPATH" \
         --api_key=env:SMART_STAC_API_KEY \
         --search_json "auto" \
@@ -105,7 +105,7 @@ CommandLine:
     # Delete this to prevent duplicates
     rm -f "$RESULT_FPATH"
     # Create the .input file
-    python -m watch.cli.stac_search \
+    python -m geowatch.cli.stac_search \
         --region_file "$REGION_FPATH" \
         --api_key=env:SMART_STAC_API_KEY \
         --search_json "auto" \
@@ -123,7 +123,7 @@ CommandLine:
     # Load SMART_STAC_API_KEY
     source "$HOME"/code/watch/secrets/secrets
 
-    python -m watch.cli.stac_search \
+    python -m geowatch.cli.stac_search \
         --region_file "$DVC_DPATH/annotations/region_models/US_R007.geojson" \
         --search_json "auto" \
         --cloud_cover "0" \
@@ -138,8 +138,8 @@ CommandLine:
 import json
 import tempfile
 import pystac_client
-from watch.utils import util_logging
-from watch.utils import util_s3
+from geowatch.utils import util_logging
+from geowatch.utils import util_s3
 import kwarray
 import ubelt as ub
 import scriptconfig as scfg
@@ -215,12 +215,12 @@ def main(cmdline=True, **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.cli.stac_search import *  # NOQA
-        >>> from watch.demo import demo_region
-        >>> from watch.stac import stac_search_builder
-        >>> from watch.utils import util_gis
+        >>> from geowatch.cli.stac_search import *  # NOQA
+        >>> from geowatch.demo import demo_region
+        >>> from geowatch.stac import stac_search_builder
+        >>> from geowatch.utils import util_gis
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
         >>> region_fpath = demo_region.demo_khq_region_fpath()
         >>> region = util_gis.load_geojson(region_fpath)
@@ -245,7 +245,7 @@ def main(cmdline=True, **kwargs):
         >>> cmdline = 0
         >>> main(cmdline=cmdline, **kwargs)
         >>> # results are in the
-        >>> from watch.cli.baseline_framework_ingress import read_input_stac_items
+        >>> from geowatch.cli.baseline_framework_ingress import read_input_stac_items
         >>> items = read_input_stac_items(result_fpath)
         >>> len(items)
         >>> for item in items:
@@ -254,11 +254,11 @@ def main(cmdline=True, **kwargs):
     """
     config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import slugify_ext
     from kwutil import util_progress
-    from watch.utils import util_parallel
-    from watch.utils import util_pandas
+    from geowatch.utils import util_parallel
+    from geowatch.utils import util_pandas
     from kwutil import util_time
     import pandas as pd
     import rich.markup
@@ -410,7 +410,7 @@ class StacSearcher:
     Example:
         >>> # xdoctest: +REQUIRES(env:WATCH_ENABLE_NETWORK_TESTS)
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.cli.stac_search import *  # NOQA
+        >>> from geowatch.cli.stac_search import *  # NOQA
         >>> import tempfile
         >>> provider = "https://earth-search.aws.element84.com/v0"
         >>> geom = {'type': 'Polygon',
@@ -490,7 +490,7 @@ class StacSearcher:
             # Filter to a max number of items per region for testing
             # Sample over time uniformly
             from kwutil import util_time
-            from watch.tasks.fusion.datamodules import temporal_sampling
+            from geowatch.tasks.fusion.datamodules import temporal_sampling
             datetimes = [util_time.coerce_datetime(item['properties']['datetime'])
                          for item in features]
             # TODO: Can we get a linear variant that doesn't need the N**2
@@ -526,9 +526,9 @@ class StacSearcher:
 
 
 def _auto_search_params_from_region(r_file_loc, config):
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_time
-    from watch.stac.stac_search_builder import build_search_json
+    from geowatch.stac.stac_search_builder import build_search_json
     region_df = util_gis.load_geojson(r_file_loc)
     region_row = region_df[region_df['type'] == 'region'].iloc[0]
     end_date = util_time.coerce_datetime(region_row['end_date'])
@@ -549,7 +549,7 @@ def _auto_search_params_from_region(r_file_loc, config):
 
 
 def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, verbose=1):
-    from watch.geoannots import geomodels
+    from geowatch.geoannots import geomodels
     from shapely.geometry import shape as geom_shape
     if verbose:
         logger.info(f'Query region file: {region_fpath}')

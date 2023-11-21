@@ -18,7 +18,7 @@ CommandLine:
 
 
     # Generate Rutgers Features
-    python -m watch.tasks.rutgers_material_seg.predict_test \
+    python -m geowatch.tasks.rutgers_material_seg.predict_test \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
@@ -36,9 +36,9 @@ import ndsampler
 import numpy as np
 import ubelt as ub
 import pathlib
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 
 
 class Evaluator(object):
@@ -164,7 +164,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for material prediction
     """
-    from watch.utils import configargparse_ext
+    from geowatch.utils import configargparse_ext
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Prediction script for the fusion task',
@@ -203,7 +203,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
 def hardcoded_default_configs(default_config_key):
     # HACK: THIS IS NOT ROBUST
-    from watch.tasks import rutgers_material_seg
+    from geowatch.tasks import rutgers_material_seg
     from os.path import dirname, join
     module_dpath = dirname(rutgers_material_seg.__file__)
     main_config_path = join(module_dpath, "./configs/main.yaml")
@@ -246,7 +246,7 @@ def main(cmdline=True, **kwargs):
         random.seed(config['seed'])
         torch.set_default_dtype(torch.float32)
 
-    from watch.utils.lightning_ext import util_device
+    from geowatch.utils.lightning_ext import util_device
     devices = util_device.coerce_devices(args.devices)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -266,7 +266,7 @@ def main(cmdline=True, **kwargs):
     print(dataset.__len__())
 
     from kwutil import util_resources
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     num_workers = util_parallel.coerce_num_workers(args.num_workers)
     if num_workers > 0:
         util_resources.request_nofile_limits()

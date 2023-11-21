@@ -1,7 +1,7 @@
 import os
 import json
 
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_repo_dir
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_repo_dir
 
 
 def get_dataset_root_dir(dataset_name):

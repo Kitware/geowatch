@@ -11,11 +11,11 @@ class SMARTDataMixin:
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
             >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath()
+            >>> dvc_dpath = geowatch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -138,13 +138,13 @@ class SMARTDataMixin:
         Construct a binary good/bad mask from the quality band in a coco image.
 
         Ignore:
-            >>> from watch.mlops.smart_pipeline import *  # NOQA
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.mlops.smart_pipeline import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import ndsampler
-            >>> import watch
-            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> import geowatch
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -216,13 +216,13 @@ class SMARTDataMixin:
 
             sensor = coco_img.img.get('sensor_coarse')
             spec_name = 'ACC-1'
-            from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
             table = qa_table = QA_SPECS.find_table(spec_name, sensor)
 
             draw_cloudmask_viz(qa_data, rgb_data)
 
         """
-        from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+        from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
 
         registered_channels = coco_img.channels
 

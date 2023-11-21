@@ -83,13 +83,13 @@ def export_cold_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.export_cold_result_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco export_cold_main
+        python -m geowatch.tasks.cold.export_cold_result_kwcoco --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.export_cold_result_kwcoco export_cold_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import export_cold_main
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import *
+    >>> from geowatch.tasks.cold.export_cold_result_kwcoco import export_cold_main
+    >>> from geowatch.tasks.cold.export_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    rank = 0,
     >>>    n_cores = 1,

@@ -9,7 +9,7 @@ from tqdm import tqdm
 from osgeo import gdal
 from tifffile import tifffile
 
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import sigmoid
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import sigmoid
 
 
 def load_S2_image(image_dir, channels, crop_slice=None, backend='gdal'):

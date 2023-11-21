@@ -11,17 +11,17 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from .models.network_swinir import SwinIR as net
-from watch.utils import kwcoco_extensions
+from geowatch.utils import kwcoco_extensions
 
 
 def main():
     """example:
-    python -W ignore -m watch.tasks.super_res.main_test_swinir \
+    python -W ignore -m geowatch.tasks.super_res.main_test_swinir \
         --src_kwcoco /output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv.kwcoco.json \
         --task real_sr \
         --scale 4 \
         --large_model \
-        --model_path watch/tasks/super_res/model_zoo/swinir/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth \
+        --model_path geowatch/tasks/super_res/model_zoo/swinir/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth \
         --dst_dir /output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC \
         --src_images_dir /dvc/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
     """

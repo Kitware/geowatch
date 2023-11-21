@@ -13,12 +13,12 @@ CommandLine:
     ###
 
     # Create a demo region file
-    xdoctest -m watch.demo.demo_region demo_khq_region_fpath
+    xdoctest -m geowatch.demo.demo_region demo_khq_region_fpath
 
     DATASET_SUFFIX=DemoKHQ-2022-09-19-V7
-    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
-    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
-    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    DEMO_DPATH=$HOME/.cache/geowatch/demo/datasets
+    REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/KHQ_R001_sites/*.geojson"
     REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
     RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
 
@@ -31,7 +31,7 @@ CommandLine:
     rm -f "$RESULT_FPATH"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --cloud_cover=100 \
         --stac_query_mode=auto \
@@ -113,7 +113,7 @@ def demo_khq_annots():
     import geojson
     import geopandas as gpd
     import ubelt as ub
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
@@ -311,7 +311,7 @@ def demo_khq_annots():
             "end_date": khq_region_end_time.date().isoformat(),
             "originator": "kit-demo",
             "model_content": "annotation",
-            "comments": 'watch-demo-data',
+            "comments": 'geowatch-demo-data',
         },
         geometry=khq_region_geom
     )
@@ -328,7 +328,7 @@ def demo_smart_annots():
     import geojson
     import geopandas as gpd
     import ubelt as ub
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
@@ -454,7 +454,7 @@ def demo_smart_annots():
     mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
 
     # Enlarge the region
-    # TODO: see RegionModel in ~/code/watch/watch/cli/cluster_sites.py
+    # TODO: see RegionModel in ~/code/watch/geowatch/cli/cluster_sites.py
     region_feature = geojson.Feature(
         properties={
             "type": "region",
@@ -465,7 +465,7 @@ def demo_smart_annots():
             "end_date": region_end_time.date().isoformat(),
             "originator": "kit-demo",
             "model_content": "annotation",
-            "comments": 'watch-demo-data',
+            "comments": 'geowatch-demo-data',
         },
         geometry=region_geom
     )
@@ -508,8 +508,8 @@ def _show_demo_annots_on_map():
 
     Example:
         >>> # xdoctest: +REQUIRES(--show)
-        >>> from watch.demo.demo_region import *  # NOQA
-        >>> from watch.demo.demo_region import _show_demo_annots_on_map
+        >>> from geowatch.demo.demo_region import *  # NOQA
+        >>> from geowatch.demo.demo_region import _show_demo_annots_on_map
         >>> import kwplot
         >>> kwplot.autompl()
     """
@@ -518,7 +518,7 @@ def _show_demo_annots_on_map():
     import kwimage
     import kwplot
     import matplotlib
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     ox = _configure_osm()
     # https://geopandas.org/en/stable/gallery/plotting_basemap_background.html
     kwplot.autompl()
@@ -548,7 +548,7 @@ def demo_khq_region_fpath():
     import json
     import ubelt as ub
     region, sites = demo_khq_annots()
-    annot_dpath = ub.Path.appdir('watch/demo/annotations').ensuredir()
+    annot_dpath = ub.Path.appdir('geowatch/demo/annotations').ensuredir()
 
     # Dump region file
     region_id = region['features'][0]['properties']['region_id']
@@ -570,7 +570,7 @@ def demo_smart_region_fpath():
     import json
     import ubelt as ub
     region, sites = demo_smart_annots()
-    annot_dpath = ub.Path.appdir('watch/demo/annotations').ensuredir()
+    annot_dpath = ub.Path.appdir('geowatch/demo/annotations').ensuredir()
 
     # Dump region file
     region_id = region['features'][0]['properties']['region_id']
@@ -591,6 +591,6 @@ def demo_smart_region_fpath():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/demo/demo_region.py
+        python ~/code/watch/geowatch/demo/demo_region.py
     """
     demo_khq_region_fpath()

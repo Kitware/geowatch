@@ -9,7 +9,7 @@ import ubelt as ub
 # from datetime import datetime as datetime_cls
 from shapely.ops import unary_union
 from kwarray.distributions import TruncNormal
-from watch.demo.metrics_demo import demo_utils
+from geowatch.demo.metrics_demo import demo_utils
 
 
 class RegionModelGenerator:
@@ -99,7 +99,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
             A region model and its corresponding site models and renderables
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region, sites, renderables = random_region_model(num_sites=2, num_observations=5, p_observe=0.5, rng=0)
         >>> print('region = {}'.format(ub.urepr(region, nl=4, precision=6, sort=0)))
         ...
@@ -307,7 +307,7 @@ def random_observables(num_observations, start_time=None, end_time=None, rng=Non
 
     Example:
         >>> # xdoctest: +SKIP("failing on CI. unsure why")
-        >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> num_observations = 2
         >>> observables = random_observables(1, rng=32)
         >>> print('observables = {}'.format(ub.urepr(observables, nl=2)))
@@ -385,7 +385,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
 
     Example:
         >>> # xdoctest: +SKIP("failing on CI. unsure why")
-        >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region_id = 'DR_0042'
         >>> site_id = 'DR_0042_9001'
         >>> rng = kwarray.ensure_rng(0)
@@ -442,7 +442,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
 
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region_id = 'DR_0042'
         >>> site_id = 'DR_0042_9001'
         >>> rng = kwarray.ensure_rng(0)
@@ -487,7 +487,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
         }
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region_id = 'DR_0042'
         >>> site_id = 'DR_0042_9001'
         >>> rng = kwarray.ensure_rng(42232)

@@ -9,13 +9,13 @@ Limitations:
 
 Example:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.cluster_sites \
+    python -m geowatch.cli.cluster_sites \
             --src "$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson" \
             --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson \
             --draw_clusters True
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.coco_align \
+    python -m geowatch.cli.coco_align \
         --src $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
         --dst $DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
         --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
@@ -29,13 +29,13 @@ Example:
         --workers=8
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.cluster_sites \
+    python -m geowatch.cli.cluster_sites \
             --src "$DVC_DATA_DPATH/annotations/drop6/region_models/NZ_R001.geojson" \
             --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson/NZ_R001 \
             --draw_clusters True
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.coco_align \
+    python -m geowatch.cli.coco_align \
         --src $DVC_DATA_DPATH/Drop6/combo_imganns-NZ_R001_L.kwcoco.json \
         --dst $DVC_DATA_DPATH/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip \
         --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/NZ_R001/SUB_NZ_R001_n031_swnykmah.geojson \
@@ -84,14 +84,14 @@ class ClusterSiteConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     Example:
-        >>> from watch.cli.cluster_sites import *  # NOQA
-        >>> from watch.cli import cluster_sites
+        >>> from geowatch.cli.cluster_sites import *  # NOQA
+        >>> from geowatch.cli import cluster_sites
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites1').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch', 'doctests', 'cluster_sites1').ensuredir()
         >>> src_dpath = (dpath / 'src').ensuredir()
         >>> dst_dpath = (dpath / 'dst')
         >>> dst_region_fpath = dst_dpath / 'cluster.geojson'
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> region = geomodels.RegionModel.random(num_sites=10)
         >>> src_fpath = src_dpath / 'demo_region.geojson'
         >>> src_fpath.write_text(region.dumps())
@@ -107,13 +107,13 @@ def main(cmdline=1, **kwargs):
         >>> cluster_sites.main(cmdline=cmdline, **kwargs)
 
     Example:
-        >>> from watch.cli.cluster_sites import *  # NOQA
-        >>> from watch.cli import cluster_sites
+        >>> from geowatch.cli.cluster_sites import *  # NOQA
+        >>> from geowatch.cli import cluster_sites
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites2').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch', 'doctests', 'cluster_sites2').ensuredir()
         >>> src_dpath = (dpath / 'src').ensuredir()
         >>> dst_dpath = (dpath / 'dst')
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> region = geomodels.RegionModel.random(num_sites=10)
         >>> src_fpath = src_dpath / 'demo_region.geojson'
         >>> src_fpath.write_text(region.dumps())
@@ -134,9 +134,9 @@ def main(cmdline=1, **kwargs):
     Ignore:
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch'))
-        from watch.cli.cluster_sites import *  # NOQA
-        import watch
-        data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.cli.cluster_sites import *  # NOQA
+        import geowatch
+        data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         src = data_dpath / 'annotations/drop6/region_models/KR_R002.geojson'
         dst_dpath = data_dpath / 'ValiRegionSmall/geojson'
         kwargs = dict(src=src, dst_dpath=dst_dpath, draw_clusters=True)
@@ -150,12 +150,12 @@ def main(cmdline=1, **kwargs):
     import kwimage
     from kwutil import util_time
 
-    from watch import heuristics
-    from watch.geoannots import geomodels
-    from watch.utils import process_context
-    from watch.utils import util_gis
-    from watch.utils import util_kwimage
-    from watch.utils import util_resolution
+    from geowatch import heuristics
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import process_context
+    from geowatch.utils import util_gis
+    from geowatch.utils import util_kwimage
+    from geowatch.utils import util_resolution
 
     # import pandas as pd
     if config.dst_dpath is None:
@@ -165,7 +165,7 @@ def main(cmdline=1, **kwargs):
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
 
     proc_context = process_context.ProcessContext(
-        name='watch.cli.cluster_sites', type='process',
+        name='geowatch.cli.cluster_sites', type='process',
         config=process_context.jsonify_config(config),
         track_emissions=False,
     )
@@ -397,7 +397,7 @@ def main(cmdline=1, **kwargs):
                 color_list.append(color)
 
             import kwplot
-            from watch.utils import util_kwplot
+            from geowatch.utils import util_kwplot
             plt = kwplot.autoplt()
             kwplot.figure(fnum=1, doclf=1)
             # polygons.draw(color='pink')
@@ -426,6 +426,6 @@ __cli__.main = main
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/cluster_sites.py
+        python ~/code/watch/geowatch/cli/cluster_sites.py
     """
     main(cmdline=True)

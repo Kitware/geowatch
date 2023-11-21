@@ -8,7 +8,7 @@ def parse_delimited_argstr(data):
     demo method.
 
     Example:
-        >>> from watch.utils.util_codes import *  # NOQA
+        >>> from geowatch.utils.util_codes import *  # NOQA
         >>> data = 'foo-bar-baz1-biz2.3'
         >>> defaults = {}
         >>> alias_to_key = None

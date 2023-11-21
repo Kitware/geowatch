@@ -30,11 +30,11 @@ from typing import Dict
 import scriptconfig as scfg
 from shapely.ops import unary_union
 
-from watch.utils import kwcoco_extensions
-from watch.utils import process_context
+from geowatch.utils import kwcoco_extensions
+from geowatch.utils import process_context
 from kwutil import util_progress
-from watch.utils import util_parallel
-from watch import heuristics
+from geowatch.utils import util_parallel
+from geowatch import heuristics
 
 try:
     from xdev import profile
@@ -892,10 +892,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         - [ ] Fold non-critical options into the config
 
     CommandLine:
-        XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
+        XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.evaluate evaluate_segmentations
 
     Example:
-        >>> from watch.tasks.fusion.evaluate import *  # NOQA
+        >>> from geowatch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
@@ -917,7 +917,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> # auxiliary channels to this demodata.
         >>> print('perterbing')
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
-        >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval').ensuredir()
+        >>> eval_dpath = ub.Path.appdir('geowatch/tests/fusion_eval').ensuredir()
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> config = {}
         >>> config['score_space'] = 'image'
@@ -930,7 +930,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.tasks.fusion.evaluate import *  # NOQA
+        >>> from geowatch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
@@ -948,7 +948,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> # auxiliary channels to this demodata.
         >>> print('perterbing')
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
-        >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval-video').ensuredir()
+        >>> eval_dpath = ub.Path.appdir('geowatch/tests/fusion_eval-video').ensuredir()
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> config = {}
         >>> config['score_space'] = 'video'
@@ -1005,7 +1005,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             info.append(item)
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
-            if proc_name == 'watch.tasks.fusion.predict':
+            if proc_name == 'geowatch.tasks.fusion.predict':
                 package_fpath = item['properties']['config'].get('package_fpath')
                 if 'title' not in item:
                     item['title'] = ub.Path(package_fpath).stem
@@ -1064,7 +1064,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         draw_heatmaps = bool(eval_dpath is not None)
 
     pcontext = process_context.ProcessContext(
-        name='watch.tasks.fusion.evaluate',
+        name='geowatch.tasks.fusion.evaluate',
         config=config,
     )
     pcontext.start()

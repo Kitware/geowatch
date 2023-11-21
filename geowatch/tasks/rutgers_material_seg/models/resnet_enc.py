@@ -9,9 +9,9 @@ Adapted from: https://github.com/bearpaw/pytorch-classification
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from watch.tasks.rutgers_material_seg.models.encoding import Encoding
-from watch.tasks.rutgers_material_seg.models.quantizer import Quantizer
-from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
+from geowatch.tasks.rutgers_material_seg.models.encoding import Encoding
+from geowatch.tasks.rutgers_material_seg.models.quantizer import Quantizer
+from geowatch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 from torchvision import transforms
 
 

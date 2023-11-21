@@ -6,7 +6,7 @@ visualizations.
 #### LORES
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
+python -m geowatch.mlops.confusor_analysis \
     --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
     --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/lores-confusion \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
@@ -19,7 +19,7 @@ python -m watch.mlops.confusor_analysis \
 # ON KR_R002
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
+python -m geowatch.mlops.confusor_analysis \
     --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
@@ -30,7 +30,7 @@ python -m watch.mlops.confusor_analysis \
 #### TEST WITH AC KWCOCO
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
+python -m geowatch.mlops.confusor_analysis \
     --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_demo_ac_eval/eval/flat/sc_poly_eval/sc_poly_eval_id_f689ba48 \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
@@ -194,14 +194,14 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/mlops/confusor_analysis.py main
-        HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
+        xdoctest -m /home/joncrall/code/watch/geowatch/mlops/confusor_analysis.py main
+        HAS_DVC=1 xdoctest -m geowatch.mlops.confusor_analysis main:0
 
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
-        >>> from watch.mlops.confusor_analysis import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.mlops.confusor_analysis import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> region_id = 'NZ_R001'
         >>> true_site_dpath = data_dvc_dpath / 'annotations/drop6/site_models'
         >>> true_region_dpath = data_dvc_dpath / 'annotations/drop6/region_models'
@@ -315,8 +315,8 @@ class ConfusionAnalysis:
             be robust to the case of anyone putting bad files in these dirs
         """
         import kwcoco
-        from watch.geoannots.geomodels import SiteModel
-        from watch.geoannots.geomodels import RegionModel
+        from geowatch.geoannots.geomodels import SiteModel
+        from geowatch.geoannots.geomodels import RegionModel
         coco_dset = kwcoco.CocoDataset(self.config.dst_kwcoco)
 
         region_paths = []
@@ -341,10 +341,10 @@ class ConfusionAnalysis:
         """
         Loads the true and predicted site models
         """
-        from watch.geoannots.geomodels import SiteModel
-        from watch.geoannots.geomodels import RegionModel
-        from watch.geoannots.geomodels import SiteModelCollection
-        from watch.utils import util_gis
+        from geowatch.geoannots.geomodels import SiteModel
+        from geowatch.geoannots.geomodels import RegionModel
+        from geowatch.geoannots.geomodels import SiteModelCollection
+        from geowatch.utils import util_gis
         import rich
         import itertools as it
 
@@ -403,13 +403,13 @@ class ConfusionAnalysis:
 
         Note:
             The possible confusion codes and the corresponding confusion_color
-            are assigned in :py:obj:`watch.heuristics.IARPA_CONFUSION_COLORS`
+            are assigned in :py:obj:`geowatch.heuristics.IARPA_CONFUSION_COLORS`
         """
         config = self.config
 
         import rich
         import pandas as pd
-        from watch import heuristics
+        from geowatch import heuristics
 
         performer_id = config.performer_id
         region_id = config.region_id
@@ -550,10 +550,10 @@ class ConfusionAnalysis:
         We should redo confusion stuff at each stage of the pipeline and
         determine when mistakes and good decisions are made.
         """
-        from watch.mlops.smart_result_parser import load_iarpa_evaluation
-        from watch.geoannots.geomodels import SiteModel
-        # from watch.geoannots.geomodels import RegionModel
-        from watch.geoannots.geomodels import SiteModelCollection
+        from geowatch.mlops.smart_result_parser import load_iarpa_evaluation
+        from geowatch.geoannots.geomodels import SiteModel
+        # from geowatch.geoannots.geomodels import RegionModel
+        from geowatch.geoannots.geomodels import SiteModelCollection
         import pandas as pd
         import rich
 
@@ -637,7 +637,7 @@ class ConfusionAnalysis:
         """
         # Add the confusion info as misc data in new site files
         # We will later reproject them onto the truth for visualization.
-        from watch.geoannots.geomodels import SiteModelCollection
+        from geowatch.geoannots.geomodels import SiteModelCollection
 
         true_region_model = self.true_region_model
         id_to_true_site = self.id_to_true_site
@@ -747,7 +747,7 @@ class ConfusionAnalysis:
 
         2. Finds the false negative examples and increases their weight.
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         import rich
 
         true_sites = self.true_sites
@@ -926,7 +926,7 @@ class ConfusionAnalysis:
         """
         Write kwcoco files for potential system feedback (not used atm)
         """
-        from watch.cli import reproject_annotations
+        from geowatch.cli import reproject_annotations
         config = self.config
 
         if self.new_sites is None:
@@ -952,7 +952,7 @@ class ConfusionAnalysis:
         Write confusion kwcoco files for visualization and analysis
         """
         import rich
-        from watch.cli import reproject_annotations
+        from geowatch.cli import reproject_annotations
         import kwcoco
         config = self.config
 
@@ -1030,8 +1030,8 @@ class ConfusionAnalysis:
 
             if config.bas_kwcoco and config.src_kwcoco != config.bas_kwcoco:
                 # Let the AC coco files know about bas heatmaps
-                from watch import heuristics
-                from watch.tasks.cold import transfer_features
+                from geowatch import heuristics
+                from geowatch.tasks.cold import transfer_features
                 bas_dset = kwcoco.CocoDataset(config.bas_kwcoco)
                 heuristics.normalize_sensors(bas_dset)
                 heuristics.normalize_sensors(dst_dset)
@@ -1082,7 +1082,7 @@ class ConfusionAnalysis:
         cases = self.build_site_confusion_cases()
         viz_dpath = self.out_dpath / 'site_viz'
 
-        # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+        # from geowatch.utils.kwcoco_extensions import covered_video_geo_regions
         # if self.bas_dset is not None:
         #     # If we can't visualize the site with the AC dataset,
         #     # we probably can with the BAS dataset.
@@ -1177,7 +1177,7 @@ class ConfusionAnalysis:
         """
         Build a set of cases that inspect the predictions of a single site.
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         import numpy as np
         print('Building confusion cases')
 
@@ -1467,17 +1467,17 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     """
     from kwutil import util_time
     from shapely.ops import unary_union
-    from watch import heuristics
-    from watch.geoannots.geomodels import RegionModel
-    from watch.utils import util_gis
-    from watch.utils import util_kwimage
+    from geowatch import heuristics
+    from geowatch.geoannots.geomodels import RegionModel
+    from geowatch.utils import util_gis
+    from geowatch.utils import util_kwimage
     import geopandas as gpd
     import kwarray
     import kwcoco
     import kwimage
     import numpy as np
 
-    # from watch.utils.kwcoco_extensions import covered_video_geo_regions
+    # from geowatch.utils.kwcoco_extensions import covered_video_geo_regions
     # gdf = covered_video_geo_regions(coco_dset)
 
     all_aids = set()
@@ -1712,7 +1712,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     AC_SALIENT_CHANNELS = kwcoco.FusedChannelSpec.coerce('ac_salient')
 
     cells = []
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
         dets = gid_to_dets[gid]
@@ -1988,7 +1988,7 @@ def make_pred_score_timeline(main_pred_site):
     ax = fig.gca()
     ax.cla()
 
-    from watch import heuristics
+    from geowatch import heuristics
     import kwimage
     name_to_color = {d['name']: d['color'] for d in heuristics.CATEGORIES}
     name_to_color['ac_salient'] = 'pink'
@@ -2013,7 +2013,7 @@ def make_case_timeline(case):
     future.result()
 
     Ignore:
-        from watch.mlops.confusor_analysis import *  # NOQA
+        from geowatch.mlops.confusor_analysis import *  # NOQA
         import kwplot
         kwplot.autompl()
         from kwutil import util_time
@@ -2039,7 +2039,7 @@ def make_case_timeline(case):
         ...
     """
     import kwplot
-    from watch.utils import util_kwplot
+    from geowatch.utils import util_kwplot
     from kwutil import util_time
     # plt = kwplot.plt
     import matplotlib.dates as mdates
@@ -2058,7 +2058,7 @@ def make_case_timeline(case):
 
     ylabel_map = {0: ''}
 
-    from watch import heuristics
+    from geowatch import heuristics
     import numpy as np
     import itertools as it
     import kwimage
@@ -2147,7 +2147,7 @@ def make_case_timeline(case):
 
 
 def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
-    # from watch.geoannots.geomodels import SiteSummary
+    # from geowatch.geoannots.geomodels import SiteSummary
     # from kwutil import util_time
 
     true_id_to_site = {s.site_id: s for s in type_to_sites['true']}
@@ -2167,7 +2167,7 @@ def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
     fig = kwplot.figure(fnum=1)
     fig.clf()
 
-    from watch.utils import util_kwplot
+    from geowatch.utils import util_kwplot
     artman = util_kwplot.ArtistManager()
     yloc = 1
 
@@ -2251,7 +2251,7 @@ def make_summary_visualization(dst_dset, viz_dpath):
 
     from kwutil import util_progress
     from kwutil import util_time
-    # from watch.utils import util_kwimage
+    # from geowatch.utils import util_kwimage
     import kwarray
     import kwimage
     from shapely.ops import unary_union
@@ -2408,7 +2408,7 @@ def make_summary_visualization(dst_dset, viz_dpath):
             fpath = viz_dpath / f'confusion_{video["name"]}.jpg'
             kwimage.imwrite(fpath, final_canvas)
 
-    from watch import heuristics
+    from geowatch import heuristics
     legend_img = kwplot.make_legend_img(heuristics.IARPA_CONFUSION_COLORS)
     kwimage.imwrite(viz_dpath / 'confusion_legend.png', legend_img)
     import rich
@@ -2490,7 +2490,7 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/mlops/confusor_analysis.py
-        python -m watch.mlops.confusor_analysis
+        python ~/code/watch/geowatch/mlops/confusor_analysis.py
+        python -m geowatch.mlops.confusor_analysis
     """
     main()

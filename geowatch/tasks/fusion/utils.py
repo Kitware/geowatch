@@ -49,14 +49,14 @@ def load_model_from_package(package_path):
           the model instance. The package header solves this.
 
     Ignore:
-        >>> from watch.tasks.fusion.utils import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> from geowatch.tasks.fusion.utils import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
         >>> package_path = dvc_dpath / 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt'
         >>> model = load_model_from_package(package_path)
     """
-    from watch.monkey import monkey_torchmetrics
-    from watch.monkey import monkey_kwcoco
+    from geowatch.monkey import monkey_torchmetrics
+    from geowatch.monkey import monkey_kwcoco
     monkey_torchmetrics.fix_torchmetrics_compatability()
     monkey_kwcoco.fix_sorted_set()
     from torch import package
@@ -233,7 +233,7 @@ def _try_fixed_package_import(package_path):
     # new_model.load_state_dict(state)
 
     # new_model.save_package('foo.pt')
-    # from watch.tasks.fusion.utils import load_model_from_package
+    # from geowatch.tasks.fusion.utils import load_model_from_package
     # recon_model = load_model_from_package('foo.pt')
     return imp
 
@@ -275,7 +275,7 @@ def ordinal_position_encoding(num_items, feat_size, method='sin', device='cpu'):
 
     Example:
         >>> # Use 5 feature dimensions to encode 3 timesteps
-        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.utils import *  # NOQA
         >>> num_timesteps = num_items = 3
         >>> feat_size = 5
         >>> encoding = ordinal_position_encoding(num_items, feat_size)
@@ -305,7 +305,7 @@ class SinePositionalEncoding(nn.Module):
         size (int): number of different encodings for the dim_to_encode
 
     Example:
-        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.utils import *  # NOQA
         >>> dest_dim = 3
         >>> dim_to_encode = 2
         >>> size = 8
@@ -314,7 +314,7 @@ class SinePositionalEncoding(nn.Module):
         >>> y = self(x)
 
     Ignore:
-        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.utils import *  # NOQA
         >>> self = SinePositionalEncoding(1, 0, size=8)
         >>> encoding = self._encoding_part(10)
         >>> # xdoctest: +REQUIRES(--show)
@@ -410,10 +410,10 @@ def category_tree_ensure_color(classes):
     TODO:
         - [ ] Add to CategoryTree
         - [ ] TODO: better function
-        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
 
     Example:
         >>> import kwcoco

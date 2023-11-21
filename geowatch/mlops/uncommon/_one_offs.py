@@ -2,13 +2,13 @@
 
 def __oneoff():
     # TODO: might make a general migrate function for the manager.
-    from watch.mlops.expt_manager import ExperimentState
-    import watch
+    from geowatch.mlops.expt_manager import ExperimentState
+    import geowatch
     import ubelt as ub
     import os
     import shutil
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+    data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
     dataset_code = '*'
     dvc_remote = 'aws'
     self = ExperimentState(expt_dvc_dpath, dataset_code, dvc_remote, data_dvc_dpath)
@@ -19,7 +19,7 @@ def __oneoff():
     for src_t, dst_t in self.legacy_versioned_templates:
         src_p = src_t.format(**self.patterns)
         dst_t.format(**self.patterns)
-        from watch.utils import util_pattern
+        from geowatch.utils import util_pattern
         src_paths = list(util_pattern.Pattern.coerce(src_p).paths())
         import parse
         for path in src_paths:

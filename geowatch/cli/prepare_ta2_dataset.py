@@ -14,9 +14,9 @@ CommandLine:
 
     # Create a demo region file, and create vairables that point at relevant
     # paths, which are by default written in your ~/.cache folder
-    xdoctest -m watch.demo.demo_region demo_khq_region_fpath
-    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
-    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    xdoctest -m geowatch.demo.demo_region demo_khq_region_fpath
+    REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/KHQ_R001_sites/*.geojson"
 
     # The "name" of the new dataset
     DATASET_SUFFIX=Demo-TA2-KHQ
@@ -38,7 +38,7 @@ CommandLine:
     export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --cloud_cover=100 \
         --stac_query_mode=auto \
@@ -68,13 +68,13 @@ TODO:
     handl GE01 and WV01 platforms
 
 CommandLine:
-    xdoctest -m watch.cli.prepare_ta2_dataset __doc__:0
+    xdoctest -m geowatch.cli.prepare_ta2_dataset __doc__:0
 
 Example:
-    >>> from watch.cli.prepare_ta2_dataset import *  # NOQA
+    >>> from geowatch.cli.prepare_ta2_dataset import *  # NOQA
     >>> import ubelt as ub
-    >>> dpath = ub.Path.appdir('watch/test/prep_ta2_dataset').delete().ensuredir()
-    >>> from watch.geoannots import geomodels
+    >>> dpath = ub.Path.appdir('geowatch/test/prep_ta2_dataset').delete().ensuredir()
+    >>> from geowatch.geoannots import geomodels
     >>> # Write dummy regions / sites
     >>> for rng in [0, 1, 3]:
     >>>     region, sites = geomodels.RegionModel.random(rng=rng, with_sites=True)
@@ -319,7 +319,7 @@ def main(cmdline=False, **kwargs):
     """
 
     Ignore:
-        from watch.cli.prepare_ta2_dataset import *  # NOQA
+        from geowatch.cli.prepare_ta2_dataset import *  # NOQA
         cmdline = False
         kwargs = {
             'dataset_suffix': 'TA1_FULL_SEQ_KR_S001_CLOUD_LT_10',
@@ -333,15 +333,15 @@ def main(cmdline=False, **kwargs):
     """
     config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
     from kwutil import slugify_ext
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import rich
-    from watch.mlops.pipeline_nodes import Pipeline
+    from geowatch.mlops.pipeline_nodes import Pipeline
     rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     out_dpath = config['out_dpath']
     if out_dpath == 'auto':
-        import watch
-        out_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        import geowatch
+        out_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     out_dpath = ub.Path(out_dpath)
 
     aws_profile = config['aws_profile']
@@ -472,7 +472,7 @@ def main(cmdline=False, **kwargs):
                 },
                 executable=ub.codeblock(
                     r'''
-                    python -m watch.cli.stac_search
+                    python -m geowatch.cli.stac_search
                     '''),
                 in_paths=_justkeys({
                     'region_file': final_region_fpath,
@@ -565,7 +565,7 @@ def main(cmdline=False, **kwargs):
             },
             executable=ub.codeblock(
                 r'''
-                python -m watch.cli.baseline_framework_ingress
+                python -m geowatch.cli.baseline_framework_ingress
                 '''),
             in_paths=_justkeys({
                 'input_path': uncropped_query_fpath,
@@ -593,7 +593,7 @@ def main(cmdline=False, **kwargs):
             },
             executable=ub.codeblock(
                 fr'''
-                {job_environ_str}python -m watch.cli.stac_to_kwcoco
+                {job_environ_str}python -m geowatch.cli.stac_to_kwcoco
                 '''),
             in_paths=_justkeys({
                 'input_stac_catalog': uncropped_catalog_fpath,
@@ -621,7 +621,7 @@ def main(cmdline=False, **kwargs):
             },
             executable=ub.codeblock(
                 fr'''
-                {job_environ_str}python -m watch.cli.coco_add_watch_fields
+                {job_environ_str}python -m geowatch.cli.coco_add_watch_fields
                 '''),
             in_paths=_justkeys({
                 'src': uncropped_kwcoco_fpath,
@@ -677,7 +677,7 @@ def main(cmdline=False, **kwargs):
             name=f'align-geotiffs-{name}',
             executable=ub.codeblock(
                 fr'''
-                {job_environ_str}python -m watch.cli.coco_align \
+                {job_environ_str}python -m geowatch.cli.coco_align \
                     --regions "{region_globstr}" \
                     --context_factor=1 \
                     --geo_preprop=auto \
@@ -714,7 +714,7 @@ def main(cmdline=False, **kwargs):
                 name=f'viz-imgs-{name}',
                 executable=ub.codeblock(
                     fr'''
-                    python -m watch visualize \
+                    python -m geowatch visualize \
                         --draw_anns=False \
                         --draw_imgs=True \
                         --channels="red|green|blue" \
@@ -741,7 +741,7 @@ def main(cmdline=False, **kwargs):
                 name=f'project-annots-{name}',
                 executable=ub.codeblock(
                     r'''
-                    python -m watch reproject_annotations \
+                    python -m geowatch reproject_annotations \
                         --propogate_strategy="{config.propogate_strategy}" \
                         --site_models="{site_globstr}" \
                         --io_workers="avail/2" \
@@ -763,7 +763,7 @@ def main(cmdline=False, **kwargs):
                     name=f'viz-annots-{name}',
                     executable=ub.codeblock(
                         fr'''
-                        python -m watch visualize \
+                        python -m geowatch visualize \
                             --draw_anns=True \
                             --draw_imgs=False \
                             --channels="red|green|blue" \
@@ -856,7 +856,7 @@ def main(cmdline=False, **kwargs):
         # Note: we probably could just do unions more cleverly rather than
         # splitting.
         raise NotImplementedError('broken')
-        from watch.cli import prepare_splits
+        from geowatch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
             aligned_final_fpath, queue, depends=[aligned_final_nodes])
 
@@ -905,7 +905,7 @@ def main(cmdline=False, **kwargs):
     DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.zip \
         --gres=0, \
         --with_depth=0 \
@@ -942,6 +942,6 @@ def main(cmdline=False, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/prepare_ta2_dataset.py
+        python ~/code/watch/geowatch/cli/prepare_ta2_dataset.py
     """
     main(cmdline=True)

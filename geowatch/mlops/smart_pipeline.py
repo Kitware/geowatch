@@ -6,12 +6,12 @@ used to store results.
 
 
 CommandLine:
-    xdoctest -m watch.mlops.smart_pipeline __doc__:0
-    WATCH_DEVCHECK=1 xdoctest -m watch.mlops.smart_pipeline __doc__:1
+    xdoctest -m geowatch.mlops.smart_pipeline __doc__:0
+    WATCH_DEVCHECK=1 xdoctest -m geowatch.mlops.smart_pipeline __doc__:1
 
 Example:
     >>> # xdoctest: +SKIP
-    >>> from watch.mlops.smart_pipeline import *  # NOQA
+    >>> from geowatch.mlops.smart_pipeline import *  # NOQA
     >>> from cmd_queue.util import util_networkx
     >>> #
     >>> config = {
@@ -63,10 +63,10 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:WATCH_DEVCHECK)
-    >>> from watch.mlops.smart_pipeline import *  # NOQA
-    >>> import watch
-    >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> from geowatch.mlops.smart_pipeline import *  # NOQA
+    >>> import geowatch
+    >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> #
     >>> config = {}
     >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.zip'
@@ -92,7 +92,7 @@ Example:
     >>> #
     >>> nodes = make_smart_pipeline_nodes()
     >>> #nodes = bas_nodes()
-    >>> from watch.mlops.pipeline_nodes import PipelineDAG
+    >>> from geowatch.mlops.pipeline_nodes import PipelineDAG
     >>> self = dag = PipelineDAG(nodes)
     >>> dag.configure(config=config, root_dpath=root_dpath)
     >>> dag.print_graphs()
@@ -105,7 +105,7 @@ Example:
 import ubelt as ub
 import shlex
 import json
-from watch.mlops.pipeline_nodes import ProcessNode
+from geowatch.mlops.pipeline_nodes import ProcessNode
 
 
 try:
@@ -118,7 +118,7 @@ EVALUATE_NAME = 'eval'
 
 
 class FeatureComputation(ProcessNode):
-    executable = 'python -m watch.cli.run_metrics_framework'
+    executable = 'python -m geowatch.cli.run_metrics_framework'
     group_dname = PREDICT_NAME
 
     # node_dname = 'feats/{src_dset}'
@@ -159,7 +159,7 @@ class FeatureUnion(ProcessNode):
 
 
 class HeatmapPrediction(ProcessNode):
-    executable = 'python -m watch.tasks.fusion.predict'
+    executable = 'python -m geowatch.tasks.fusion.predict'
     group_dname = PREDICT_NAME
 
     # resources = {
@@ -200,7 +200,7 @@ class HeatmapPrediction(ProcessNode):
         fmtkw['perf_argstr'] = self._make_argstr(perf_config)
         command = ub.codeblock(
             r'''
-            python -m watch.tasks.fusion.predict \
+            python -m geowatch.tasks.fusion.predict \
                 --package_fpath={package_fpath} \
                 --test_dataset={test_dataset} \
                 --pred_dataset={pred_pxl_fpath} \
@@ -211,7 +211,7 @@ class HeatmapPrediction(ProcessNode):
 
 
 class PolygonPrediction(ProcessNode):
-    executable = 'python -m watch.cli.run_tracker'
+    executable = 'python -m geowatch.cli.run_tracker'
     group_dname = PREDICT_NAME
     default_track_fn = NotImplemented
 
@@ -252,7 +252,7 @@ class PolygonPrediction(ProcessNode):
         # --boundary_region '{boundary_region}' \
         command = ub.codeblock(
             r'''
-            python -m watch.cli.run_tracker \
+            python -m geowatch.cli.run_tracker \
                 --input_kwcoco "{pred_pxl_fpath}" \
                 --default_track_fn {default_track_fn} \
                 --track_kwargs {kwargs_str} \
@@ -268,7 +268,7 @@ class PolygonPrediction(ProcessNode):
 
 
 class PolygonEvaluation(ProcessNode):
-    executable = 'python -m watch.cli.run_metrics_framework'
+    executable = 'python -m geowatch.cli.run_metrics_framework'
     group_dname = EVALUATE_NAME
 
     in_paths = {
@@ -316,7 +316,7 @@ class PolygonEvaluation(ProcessNode):
 
         command = ub.codeblock(
             r'''
-            python -m watch.cli.run_metrics_framework \
+            python -m geowatch.cli.run_metrics_framework \
                 --merge=True \
                 --name "{name_suffix}" \
                 --true_site_dpath "{true_site_dpath}" \
@@ -335,13 +335,13 @@ class PolygonEvaluation(ProcessNode):
 
 @ub.memoize
 def _phase2_dvc_data_dpath():
-    import watch
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    import geowatch
+    dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     return dvc_dpath
 
 
 class HeatmapEvaluation(ProcessNode):
-    executable = 'python -m watch.tasks.fusion.evaluate'
+    executable = 'python -m geowatch.tasks.fusion.evaluate'
     group_dname = EVALUATE_NAME
 
     in_paths = {
@@ -368,7 +368,7 @@ class HeatmapEvaluation(ProcessNode):
         fmtkw['extra_argstr'] = self._make_argstr(extra_opts)  # NOQA
         command = ub.codeblock(
             r'''
-            python -m watch.tasks.fusion.evaluate \
+            python -m geowatch.tasks.fusion.evaluate \
                 --true_dataset={true_dataset} \
                 --pred_dataset={pred_pxl_fpath} \
                 --eval_dpath={eval_pxl_dpath} \
@@ -380,7 +380,7 @@ class HeatmapEvaluation(ProcessNode):
 
 
 class KWCocoVisualization(ProcessNode):
-    executable = 'python -m watch.cli.coco_visualize_videos'
+    executable = 'python -m geowatch.cli.coco_visualize_videos'
     group_dname = PREDICT_NAME
 
     # resources = {
@@ -461,10 +461,10 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
     """
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline BAS_HeatmapPrediction
+        xdoctest -m geowatch.mlops.smart_pipeline BAS_HeatmapPrediction
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> node = BAS_HeatmapPrediction()
         >>> node.configure({
         >>>     'tta_time': 2,
@@ -583,7 +583,7 @@ class Cropping(ProcessNode):
     """
     Used for both site cropping and validation-cropping
     """
-    executable = 'python -m watch.cli.align'
+    executable = 'python -m geowatch.cli.align'
     group_dname = PREDICT_NAME
 
     algo_params = {
@@ -642,7 +642,7 @@ class Cropping(ProcessNode):
 
         command = ub.codeblock(
             r'''
-            python -m watch.cli.coco_align \
+            python -m geowatch.cli.coco_align \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_dst_fpath}" \
                 --regions="{regions}" \
@@ -666,15 +666,15 @@ class SiteClustering(ProcessNode):
     Crop to each image of every site.
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline SiteClustering
+        xdoctest -m geowatch.mlops.smart_pipeline SiteClustering
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> node = SiteClustering()
         >>> command = node.final_command()
         >>> print(command)
     """
-    executable = 'python -m watch.cli.cluster_sites'
+    executable = 'python -m geowatch.cli.cluster_sites'
     group_dname = PREDICT_NAME
 
     name = 'cluster_sites'
@@ -706,10 +706,10 @@ class SC_Cropping(Cropping):
     Crop to each image of every site.
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline SC_Cropping
+        xdoctest -m geowatch.mlops.smart_pipeline SC_Cropping
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> node = SC_Cropping()
         >>> command = node.command()
         >>> print(command)
@@ -745,10 +745,10 @@ class SV_Cropping(Cropping):
     Crop to high res images as the start / end of a sequence
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline SV_Cropping
+        xdoctest -m geowatch.mlops.smart_pipeline SV_Cropping
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> node = SV_Cropping()
         >>> command = node.command()
         >>> print(command)
@@ -788,7 +788,7 @@ class SV_DepthPredict(ProcessNode):
     writes a modified kwcoco file.
 
     Example:
-        >>> from watch.mlops import smart_pipeline
+        >>> from geowatch.mlops import smart_pipeline
         >>> self = node = smart_pipeline.SV_DepthPredict(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'my_highres.kwcoco.zip',
@@ -799,7 +799,7 @@ class SV_DepthPredict(ProcessNode):
         >>> print(node.command())
     """
     name = 'sv_depth_score'
-    executable = 'python -m watch.tasks.depth_pcd.score_tracks'
+    executable = 'python -m geowatch.tasks.depth_pcd.score_tracks'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -837,7 +837,7 @@ class SV_DepthFilter(ProcessNode):
     and then filters the annotations based on the scores in the kwcoco file.
 
     Example:
-        >>> from watch.mlops import smart_pipeline
+        >>> from geowatch.mlops import smart_pipeline
         >>> self = node = smart_pipeline.SV_DepthFilter(node_dpath='/MY/OUPUT/DIR/')
         >>> node.configure({
         >>>     'input_kwcoco': 'myscored.kwcoco.zip',
@@ -847,7 +847,7 @@ class SV_DepthFilter(ProcessNode):
         >>> print(node.command())
 
     Example:
-        >>> from watch.mlops import smart_pipeline
+        >>> from geowatch.mlops import smart_pipeline
         >>> self = node = smart_pipeline.SV_DepthFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
@@ -862,7 +862,7 @@ class SV_DepthFilter(ProcessNode):
         >>> print(node.command())
     """
     name = 'sv_depth_filter'
-    executable = 'python -m watch.tasks.depth_pcd.filter_tracks'
+    executable = 'python -m geowatch.tasks.depth_pcd.filter_tracks'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -895,7 +895,7 @@ class SV_DepthFilter(ProcessNode):
             )
         return command
 
-# from watch.tasks.dino_detector import predict as dino_predict
+# from geowatch.tasks.dino_detector import predict as dino_predict
 # ub.udict(dino_predict.BuildingDetectorConfig.__default__)
 
 
@@ -904,7 +904,7 @@ class DinoBoxDetector(ProcessNode):
     Used for both site cropping and validation-cropping
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> node = DinoBoxDetector(root_dpath='/root/dpath/')
         >>> node.configure({
         >>>     'coco_fpath': 'foo.kwcoco',
@@ -929,7 +929,7 @@ class DinoBoxDetector(ProcessNode):
         >>> assert algo_id1 != algo_id3, 'algo params do change hash'
     """
     name = 'sv_dino_boxes'
-    executable = 'python -m watch.tasks.dino_detector.predict'
+    executable = 'python -m geowatch.tasks.dino_detector.predict'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -972,13 +972,13 @@ class DinoBoxDetector(ProcessNode):
         fmtkw['config_argstr'] = self._make_argstr(config)
         command = ub.codeblock(
             r'''
-            python -m watch.tasks.dino_detector.predict \
+            python -m geowatch.tasks.dino_detector.predict \
                 {config_argstr}
             ''').format(**fmtkw)
         return command
 
 
-# from watch.tasks.dino_detector import building_validator  # NOQA
+# from geowatch.tasks.dino_detector import building_validator  # NOQA
 # ub.udict(building_validator.BuildingValidatorConfig.__default__)
 
 class SV_DinoFilter(ProcessNode):
@@ -986,7 +986,7 @@ class SV_DinoFilter(ProcessNode):
     Used for both site cropping and validation-cropping
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> self = node = SV_DinoFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
@@ -1001,7 +1001,7 @@ class SV_DinoFilter(ProcessNode):
         >>> print(node.command())
     """
     name = 'sv_dino_filter'
-    executable = 'python -m watch.tasks.dino_detector.building_validator'
+    executable = 'python -m geowatch.tasks.dino_detector.building_validator'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -1234,36 +1234,36 @@ def make_smart_pipeline(name):
     Get an unconfigured instance of the SMART pipeline
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline make_smart_pipeline
+        xdoctest -m geowatch.mlops.smart_pipeline make_smart_pipeline
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('sc')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('joint_bas_sc')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('joint_bas_sv_sc')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('full')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
     Ignore:
-        from watch.mlops.smart_pipeline import *  # NOQA
+        from geowatch.mlops.smart_pipeline import *  # NOQA
         dag = make_smart_pipeline('joint_bas_sv_sc')
         dag.print_graphs()
         dag.inspect_configurables()
         # Make a graphviz illustration of the DAG
-        from watch.utils import util_yaml
+        from geowatch.utils import util_yaml
         # Change the labels a bit
 
         proc_graph = dag.proc_graph.copy()
@@ -1295,17 +1295,17 @@ def make_smart_pipeline(name):
         # util.util_graphviz.dump_nx_ondisk(dag.io_graph, 'io_graph.png')
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('bas_depth_vali')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('dzyne_sv_only')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
     """
-    from watch.mlops.pipeline_nodes import PipelineDAG
+    from geowatch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial
     node_makers = {
         'full': partial(make_smart_pipeline_nodes, site_crops=True,
@@ -1354,7 +1354,7 @@ def dzyne_sv_only_pipeline():
         HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-        python -m watch.mlops.schedule_evaluation --params="
+        python -m geowatch.mlops.schedule_evaluation --params="
             pipeline: dzyne_sv_only
             matrix:
                 sv_depth_score.input_region:

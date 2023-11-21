@@ -4,7 +4,7 @@ import torchmetrics
 import pytorch_lightning as pl
 from pycm import ConfusionMatrix
 
-from watch.tasks.rutgers_material_seg_v2.matseg.models.smp_model import create_smp_network
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models.smp_model import create_smp_network
 
 
 class MaterialSegmentationModel(pl.LightningModule):

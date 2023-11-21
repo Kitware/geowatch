@@ -157,7 +157,7 @@ class SmartGlobalHelper:
         # import kwplot
         import numpy as np
         import seaborn as sns
-        from watch.utils import util_pandas
+        from geowatch.utils import util_pandas
 
         def filterkeys(keys):
             return [k for k in keys if 'specified' not in k]
@@ -223,7 +223,7 @@ class SmartGlobalHelper:
         Returns:
             util_kwplot.LabelModifier
         """
-        from watch.utils import util_kwplot
+        from geowatch.utils import util_kwplot
         modifier = util_kwplot.LabelModifier()
 
         modifier.add_mapping({
@@ -464,7 +464,7 @@ class SmartGlobalHelper:
         macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
 
     def old_hacked_model_case(self, macro_table):
-        from watch.utils.util_pandas import DotDictDataFrame
+        from geowatch.utils.util_pandas import DotDictDataFrame
         fit_params = DotDictDataFrame(macro_table)['fit']
         unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
         # unique_fit_params = fit_params.loc[unique_packages.index]
@@ -486,7 +486,7 @@ class SmartGlobalHelper:
         """
         self = SMART_HELPER
         """
-        from watch.utils.util_pandas import DotDictDataFrame
+        from geowatch.utils.util_pandas import DotDictDataFrame
         delivered_model_params = self.get_delivered_model_params()
 
         delivered_params = delivered_model_params[-1]
@@ -848,7 +848,7 @@ class SmartGlobalHelper:
 
     def print_minmax_times(self, table):
         import pandas as pd
-        from watch.utils.util_pandas import DotDictDataFrame
+        from geowatch.utils.util_pandas import DotDictDataFrame
         from kwutil import util_time
         table = DotDictDataFrame(table)
         start_time_cols = table.search_columns('start_timestamp')

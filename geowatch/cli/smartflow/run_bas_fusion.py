@@ -17,7 +17,7 @@ class BasFusionConfig(scfg.DataConfig):
     """
     Run TA-2 BAS fusion as baseline framework component
 
-    python ~/code/watch/watch/cli/smartflow/run_bas_fusion.py
+    python ~/code/watch/geowatch/cli/smartflow/run_bas_fusion.py
     """
 
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
@@ -98,17 +98,17 @@ def main():
 
 
 def run_bas_fusion_for_baseline(config):
-    from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.smartflow_egress import smartflow_egress
-    from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-    from watch.utils.util_framework import download_region, determine_region_id
-    from watch.tasks.fusion.predict import predict
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli.smartflow_egress import smartflow_egress
+    from geowatch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+    from geowatch.utils.util_framework import download_region, determine_region_id
+    from geowatch.tasks.fusion.predict import predict
     from kwutil.util_yaml import Yaml
-    from watch.utils import util_framework
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_framework
+    from geowatch.utils import util_fsspec
 
     ####
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -280,7 +280,7 @@ def run_bas_fusion_for_baseline(config):
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
     ub.cmd([
-        'python', '-m', 'watch.cli.run_tracker',
+        'python', '-m', 'geowatch.cli.run_tracker',
         combined_bas_fusion_kwcoco_path,
         '--out_sites_dir', bas_site_models_outdir,
         '--out_sites_fpath', site_models_manifest_outpath,
@@ -303,7 +303,7 @@ def run_bas_fusion_for_baseline(config):
     node_state.print_current_state(ingress_dir)
 
     crop_cmd = [
-        'python', '-m', 'watch.cli.crop_sites_to_regions',
+        'python', '-m', 'geowatch.cli.crop_sites_to_regions',
         '--site_models', bas_site_models_outdir / '*.geojson',
         '--region_models', bas_region_models_outdir / '*.geojson',
         '--new_site_dpath', cropped_site_models_outdir,
@@ -328,7 +328,7 @@ def run_bas_fusion_for_baseline(config):
         raise
 
     if __debug__:
-        from watch.geoannots import geomodels
+        from geowatch.geoannots import geomodels
         all_regions_models = list(geomodels.RegionModel.coerce_multiple(cropped_region_models_outdir))
         all_site_models = list(geomodels.SiteModel.coerce_multiple(cropped_site_models_outdir))
         assert len(all_regions_models) == 1, 'should only be 1 output region model'

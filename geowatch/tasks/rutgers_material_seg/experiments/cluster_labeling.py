@@ -22,7 +22,7 @@ import ubelt as ub
 import kwcoco
 import ndsampler
 # import numpy as np
-# import watch
+# import geowatch
 # import matplotlib.pyplot as plt
 # from tqdm import tqdm
 import torch
@@ -37,7 +37,7 @@ import qimage2ndarray
 import cmapy
 # import random
 import kwimage
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 
 class Window(QMainWindow):

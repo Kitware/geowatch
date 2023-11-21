@@ -156,7 +156,7 @@ _execute_ordered_preimports()
 
 if 0:
     # Disable
-    from watch.monkey import monkey_numpy  # NOQA
+    from geowatch.monkey import monkey_numpy  # NOQA
     monkey_numpy.patch_numpy_dtypes()
 
 
@@ -168,13 +168,13 @@ if 'hard-to-inspect-key' in vars():
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy_loader --diff
-mkinit -m watch --lazy_loader -w
+mkinit -m geowatch --lazy_loader --diff
+mkinit -m geowatch --lazy_loader -w
 
 # Debug import time
-python -X importtime -c "import watch"
-WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
-WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
+python -X importtime -c "import geowatch"
+WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import geowatch"
+WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import geowatch"
 """
 
 

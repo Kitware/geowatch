@@ -2,11 +2,11 @@
 """
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-    >>> import watch
+    >>> import geowatch
     >>> import kwcoco
     >>> import ubelt as ub
     >>> # Define where to write the output
-    >>> output_dpath = ub.Path.appdir('watch/tests/sam/demo')
+    >>> output_dpath = ub.Path.appdir('geowatch/tests/sam/demo')
     >>> output_kwcoco_fpath = output_dpath / 'demo_sam.kwcoco.zip'
     >>> # Define the input
     >>> dset = kwcoco.CocoDataset.demo('vidshapes', num_frames=4, num_videos=1)
@@ -15,10 +15,10 @@ Example:
     >>> dset.dump()
     >>> input_kwcoco_fpath = dset.fpath
     >>> # The main external data this test needs is the SAM weights
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
     >>> weights_fpath = dvc_dpath / "models/sam/sam_vit_h_4b8939.pth"
     >>> # Setup the arguments to SAM predict
-    >>> from watch.tasks.sam import predict as sam_predict
+    >>> from geowatch.tasks.sam import predict as sam_predict
     >>> kwargs = {
     >>>     'input_kwcoco': input_kwcoco_fpath,
     >>>     'output_kwcoco': output_kwcoco_fpath,
@@ -42,7 +42,7 @@ class SAMConfig(scfg.DataConfig):
 
     Usage:
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-        python -m watch.tasks.sam.predict \
+        python -m geowatch.tasks.sam.predict \
             --input_kwcoco <input-kwcoco>
             --output_kwcoco <output-kwcoco>
             --fixed_resolution=None
@@ -253,10 +253,10 @@ class DenseFeaturePredictor:
         self.config = config
 
     def setup(self):
-        from watch.tasks.fusion.datamodules import kwcoco_datamodule
-        from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
-        from watch.utils import util_parallel
-        from watch.utils import process_context
+        from geowatch.tasks.fusion.datamodules import kwcoco_datamodule
+        from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
+        from geowatch.utils import util_parallel
+        from geowatch.utils import process_context
         import kwcoco
 
         # put the vendored package into our namespace.
@@ -402,7 +402,7 @@ class DenseFeaturePredictor:
 
 class SAMFeaturePredictor(DenseFeaturePredictor):
     short_code = 'sam'
-    proc_name = 'watch.tasks.sam.predict'
+    proc_name = 'geowatch.tasks.sam.predict'
     chan_code = 'sam.0:256'
 
     WrapperDsetClass = SAMWrapperDataset
@@ -455,14 +455,14 @@ def main(cmdline=1, **kwargs):
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
     CommandLine:
-        TEST_SAM=1 xdoctest -m watch.tasks.sam.predict main
+        TEST_SAM=1 xdoctest -m geowatch.tasks.sam.predict main
 
     Example:
         >>> # xdoctest: +REQUIRES(env:TEST_SAM)
-        >>> from watch.tasks.sam.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.tasks.sam.predict import *  # NOQA
+        >>> import geowatch
+        >>> dvc_expt_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> weights_fpath = dvc_expt_dpath / 'models/sam/sam_vit_h_4b8939.pth'
         >>> input_kwcoco = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'
         >>> kwargs = dict(
@@ -474,10 +474,10 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline, **kwargs)
 
     Ignore:
-        from watch.tasks.sam.predict import *  # NOQA
-        import watch
-        dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-        dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.tasks.sam.predict import *  # NOQA
+        import geowatch
+        dvc_expt_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         weights_fpath = dvc_expt_dpath / 'models/sam/sam_vit_h_4b8939.pth'
         input_kwcoco = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip'
         kwargs = dict(weights_fpath=weights_fpath, input_kwcoco=input_kwcoco, output_kwcoco=(dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imganns-AE_R001_sam.kwcoco.zip'))
@@ -564,12 +564,12 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/tasks/sam/predict.py
+        python ~/code/watch/geowatch/tasks/sam/predict.py
         python -m predict
 
     Ignore:
 
-        python -m watch.tasks.sam.predict \
+        python -m geowatch.tasks.sam.predict \
             --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip" \
             --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD-V2/imganns-AE_R001_sam.kwcoco.zip" \
             --weights_fpath "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/sam/sam_vit_h_4b8939.pth" \

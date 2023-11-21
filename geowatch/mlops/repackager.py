@@ -26,7 +26,7 @@ class RepackageConfig(scfg.DataConfig):
         context or via these configuration arguments.
 
     Ignore:
-        python -m watch.mlops.repackager  \
+        python -m geowatch.mlops.repackager  \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
@@ -37,7 +37,7 @@ class RepackageConfig(scfg.DataConfig):
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=89-step=1215180.ckpt
 
 
-        python -m watch.mlops.repackager \
+        python -m geowatch.mlops.repackager \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=3*.ckpt
     """
     __command__ = 'repackage'
@@ -210,13 +210,13 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     Example:
         >>> import ubelt as ub
         >>> import torch
-        >>> dpath = ub.Path.appdir('watch/tests/repackage').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/repackage').delete().ensuredir()
         >>> package_fpath = dpath / 'my_package.pt'
         >>> checkpoint_fpath = dpath / 'my_checkpoint.ckpt'
         >>> assert not package_fpath.exists()
         >>> # Create an instance of a model, and save a checkpoint to disk
-        >>> from watch.tasks.fusion import methods
-        >>> from watch.tasks.fusion import datamodules
+        >>> from geowatch.tasks.fusion import methods
+        >>> from geowatch.tasks.fusion import datamodules
         >>> model = self = methods.MultimodalTransformer(
         >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
         >>>     change_head_hidden=0, saliency_head_hidden=0,
@@ -230,11 +230,11 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         >>> }
         >>> with open(checkpoint_fpath, 'wb') as file:
         ...     torch.save(checkpoint, file)
-        >>> from watch.mlops.repackager import *  # NOQA
+        >>> from geowatch.mlops.repackager import *  # NOQA
         >>> repackage_single_checkpoint(checkpoint_fpath, package_fpath)
         >>> assert package_fpath.exists()
         >>> # Test we can reload the package
-        >>> from watch.tasks.fusion.utils import load_model_from_package
+        >>> from geowatch.tasks.fusion.utils import load_model_from_package
         >>> model2 = load_model_from_package(package_fpath)
         >>> # TODO: get allclose working on the nested dict
         >>> params1 = dict(model.named_parameters())
@@ -248,7 +248,7 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         ...     assert torch.allclose(params1[k], params2[k])
         ...     assert params1[k] is not params2[k]
         >>> # Test that we can get model stats
-        >>> from watch.cli import torch_model_stats
+        >>> from geowatch.cli import torch_model_stats
         >>> torch_model_stats.torch_model_stats(package_fpath)
     """
     from torch_liberator.xpu_device import XPU
@@ -273,7 +273,7 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     # directory to figure this out more generally.
 
     if model_config_fpath is None:
-        from watch.tasks.fusion import methods
+        from geowatch.tasks.fusion import methods
         model = methods.MultimodalTransformer(**hparams)
     else:
         data = load_meta(model_config_fpath)
@@ -305,6 +305,6 @@ def load_meta(fpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.mlops.repackager
+        python -m geowatch.mlops.repackager
     """
     main()

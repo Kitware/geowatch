@@ -3,18 +3,18 @@ Helper to fix issues in truth region / site models, particularly issues seen in
 iMERIT data.
 
 SeeAlso:
-    ~/code/watch/watch/geoannots/geomodels.py
-    ~/code/watch/watch/cli/validate_annotation_schemas.py
-    ~/code/watch/watch/cli/fix_region_models.py
+    ~/code/watch/geowatch/geoannots/geomodels.py
+    ~/code/watch/geowatch/cli/validate_annotation_schemas.py
+    ~/code/watch/geowatch/cli/fix_region_models.py
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    python -m watch.cli.fix_region_models \
+    python -m geowatch.cli.fix_region_models \
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/*.geojson
 
-    python -m watch.cli.fix_region_models \
+    python -m geowatch.cli.fix_region_models \
         --region_models "$DVC_DATA_DPATH"/submodules/annotations/region_models/*.geojson
 
-    python -m watch.cli.fix_region_models \
+    python -m geowatch.cli.fix_region_models \
         --region_models \
             "$DVC_DATA_DPATH"/submodules/annotations/region_models/AE_C002.geojson \
             "$DVC_DATA_DPATH"/submodules/annotations/region_models/AE_C003.geojson \
@@ -22,7 +22,7 @@ SeeAlso:
             "$DVC_DATA_DPATH"/submodules/annotations/region_models/BR_T001.geojson \
             "$DVC_DATA_DPATH"/submodules/annotations/region_models/BR_T002.geojson
 
-    python -m watch.cli.validate_annotation_schemas \
+    python -m geowatch.cli.validate_annotation_schemas \
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
 """
 #!/usr/bin/env python3
@@ -65,8 +65,8 @@ def defaultencode(o):
 
 
 def main(cmdline=1, **kwargs):
-    from watch.utils import util_gis
-    from watch.geoannots import geomodels
+    from geowatch.utils import util_gis
+    from geowatch.geoannots import geomodels
 
     import rich
     config = FixRegionModelsCLI.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -279,7 +279,7 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/cli/fix_region_models.py
-        python -m watch.cli.fix_region_models
+        python ~/code/watch/geowatch/cli/fix_region_models.py
+        python -m geowatch.cli.fix_region_models
     """
     main()

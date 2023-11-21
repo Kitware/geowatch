@@ -5,7 +5,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.transfer_features \
+    python -m geowatch.tasks.cold.transfer_features \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
         --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
         --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
@@ -64,13 +64,13 @@ def transfer_features_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.transfer_features --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.transfer_features transfer_features_main
+        python -m geowatch.tasks.cold.transfer_features --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.transfer_features transfer_features_main
 
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.transfer_features import transfer_features_main
-        >>> from watch.tasks.cold.transfer_features import *
+        >>> from geowatch.tasks.cold.transfer_features import transfer_features_main
+        >>> from geowatch.tasks.cold.transfer_features import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip'),
         >>>   combine_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'),
@@ -81,10 +81,10 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>> transfer_features_main(cmdline, **kwargs)
 
     Example:
-        >>> from watch.tasks.cold.transfer_features import transfer_features_main
-        >>> from watch.tasks.cold.transfer_features import *
-        >>> import watch
-        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> from geowatch.tasks.cold.transfer_features import transfer_features_main
+        >>> from geowatch.tasks.cold.transfer_features import *
+        >>> import geowatch
+        >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, heatmap=True, dates=True)
         >>> dset2 = dset1.copy()
         >>> # Remove saliency assets from dset2
         >>> for img in dset2.images().coco_images:
@@ -102,7 +102,7 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>> cmdline = False
         >>> new_dset = transfer_features_main(cmdline, **kwargs)
         >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
         >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
         >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)
@@ -115,14 +115,14 @@ def transfer_features_main(cmdline=1, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    from watch.cli.reproject_annotations import keyframe_interpolate
-    from watch.utils import process_context
-    from watch.utils import util_json
+    from geowatch.cli.reproject_annotations import keyframe_interpolate
+    from geowatch.utils import process_context
+    from geowatch.utils import util_json
 
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.cold.transfer_features',
+        name='geowatch.tasks.cold.transfer_features',
         type='process',
         config=resolved_config,
     )
@@ -169,8 +169,8 @@ def transfer_features_main(cmdline=1, **kwargs):
     src_vidnames = sorted(set(src.index.name_to_video))
     if src_vidnames != dst_vidnames:
         # If video names do not agree, we need to check for overlaps
-        from watch.utils import kwcoco_extensions
-        from watch.utils import util_gis
+        from geowatch.utils import kwcoco_extensions
+        from geowatch.utils import util_gis
         src_vid_gdf = kwcoco_extensions.covered_video_geo_regions(src)
         dst_vid_gdf = kwcoco_extensions.covered_video_geo_regions(dst)
         dst_to_src_idxs = util_gis.geopandas_pairwise_overlaps(dst_vid_gdf, src_vid_gdf)
@@ -486,7 +486,7 @@ def _make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, copy_as
         port to kwcoco proper and move most of these tests to a unit test
 
     Example:
-        >>> from watch.tasks.cold.transfer_features import _make_new_asset_fname
+        >>> from geowatch.tasks.cold.transfer_features import _make_new_asset_fname
 
         >>> # Case: asset is absolute and inside src bundle
         >>> src_asset = {'file_name': '/my/src/rel/img.tif'}
@@ -596,10 +596,10 @@ def _test_cases():
 
     Example:
         >>> # Test case: transfer from temporal-lores to temporal-hires
-        >>> from watch.tasks.cold.transfer_features import transfer_features_main
-        >>> from watch.tasks.cold.transfer_features import *
-        >>> import watch
-        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> from geowatch.tasks.cold.transfer_features import transfer_features_main
+        >>> from geowatch.tasks.cold.transfer_features import *
+        >>> import geowatch
+        >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, heatmap=True, dates=True)
         >>> dset2 = dset1.copy()
         >>> # Remove half of the images from dset1
         >>> dset1.remove_images(list(dset1.images())[::2])
@@ -619,7 +619,7 @@ def _test_cases():
         >>> cmdline = False
         >>> new_dset = transfer_features_main(cmdline, **kwargs)
         >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
         >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
         >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)
@@ -629,10 +629,10 @@ def _test_cases():
 
     Example:
         >>> # Test case: transfer from temporal-lores to temporal-hires multiple transfer
-        >>> from watch.tasks.cold.transfer_features import transfer_features_main
-        >>> from watch.tasks.cold.transfer_features import *
-        >>> import watch
-        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> from geowatch.tasks.cold.transfer_features import transfer_features_main
+        >>> from geowatch.tasks.cold.transfer_features import *
+        >>> import geowatch
+        >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, heatmap=True, dates=True)
         >>> dset2 = dset1.copy()
         >>> # Remove half of the images from dset1
         >>> dset1.remove_images(list(dset1.images())[::2])
@@ -654,7 +654,7 @@ def _test_cases():
         >>> cmdline = False
         >>> new_dset = transfer_features_main(cmdline, **kwargs)
         >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
         >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
         >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)
@@ -663,10 +663,10 @@ def _test_cases():
 
     Example:
         >>> # Test case: transfer from temporal-hires to temporal-lores
-        >>> from watch.tasks.cold.transfer_features import transfer_features_main
-        >>> from watch.tasks.cold.transfer_features import *
-        >>> import watch
-        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> from geowatch.tasks.cold.transfer_features import transfer_features_main
+        >>> from geowatch.tasks.cold.transfer_features import *
+        >>> import geowatch
+        >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, heatmap=True, dates=True)
         >>> dset2 = dset1.copy()
         >>> # Remove half of the images from dset2
         >>> dset2.remove_images(list(dset1.images())[::2])
@@ -686,7 +686,7 @@ def _test_cases():
         >>> cmdline = False
         >>> new_dset = transfer_features_main(cmdline, **kwargs)
         >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
         >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
         >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)

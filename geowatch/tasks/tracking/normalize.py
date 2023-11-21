@@ -4,10 +4,10 @@ import warnings
 import numpy as np
 import ubelt as ub
 from typing import Dict, List, Any
-from watch.utils.kwcoco_extensions import TrackidGenerator
-from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
-from watch.tasks.tracking.abstract_classes import TrackFunction
-from watch.tasks.tracking.utils import check_only_bg
+from geowatch.utils.kwcoco_extensions import TrackidGenerator
+from geowatch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
+from geowatch.tasks.tracking.abstract_classes import TrackFunction
+from geowatch.tasks.tracking.utils import check_only_bg
 try:
     from xdev import profile
 except Exception:
@@ -76,8 +76,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     Example:
         >>> import kwimage
         >>> from copy import deepcopy
-        >>> from watch.tasks.tracking.normalize import remove_small_annots
-        >>> from watch.demo import smart_kwcoco_demodata
+        >>> from geowatch.tasks.tracking.normalize import remove_small_annots
+        >>> from geowatch.demo import smart_kwcoco_demodata
         >>> coco_dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> # This dset has 1 video with all images the same size
         >>> # For testing, resize one of the images so there is a meaningful
@@ -296,9 +296,9 @@ def normalize_phases(coco_dset,
     TODO make this a step in track_fn to take advantage of heatmap info?
     Example:
         >>> # test baseline guess
-        >>> from watch.tasks.tracking.normalize import normalize_phases
-        >>> from watch.tasks.tracking.normalize import normalize_phases
-        >>> from watch.demo import smart_kwcoco_demodata
+        >>> from geowatch.tasks.tracking.normalize import normalize_phases
+        >>> from geowatch.tasks.tracking.normalize import normalize_phases
+        >>> from geowatch.demo import smart_kwcoco_demodata
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> dset.remove_categories([1,3,4,5])
         >>> dset.cats[2]['name'] = 'salient'
@@ -313,7 +313,7 @@ def normalize_phases(coco_dset,
         >>>      (['Post Construction'])))
         >>> # try again with smoothing
         >>> dset = normalize_phases(dset, use_viterbi=True)
-        >>> from watch.demo import smart_kwcoco_demodata
+        >>> from geowatch.demo import smart_kwcoco_demodata
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> dset.remove_categories([1,3,4,5])
         >>> dset.cats[2]['name'] = 'salient'
@@ -329,8 +329,8 @@ def normalize_phases(coco_dset,
         >>> # try again with smoothing
         >>> dset = normalize_phases(dset, use_viterbi=True)
     """
-    from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
-    from watch.tasks.tracking import phase
+    from geowatch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
+    from geowatch.tasks.tracking import phase
     from collections import Counter
 
     print('Normalizing phases')
@@ -533,10 +533,10 @@ def dedupe_dates(coco_dset):
         [1] https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/63
 
     Example:
-        >>> from watch.tasks.tracking.normalize import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.tracking.normalize import *  # NOQA
+        >>> import geowatch
         >>> import kwarray
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True)
         >>> # Add 0-4 duplicate images to each video
         >>> rng = kwarray.ensure_rng(613544)
         >>> gids_to_duplicate = list(ub.flatten([rng.choice(gs, rng.randint(0, 4)) for gs in coco_dset.videos().images]))
@@ -549,7 +549,7 @@ def dedupe_dates(coco_dset):
         >>> assert coco_dset_fixed.n_images < coco_dset_with_dups.n_images
     """
     from kwutil import util_time
-    from watch import heuristics
+    from geowatch import heuristics
     sensor_priority = heuristics.SENSOR_TRACK_PRIORITY
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(track_id=trackid)
@@ -607,8 +607,8 @@ def run_tracking_pipeline(
 
     Example:
         >>> import kwcoco as kc
-        >>> from watch.tasks.tracking.normalize import *
-        >>> from watch.tasks.tracking.from_polygon import OverlapTrack
+        >>> from geowatch.tasks.tracking.normalize import *
+        >>> from geowatch.tasks.tracking.from_polygon import OverlapTrack
         >>> # create demodata
         >>> d = kc.CocoDataset.demo()
         >>> ann_dct = d.anns[1]
@@ -644,7 +644,7 @@ def run_tracking_pipeline(
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
-        >>> from watch import heuristics
+        >>> from geowatch import heuristics
         >>> coco_dset = heuristics.normalize_sensors(
         >>>     coco_dset, sensor_warnings=False, format='iarpa')
         >>> assert (coco_dset.images().get('sensor_coarse') ==
@@ -655,7 +655,7 @@ def run_tracking_pipeline(
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
-        from watch.utils.util_json import debug_json_unserializable
+        from geowatch.utils.util_json import debug_json_unserializable
 
     if viz_out_dir is not None:
         viz_out_dir = ub.Path(viz_out_dir)
@@ -714,7 +714,7 @@ def run_tracking_pipeline(
     out_dset = dedupe_tracks(out_dset)
 
     if viz_out_dir is not None:
-        from watch.tasks.tracking.visualize import viz_track_scores
+        from geowatch.tasks.tracking.visualize import viz_track_scores
         out_pth = viz_out_dir / 'track_scores.jpg'
         viz_track_scores(out_dset, out_pth, gt_dset)
 
@@ -745,7 +745,7 @@ def run_tracking_pipeline(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
 
-    from watch import heuristics
+    from geowatch import heuristics
     print('Norm sensors')
     out_dset = heuristics.normalize_sensors(
         out_dset, sensor_warnings=sensor_warnings, format='iarpa')
@@ -765,8 +765,8 @@ def run_tracking_pipeline(
     # if viz_out_dir is not None:
     #     # visualize predicted sites with true sites
     #     # TODO think more about key handling
-    #     from watch.tasks.tracking.visualize import visualize_videos
-    #     from watch.tasks.tracking.utils import _validate_keys
+    #     from geowatch.tasks.tracking.visualize import visualize_videos
+    #     from geowatch.tasks.tracking.utils import _validate_keys
     #     # from dataclasses import asdict
     #     fg, bg = _validate_keys(
     #         dict(tracker).get('key', None),

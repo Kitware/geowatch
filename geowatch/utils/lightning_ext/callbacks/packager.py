@@ -45,11 +45,11 @@ class Packager(pl.callbacks.Callback):
         https://discuss.pytorch.org/t/packaging-pytorch-topology-first-and-checkpoints-later/129478/2
 
     Example:
-        >>> from watch.utils.lightning_ext.callbacks.packager import *  # NOQA
-        >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
-        >>> from watch.utils.lightning_ext.callbacks import StateLogger
+        >>> from geowatch.utils.lightning_ext.callbacks.packager import *  # NOQA
+        >>> from geowatch.utils.lightning_ext.demo import LightningToyNet2d
+        >>> from geowatch.utils.lightning_ext.callbacks import StateLogger
         >>> import ubelt as ub
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
         >>> default_root_dir = ub.Path.appdir('lightning_ext/test/packager')
         >>> default_root_dir.delete().ensuredir()
@@ -71,15 +71,15 @@ class Packager(pl.callbacks.Callback):
     def add_argparse_args(cls, parent_parser):
         """
         Example:
-            >>> from watch.utils.lightning_ext.callbacks.packager import *  # NOQA
-            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> from geowatch.utils.lightning_ext.callbacks.packager import *  # NOQA
+            >>> from geowatch.utils.configargparse_ext import ArgumentParser
             >>> cls = Packager
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
             >>> assert parent_parser.parse_known_args(None)[0].package_fpath == 'auto'
         """
-        from watch.utils.lightning_ext import argparse_ext
+        from geowatch.utils.lightning_ext import argparse_ext
         arg_infos = argparse_ext.parse_docstring_args(cls)
         argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
         return parent_parser
@@ -222,14 +222,14 @@ def _torch_package_monkeypatch():
     # Monkey Patch torch.package
     raise AssertionError(
         'Dont call this anymore, '
-        'use watch.monkey.monkey_torch.fix_package_modules')
-    from watch.monkey import monkey_torch
+        'use geowatch.monkey.monkey_torch.fix_package_modules')
+    from geowatch.monkey import monkey_torch
     monkey_torch.fix_package_modules()
 
 
 def default_save_package(model, package_path, verbose=1):
     import torch.package
-    from watch.monkey import monkey_torch
+    from geowatch.monkey import monkey_torch
     monkey_torch.fix_package_modules()
 
     # shallow copy of self, to apply attribute hacks to
@@ -245,8 +245,8 @@ def default_save_package(model, package_path, verbose=1):
 
     with torch.package.PackageExporter(package_path) as exp:
         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
-        # exp.extern("**", exclude=["watch.tasks.fusion.**"])
+        # exp.extern("**", exclude=["geowatch.tasks.fusion.**"])
         exp.extern('**')
-        # exclude=["watch.tasks.fusion.**"])
-        # exp.intern("watch.tasks.fusion.**")
+        # exclude=["geowatch.tasks.fusion.**"])
+        # exp.intern("geowatch.tasks.fusion.**")
         exp.save_pickle(module_name, model_name, model)

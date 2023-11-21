@@ -122,7 +122,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         https://superuser.com/questions/624563/how-to-resize-a-video-to-make-it-smaller-with-ffmpeg
 
     Example:
-        >>> from watch.cli.gifify import *  # NOQA
+        >>> from geowatch.cli.gifify import *  # NOQA
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('shapes8')
         >>> ffmpeg_exe = ub.find_exe('ffmpeg')
@@ -136,7 +136,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         >>> ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=0.5)
 
     Example:
-        >>> from watch.cli.gifify import *  # NOQA
+        >>> from geowatch.cli.gifify import *  # NOQA
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('shapes8')
         >>> ffmpeg_exe = ub.find_exe('ffmpeg')

@@ -10,11 +10,11 @@ import kwarray
 import netharn as nh
 import ubelt as ub
 
-from watch import heuristics
-from watch.tasks.fusion.methods.network_modules import coerce_criterion
-from watch.tasks.fusion.methods.network_modules import RobustModuleDict
-from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
-from watch.tasks.fusion.architectures import unet_blur
+from geowatch import heuristics
+from geowatch.tasks.fusion.methods.network_modules import coerce_criterion
+from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
+from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from geowatch.tasks.fusion.architectures import unet_blur
 
 from typing import Dict, Any, Optional
 
@@ -78,7 +78,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
-            >>> from watch.tasks.fusion.methods.unet_baseline import UNetBaseline
+            >>> from geowatch.tasks.fusion.methods.unet_baseline import UNetBaseline
             >>> model = UNetBaseline(
             >>>   input_sensorchan='r|g|b',
             >>> )
@@ -355,7 +355,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
     def forward(self, batch):
         """
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
             >>> model = fusion.methods.UNetBaseline(
             >>>     classes=classes,
@@ -410,7 +410,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         """
         Example:
             >>> # xdoctest: +REQUIRES(env:SLOW_TESTS)
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
             >>> model = fusion.methods.UNetBaseline(
@@ -428,7 +428,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # xdoctest: +REQUIRES(env:SLOW_TESTS)
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
             >>> model = fusion.methods.UNetBaseline(
@@ -446,7 +446,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> optimizer.step()
 
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
             >>> model = fusion.methods.UNetBaseline(
@@ -606,19 +606,19 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         """
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.methods.unet_baseline UNetBaseline.save_package
+            xdoctest -m geowatch.tasks.fusion.methods.unet_baseline UNetBaseline.save_package
 
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.unet_baseline import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.unet_baseline import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
             >>> model = self = methods.UNetBaseline(
             >>>     input_sensorchan=5,
             >>> )
@@ -628,14 +628,14 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.UNetBaseline.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = model.state_dict()
             >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
-            >>> from watch.utils.util_kwarray import torch_array_equal
+            >>> from geowatch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]
@@ -649,13 +649,13 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.unet_baseline import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.unet_baseline import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
             >>> model = self = methods.UNetBaseline(
             >>>     input_sensorchan=5,
             >>> )
@@ -665,14 +665,14 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.UNetBaseline.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = self.state_dict()
             >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
-            >>> from watch.utils.util_kwarray import torch_array_equal
+            >>> from geowatch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]
@@ -686,13 +686,13 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.unet_baseline import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.unet_baseline import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
             >>> model = self = methods.UNetBaseline(
             >>>     input_sensorchan=5,
             >>> )
@@ -702,14 +702,14 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.UNetBaseline.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = self.state_dict()
             >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
-            >>> from watch.utils.util_kwarray import torch_array_equal
+            >>> from geowatch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]

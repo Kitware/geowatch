@@ -419,8 +419,8 @@ def download_region(input_region_path,
                     aws_profile=None,
                     strip_nonregions=False,
                     ensure_comments=False):
-    from watch.utils.util_fsspec import FSPath
-    from watch.geoannots import geomodels
+    from geowatch.utils.util_fsspec import FSPath
+    from geowatch.geoannots import geomodels
 
     # TODO: handle aws_profile
     assert aws_profile is None, 'unhandled'
@@ -475,7 +475,7 @@ class AWS_S3_Command:
         https://docs.aws.amazon.com/cli/latest/reference/s3/
 
     Example:
-        >>> from watch.utils.util_framework import *  # NOQA
+        >>> from geowatch.utils.util_framework import *  # NOQA
         >>> self = AWS_S3_Command('ls', 's3://foo/bar')
         >>> self.update(profile='myprofile')
         >>> print(self.finalize())
@@ -735,7 +735,7 @@ def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
     that T&E wants them.
     """
     from glob import glob
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_fsspec
     assert aws_base_command is None, 'unused'
 
     def _get_suffixed_basename(local_path):
@@ -765,8 +765,8 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
     Read, fix, and validate all site and region models.
     """
     # Validate and fix all outputs
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import util_gis
     region_infos = list(util_gis.coerce_geojson_datas(region_dpath, format='json'))
     site_infos = list(util_gis.coerce_geojson_datas(site_dpath, format='json'))
     for region_info in region_infos:
@@ -792,9 +792,9 @@ class NodeStateDebugger:
     Maintains some internal state to keep things organized.
 
     Example:
-        >>> from watch.utils.util_framework import *  # NOQA
+        >>> from geowatch.utils.util_framework import *  # NOQA
         >>> import ubelt as ub
-        >>> watch_appdir_dpath = ub.Path.appdir('watch')
+        >>> watch_appdir_dpath = ub.Path.appdir('geowatch')
         >>> self = NodeStateDebugger()
         >>> self.print_environment()
         >>> self.print_current_state(watch_appdir_dpath)
@@ -808,12 +808,12 @@ class NodeStateDebugger:
         # Print info about what version of the code we are running on
         import ubelt as ub
         import os
-        import watch
+        import geowatch
         print(' --- <NODE_ENV> --- ')
         print(' * Print current version of the code & environment')
-        ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(watch.__file__).parent)
-        print('watch.__version__ = {}'.format(ub.urepr(watch.__version__, nl=1)))
-        print('watch.__file__ = {}'.format(ub.urepr(watch.__file__, nl=1)))
+        ub.cmd('git log -n 1', verbose=3, cwd=ub.Path(geowatch.__file__).parent)
+        print('geowatch.__version__ = {}'.format(ub.urepr(geowatch.__version__, nl=1)))
+        print('geowatch.__file__ = {}'.format(ub.urepr(geowatch.__file__, nl=1)))
         print('os.environ = {}'.format(ub.urepr(dict(os.environ), nl=1)))
 
         # Check to make sure our times are in sync with amazon servers
@@ -837,7 +837,7 @@ class NodeStateDebugger:
         print(f' * Print some disk and machine statistics ({self.current_iteration})')
         ub.cmd('df -h', verbose=3)
 
-        from watch.utils import util_hardware
+        from geowatch.utils import util_hardware
         mem_info = util_hardware.get_mem_info()
         print('mem_info = {}'.format(ub.urepr(mem_info, nl=1, align=':')))
 
@@ -887,19 +887,19 @@ def _test_s3_hack():
 
 
     botocore.exceptions.ClientError: An error occurred (RequestTimeTooSkewed) when calling the PutObject operation: The difference between the request time and the current time is too large.
-    File "/root/code/watch/watch/cli/smartflow_egress.py", line 174, in smartflow_egress
+    File "/root/code/watch/geowatch/cli/smartflow_egress.py", line 174, in smartflow_egress
     local_path.copy(asset_s3_outpath)
     File "/root/.pyenv/versions/3.11.2/lib/python3.11/site-packages/s3fs/core.py", line 140, in _error_wrapper
     raise err
     PermissionError: The difference between the request time and the current time is too large.
     """
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_fsspec
     util_fsspec.S3Path._new_fs(profile='iarpa')
     s3_dpath = util_fsspec.S3Path.coerce('s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v120/batch/kit/CN_C000/2021-08-31/split/mono/products/dummy-test')
     s3_dpath.parent.ls()
     dst_dpath = s3_dpath
 
-    dpath = util_fsspec.LocalPath.appdir('watch/fsspec/test-s3-hack/').ensuredir()
+    dpath = util_fsspec.LocalPath.appdir('geowatch/fsspec/test-s3-hack/').ensuredir()
     # dst_dpath = (dpath / 'dst')
 
     src_dpath = (dpath / 'src').ensuredir()
@@ -909,7 +909,7 @@ def _test_s3_hack():
     from fsspec.callbacks import TqdmCallback
     callback = TqdmCallback(tqdm_kwargs={"desc": "Your tqdm description"})
     src_dpath.copy(dst_dpath, callback=callback)
-    from watch.utils import util_framework
+    from geowatch.utils import util_framework
 
     aws_cmd = util_framework.AWS_S3_Command(
         'sync', src_dpath, dst_dpath,

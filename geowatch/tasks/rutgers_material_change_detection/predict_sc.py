@@ -8,10 +8,10 @@ import numpy as np
 from tqdm import tqdm
 
 
-from watch.tasks.rutgers_material_change_detection.models import build_model
-from watch.tasks.rutgers_material_change_detection.datasets import create_loader
-from watch.tasks.rutgers_material_change_detection.datasets.iarpa_sc_kwdataset import IARPA_SC_EVAL_DATASET
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_n_frames, generate_video_slice_object
+from geowatch.tasks.rutgers_material_change_detection.models import build_model
+from geowatch.tasks.rutgers_material_change_detection.datasets import create_loader
+from geowatch.tasks.rutgers_material_change_detection.datasets.iarpa_sc_kwdataset import IARPA_SC_EVAL_DATASET
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_n_frames, generate_video_slice_object
 
 
 def main():
@@ -161,7 +161,7 @@ def main():
 
                 if 0:
                     # Do quantization or not
-                    from watch.tasks.fusion.predict import quantize_float01
+                    from geowatch.tasks.fusion.predict import quantize_float01
                     quant_recon, quantization = quantize_float01(
                         data, old_min=0, old_max=1)
                     nodata = quantization['nodata']
@@ -202,7 +202,7 @@ if __name__ == "__main__":
     """
     Example call:
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m geowatch.cli.find_dvc)
     MODEL_FPATH=$DVC_DPATH/models/rutgers/rutgers_sc_model_v4.pth.tar
 
     kwcoco subset \
@@ -211,13 +211,13 @@ if __name__ == "__main__":
         --select_images='.sensor_coarse == "S2"' \
         --select_videos='.name == "KR_R001"'
 
-    python -m watch.tasks.rutgers_material_change_detection.predict_sc \
+    python -m geowatch.tasks.rutgers_material_change_detection.predict_sc \
         $MODEL_FPATH \
         $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_s2kr_vali.kwcoco.json \
         $DVC_DPATH/tmp/my_pred/pred.kwcoco.json \
         --n_workers 16 --batch_size 16
 
-    python -m watch.tasks.fusion.evaluate \
+    python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_s2kr_vali.kwcoco.json \
         --pred_dataset=$DVC_DPATH/tmp/my_pred/pred.kwcoco.json \
         --eval_dpath=$DVC_DPATH/tmp/my_eval \

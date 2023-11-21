@@ -9,7 +9,7 @@ For official documentation about the KWCOCO json format see [1]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
 
 For official documentation about the IARPA json format see [2, 3]_. A formal
-json-schema can be found in ``../../watch/rc/site-model.schema.json``.
+json-schema can be found in ``../../geowatch/rc/site-model.schema.json``.
 
 References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
@@ -24,7 +24,7 @@ SeeAlso:
     * ../../tests/test_tracker.py
 
 Ignore:
-    python -m watch.cli.run_tracker \
+    python -m geowatch.cli.run_tracker \
         --in_file /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco.json \
         --out_site_summaries_fpath /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/tracking_manifests_bas2/region_models_manifest.json \
         --out_site_summaries_dir /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/region_models2 \
@@ -51,7 +51,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 if not os.environ.get('_ARGCOMPLETE', ''):
-    from watch.tasks.tracking import from_heatmap, from_polygon
+    from geowatch.tasks.tracking import from_heatmap, from_polygon
 
     _KNOWN_TRACK_FUNCS = {
         'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
@@ -145,7 +145,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             Function to add tracks. If None, use existing tracks.
             Example:
-            'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
+            'geowatch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
             '''), group='track', mutex_group=1)
     default_track_fn = scfg.Value(None, help=ub.paragraph(
             '''
@@ -288,7 +288,7 @@ def coco_create_observation(coco_dset, anns):
     import shapely
     import numpy as np
     from collections import defaultdict
-    from watch.geoannots import geomodels
+    from geowatch.geoannots import geomodels
 
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
@@ -474,7 +474,7 @@ def predict_phase_changes(site_id, observations):
         https://gitlab.kitware.com/smart/standards-wiki/-/blob/main/Site-Model-Specification.md
 
     Example:
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> site = geomodels.SiteModel.random(rng=0, num_observations=20)
         >>> site_id = site.site_id
         >>> observations = list(site.body_features())
@@ -537,8 +537,8 @@ def smooth_observation_scores(observations, smoothing=0.5, smooth_mode='ewma'):
     Add smoothed scores inplace
 
     Example:
-        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.geoannots import geomodels
         >>> site = geomodels.SiteModel.random(num_observations=15)
         >>> observations = list(site.observations())
         >>> # Add random scores for tests
@@ -608,7 +608,7 @@ def smooth_observation_scores(observations, smoothing=0.5, smooth_mode='ewma'):
         obs['properties']['cache']['smooth_scores'] = scores
 
     if 0:
-        from watch.tasks.tracking import phase
+        from geowatch.tasks.tracking import phase
         new_labels = phase.class_label_smoothing(
             new_labels, transition_probs='v7', emission_probs='v7')
 
@@ -721,8 +721,8 @@ def coco_create_site_header(region_id, site_id, trackid, observations):
         geomodels.SiteSummary | geomodels.SiteHeader
     """
     import shapely
-    import watch
-    from watch.geoannots import geomodels
+    import geowatch
+    from geowatch.geoannots import geomodels
 
     geom_list = [_single_geometry(feat['geometry']) for feat in observations]
     geometry = _combined_geometries(geom_list)
@@ -759,7 +759,7 @@ def coco_create_site_header(region_id, site_id, trackid, observations):
         'site_id': site_id,
         'region_id': region_id,
 
-        'version': watch.__version__,  # Shouldn't this be a schema version?
+        'version': geowatch.__version__,  # Shouldn't this be a schema version?
 
         'status': status,
         'model_content': 'proposed',
@@ -790,12 +790,12 @@ def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
             dictionary of json-style data in IARPA site format
 
     Example:
-        >>> import watch
-        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from watch.tasks.tracking.normalize import run_tracking_pipeline
-        >>> from watch.tasks.tracking.from_polygon import MonoTrack
+        >>> import geowatch
+        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.tasks.tracking.normalize import run_tracking_pipeline
+        >>> from geowatch.tasks.tracking.from_polygon import MonoTrack
         >>> import ubelt as ub
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
         >>> coco_dset = run_tracking_pipeline(
         >>>     coco_dset, track_fn=MonoTrack, overwrite=False,
         >>>     sensor_warnings=False)
@@ -805,7 +805,7 @@ def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
         >>> print(f'{len(sites)} sites')
         >>> if 0:  # validation fails
         >>>     import jsonschema
-        >>>     SITE_SCHEMA = watch.rc.load_site_model_schema()
+        >>>     SITE_SCHEMA = geowatch.rc.load_site_model_schema()
         >>>     for site in sites:
         >>>         jsonschema.validate(site, schema=SITE_SCHEMA)
         >>> elif 0:  # but this works if metrics are available
@@ -845,8 +845,8 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
     Turn a kwcoco track into an IARPA site model or site summary
     """
     # import geojson
-    from watch.geoannots.geomodels import SiteModel
-    import watch
+    from geowatch.geoannots.geomodels import SiteModel
+    import geowatch
 
     # get annotations in this track sorted by frame_index
     annots = coco_dset.annots(track_id=trackid)
@@ -861,7 +861,7 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
     #     observations[i]['properties']['cache']['trackid'] = trackid
 
     # HACK to passthrough site_summary IDs
-    if watch.tasks.tracking.utils.trackid_is_default(trackid):
+    if geowatch.tasks.tracking.utils.trackid_is_default(trackid):
         if site_idx is None:
             site_idx = trackid
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
@@ -897,8 +897,8 @@ def _coerce_site_summaries(site_summary_or_region_model,
         List[Tuple[str, Dict]]
            Each tuple is a (region_id, site_summary) pair
     """
-    from watch.utils import util_gis
-    from watch.geoannots import geomodels
+    from geowatch.utils import util_gis
+    from geowatch.geoannots import geomodels
     import jsonschema
 
     TRUST_REGION_SCHEMA = 0
@@ -971,10 +971,10 @@ def assign_sites_to_videos(coco_dset, site_summaries):
     Compute assignments between which sites summaries should be projected onto
     which videos for scoring.
     """
-    from watch.utils import util_gis
-    from watch.geoannots.geomodels import RegionModel
+    from geowatch.utils import util_gis
+    from geowatch.geoannots.geomodels import RegionModel
     import rich
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
 
     site_idx_to_vidid = []
     unassigned_site_idxs = []
@@ -1040,8 +1040,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
     place them in the correct videos so we can process those areas.
     """
     import rich
-    import watch
-    from watch.utils import kwcoco_extensions
+    import geowatch
+    from geowatch.utils import kwcoco_extensions
     from kwutil import util_time
     import kwcoco
     # input validation
@@ -1058,7 +1058,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         site_summary_or_region_model, default_region_id)
     print(f'found {len(site_summaries)} site summaries')
 
-    site_summary_cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
+    site_summary_cid = coco_dset.ensure_category(geowatch.heuristics.SITE_SUMMARY_CNAME)
 
     print('Searching for assignment between requested site summaries and the kwcoco videos')
 
@@ -1154,17 +1154,17 @@ def main(argv=None, **kwargs):
     """
     Example:
         >>> # test BAS and default (SC) modes
-        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from watch.cli.kwcoco_to_geojson import main
-        >>> from watch.demo import smart_kwcoco_demodata
-        >>> from watch.utils import util_gis
+        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.cli.kwcoco_to_geojson import main
+        >>> from geowatch.demo import smart_kwcoco_demodata
+        >>> from geowatch.utils import util_gis
         >>> import json
         >>> import kwcoco
         >>> import ubelt as ub
         >>> # run BAS on demodata in a new place
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main0').ensuredir()
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
+        >>> dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'main0').ensuredir()
         >>> coco_dset.reroot(absolute=True)
         >>> coco_dset.fpath = dpath / 'bas_input.kwcoco.json'
         >>> coco_dset.clear_annotations()
@@ -1230,11 +1230,11 @@ def main(argv=None, **kwargs):
 
     Example:
         >>> # test resolution
-        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from watch.cli.kwcoco_to_geojson import main
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main1').ensuredir()
+        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.cli.kwcoco_to_geojson import main
+        >>> import geowatch
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
+        >>> dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'main1').ensuredir()
         >>> out_fpath = dpath / 'resolution_test.kwcoco.json'
         >>> regions_dir = dpath / 'regions'
         >>> bas_fpath = dpath / 'bas_sites.json'
@@ -1257,7 +1257,7 @@ def main(argv=None, **kwargs):
         >>> argv = []
         >>> # Test case for no results
         >>> main(argv=argv, **kwargs)
-        >>> from watch.utils import util_gis
+        >>> from geowatch.utils import util_gis
         >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) == 0
         >>> # Try to get results here
         >>> track_kwargs = json.dumps({
@@ -1282,13 +1282,13 @@ def main(argv=None, **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # test a more complicated track function
-        >>> import watch
-        >>> from watch.cli.kwcoco_to_geojson import demo
+        >>> import geowatch
+        >>> from geowatch.cli.kwcoco_to_geojson import demo
         >>> import kwcoco
-        >>> import watch
+        >>> import geowatch
         >>> import ubelt as ub
         >>> # make a new BAS dataset
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True)
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True)
         >>> #coco_dset.images().set('sensor_coarse', 'S2')
         >>> for img in coco_dset.imgs.values():
         >>>     img['sensor_coarse'] = 'S2'
@@ -1328,13 +1328,13 @@ def main(argv=None, **kwargs):
     import kwcoco
     import pandas as pd
     import safer
-    import watch
+    import geowatch
 
     from kwcoco.util import util_json
     from kwutil.util_yaml import Yaml
-    from watch.geoannots import geomodels
-    from watch.utils import process_context
-    from watch.utils import util_gis
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import process_context
+    from geowatch.utils import util_gis
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -1401,7 +1401,7 @@ def main(argv=None, **kwargs):
     info = tracking_output['info']
 
     proc_context = process_context.ProcessContext(
-        name='watch.cli.kwcoco_to_geojson', type='process',
+        name='geowatch.cli.kwcoco_to_geojson', type='process',
         config=jsonified_config,
         extra={'pred_info': pred_info},
         track_emissions=False,
@@ -1413,13 +1413,13 @@ def main(argv=None, **kwargs):
     # HACK remove potentially conflicting annotations as well
     # we shouldn't have saliency annots when we want class or vice versa
     CLEAN_DSET = 1
-    class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
+    class_cats = [cat['name'] for cat in geowatch.heuristics.CATEGORIES]
     saliency_cats = ['salient']
 
     track_fn = args.track_fn
     if track_fn is None:
         track_fn = (
-            watch.tasks.tracking.abstract_classes.NoOpTrackFunction
+            geowatch.tasks.tracking.abstract_classes.NoOpTrackFunction
             if args.default_track_fn is None else
             args.default_track_fn
         )
@@ -1468,7 +1468,7 @@ def main(argv=None, **kwargs):
 
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
                                                args.region_id)
-        cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
+        cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']
         coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
         print('restricting dset to videos with site_summary annots: ',
               set(coco_dset.index.name_to_video))
@@ -1495,7 +1495,7 @@ def main(argv=None, **kwargs):
     """
     ../tasks/tracking/normalize.py
     """
-    coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
+    coco_dset = geowatch.tasks.tracking.normalize.run_tracking_pipeline(
         coco_dset, track_fn=track_fn, gt_dset=gt_dset,
         viz_out_dir=args.viz_out_dir, sensor_warnings=args.sensor_warnings,
         **track_kwargs)
@@ -1606,8 +1606,8 @@ def main(argv=None, **kwargs):
 def coco_video_gdf(coco_dset):
     # TODO: rectify with covered_video_geo_regions
     import pandas as pd
-    from watch.utils import util_gis
-    from watch.geoannots.geococo_objects import CocoGeoVideo
+    from geowatch.utils import util_gis
+    from geowatch.geoannots.geococo_objects import CocoGeoVideo
     crs84 = util_gis.get_crs84()
     crs84_parts = []
     for video in coco_dset.videos().objs:
@@ -1623,7 +1623,7 @@ def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
     """
     Assign each video to a region (usually for BAS)
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
     video_region_assignments = []
     for idx1, idxs2 in idx1_to_idxs2.items():
@@ -1672,7 +1672,7 @@ def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
 def coco_remove_out_of_bound_tracks(coco_dset, video_region_assignments):
     # Remove any tracks that are outside of region bounds.
     # First find which regions correspond to which videos.
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from shapely.geometry import shape
     import rich
     import geopandas as gpd
@@ -1733,7 +1733,7 @@ def demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True):
         '--out_site_summaries_dir',
         regions_dir,
         '--track_fn',
-        'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
+        'geowatch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
     ]
     # run BAS on it
     main(bas_args)
@@ -1744,7 +1744,7 @@ def demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True):
         '--out_site_sites_dir',
         sites_dir,
         '--track_fn',
-        'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
+        'geowatch.tasks.tracking.from_heatmap.TimeAggregatedSC',
     ]
     for vid_name, vid in coco_dset_sc.index.name_to_video.items():
         gids = coco_dset_sc.index.vidid_to_gids[vid['id']]

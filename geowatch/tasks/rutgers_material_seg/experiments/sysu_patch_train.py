@@ -1,17 +1,17 @@
 # flake8: noqa
 import comet_ml
 import time
-from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
+from geowatch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
 from skimage.filters import threshold_otsu as otsu
 from fast_pytorch_kmeans import KMeans
-from watch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss
-from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.models import build_model
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss
+from geowatch.tasks.rutgers_material_seg.models.supcon import SupConResNet
+from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.models import build_model
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
 import torchvision.transforms.functional as FT
 from torchvision import transforms
 from tqdm import tqdm
@@ -903,7 +903,7 @@ class Trainer(object):
 
 if __name__ == "__main__":
 
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
 
@@ -951,7 +951,7 @@ if __name__ == "__main__":
     channels = config['data']['channels']
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
-    if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
+    if config['data']['name'] == 'geowatch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
         sampler = ndsampler.CocoSampler(dset)

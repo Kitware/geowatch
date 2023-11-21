@@ -10,20 +10,20 @@ from torch import nn
 import kwimage
 import kwarray
 import ndsampler
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import numpy as np
 import torch.nn.functional as F
 from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 from torchvision import transforms
 from skimage.filters import threshold_otsu as otsu
 import matplotlib.pyplot as plt
 import gc
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
 
 current_path = os.getcwd().split("/")
 

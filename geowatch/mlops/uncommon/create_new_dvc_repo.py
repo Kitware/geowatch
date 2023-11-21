@@ -99,7 +99,7 @@ def create_experiment_dvc_repo():
 
 
 def update_data_ignores():
-    import watch
+    import geowatch
     import ubelt as ub
     ignore_text = ub.codeblock(
         '''
@@ -110,7 +110,7 @@ def update_data_ignores():
         Uncropped-*
         ''')
 
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
     fpath1 = expt_dvc_dpath / '.gitignore'
     fpath2 = expt_dvc_dpath / '.dvcignore'
     fpath1.write_text(ignore_text)
@@ -120,7 +120,7 @@ def update_data_ignores():
 
 
 def update_expt_ignores():
-    import watch
+    import geowatch
     import ubelt as ub
     ignore_text = ub.codeblock(
         '''
@@ -158,7 +158,7 @@ def update_expt_ignores():
         models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/*.pkl
         ''')
 
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
     fpath1 = expt_dvc_dpath / '.gitignore'
     fpath2 = expt_dvc_dpath / '.dvcignore'
     fpath1.write_text(ignore_text)

@@ -55,7 +55,7 @@ class TrackFunction:
 
             _debug = 0
 
-            from watch.utils import kwcoco_extensions
+            from geowatch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
             fixed_subdataset = []
             for sub_dset in ub.ProgIter(tracked_subdsets,
@@ -122,7 +122,7 @@ class TrackFunction:
         import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
-            from watch.utils.util_json import debug_json_unserializable
+            from geowatch.utils.util_json import debug_json_unserializable
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(coco_dset.dataset,

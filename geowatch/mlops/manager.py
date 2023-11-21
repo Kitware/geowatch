@@ -11,71 +11,71 @@ Example:
     export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m geowatch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
-    python -m watch.mlops.manager "status" --dataset_codes "Drop6"
-    python -m watch.mlops.manager "push packages" --dataset_codes "Drop6"
-    python -m watch.mlops.manager "push packages" --dataset_codes "Drop6-MeanYear10GSD"
+    python -m geowatch.mlops.manager "status" --dataset_codes "Drop6"
+    python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop6"
+    python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop6-MeanYear10GSD"
 
-    python -m watch.mlops.manager "pull packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
-    python -m watch.mlops.manager "push packages"
-    python -m watch.mlops.manager "status packages"
+    python -m geowatch.mlops.manager "push packages"
+    python -m geowatch.mlops.manager "status packages"
 
-    python -m watch.mlops.manager "status" --dataset_codes Drop4-SC
+    python -m geowatch.mlops.manager "status" --dataset_codes Drop4-SC
 
-    python -m watch.mlops.manager "list" --dataset_codes Drop4-BAS
-    python -m watch.mlops.manager "list" --dataset_codes Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
-    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
-    python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
-    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD-V2
-    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MedianSummer10GSD
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop4-BAS
+    python -m geowatch.mlops.manager "list" --dataset_codes Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD-V2
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop6 Drop6-MedianSummer10GSD
 
 
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD-V2 --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD-V2 --yes
 
-    HACK_SAVE_ANYWAY=1 python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
+    HACK_SAVE_ANYWAY=1 python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
 
-    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
+    python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
 
-    python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+    python -m geowatch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
 
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
-    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD
-    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask
+    python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD
+    python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask
 
     # On training machine
-    python -m watch.mlops.manager "push packages" --dataset_codes Drop6
-    python -m watch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m geowatch.mlops.manager "push packages" --dataset_codes Drop6
+    python -m geowatch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6
-    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD --yes
-    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD Drop7-MedianNoWinter10GSD-iMERIT --yes
-    python -m watch.mlops.manager "status"
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop6
+    python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD --yes
+    python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD Drop7-MedianNoWinter10GSD-iMERIT --yes
+    python -m geowatch.mlops.manager "status"
 
     # Run evals on testing machine
-    python -m watch.mlops.manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m geowatch.mlops.manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.manager "push evals"
+    python -m geowatch.mlops.manager "push evals"
 
     # On analysis machine
-    python -m watch.mlops.manager "pull evals"
+    python -m geowatch.mlops.manager "pull evals"
 
 
 TODO:
@@ -94,12 +94,12 @@ TODO:
 
     # You should be able to pull things wrt to that model
 
-    python -m watch.mlops.manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.mlops.manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.mlops.manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m geowatch.mlops.manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m geowatch.mlops.manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m geowatch.mlops.manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
 
-    python -m watch.mlops.manager "status" --dataset_codes=Drop6
-    python -m watch.mlops.manager "add packages" --dataset_codes=Drop6
+    python -m geowatch.mlops.manager "status" --dataset_codes=Drop6
+    python -m geowatch.mlops.manager "add packages" --dataset_codes=Drop6
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -161,7 +161,7 @@ class ManagerConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.mlops.manager import *  # NOQA
+    from geowatch.mlops.manager import *  # NOQA
     """
     config = ManagerConfig.cli(cmdline=cmdline, data=kwargs)
     print('ManagerConfig config = {}'.format(ub.urepr(dict(config), nl=1)))
@@ -195,7 +195,7 @@ def main(cmdline=True, **kwargs):
     dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
-        from watch import heuristics
+        from geowatch import heuristics
         expt_dvc_dpath = heuristics.auto_expt_dvc()
         config['expt_dvc_dpath'] = expt_dvc_dpath
 
@@ -250,9 +250,9 @@ class DVCExptManager(ub.NiceRepr):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-        >>> from watch.mlops.manager import *  # NOQA
-        >>> import watch
-        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> from geowatch.mlops.manager import *  # NOQA
+        >>> import geowatch
+        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
         >>> dataset_codes = ['Drop4-BAS']
         >>> manager = DVCExptManager(expt_dvc_dpath=expt_dvc_dpath, dataset_codes=dataset_codes)
         >>> manager.list()
@@ -272,7 +272,7 @@ class DVCExptManager(ub.NiceRepr):
 
     def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes='*',
                  model_pattern='*'):
-        from watch.utils import simple_dvc
+        from geowatch.utils import simple_dvc
         manager.model_pattern = model_pattern
         manager.expt_dvc_dpath = expt_dvc_dpath
         manager.dvc_remote = dvc_remote
@@ -292,9 +292,9 @@ class DVCExptManager(ub.NiceRepr):
 
     @classmethod
     def coerce(cls, expt_dvc_dpath=None):
-        import watch
+        import geowatch
         if expt_dvc_dpath is None:
-            expt_dvc_dpath = watch.find_dvc_dpath()
+            expt_dvc_dpath = geowatch.find_dvc_dpath()
         dvc_remote = 'aws'
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
                       dataset_codes='*')
@@ -332,7 +332,7 @@ class DVCExptManager(ub.NiceRepr):
         """
         TODO: break this up into smaller components.
         """
-        # from watch.tasks.fusion import repackage
+        # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
             state.add_packages(yes=yes)
@@ -341,7 +341,7 @@ class DVCExptManager(ub.NiceRepr):
         """
         TODO: break this up into smaller components.
         """
-        # from watch.tasks.fusion import repackage
+        # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
             state.push_packages(yes=yes)
@@ -356,7 +356,7 @@ class DVCExptManager(ub.NiceRepr):
 
     def reverse_hash_lookup(manager, key):
         # This probably doesn't belong here
-        from watch.utils.reverse_hashid import ReverseHashTable
+        from geowatch.utils.reverse_hashid import ReverseHashTable
         ReverseHashTable.query(key, verbose=1)
 
 
@@ -365,10 +365,10 @@ class ExperimentState(ub.NiceRepr):
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-        >>> from watch.mlops.manager import *  # NOQA
-        >>> import watch
-        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+        >>> from geowatch.mlops.manager import *  # NOQA
+        >>> import geowatch
+        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
         >>> #dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
         >>> dataset_code = '*'
         >>> #dataset_code = 'Drop4-BAS'
@@ -380,7 +380,7 @@ class ExperimentState(ub.NiceRepr):
 
     Ignore:
         >>> # Just show patterns:
-        >>> from watch.mlops.manager import *  # NOQA
+        >>> from geowatch.mlops.manager import *  # NOQA
         >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=1, sort=0)))
 
@@ -407,9 +407,9 @@ class ExperimentState(ub.NiceRepr):
         self.expt_dvc_dpath = expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
         if data_dvc_dpath is None:
-            import watch
+            import geowatch
             try:
-                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DVC_DATA_DPATH')
+                data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', envvar='DVC_DATA_DPATH')
             except Exception:
                 pass
         self.data_dvc_dpath = data_dvc_dpath
@@ -495,7 +495,7 @@ class ExperimentState(ub.NiceRepr):
 
         # The expt_dvc_dpath and storage_dpath should be given as full paths
         # So we take those out of the template.
-        from watch.utils.partial_format import partial_format
+        from geowatch.utils.partial_format import partial_format
         import os
         partialkw = {
             'expt_dvc_dpath': os.fspath(self.expt_dvc_dpath),
@@ -536,7 +536,7 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
-        from watch.utils import util_pattern
+        from geowatch.utils import util_pattern
         default = {'ckpt_path': None, 'spkg_fpath': None}
         _id_to_row = ub.ddict(default.copy)
 
@@ -848,10 +848,10 @@ class ExperimentState(ub.NiceRepr):
 
         Ignore:
             >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-            >>> from watch.mlops.manager import *  # NOQA
-            >>> import watch
-            >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-            >>> #expt_dvc_dpath = watch.find_dvc_dpath(hardware='ssd')
+            >>> from geowatch.mlops.manager import *  # NOQA
+            >>> import geowatch
+            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+            >>> #expt_dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd')
             >>> #dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
             >>> self = ExperimentState(expt_dvc_dpath)
             >>> self.summarize()
@@ -860,7 +860,7 @@ class ExperimentState(ub.NiceRepr):
         summarize_tables(tables)
 
     def package_checkpoints(self, yes=None):
-        from watch.mlops import repackager
+        from geowatch.mlops import repackager
         from rich.prompt import Confirm
 
         import os
@@ -923,7 +923,7 @@ class ExperimentState(ub.NiceRepr):
                 raise UserAbort
 
             import platform
-            from watch.utils.simple_dvc import SimpleDVC
+            from geowatch.utils.simple_dvc import SimpleDVC
             hostname = platform.node()
             dvc_api = SimpleDVC(self.expt_dvc_dpath)
 
@@ -946,8 +946,8 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m watch.mlops.manager "pull packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.mlops.manager "status packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
+            python -m geowatch.mlops.manager "pull packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
+            python -m geowatch.mlops.manager "status packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
             """))
 
     def add_packages(self, yes=None):
@@ -966,10 +966,10 @@ class ExperimentState(ub.NiceRepr):
         and then adds them to DVC.
 
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-        >>> from watch.mlops.manager import *  # NOQA
-        >>> import watch
-        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+        >>> from geowatch.mlops.manager import *  # NOQA
+        >>> import geowatch
+        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
         >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
         >>> self.summarize()
@@ -991,10 +991,10 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     CommandLine:
-        xdoctest -m watch.mlops.manager checkpoint_filepath_info
+        xdoctest -m geowatch.mlops.manager checkpoint_filepath_info
 
     Example:
-        >>> from watch.mlops.manager import *  # NOQA
+        >>> from geowatch.mlops.manager import *  # NOQA
         >>> fnames = [
         >>>     'epoch1_step10.foo',
         >>>     'epoch=2-step=10.foo',
@@ -1123,15 +1123,15 @@ __config__.main = main
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/mlops/mlops.manager.py "pull all"
-        python -m watch.mlops.manager "status"
-        python -m watch.mlops.manager "list"
-        python -m watch.mlops.manager "pull packages"
+        python ~/code/watch/geowatch/mlops/mlops.manager.py "pull all"
+        python -m geowatch.mlops.manager "status"
+        python -m geowatch.mlops.manager "list"
+        python -m geowatch.mlops.manager "pull packages"
 
-        # python -m watch.mlops.manager "push packages"
-        # python -m watch.mlops.manager "pull evals"
+        # python -m geowatch.mlops.manager "push packages"
+        # python -m geowatch.mlops.manager "pull evals"
 
-        # python -m watch.mlops.manager "evaluate"
-        # python -m watch.mlops.manager "pull packages"
+        # python -m geowatch.mlops.manager "evaluate"
+        # python -m geowatch.mlops.manager "pull packages"
     """
     main(cmdline=True)

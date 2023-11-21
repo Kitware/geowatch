@@ -1,4 +1,4 @@
-import watch
+import geowatch
 import json
 import geojson
 import ubelt as ub
@@ -198,7 +198,7 @@ def main(region_models_pth,
         than its site summary
 
     Ignore:
-        >>> from watch.cli.extend_sc_sites import main
+        >>> from geowatch.cli.extend_sc_sites import main
         >>> main(
         >>>     'sc_out_region_models',
         >>>     'sc_out_site_models',
@@ -208,15 +208,15 @@ def main(region_models_pth,
         >>> )
         >>> import jsonschema
         >>> import json
-        >>> import watch
+        >>> import geowatch
         >>> import ubelt as ub
-        >>> REGION_SCHEMA = watch.rc.load_region_model_schema()
+        >>> REGION_SCHEMA = geowatch.rc.load_region_model_schema()
         >>> region_pths = ub.Path('extended_sc_out_region_models').glob('*.geojson')
         >>> regions = [json.load(open(p)) for p in region_pths]
         >>> for region in regions:
         >>>     # jsonschema.validate(region, schema=REGION_SCHEMA)
         >>>     pass
-        >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
+        >>> SITE_SCHEMA = geowatch.rc.load_site_model_schema()
         >>> site_pths = ub.Path('extended_sc_out_site_models').glob('*.geojson')
         >>> sites = [json.load(open(p)) for p in site_pths]
         >>> for site in sites:
@@ -228,11 +228,11 @@ def main(region_models_pth,
         >>>     s = SiteStack(p)
 
     '''
-    mr_pths = watch.utils.util_gis.coerce_geojson_paths(
+    mr_pths = geowatch.utils.util_gis.coerce_geojson_paths(
         modify_region_models_pth)
-    rm_pths = watch.utils.util_gis.coerce_geojson_paths(region_models_pth)
-    ms_pths = watch.utils.util_gis.coerce_geojson_paths(modify_site_models_pth)
-    sm_pths = watch.utils.util_gis.coerce_geojson_paths(site_models_pth)
+    rm_pths = geowatch.utils.util_gis.coerce_geojson_paths(region_models_pth)
+    ms_pths = geowatch.utils.util_gis.coerce_geojson_paths(modify_site_models_pth)
+    sm_pths = geowatch.utils.util_gis.coerce_geojson_paths(site_models_pth)
     assert len(mr_pths) == 1, 'need 1 region -> n site models'
     assert len(rm_pths) == 1, 'need 1 region -> n site models'
     if len(sm_pths) < 1:

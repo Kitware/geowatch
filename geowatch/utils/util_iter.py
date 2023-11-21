@@ -15,7 +15,7 @@ def consume(iterator, n=None):
         https://docs.python.org/3/library/itertools.html#itertools-recipes
 
     Benchmark:
-        >>> from watch.utils.util_iter import *  # NOQA
+        >>> from geowatch.utils.util_iter import *  # NOQA
         >>> import timerit
         >>> ti = timerit.Timerit(100, bestof=10, verbose=2)
         >>> #
@@ -60,7 +60,7 @@ def chunks(items, nchunks):
         - [ ] Fix ubelt.chunks to handle this remainder case
 
     Example:
-        >>> from watch.utils.util_iter import *  # NOQA
+        >>> from geowatch.utils.util_iter import *  # NOQA
         >>> items = list(range(11))
         >>> nchunks = 4
         >>> list(chunks(items, nchunks))

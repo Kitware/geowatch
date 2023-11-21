@@ -10,7 +10,7 @@ References:
 Ignore:
     >>> import xdev
     >>> import pathlib
-    >>> fpath = pathlib.Path('~/code/watch/watch/tasks/fusion/datamodules/affinity_sampling.pyx').expanduser()
+    >>> fpath = pathlib.Path('~/code/watch/geowatch/tasks/fusion/datamodules/affinity_sampling.pyx').expanduser()
     >>> renormalize_cython = xdev.import_module_from_pyx(fpath, recompile=True, verbose=3, annotate=True)
 """
 import numpy as np

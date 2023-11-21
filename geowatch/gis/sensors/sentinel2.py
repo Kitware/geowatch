@@ -16,11 +16,11 @@ def sentinel2_grid():
         https://github.com/justinelliotmeyers/Sentinel-2-Shapefile-Index
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/gis/sensors/sentinel2.py
+        xdoctest -m /home/joncrall/code/watch/geowatch/gis/sensors/sentinel2.py
 
     Example:
         >>> # xdoctest: +SKIP("slow, not currently used")
-        >>> from watch.gis.sensors.sentinel2 import *  # NOQA
+        >>> from geowatch.gis.sensors.sentinel2 import *  # NOQA
         >>> s2_tiles = sentinel2_grid()
         >>> assert s2_tiles.crs.name == 'WGS 84'
         >>> # Print out the first 5 tile rows
@@ -36,7 +36,7 @@ def sentinel2_grid():
         >>> #
         >>> # Demo how to convert each polygon into its UTM zone
         >>> import kwimage
-        >>> from watch.utils import util_gis
+        >>> from geowatch.utils import util_gis
         >>> import pyproj
         >>> utm_codes = []
         >>> # Only take some of the tiles for test speed
@@ -111,7 +111,7 @@ def sentinel2_grid():
     }
     for item in items.values():
         url = join(base_url, item['fname'])
-        fpath = ub.grabdata(url, appname='watch', hash_prefix=item['hash_prefix'])
+        fpath = ub.grabdata(url, appname='geowatch', hash_prefix=item['hash_prefix'])
         item['fpath'] = fpath
     fpath = items['shp']['fpath']
     s2_tiles = gpd.read_file(fpath)
@@ -129,7 +129,7 @@ def s2_grid_tiles_for_geometry(geometry):
 
     Example:
         >>> # xdoctest: +SKIP("slow, not currently used")
-        >>> from watch.gis.sensors.sentinel2 import *  # NOQA
+        >>> from geowatch.gis.sensors.sentinel2 import *  # NOQA
         >>> from shapely.geometry import shape
         >>> geometry = shape({
         >>>  "type": "Polygon",

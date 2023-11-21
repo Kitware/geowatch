@@ -15,9 +15,9 @@ import numbers
 import kwcoco
 
 from os.path import join
-from watch.utils import util_raster
-from watch import exceptions
-# import watch.gis
+from geowatch.utils import util_raster
+from geowatch import exceptions
+# import geowatch.gis
 
 try:
     from xdev import profile
@@ -126,9 +126,9 @@ def populate_watch_fields(
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
-        >>> dvc_dpath = watch.utils.util_data.find_dvc_dpath()
+        >>> dvc_dpath = geowatch.utils.util_data.find_dvc_dpath()
         >>> fpath = dvc_dpath / 'drop0_aligned/data.kwcoco.json')
         >>> coco_dset = kwcoco.CocoDataset(fpath)
         >>> target_gsd = 5.0
@@ -137,7 +137,7 @@ def populate_watch_fields(
         >>> print('coco_dset.index.imgs[1] = ' + ub.urepr(coco_dset.index.imgs[1], nl=1))
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -178,10 +178,10 @@ def populate_watch_fields(
 
     # Modify videos to include cleared status
     if 1:
-        from watch import heuristics
-        import watch
+        from geowatch import heuristics
+        import geowatch
         region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
-        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
+        pat = geowatch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
         for video in coco_dset.videos().objs:
             video_name = video['name']
             if pat.match(video_name):
@@ -208,8 +208,8 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
@@ -220,8 +220,8 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
@@ -241,7 +241,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             Cannot keep keep geotiff metadata when using process parallelism.
 
             Need to serialize gdal objects (i.e. RPC transforms and
-            SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
+            SwigPyObject) returned from ``geowatch.gis.geotiff.geotiff_metadata``
             to be able do this.
             '''))
 
@@ -313,17 +313,17 @@ def coco_populate_geo_img_heuristics2(
     Note: this will not overwrite existing channel info unless specified
 
     Commandline
-        xdoctest -m ~/code/watch/watch/utils/kwcoco_extensions.py --profile
+        xdoctest -m ~/code/watch/geowatch/utils/kwcoco_extensions.py --profile
 
     TODO:
         - [ ] Use logic in the align demo classmethod to make an example
               that uses a real L8 / S2 image.
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> import watch
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> import geowatch
         >>> import json
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames2-gsize64')
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-geodata-dates-heatmap-videos1-frames2-gsize64')
         >>> gid = 1
         >>> overwrite = {'warp', 'band'}
         >>> default_gsd = None
@@ -350,7 +350,7 @@ def coco_populate_geo_img_heuristics2(
         >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary'])), default=None))
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> ###
         >>> gid = 1
@@ -363,7 +363,7 @@ def coco_populate_geo_img_heuristics2(
         >>> coco_img = dset2.coco_image(gid)
         >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
     """
-    import watch
+    import geowatch
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
 
@@ -401,7 +401,7 @@ def coco_populate_geo_img_heuristics2(
                 metakw['elevation'] = 0
             primary_fname = primary_obj.get('file_name', None)
             primary_fpath = join(bundle_dpath, primary_fname)
-            info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+            info = geowatch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
             primary_obj['geotiff_metadata'] = info
 
     # if 'default_nodata' not in img:
@@ -463,12 +463,12 @@ def _populate_valid_region(coco_img):
     """
     Ignore:
         >>> # Make a dummy image with nodata to test that this works
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.kwcoco_extensions import _populate_valid_region
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import _populate_valid_region
         >>> import kwcoco
         >>> H, W = 1024, 1024
         >>> nodata = 0  #
-        >>> dpath = ub.Path.appdir('watch/test/valid_region').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/valid_region').ensuredir()
         >>> imdata = ((np.random.rand(H, W) * 240) + 3).astype(np.uint8)
         >>> # Fill in nodata values
         >>> imdata[:, 0:20] = nodata
@@ -503,7 +503,7 @@ def _populate_valid_region(coco_img):
         canvasR = features.rasterize(shapes, out=canvas[:, :, 0].copy())
         kwplot.imshow(canvasR, doclf=1)
     """
-    import watch
+    import geowatch
     # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
@@ -534,7 +534,7 @@ def _populate_valid_region(coco_img):
         dem_hint = primary_obj.get('dem_hint', 'use')
         if dem_hint == 'ignore':
             metakw['elevation'] = 0
-        info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+        info = geowatch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
 
     warp_img_from_asset = kwimage.Affine.coerce(primary_obj.get('warp_aux_to_img', None))
     if warp_img_from_asset.isclose_identity():
@@ -567,8 +567,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
     obj can be an img or aux
 
     Ignore:
-        from watch.utils.kwcoco_extensions import *  # NOQA
-        from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        from geowatch.utils.kwcoco_extensions import *  # NOQA
+        from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         coco_dset = demo_kwcoco_with_heatmaps()
         coco_img = coco_dset.coco_image(1)
         obj = coco_img.primary_asset()
@@ -578,7 +578,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         default_gsd = None
         keep_geotiff_metadata = False
     """
-    import watch
+    import geowatch
     sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
@@ -611,7 +611,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 if info is None:
-                    info = watch.gis.geotiff.geotiff_metadata(
+                    info = geowatch.gis.geotiff.geotiff_metadata(
                         fpath, strict=True, **metakw)
 
                 if keep_geotiff_metadata:
@@ -687,7 +687,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         # TODO: determine nodata defaults based on sensor_coarse
 
         if enable_intensity_stats:
-            from watch.cli import coco_spectra
+            from geowatch.cli import coco_spectra
             coco_spectra.ensure_intensity_sidecar(fpath)
 
         return errors
@@ -722,7 +722,7 @@ def _coerce_overwrite(overwrite):
 
 
 # def single_geotiff_metadata(bundle_dpath, img, serializable=False):
-#     import watch
+#     import geowatch
 #     from os.path import exists
 #     import dateutil
 #     geotiff_metadata = None
@@ -754,7 +754,7 @@ def _coerce_overwrite(overwrite):
 #     if fname is not None:
 #         src_gpath = join(bundle_dpath, fname)
 #         assert exists(src_gpath)
-#         img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
+#         img_info = geowatch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
 
 #         if serializable:
 #             raise NotImplementedError
@@ -765,7 +765,7 @@ def _coerce_overwrite(overwrite):
 #     for aux in img.get('auxiliary', []):
 #         aux_fpath = join(bundle_dpath, aux['file_name'])
 #         assert exists(aux_fpath)
-#         aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
+#         aux_info = geowatch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
 #         aux_info = ub.dict_isect(aux_info, keys_of_interest)
 #         if serializable:
 #             raise NotImplementedError
@@ -830,8 +830,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
@@ -1038,7 +1038,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
         if 'valid_region_geos' in video:
             import geopandas as gpd
-            from watch.utils import util_gis
+            from geowatch.utils import util_gis
             # Project the valid region onto video space
             valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
             wld_crs = base_wld_crs_info['auth']
@@ -1098,15 +1098,15 @@ def check_kwcoco_spatial_transforms(coco_dset):
     import kwcoco
     dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip')
 
-    import watch
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    import geowatch
+    data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     dset = kwcoco.CocoDataset(data_dvc_dpath / 'Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip')
 
     dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_expt_dvc/_debug/pred.kwcoco.zip')
     """
 
     import kwimage
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     import numpy as np
 
     for video in coco_dset.videos().objs:
@@ -1183,7 +1183,7 @@ def check_geo_transform_consistency(coco_dset):
     space in a coco dataset.
 
     Ignore:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> #coco_dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001_v2.kwcoco.json')
         >>> coco_dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_data_dvc-ssd/Drop6/imgonly-NZ_R001.kwcoco.json')
@@ -1423,7 +1423,7 @@ def check_unique_channel_names(coco_dset, gids=None, verbose=0):
         - [ ] move to kwcoco proper
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -1625,8 +1625,8 @@ def transfer_geo_metadata(coco_dset, gid):
 
     Example:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
-        from watch.utils.kwcoco_extensions import *  # NOQA
-        from watch.utils.util_data import find_dvc_dpath
+        from geowatch.utils.kwcoco_extensions import *  # NOQA
+        from geowatch.utils.util_data import find_dvc_dpath
         import kwcoco
         dvc_dpath = find_dvc_dpath()
         coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
@@ -1634,9 +1634,9 @@ def transfer_geo_metadata(coco_dset, gid):
         gid = coco_dset.images().peek()['id']
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
-        >>> from watch.demo.smart_kwcoco_demodata import hack_seed_geometadata_in_dset
+        >>> from geowatch.demo.smart_kwcoco_demodata import hack_seed_geometadata_in_dset
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> hack_seed_geometadata_in_dset(coco_dset, force=True, rng=0)
         >>> gid = 2
@@ -1644,7 +1644,7 @@ def transfer_geo_metadata(coco_dset, gid):
         >>> fpath = join(coco_dset.bundle_dpath, coco_dset._coco_image(gid).primary_asset()['file_name'])
         >>> _ = ub.cmd('gdalinfo ' + fpath, verbose=1)
     """
-    import watch
+    import geowatch
     from osgeo import gdal
     coco_img = coco_dset._coco_image(gid)
 
@@ -1657,7 +1657,7 @@ def transfer_geo_metadata(coco_dset, gid):
         if fname is not None:
             fpath = join(coco_img.dset.bundle_dpath, fname)
             try:
-                info = watch.gis.geotiff.geotiff_metadata(fpath)
+                info = geowatch.gis.geotiff.geotiff_metadata(fpath)
                 if info.get('crs_error', None) is not None:
                     raise Exception
             except Exception:
@@ -1685,7 +1685,7 @@ def transfer_geo_metadata(coco_dset, gid):
                                 fpath = join(coco_img.dset.bundle_dpath, fname)
                                 try:
                                     # Try until we find an image with real CRS info
-                                    info = watch.gis.geotiff.geotiff_metadata(fpath)
+                                    info = geowatch.gis.geotiff.geotiff_metadata(fpath)
                                     if info.get('crs_error', None) is not None:
                                         raise Exception
                                 except Exception:
@@ -1771,7 +1771,7 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
     ### TODO: make use of me as a fallback in the transfer_geo_metadata2
     class Found(Exception):
         pass
-    import watch
+    import geowatch
     asset_with_geo_info = None
     gid = coco_img.img['id']
     try:
@@ -1788,7 +1788,7 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
                         fpath = join(coco_img.dset.bundle_dpath, fname)
                         try:
                             # Try until we find an image with real CRS info
-                            info = watch.gis.geotiff.geotiff_metadata(fpath)
+                            info = geowatch.gis.geotiff.geotiff_metadata(fpath)
                             if info.get('crs_error', None) is not None:
                                 raise Exception
                         except Exception:
@@ -1822,7 +1822,7 @@ def transfer_geo_metadata2(coco_img, dry=0):
 
     ASSUMES THAT EVERYTHING IS ALREADY ALIGNED
     """
-    import watch
+    import geowatch
     # from osgeo import gdal
     import affine
     from os.path import exists
@@ -1837,7 +1837,7 @@ def transfer_geo_metadata2(coco_img, dry=0):
             fpath = join(coco_img.bundle_dpath, fname)
             if exists(fpath):
                 try:
-                    info = watch.gis.geotiff.geotiff_metadata(fpath)
+                    info = geowatch.gis.geotiff.geotiff_metadata(fpath)
                     if info.get('crs_error', None) is not None:
                         raise Exception
                 except Exception:
@@ -1932,7 +1932,7 @@ def _execute_transfer_task(task):
 def _make_coco_img_from_geotiff(tiff_fpath, name=None):
     """
     Example:
-        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product  # NOQA
         >>> product = grab_landsat_product()
         >>> tiffs = product['bands'] + [product['meta']['bqa']]
         >>> tiff_fpath = product['bands'][0]
@@ -1961,7 +1961,7 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     that is, one sensor's 'red' is roughly similar to another's but not corrected to match.
     Bands without a common_name will have a sensor-unique prefix appended to prevent this behavior.
     """
-    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7  # NOQA
+    from geowatch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7  # NOQA
 
     def code(bands, prefix):
         names = []
@@ -2110,9 +2110,9 @@ def coco_channel_stats(coco_dset):
     Example:
         >>> import kwcoco
         >>> import ubelt as ub
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('vidshapes-watch')
-        >>> from watch.utils import kwcoco_extensions
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes-geowatch')
+        >>> from geowatch.utils import kwcoco_extensions
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
         >>> print(ub.urepr(info, nl=3))
     """
@@ -2210,7 +2210,7 @@ def coco_img_wld_info(coco_img):
     """
     TODO: candidate for kwcoco.CocoImage method
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     asset = coco_img.primary_asset(requires=['geos_corners'])
     if asset is None:
         raise KeyError(f'Geo-referenced asset not found for {coco_img}')
@@ -2250,18 +2250,18 @@ def warp_annot_segmentations_from_geos(coco_dset):
 
     Ignore:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
-        from watch.utils.kwcoco_extensions import *  # NOQA
-        import watch
-        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.utils.kwcoco_extensions import *  # NOQA
+        import geowatch
+        dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         coco_fpath = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.json'
         import kwcoco
         coco_dset = kwcoco.CocoDataset(coco_fpath)
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> import watch
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> import geowatch
         >>> # creating demodata also uses warp_annot_segmentations_to_geos
-        >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True)
+        >>> orig_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True)
         >>> coco_dset = orig_dset.copy()
         >>> for ann in coco_dset.annots().objs:
         ...     ann.pop('segmentation', None)
@@ -2287,7 +2287,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     """
     import pandas as pd
     import geopandas as gpd
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from shapely.geometry import shape
     crs84 = util_gis.get_crs84()
 
@@ -2348,9 +2348,9 @@ def warp_annot_segmentations_to_geos(coco_dset):
     """
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> import watch
-        >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True)
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> import geowatch
+        >>> orig_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True)
         >>> coco_dset = orig_dset.copy()
         >>> for ann in coco_dset.annots().objs:
         ...     ann.pop('segmentation_geos', None)
@@ -2372,7 +2372,7 @@ def warp_annot_segmentations_to_geos(coco_dset):
     """
     import pandas as pd
     import geopandas as gpd
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
 
     crs84 = util_gis.get_crs84()
     gdfs = []
@@ -2463,16 +2463,16 @@ def visualize_rois(coco_dset, zoom=None):
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=1)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
         >>> visualize_rois(coco_dset, zoom=0)
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
@@ -2524,8 +2524,8 @@ def covered_image_geo_regions(coco_dset, merge=False):
         gpd.GeoDataFrame
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_frames=1, num_videos=1)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
         >>> img = coco_dset.index.imgs[1]
@@ -2533,7 +2533,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
 
     Example:
         >>> # Check it works with empty data frame
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset()
         >>> cov_image_gdf1 = covered_image_geo_regions(coco_dset, merge=False)
         >>> cov_image_gdf2 = covered_image_geo_regions(coco_dset, merge=True)
@@ -2543,7 +2543,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
     import geopandas as gpd
     from shapely import ops
     import shapely
-    # import watch
+    # import geowatch
     rows = []
     columns = [
         'geometry', 'date_captured', 'name', 'height', 'width', 'video_id',
@@ -2571,7 +2571,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
             'frame_index': img.get('frame_index', None),
         })
 
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     cov_poly_crs = util_gis.get_crs84()
     if merge:
         # df_input = [
@@ -2609,19 +2609,19 @@ def covered_video_geo_regions(coco_dset):
         gpd.GeoDataFrame
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_frames=1, num_videos=1)
         >>> # coco_populate_geo_heuristics(coco_dset, overwrite=True)
         >>> # video_gdf = covered_video_geo_regions(coco_dset)
     """
     import geopandas as gpd
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
 
     # TODO: build this more efficiently if possible.
 
     # if 0:
-    # import watch
+    # import geowatch
     rows = []
     for vidid, video in coco_dset.index.videos.items():
         if 'valid_region_geos' in video:
@@ -2685,7 +2685,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
             aid_to_poly[aid] = sh_poly
 
     # annot_crs = 'epsg:4326'
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     annot_crs = util_gis.get_crs84()
     # annot_crs = 'crs84'
     if merge:
@@ -2755,10 +2755,10 @@ def category_category_colors(coco_dset):
 
     TODO:
         - [ ] Add to CategoryTree
-        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
     """
     cats = coco_dset.dataset['categories']
     # backup_colors = iter(kwimage.Color.distinct(len(cats)))
@@ -2794,7 +2794,7 @@ def associate_images(dset1, dset2, key_fallback=None):
         - [ ] use in kwcoco eval as a robust image/video association method
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dset1 = kwcoco.CocoDataset.demo('shapes2')
@@ -2810,7 +2810,7 @@ def associate_images(dset1, dset2, key_fallback=None):
         >>> assert not len(matches['video'])
 
     Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from geowatch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dset1 = kwcoco.CocoDataset.demo('vidshapes2')
@@ -2961,10 +2961,10 @@ def pick_channels(coco_img, choices):
             exist in the image.
 
     CommandLine:
-        xdoctest -m watch.utils.kwcoco_extensions pick_channels
+        xdoctest -m geowatch.utils.kwcoco_extensions pick_channels
 
     Example:
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> import kwcoco
         >>> choices = ['blue|green|red', 'pan']
         >>> # Make different demo CocoImages that contain different bands
@@ -2992,7 +2992,7 @@ def pick_channels(coco_img, choices):
 
     Example:
         >>> # Test case with different choices orders
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> channel_priority1 = ['blue|green|red', 'pan']
         >>> channel_priority2 = ['pan', 'blue|green|red']
         >>> coco_img1 = kwcoco.CocoImage({

@@ -6,7 +6,7 @@ several statistical methods to estimate parameter importance.
 
 Example:
     >>> # Given a list of experiments, configs, and results
-    >>> from watch.utils.result_analysis import ResultAnalysis
+    >>> from geowatch.utils.result_analysis import ResultAnalysis
     >>> # Given a table of experiments with parameters, and metrics
     >>> table = [
     >>>     Result('expt0', {'param1': 2, 'param2': 'b'}, {'f1': 0.75, 'loss': 0.5}),
@@ -88,7 +88,7 @@ Example:
     >>> # Simple example for computing a p-values between a set of baseline
     >>> # results and hypothesis you think might do better.
     >>> # Given a list of experiments, configs, and results
-    >>> from watch.utils.result_analysis import ResultAnalysis, Result
+    >>> from geowatch.utils.result_analysis import ResultAnalysis, Result
     >>> # Given a table of experiments with parameters, and metrics
     >>> table = [
     >>>     Result('expt0', {'group': 'baseline'}, {'f1': 0.75}),
@@ -254,7 +254,7 @@ class ResultTable:
     Helps abstract away the old Result object.
 
     Example:
-        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> from geowatch.utils.result_analysis import *  # NOQA
         >>> self = ResultTable.demo()
         >>> print(self.table)
     """
@@ -382,7 +382,7 @@ class ResultAnalysis(ub.NiceRepr):
     Example:
         >>> # Given a list of experiments, configs, and results
         >>> # Create a ResultAnalysis object
-        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> from geowatch.utils.result_analysis import *  # NOQA
         >>> result_table = ResultTable.coerce([
         >>>     Result('expt0', {'param1': 2, 'param3': 'b'}, {'f1': 0.75}),
         >>>     Result('expt1', {'param1': 0, 'param3': 'c'}, {'f1': 0.92}),

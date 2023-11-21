@@ -20,14 +20,14 @@ from collections import defaultdict
 # from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support
 
-from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID, colorize_material_mask, load_region_bas_annos
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_conf_matrix_pred_image, create_gif
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models import build_model
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID, colorize_material_mask, load_region_bas_annos
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_conf_matrix_pred_image, create_gif
 
-from watch.tasks.rutgers_material_seg_v2.mtm.dataset.median_dataset import MedianDataset
-from watch.tasks.rutgers_material_seg_v2.mtm.dataset.early_late_dataset import EarlyLateDataset
+from geowatch.tasks.rutgers_material_seg_v2.mtm.dataset.median_dataset import MedianDataset
+from geowatch.tasks.rutgers_material_seg_v2.mtm.dataset.early_late_dataset import EarlyLateDataset
 
 
 def custom_collate_fn(data):

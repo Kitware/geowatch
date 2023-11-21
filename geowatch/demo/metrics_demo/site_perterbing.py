@@ -9,8 +9,8 @@ import kwarray
 import kwimage
 import ubelt as ub
 import geopandas as gpd
-from watch.demo.metrics_demo import demo_truth
-from watch.demo.metrics_demo import demo_utils
+from geowatch.demo.metrics_demo import demo_truth
+from geowatch.demo.metrics_demo import demo_utils
 
 
 def perterb_site_model(sites, rng=None, **kwargs):
@@ -28,7 +28,7 @@ def perterb_site_model(sites, rng=None, **kwargs):
         List[geojson.FeatureCollection]: modified site models
 
     Example:
-        >>> from watch.demo.metrics_demo.site_perterbing import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.site_perterbing import *  # NOQA
         >>> _, sites, _ = demo_truth.random_region_model(rng=12345)
         >>> pred_sites1 = perterb_site_model(sites, noise=1, rng=34567)
         >>> pred_sites2 = perterb_site_model(sites, noise=0, rng=34567)
@@ -58,12 +58,12 @@ class PerterbModel:
         consume the functionality of perterb_single_site_model
 
     Example:
-        >>> from watch.demo.metrics_demo.site_perterbing import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.site_perterbing import *  # NOQA
         >>> self = PerterbModel()
 
     Example:
-        >>> from watch.demo.metrics_demo.site_perterbing import *  # NOQA
-        >>> from watch.demo.metrics_demo import demo_truth
+        >>> from geowatch.demo.metrics_demo.site_perterbing import *  # NOQA
+        >>> from geowatch.demo.metrics_demo import demo_truth
         >>> region_id = 'DR_0042'
         >>> site_id = 'DR_0042_9001'
         >>> rng = kwarray.ensure_rng(4222)
@@ -311,7 +311,7 @@ def perterb_single_site_model(site, noise=0.0, warp_noise=1.0,
 
     Example:
         >>> # Demo case with a lot of noise
-        >>> from watch.demo.metrics_demo.site_perterbing import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.site_perterbing import *  # NOQA
         >>> rng = kwarray.ensure_rng(43240830)
         >>> _, sites, _ = demo_truth.random_region_model(num_observations=20, rng=rng)
         >>> site = sites[0]
@@ -337,7 +337,7 @@ def perterb_single_site_model(site, noise=0.0, warp_noise=1.0,
 
     Example:
         >>> # Demo case with almost zero noise
-        >>> from watch.demo.metrics_demo.site_perterbing import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.site_perterbing import *  # NOQA
         >>> rng = kwarray.ensure_rng(43240830)
         >>> _, sites, _ = demo_truth.random_region_model(num_observations=20, rng=rng)
         >>> site = sites[0]

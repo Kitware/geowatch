@@ -1,7 +1,7 @@
 """
 Temporal sampling submodule
 
-mkinit ~/code/watch/watch/tasks/fusion/datamodules/temporal_sampling/__init__.py --lazy_loader -w
+mkinit ~/code/watch/geowatch/tasks/fusion/datamodules/temporal_sampling/__init__.py --lazy_loader -w
 """
 
 import lazy_loader

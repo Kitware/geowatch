@@ -6,11 +6,11 @@ Used by ./aggregate.py
 import ubelt as ub
 from kwutil import util_pattern
 from kwutil import util_parallel
-from watch.utils import util_dotdict
+from geowatch.utils import util_dotdict
 import parse
 import json
-from watch.mlops import smart_pipeline
-from watch.mlops import smart_result_parser
+from geowatch.mlops import smart_pipeline
+from geowatch.mlops import smart_result_parser
 
 
 def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
@@ -149,7 +149,7 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
         out_node_key = 'bas_poly_eval.eval_fpath'
     """
     import json
-    from watch.utils import util_json
+    from geowatch.utils import util_json
     import safer
     fpath = ub.Path(fpath)
 
@@ -237,14 +237,14 @@ def new_process_context_parser(proc_item):
     Load parameters out of data saved by a ProcessContext object
     """
     tracker_name_pat = util_pattern.MultiPattern.coerce({
-        'watch.cli.kwcoco_to_geojson',
-        'watch.cli.run_tracker',
+        'geowatch.cli.kwcoco_to_geojson',
+        'geowatch.cli.run_tracker',
     })
     heatmap_name_pat = util_pattern.MultiPattern.coerce({
-        'watch.tasks.fusion.predict',
+        'geowatch.tasks.fusion.predict',
     })
     pxl_eval_pat = util_pattern.MultiPattern.coerce({
-        'watch.tasks.fusion.evaluate',
+        'geowatch.tasks.fusion.evaluate',
     })
     proc_item = smart_result_parser._handle_process_item(proc_item)
     props = proc_item['properties']
@@ -256,7 +256,7 @@ def new_process_context_parser(proc_item):
     elif heatmap_name_pat.match(props['name']):
         params.pop('datamodule_defaults', None)
     elif pxl_eval_pat.match(props['name']):
-        from watch.tasks.fusion import evaluate
+        from geowatch.tasks.fusion import evaluate
         # We can resolve the params to a dictionary in this instance
         if isinstance(params, list) or 'true_dataset' not in params:
             args = props['args']
@@ -298,13 +298,13 @@ def load_result_resolved(node_dpath):
         of a given type.
 
     Ignore:
-        from watch.mlops.aggregate import *  # NOQA
+        from geowatch.mlops.aggregate import *  # NOQA
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc')
         got = load_result_resolved(node_dpath)
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
     """
-    # from watch.utils.util_dotdict import explore_nested_dict
+    # from geowatch.utils.util_dotdict import explore_nested_dict
     node_dpath = ub.Path(node_dpath)
     node_type_dpath = node_dpath.parent
     node_type = node_type_dpath.name
@@ -324,7 +324,7 @@ def load_result_resolved(node_dpath):
         fit_config = proc_item['properties']['extra']['fit_config']
         fit_config = smart_result_parser.relevant_fit_config(fit_config, add_prefix=False)
         fit_nested = {
-            'context': {'task': 'watch.tasks.fusion.fit'},
+            'context': {'task': 'geowatch.tasks.fusion.fit'},
             'resolved_params': fit_config,
             'resources': {},
             'machine': {},
@@ -406,19 +406,19 @@ def load_result_resolved(node_dpath):
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
 
     elif node_type in {'sv_dino_filter'}:
-        node_process_name = 'watch.tasks.dino_detector.building_validator'
+        node_process_name = 'geowatch.tasks.dino_detector.building_validator'
         fpath = node_dpath / 'out_site_manifest.json'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     # TODO: it would be nice if just declaring a node gave us this information.
     elif node_type in {'sv_depth_score'}:
-        from watch.mlops import smart_pipeline
+        from geowatch.mlops import smart_pipeline
         fpath = node_dpath / smart_pipeline.SV_DepthPredict.out_paths['out_kwcoco']
-        node_process_name = 'watch.tasks.depth_pcd.score_tracks'
+        node_process_name = 'geowatch.tasks.depth_pcd.score_tracks'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     elif node_type in {'sv_depth_filter'}:
-        from watch.mlops import smart_pipeline
+        from geowatch.mlops import smart_pipeline
         fpath = node_dpath / smart_pipeline.SV_DepthFilter.out_paths['output_site_manifest_fpath']
-        node_process_name = 'watch.tasks.depth_pcd.filter_tracks'
+        node_process_name = 'geowatch.tasks.depth_pcd.filter_tracks'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     else:
         raise NotImplementedError(node_type)

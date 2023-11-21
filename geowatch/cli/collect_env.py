@@ -16,7 +16,7 @@ class CollectEnvCLI(scfg.DataConfig):
         """
         Example:
             >>> # xdoctest: +SKIP
-            >>> from watch.cli.collect_env import *  # NOQA
+            >>> from geowatch.cli.collect_env import *  # NOQA
             >>> cmdline = 0
             >>> kwargs = dict()
             >>> cls = CollectEnvCLI
@@ -95,6 +95,6 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python -m watch.cli.collect_env
+        python -m geowatch.cli.collect_env
     """
     main()

@@ -2,13 +2,13 @@
 r"""
 
 SeeAlso:
-    ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py
+    ~/code/watch/geowatch/cli/queue_cli/prepare_time_combined_dataset.py
 
 
 CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
-    python -m watch.cli.coco_time_combine \
+    python -m geowatch.cli.coco_time_combine \
         --input_kwcoco_fpath="$DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.zip" \
         --output_kwcoco_fpath="$DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.zip" \
         --channels="red|green|blue|nir|swir16|swir22" \
@@ -17,7 +17,7 @@ CommandLine:
         --merge_method=mean \
         --workers=4
 
-    python -m watch reproject_annotations \
+    python -m geowatch reproject_annotations \
         --src $DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.zip \
         --dst $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
@@ -26,7 +26,7 @@ CommandLine:
 Ignore:
     # Debugging
 
-    python -m watch.cli.coco_time_combine \
+    python -m geowatch.cli.coco_time_combine \
         --kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Aligned-Drop7/VN_C002/imgonly-VN_C002-rawbands.kwcoco.zip" \
         --output_kwcoco_fpath="$HOME/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-V2/VN_C002/_unfielded_imgonly-VN_C002-rawbands.kwcoco.zip" \
         --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
@@ -43,12 +43,12 @@ Ignore:
 
 Example:
     >>> # Toydata example for CI
-    >>> import watch
-    >>> from watch.cli import coco_time_combine
+    >>> import geowatch
+    >>> from geowatch.cli import coco_time_combine
     >>> import ubelt as ub
-    >>> dpath = ub.Path.appdir('watch/tests/cli/time_combine/t0')
-    >>> dset = watch.coerce_kwcoco(
-    >>>     'watch-msi', geodata=True,
+    >>> dpath = ub.Path.appdir('geowatch/tests/cli/time_combine/t0')
+    >>> dset = geowatch.coerce_kwcoco(
+    >>>     'geowatch-msi', geodata=True,
     >>>     dates={'start_time': '2020-01-01', 'end_time': '2020-06-01'},
     >>>     image_size=(32, 32)
     >>> )
@@ -70,7 +70,7 @@ Example:
     >>> assert len(out_dset.videos()) == len(dset.videos())
     >>> assert out_dset.n_images < dset.n_images
 
-    from watch.cli import coco_visualize_videos
+    from geowatch.cli import coco_visualize_videos
     coco_visualize_videos.main(cmdline=0, src=output_fpath, stack='only', workers='avail')
 
 """
@@ -187,11 +187,11 @@ class TimeCombineConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
-        DEVEL_TEST=1 xdoctest -m watch.cli.coco_time_combine main
+        DEVEL_TEST=1 xdoctest -m geowatch.cli.coco_time_combine main
 
-        from watch.cli.coco_time_combine import *  # NOQA
-        import watch
-        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.cli.coco_time_combine import *  # NOQA
+        import geowatch
+        data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         cmdline = 0
         channels='red|green|blue'
         kwargs = dict(
@@ -208,9 +208,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 0: Baseline run.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
@@ -221,7 +221,7 @@ def main(cmdline=1, **kwargs):
         >>>     channels='red|green|blue',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -231,9 +231,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 1: Check cloudmasking.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
@@ -244,7 +244,7 @@ def main(cmdline=1, **kwargs):
         >>>     mask_low_quality=True,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -254,9 +254,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 2: Check that resolution can be updated.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
@@ -268,7 +268,7 @@ def main(cmdline=1, **kwargs):
         >>>     resolution='5GSD',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -278,9 +278,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 3: Median combining.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
@@ -293,7 +293,7 @@ def main(cmdline=1, **kwargs):
         >>>     resolution='10GSD',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -303,9 +303,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 4: Median combining with cloudmask.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
@@ -319,7 +319,7 @@ def main(cmdline=1, **kwargs):
         >>>     separate_sensors=True,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -329,9 +329,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 5: Dont separate sensors.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
@@ -345,7 +345,7 @@ def main(cmdline=1, **kwargs):
         >>>     separate_sensors=False,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -354,10 +354,10 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # 6: Adjust the effect of S2 imagery.
-        >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
@@ -372,7 +372,7 @@ def main(cmdline=1, **kwargs):
         >>>     sensor_weights=dict(S2=2.5, L8=1.0, WV=5.0)
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -381,10 +381,10 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # 7: Tile images instead of computing average all at once.
-        >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
@@ -399,7 +399,7 @@ def main(cmdline=1, **kwargs):
         >>>     spatial_tile_size=200,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -409,9 +409,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 8: Tile images on large kwcoco file.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip',
@@ -427,7 +427,7 @@ def main(cmdline=1, **kwargs):
         >>>     include_sensors=['S2', 'L8'],
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -436,10 +436,10 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # 9: Exclude winter seasons for time average.
-        >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
@@ -454,7 +454,7 @@ def main(cmdline=1, **kwargs):
         >>>     filter_season='winter',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
@@ -484,8 +484,8 @@ def combine_kwcoco_channels_temporally(config):
     import numpy as np
     from kwutil import util_progress
     from kwutil import util_time
-    from watch.utils import kwcoco_extensions
-    from watch.utils import util_parallel
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.utils import util_parallel
     from kwutil.util_yaml import Yaml
     # Check inputs.
 
@@ -673,10 +673,10 @@ def combine_kwcoco_channels_temporally(config):
     if n_combined_images == 0:
         raise ValueError('No images were combined with non-NaN values')
 
-    # from watch.utils import util_resolution
+    # from geowatch.utils import util_resolution
     from kwcoco.coco_image import coerce_resolution
     target_gsd = float(np.mean(coerce_resolution(config.resolution)['mag']))
-    print(f'Reset watch fields target_gsd={target_gsd}')
+    print(f'Reset geowatch feilds target_gsd={target_gsd}')
     kwcoco_extensions.populate_watch_fields(
         output_coco_dset, target_gsd=target_gsd, overwrite=True)
 
@@ -725,7 +725,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
         # If the qa band is a float, then it must be a nan channel
         return np.ones_like(qa_data, dtype=np.uint8)
 
-    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     # We don't have the exact right information here, so we can
     # punt for now and assume "Drop4"
     spec_name = 'ACC-1'
@@ -757,7 +757,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     import kwarray
     import kwcoco
     import numpy as np
-    from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
+    from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
     from kwutil import util_time
 
     # Determine what channels are available in this image set
@@ -1029,9 +1029,9 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
     Example:
         >>> # 0: Baseline run.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.coco_time_combine import *  # NOQA
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> # Load KWCOCO dataset.
         >>> input_kwcoco_fpath = data_dvc_dpath / 'Drop6/imgonly-AE_C001.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
@@ -1142,6 +1142,6 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python -m watch.cli.coco_time_combine
+        python -m geowatch.cli.coco_time_combine
     """
     main()

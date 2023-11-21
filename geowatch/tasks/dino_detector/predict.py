@@ -49,15 +49,15 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.tasks.dino_detector.predict import *  # NOQA
+        >>> from geowatch.tasks.dino_detector.predict import *  # NOQA
         >>> import ubelt as ub
-        >>> import watch
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_expt_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         >>> coco_fpath = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'
         >>> package_fpath = dvc_expt_dpath / 'models/kitware/xview_dino.pt'
-        >>> out_coco_fpath = ub.Path.appdir('watch/tests/dino/doctest0').ensuredir() / 'pred_boxes.kwcoco.zip'
+        >>> out_coco_fpath = ub.Path.appdir('geowatch/tests/dino/doctest0').ensuredir() / 'pred_boxes.kwcoco.zip'
         >>> kwargs = {
         >>>     'coco_fpath': coco_fpath,
         >>>     'package_fpath': package_fpath,
@@ -89,7 +89,7 @@ def main(cmdline=1, **kwargs):
     config = BuildingDetectorConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     rich.print('config = ' + ub.urepr(config, nl=1))
 
-    from watch.tasks.fusion.utils import load_model_from_package
+    from geowatch.tasks.fusion.utils import load_model_from_package
     import torch
     device = config.device
     model = load_model_from_package(config.package_fpath)
@@ -99,7 +99,7 @@ def main(cmdline=1, **kwargs):
     # Specific hacks for this specific model
     model.building_id = ub.invert_dict(model.id2name)['Building']
 
-    from watch.tasks.fusion.datamodules import kwcoco_datamodule
+    from geowatch.tasks.fusion.datamodules import kwcoco_datamodule
     datamodule = kwcoco_datamodule.KWCocoVideoDataModule(
         test_dataset=config.coco_fpath,
         batch_size=config.batch_size,
@@ -120,7 +120,7 @@ def main(cmdline=1, **kwargs):
     dino_dset = WrapperDataset(torch_dataset)
     # loader = torch_dataset.make_loader()
 
-    # from watch.tasks.fusion.datamodules.kwcoco_dataset import worker_init_fn
+    # from geowatch.tasks.fusion.datamodules.kwcoco_dataset import worker_init_fn
     loader = torch.utils.data.DataLoader(
         dino_dset, batch_size=config.batch_size, num_workers=config.data_workers,
         shuffle=False, pin_memory=False,
@@ -132,7 +132,7 @@ def main(cmdline=1, **kwargs):
     coco_dset = torch_dataset.sampler.dset
 
     from kwutil import util_progress
-    from watch.utils import process_context
+    from geowatch.utils import process_context
     proc = process_context.ProcessContext(
         name='box.predict',
         config=dict(config),
@@ -301,6 +301,6 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        xdoctest -m watch.tasks.dino_detector.predict
+        xdoctest -m geowatch.tasks.dino_detector.predict
     """
     main()

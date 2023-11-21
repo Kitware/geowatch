@@ -4,10 +4,10 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 
-from watch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
+from geowatch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
 
-from watch.tasks.rutgers_material_change_detection.datasets.iarpa_kwdataset import IARPA_KWDATASET
-from watch.tasks.rutgers_material_change_detection.datasets.peo_dataset import PassiveEarthObservationDataset
+from geowatch.tasks.rutgers_material_change_detection.datasets.iarpa_kwdataset import IARPA_KWDATASET
+from geowatch.tasks.rutgers_material_change_detection.datasets.peo_dataset import PassiveEarthObservationDataset
 
 dataset_classes = {
     "iarpa_drop1": IARPA_KWDATASET,

@@ -32,7 +32,7 @@ def nvidia_smi(ignore_environ=False):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_CUDA)
-        >>> from watch.utils.util_nvidia import *  # NOQA
+        >>> from geowatch.utils.util_nvidia import *  # NOQA
         >>> gpus = nvidia_smi()
         >>> # xdoctest: +IGNORE_WANT
         >>> import torch

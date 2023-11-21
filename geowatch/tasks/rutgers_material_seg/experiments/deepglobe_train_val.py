@@ -19,11 +19,11 @@ import torch.nn.functional as F
 import yaml
 import random
 
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 
 current_path = os.getcwd().split("/")
 

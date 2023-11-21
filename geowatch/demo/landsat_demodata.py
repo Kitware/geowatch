@@ -20,7 +20,7 @@ def grab_landsat_product(product_id=None, demo_index=0):
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.demo.landsat_demodata import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import *  # NOQA
         >>> product = grab_landsat_product()
         >>> # xdoctest: +IGNORE_WANT
         >>> print('product = {}'.format(ub.urepr(product, nl=2)))
@@ -50,7 +50,7 @@ def grab_landsat_product(product_id=None, demo_index=0):
         .. [3] https://earth.esa.int/documents/700255/1834061/Landsat+ETM%2B%20Data+Format+Control+Book/4bfb7121-e97d-46ca-8d3f-02f1c6bf309c;jsessionid=F97499AA37A1E9AF0EED42900CF66760?version=1.1
 
     SeeAlso:
-        watch.gis.geotiff.parse_landsat_product_id
+        geowatch.gis.geotiff.parse_landsat_product_id
 
     Ignore:
         # Use console page for the first data
@@ -78,7 +78,7 @@ def grab_landsat_product(product_id=None, demo_index=0):
 
     if False:
         # overkill?
-        from watch.gis.geotiff import parse_landsat_product_id
+        from geowatch.gis.geotiff import parse_landsat_product_id
         ls_meta = parse_landsat_product_id(scene_name)
         sat_code = ls_meta['sat_code']
     else:
@@ -138,8 +138,8 @@ def grab_landsat_product(product_id=None, demo_index=0):
 
     item_suffixes = sat_code_to_suffixes[sat_code]
 
-    # By default cache to the $XDG_CACHE_HOME/watch
-    dset_dpath = ub.Path.appdir('watch/demo/landsat').ensuredir()
+    # By default cache to the $XDG_CACHE_HOME/geowatch
+    dset_dpath = ub.Path.appdir('geowatch/demo/landsat').ensuredir()
 
     # Cache the scene using the same path used by google cloud storage
     scene_dpath = dset_dpath / scene_path

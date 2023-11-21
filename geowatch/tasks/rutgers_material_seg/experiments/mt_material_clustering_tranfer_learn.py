@@ -6,7 +6,7 @@ import comet_ml
 import kwcoco
 import ndsampler
 import ubelt as ub
-import watch
+import geowatch
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -19,9 +19,9 @@ import torch.optim as optim
 import datetime
 import random
 
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.models import build_model
-import watch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.models import build_model
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
 
 
 class Clusterer(object):
@@ -127,7 +127,7 @@ class Clusterer(object):
 
 if __name__ == "__main__":
 
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"

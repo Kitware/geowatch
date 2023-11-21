@@ -8,27 +8,27 @@ TODO:
 Example Usage:
 
     # List default directories (hard coded ones that exist)
-    python -m watch.cli.find_dvc --command=list
+    python -m geowatch.cli.find_dvc --command=list
 
-    python -m watch.cli.find_dvc --command=add --name=test --path=$HOME --hardware=hdd
+    python -m geowatch.cli.find_dvc --command=add --name=test --path=$HOME --hardware=hdd
 
     # List after adding
-    python -m watch.cli.find_dvc list
+    python -m geowatch.cli.find_dvc list
 
     # Now get one
-    python -m watch.cli.find_dvc
+    python -m geowatch.cli.find_dvc
 
     # Force it to recall "test"
-    python -m watch.cli.find_dvc --name=test
+    python -m geowatch.cli.find_dvc --name=test
 
     # Remove the test dir
-    python -m watch.cli.find_dvc --command=remove --name=test
+    python -m geowatch.cli.find_dvc --command=remove --name=test
 
     # Final list
-    python -m watch.cli.find_dvc --command=list
+    python -m geowatch.cli.find_dvc --command=list
 
-    python -m watch.cli.find_dvc --hardware=ssd
-    python -m watch.cli.find_dvc --hardware=hdd
+    python -m geowatch.cli.find_dvc --hardware=ssd
+    python -m geowatch.cli.find_dvc --hardware=hdd
 
 Example Usage:
 
@@ -92,7 +92,7 @@ class FindDVCConfig(scfg.DataConfig):
 
     @staticmethod
     def main(cmdline=True, **kwargs):
-        from watch.utils import util_data
+        from geowatch.utils import util_data
         from rich import print
         import ubelt as ub
 
@@ -133,9 +133,9 @@ if __name__ == '__main__':
     """
     CommandLine:
         smartwatch find_dvc
-        python ~/code/watch/watch/cli/find_dvc.py
-        python -m watch.cli.find_dvc --register
-        python -m watch.cli.find_dvc --mode=list
+        python ~/code/watch/geowatch/cli/find_dvc.py
+        python -m geowatch.cli.find_dvc --register
+        python -m geowatch.cli.find_dvc --mode=list
 
 
     """

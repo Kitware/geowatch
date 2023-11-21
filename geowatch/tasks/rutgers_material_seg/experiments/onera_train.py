@@ -23,17 +23,17 @@ import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
 from torchvision import transforms
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-# from watch.tasks.rutgers_material_seg.datasets import build_dataset
-# from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
-from watch.tasks.rutgers_material_seg.models.losses import SupConLoss, QuadrupletLoss
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+# from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+# from geowatch.tasks.rutgers_material_seg.models.supcon import SupConResNet
+from geowatch.tasks.rutgers_material_seg.models.losses import SupConLoss, QuadrupletLoss
 from fast_pytorch_kmeans import KMeans
 from skimage.filters import threshold_otsu as otsu
-# from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
+# from geowatch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
 
 current_path = os.getcwd().split("/")
 
@@ -854,7 +854,7 @@ class Trainer(object):
 
 if __name__ == "__main__":
 
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
 

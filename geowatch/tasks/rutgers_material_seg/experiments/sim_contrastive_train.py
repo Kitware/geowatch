@@ -25,14 +25,14 @@ import itertools
 # from statistics import mean
 from scipy.spatial import distance
 from torchvision import transforms
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-# import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
-from watch.tasks.rutgers_material_seg.models.losses import SupConLoss
-# from watch.tasks.rutgers_material_seg.models import build_model
-# from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+# import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
+from geowatch.tasks.rutgers_material_seg.models.losses import SupConLoss
+# from geowatch.tasks.rutgers_material_seg.models import build_model
+# from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
+from geowatch.tasks.rutgers_material_seg.models.supcon import SupConResNet
 
 
 if 1:
@@ -575,7 +575,7 @@ device = None
 def main():
     global config
     global device
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    project_root = "/home/native/projects/watch/geowatch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
 

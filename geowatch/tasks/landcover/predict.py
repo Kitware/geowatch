@@ -26,7 +26,7 @@ CommandLine:
     "
 
     export CUDA_VISIBLE_DEVICES="1"
-    python -m watch.tasks.landcover.predict \
+    python -m geowatch.tasks.landcover.predict \
         --dataset="$INPUT_DATASET_FPATH" \
         --deployed="$DZYNE_LANDCOVER_MODEL_FPATH"  \
         --device=0 \
@@ -49,7 +49,7 @@ from pathlib import Path
 import kwcoco
 from torch.utils.data import DataLoader
 
-from watch.utils import util_parallel
+from geowatch.utils import util_parallel
 from kwutil import util_progress
 from . import detector
 from .model_info import lookup_model_info
@@ -80,12 +80,12 @@ def predict(cmdline=1, **kwargs):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.landcover.predict import *  # NOQA
-        >>> from watch.tasks.landcover.predict import _predict_single
+        >>> from geowatch.tasks.landcover.predict import *  # NOQA
+        >>> from geowatch.tasks.landcover.predict import _predict_single
         >>> import kwcoco
-        >>> import watch
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> import geowatch
+        >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_expt_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         >>> dset = kwcoco.CocoDataset(dvc_data_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip')
         >>> deployed = dvc_expt_dpath / 'models/landcover/sentinel2.pt'
         >>> kwargs = {
@@ -97,10 +97,10 @@ def predict(cmdline=1, **kwargs):
         >>> cmdline = 0
         >>> predict(cmdline, **kwargs)
     """
-    from watch.utils.lightning_ext import util_device
-    from watch.utils import process_context
-    from watch.utils import kwcoco_extensions
-    from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
+    from geowatch.utils.lightning_ext import util_device
+    from geowatch.utils import process_context
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
     import rich
 
     config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -182,7 +182,7 @@ def predict(cmdline=1, **kwargs):
     print('Initialize process context')
     proc_context = process_context.ProcessContext(
         type='process',
-        name='watch.tasks.invariants.predict',
+        name='geowatch.tasks.invariants.predict',
         config=config.to_dict(),
         track_emissions=config.track_emissions,
     )

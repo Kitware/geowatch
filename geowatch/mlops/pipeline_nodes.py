@@ -24,7 +24,7 @@ import os
 import ubelt as ub
 from functools import cached_property
 from typing import Union, Dict, Set, List, Any, Optional
-from watch.utils import util_dotdict
+from geowatch.utils import util_dotdict
 
 Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
@@ -45,7 +45,7 @@ class Pipeline:
     job_config.sh metadata as well as symlinks between node output directories.
 
     Example:
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> node_A1 = ProcessNode(name='node_A1', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A1')
         >>> node_A2 = ProcessNode(name='node_A2', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A2')
         >>> node_A3 = ProcessNode(name='node_A3', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A3')
@@ -174,7 +174,7 @@ class Pipeline:
             it nicer.
 
         Example:
-            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> self = Pipeline.demo()
             >>> self.inspect_configurables()
         """
@@ -247,7 +247,7 @@ class Pipeline:
         Update the DAG configuration
 
         Example:
-            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> self = Pipeline.demo()
             >>> self.configure()
         """
@@ -550,7 +550,7 @@ def glob_templated_path(template):
         glob_templated_path(template)
     """
     import parse
-    from watch.utils import util_pattern
+    from geowatch.utils import util_pattern
     parser = parse.Parser(str(template))
     patterns = {n: '*' for n in parser.named_fields}
     pat = os.fspath(template).format(**patterns)
@@ -830,12 +830,12 @@ class ProcessNode(Node):
     class variables.
 
     CommandLine:
-        xdoctest -m watch.mlops.pipeline_nodes ProcessNode
+        xdoctest -m geowatch.mlops.pipeline_nodes ProcessNode
 
     Example:
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> from watch.mlops.pipeline_nodes import _classvar_init
-        >>> dpath = ub.Path.appdir('watch/test/pipeline/TestProcessNode')
+        >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
+        >>> from geowatch.mlops.pipeline_nodes import _classvar_init
+        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
         ...     '''
@@ -879,9 +879,9 @@ class ProcessNode(Node):
     Example:
         >>> # How to use a ProcessNode to handle an arbitrary process call
         >>> # First let's write a program to disk
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> import stat
-        >>> dpath = ub.Path.appdir('watch/test/pipeline/TestProcessNode2')
+        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode2')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
                 '''
@@ -1324,7 +1324,7 @@ class ProcessNode(Node):
     def ancestor_process_nodes(self):
         """
         Example:
-            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> pipe = Pipeline.demo()
             >>> self = pipe.node_dict['node_C1']
             >>> ancestors = self.ancestor_process_nodes()
@@ -1392,7 +1392,7 @@ class ProcessNode(Node):
 
         This does NOT have a dependency on the larger the DAG.
         """
-        from watch.utils.reverse_hashid import condense_config
+        from geowatch.utils.reverse_hashid import condense_config
         algo_id = condense_config(
             self.final_algo_config, self.name + '_algo_id', register=False)
         return algo_id
@@ -1407,7 +1407,7 @@ class ProcessNode(Node):
 
         This DOES have a dependency on the larger DAG.
         """
-        from watch.utils.reverse_hashid import condense_config
+        from geowatch.utils.reverse_hashid import condense_config
         depends = self.depends
         proc_id = condense_config(
             depends, self.name + '_id', register=False)
@@ -1494,7 +1494,7 @@ class ProcessNode(Node):
         Generate a bash command that will test if all output paths exist
 
         Example:
-            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> self = ProcessNode(out_paths={
             >>>     'foo': 'foo.txt',
             >>>     'bar': 'bar.txt',
@@ -1675,10 +1675,10 @@ def demodata_pipeline():
 
     Example:
         >>> # Self test
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> demodata_pipeline()
     """
-    dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
+    dpath = ub.Path.appdir('geowatch/tests/mlops/pipeline').ensuredir()
     dpath.delete().ensuredir()
     script_dpath = (dpath / 'src').ensuredir()
     inputs_dpath = (dpath / 'inputs').ensuredir()
@@ -1836,7 +1836,7 @@ def demo_pipeline_run():
 
     Example:
         >>> # Self test
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> demo_pipeline_run()
     """
     dag = Pipeline.demo()

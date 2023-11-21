@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from watch.tasks.rutgers_material_change_detection.models.base_model import BaseFramework
+from geowatch.tasks.rutgers_material_change_detection.models.base_model import BaseFramework
 
 
 class EarlyFusionMatFramework(BaseFramework):

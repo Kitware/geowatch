@@ -30,7 +30,7 @@ def setup_logging(verbose=1):
     log_config = {}
 
     if verbose > 2:
-        warnings.warn(f'watch util_logging only accepts a maximum verbosity of 2. Reconfiguring {verbose} to 2.')
+        warnings.warn(f'geowatch util_logging only accepts a maximum verbosity of 2. Reconfiguring {verbose} to 2.')
         verbose = 2
 
     if verbose == 0:
@@ -114,7 +114,7 @@ class PrintLogger:
     "simply works" without configuration.
 
     Example:
-        >>> from watch.utils.util_logging import *  # NOQA
+        >>> from geowatch.utils.util_logging import *  # NOQA
         >>> logger = PrintLogger(level=logging.INFO)
         >>> logger.info('hello')
         >>> logger.debug('world')

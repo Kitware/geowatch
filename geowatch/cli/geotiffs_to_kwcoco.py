@@ -70,8 +70,8 @@ def filter_band_files(fpaths, band_list, with_tci=True):
 
 
 def ingest_landsat_directory(lc_dpath):
-    import watch
-    from watch.utils import util_bands
+    import geowatch
+    from geowatch.utils import util_bands
     from dateutil.parser import isoparse
     from os.path import join, basename, normpath
     import glob
@@ -79,7 +79,7 @@ def ingest_landsat_directory(lc_dpath):
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
     if len(tiffs) == 0:
         tiffs = sorted(glob.glob(join(lc_dpath, '**', '*.TIF'), recursive=True))
-    baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
+    baseinfo = geowatch.gis.geotiff.geotiff_filepath_info(name)
     capture_time = isoparse(baseinfo['filename_meta']['acquisition_date']).isoformat()
     sensor_coarse = 'LS'
     if baseinfo['filename_meta']['sensor_code'] == 'C':
@@ -98,8 +98,8 @@ def ingest_sentinel2_directory(s2_dpath):
     # Are we in the safedir, the granuledir or some arbitrary dir?
     # Try to use the granuledir as name if available;
     # it's a better unique ID.
-    import watch
-    from watch.utils import util_bands
+    import geowatch
+    from geowatch.utils import util_bands
     import datetime as datetime_mod
     from dateutil.parser import isoparse
     from os.path import join, basename, normpath
@@ -118,7 +118,7 @@ def ingest_sentinel2_directory(s2_dpath):
     tiffs = filter_band_files(tiffs, util_bands.SENTINEL2)
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
-    baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
+    baseinfo = geowatch.gis.geotiff.geotiff_filepath_info(s2_dpath)
     capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
     img['date_captured'] = datetime_mod.datetime.isoformat(capture_time)
     img['sensor_coarse'] = 'S2'
@@ -131,7 +131,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
     TODO: move to coco extensions
 
     Example:
-        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product  # NOQA
         >>> product = grab_landsat_product()
         >>> tiffs = product['bands'] + [product['meta']['bqa']]
         >>> tiff_fpath = product['bands'][0]
@@ -139,17 +139,17 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         >>> img = make_coco_img_from_geotiff(tiff_fpath)
         >>> print('img = {}'.format(ub.urepr(img, nl=1)))
     """
-    import watch
-    from watch.utils import util_bands
+    import geowatch
+    from geowatch.utils import util_bands
     import kwimage
     img = {}
     if name is not None:
         img['name'] = name
 
-    info = watch.gis.geotiff.geotiff_metadata(tiff_fpath)
+    info = geowatch.gis.geotiff.geotiff_metadata(tiff_fpath)
     # only affine transformations are supported in auxiliary channels
     # TODO support RPC
-    info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
+    info.update(**geowatch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
     warp_pxl_from_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
@@ -204,7 +204,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     TODO: move to coco extensions
 
     Example:
-        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product  # NOQA
         >>> product = grab_landsat_product()
         >>> tiffs = product['bands'] + [product['meta']['bqa']]
         >>> name = product['scene_name']
@@ -259,9 +259,9 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
     """
     import os
-    import watch
+    import geowatch
     from os.path import basename
-    dpath_list = list(watch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
+    dpath_list = list(geowatch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
 
     print(f'Found candidate {len(dpath_list)} geotiff products')
 
@@ -312,7 +312,7 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
 
         # jobs = ub.JobPool(mode='thread', max_workers=workers)
         for fpath in ub.ProgIter(loose_files, desc='process loose files'):
-            info = watch.gis.geotiff.geotiff_filepath_info(fpath, fast=True)
+            info = geowatch.gis.geotiff.geotiff_filepath_info(fpath, fast=True)
             file_meta = info['filename_meta']
             file_meta.get('tile_number', None)
             date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)
@@ -351,10 +351,10 @@ __config__ = KWCocoFromGeotiffConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.geotiffs_to_kwcoco.py
+        python -m geowatch.cli.geotiffs_to_kwcoco.py
 
     CommandLine:
-        python -m watch.cli.coco_extract_geo_bounds \
+        python -m geowatch.cli.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -372,21 +372,21 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels --profile
 
-        python -m watch.cli.geotiffs_to_kwcoco.py \
+        python -m geowatch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json --profile
 
-        python -m watch.cli.geotiffs_to_kwcoco.py \
+        python -m geowatch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/AE-Dubai-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
         cat ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
-        python -m watch.cli.geotiffs_to_kwcoco.py \
+        python -m geowatch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/KR-Pyeongchang-S2 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/korea-msi.kwcoco.json
 
-        python -m -m watch.cli.geotiffs_to_kwcoco.py \
+        python -m -m geowatch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/US-Waynesboro-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/waynesboro-msi.kwcoco.json
     """

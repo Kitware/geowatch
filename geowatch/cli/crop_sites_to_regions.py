@@ -53,8 +53,8 @@ class CropSitesToRegionsConfig(SiteFilterConfig):
         - [ ] Rename this to ClipSitesToRegions?
 
     Example:
-        DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-        WATCH_PREIMPORT=none python -m watch.cli.crop_sites_to_regions \
+        DVC_DPATH=$(WATCH_PREIMPORT=none python -m geowatch.cli.find_dvc)
+        WATCH_PREIMPORT=none python -m geowatch.cli.crop_sites_to_regions \
             --site_models "$DVC_DPATH/annotations/site_models/KR_R002_*.geojson" \
             --region_models "$DVC_DPATH/annotations/region_models/KR_R002.geojson" \
             --new_site_dpath ./cropped_sites
@@ -102,11 +102,11 @@ def main(cmdline=False, **kwargs):
     """
 
     CommandLine:
-        xdoctest -m watch.cli.crop_sites_to_regions main:0
-        xdoctest -m watch.cli.crop_sites_to_regions main:1
+        xdoctest -m geowatch.cli.crop_sites_to_regions main:0
+        xdoctest -m geowatch.cli.crop_sites_to_regions main:1
 
     Example:
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> import kwimage
         >>> region = geomodels.RegionModel.random(num_sites=0)
         >>> # Create several clipping cases
@@ -123,7 +123,7 @@ def main(cmdline=False, **kwargs):
         >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
         >>>     region.add_site_summary(sites[key].as_summary())
         >>> # Write demo data to disk
-        >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
+        >>> dpath = ub.Path.appdir('geowatch/tests/cli/crop_sites_to_regions/doctest0')
         >>> dpath.delete().ensuredir()
         >>> region_dpath = (dpath / 'region_models').ensuredir()
         >>> site_dpath = (dpath / 'site_models').ensuredir()
@@ -138,7 +138,7 @@ def main(cmdline=False, **kwargs):
         >>>     'new_site_dpath': dpath / 'new_site_models',
         >>>     'new_region_dpath': dpath / 'new_region_models',
         >>> }
-        >>> from watch.cli import crop_sites_to_regions
+        >>> from geowatch.cli import crop_sites_to_regions
         >>> cmdline = 0
         >>> crop_sites_to_regions.main(cmdline=cmdline, **kwargs)
         >>> new_region = geomodels.RegionModel.coerce(dpath / 'new_region_models')
@@ -168,7 +168,7 @@ def main(cmdline=False, **kwargs):
 
     Example:
         >>> # Convex clipping case
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> import kwimage
         >>> star = kwimage.Polygon.star()
         >>> p1 = kwimage.Polygon.circle(xy=(0, 0), r=1)
@@ -195,7 +195,7 @@ def main(cmdline=False, **kwargs):
         >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
         >>>     region.add_site_summary(sites[key].as_summary())
         >>> # Write demo data to disk
-        >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
+        >>> dpath = ub.Path.appdir('geowatch/tests/cli/crop_sites_to_regions/doctest0')
         >>> dpath.delete().ensuredir()
         >>> region_dpath = (dpath / 'region_models').ensuredir()
         >>> site_dpath = (dpath / 'site_models').ensuredir()
@@ -211,7 +211,7 @@ def main(cmdline=False, **kwargs):
         >>>     'new_region_dpath': dpath / 'new_region_models',
         >>>     'min_area_square_meters': 5e8,
         >>> }
-        >>> from watch.cli import crop_sites_to_regions
+        >>> from geowatch.cli import crop_sites_to_regions
         >>> cmdline = 0
         >>> crop_sites_to_regions.main(cmdline=cmdline, **kwargs)
         >>> new_region = geomodels.RegionModel.coerce(dpath / 'new_region_models')
@@ -241,7 +241,7 @@ def main(cmdline=False, **kwargs):
         >>> df = new_region.pandas()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from shapely.geometry import MultiPolygon
     import geopandas as gpd
     import safer
@@ -252,7 +252,7 @@ def main(cmdline=False, **kwargs):
 
     # TODO: integrate process context
     # from kwcoco.util.util_json import ensure_json_serializable
-    # from watch.utils import process_context
+    # from geowatch.utils import process_context
     # proc_context = process_context.ProcessContext(
     #     name='crop_sites_to_regions',
     #     type='process',
@@ -369,10 +369,10 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
             dictionaries containing the new cropped data field.
 
     Example:
-        >>> from watch.cli.crop_sites_to_regions import *  # NOQA
+        >>> from geowatch.cli.crop_sites_to_regions import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwimage
-        >>> from watch.utils import util_gis
+        >>> from geowatch.utils import util_gis
         >>> crs84 = util_gis._get_crs84()
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly1 = region_poly.translate((0.0001, 0.0001))
@@ -413,10 +413,10 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
-        >>> from watch.cli.crop_sites_to_regions import *  # NOQA
+        >>> from geowatch.cli.crop_sites_to_regions import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwimage
-        >>> from watch.utils import util_gis
+        >>> from geowatch.utils import util_gis
         >>> crs84 = util_gis._get_crs84()
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly0 = region_poly
@@ -469,7 +469,7 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
         >>> assert len(cropped_sites[2]['data']) == 0
         >>> assert len(cropped_region) == 2
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import pandas as pd
     output_crs = region_gdf_crs84.crs
 
@@ -670,7 +670,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         DVC_DPATH=$(geowatch_dvc)
-        python -m watch.cli.crop_sites_to_regions \
+        python -m geowatch.cli.crop_sites_to_regions \
             --site_models=$DVC_DPATH/annotations/site_models/*KR*.geojson \
             --region_models=$DVC_DPATH/annotations/region_models/KR_R001.geojson \
             --new_site_dpath=$DVC_DPATH/tmp/new_site_models \

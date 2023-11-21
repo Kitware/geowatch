@@ -208,7 +208,7 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
     Holds just the unit information (e.g. X GSD)
 
     Example:
-        >>> from watch.utils.util_resolution import *  # NOQA
+        >>> from geowatch.utils.util_resolution import *  # NOQA
         >>> self = ResolvedUnit.parse('8GSD')
         >>> print('self = {}'.format(ub.urepr(self, nl=1, si=1)))
         self = <ResolvedUnit(8 GSD)>
@@ -235,7 +235,7 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
     def coerce(cls, data, default_unit=None):
         """
         Example:
-            >>> from watch.utils.util_resolution import *  # NOQA
+            >>> from geowatch.utils.util_resolution import *  # NOQA
             >>> self1 = ResolvedUnit.coerce(8, default_unit='GSD')
             >>> self2 = ResolvedUnit.coerce('8', default_unit='GSD')
             >>> self3 = ResolvedUnit.coerce('8GSD')
@@ -270,7 +270,7 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
 class ResolvedScalar(Resolved, ub.NiceRepr):
     """
     Example:
-        >>> from watch.utils.util_resolution import *  # NOQA
+        >>> from geowatch.utils.util_resolution import *  # NOQA
         >>> self1 = ResolvedScalar.parse("128@10GSD")
         >>> self2 = ResolvedScalar.parse("128  @  10  GSD")
         >>> print('self1 = {}'.format(ub.urepr(self1, sv=1, nl=1)))
@@ -321,7 +321,7 @@ class ResolvedWindow(Resolved, ub.NiceRepr):
     Parse a window size at a particular resolution
 
     Example:
-        >>> from watch.utils.util_resolution import *  # NOQA
+        >>> from geowatch.utils.util_resolution import *  # NOQA
         >>> data = "128x128@10GSD"
         >>> self1 = ResolvedWindow.parse(data)
         >>> self2 = ResolvedWindow.parse("128  ,  128  @  10  GSD")
@@ -356,7 +356,7 @@ class ResolvedWindow(Resolved, ub.NiceRepr):
                 The same window but in terms of the new resolution.
 
         Example:
-            >>> from watch.utils.util_resolution import *  # NOQA
+            >>> from geowatch.utils.util_resolution import *  # NOQA
             >>> new_resolution = {'mag': 1, 'unit': 'GSD'}
             >>> self = ResolvedWindow.parse("128x64@10GSD")
             >>> print(self.at_resolution(new_resolution))

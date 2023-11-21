@@ -7,8 +7,8 @@ import kwarray
 import ndsampler
 import ubelt as ub
 import warnings
-from watch.utils import util_kwimage
-from watch.monkey import monkey_albumentations
+from geowatch.utils import util_kwimage
+from geowatch.monkey import monkey_albumentations
 
 monkey_albumentations.patch_albumentations_for_311()
 
@@ -17,9 +17,9 @@ class GriddedDataset(torch.utils.data.Dataset):
     """
 
     Example:
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', dates=True, geodata=True)
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', dates=True, geodata=True)
         >>> keep_ids = [img.img['id'] for img in coco_dset.images().coco_images if 'B11' in img.channels]
         >>> coco_dset = coco_dset.subset(keep_ids)
         >>> self = GriddedDataset(coco_dset, include_debug_info=True, sensor=None, bands=['B11'], patch_size=32, input_space_scale='3GSD')
@@ -30,9 +30,9 @@ class GriddedDataset(torch.utils.data.Dataset):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
@@ -59,9 +59,9 @@ class GriddedDataset(torch.utils.data.Dataset):
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> bundle_dpath = dvc_dpath / 'Drop6'
         >>> coco_fpath = bundle_dpath / 'data_vali_split1.kwcoco.zip'
         >>> import kwcoco
@@ -95,11 +95,11 @@ class GriddedDataset(torch.utils.data.Dataset):
 
     Ignore:
         >>> # xdoctest: +SKIP
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
         >>> import rich
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> # TEST DROP6
         >>> coco_drop6 = kwcoco.CocoDataset(dvc_dpath / 'Drop6/data_vali_split6.kwcoco.zip')
         >>> data_drop6 = GriddedDataset(coco_drop6, window_space_scale='30GSD')
@@ -116,10 +116,10 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> rich.print('item_summary6 = {}'.format(ub.urepr(item_summary6, nl=1, sort=0, align=':')))
         >>> rich.print('item_summary7 = {}'.format(ub.urepr(item_summary7, nl=1, sort=0, align=':')))
 
-        import watch
+        import geowatch
         import kwcoco
         import rich
-        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         coco_drop7 = kwcoco.CocoDataset(dvc_dpath / 'Drop7-MedianNoWinter10GSD/data_vali_EI2LMSC_split6.kwcoco.zip')
         self = GriddedDataset(coco_drop7, window_space_scale='10GSD')
         sampler = self.sampler
@@ -233,7 +233,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             raise ValueError('No images were provided')
 
         print('make grid')
-        from watch.tasks.fusion.datamodules import spacetime_grid_builder
+        from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
         builder = spacetime_grid_builder.SpacetimeGridBuilder(
             self.coco_dset,
             time_dims=num_images,
@@ -464,7 +464,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         Populate the target so it has the correct input scale and bands.
         """
         # Handle target scale
-        from watch.tasks.fusion.datamodules import data_utils
+        from geowatch.tasks.fusion.datamodules import data_utils
         gids : list[int] = target['gids']
         im1_id = gids[0]
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
@@ -544,9 +544,9 @@ class GriddedDataset(torch.utils.data.Dataset):
     def draw_item(self, item, dsize=(224, 224)):
         """
         Example:
-            >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-            >>> from watch.demo import coerce_kwcoco
-            >>> coco_dset = coerce_kwcoco('watch-msi', dates=True, geodata=True)
+            >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
+            >>> from geowatch.demo import coerce_kwcoco
+            >>> coco_dset = coerce_kwcoco('geowatch-msi', dates=True, geodata=True)
             >>> keep_ids = [img.img['id'] for img in coco_dset.images().coco_images if 'B11' in img.channels]
             >>> coco_dset = coco_dset.subset(keep_ids)
             >>> self = GriddedDataset(coco_dset, include_debug_info=True, sensor=None, bands=['B11'])
@@ -616,7 +616,7 @@ def find_complete_image_indexes(samples, fast=True):
         https://cs.stackexchange.com/questions/155186/algorithm-for-minimizing-the-number-of-resources-simultaneously-open-while-itera
 
     Example:
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
         >>> samples = [
         >>>     {'gids': [0, 3]},
         >>>     {'gids': [0, 3]},
@@ -633,7 +633,7 @@ def find_complete_image_indexes(samples, fast=True):
         >>> print('sample_to_complete_gids = {}'.format(ub.urepr(sample_to_complete_gids, nl=1)))
 
     Example:
-        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> from geowatch.tasks.invariants.data.datasets import *  # NOQA
         >>> samples = [
         >>>     {'gids': [0, 1]},
         >>>     {'gids': [1, 2]},
@@ -890,4 +890,4 @@ def fixup_samples(coco_dset, sample_grid, time_dims):
 BACKWARDS_COMPAT = 1
 if BACKWARDS_COMPAT:
     gridded_dataset = GriddedDataset
-    from watch.tasks.invariants.data.other_datasets import kwcoco_dataset, Onera, SpaceNet7  # NOQA
+    from geowatch.tasks.invariants.data.other_datasets import kwcoco_dataset, Onera, SpaceNet7  # NOQA

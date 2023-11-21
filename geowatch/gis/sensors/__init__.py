@@ -4,10 +4,10 @@ a particular GEO sensor.
 """
 
 __dev__ = """
-mkinit ~/code/watch/watch/gis/sensors/__init__.py -w
+mkinit ~/code/watch/geowatch/gis/sensors/__init__.py -w
 """
-from watch.gis.sensors import sentinel2
+from geowatch.gis.sensors import sentinel2
 
-from watch.gis.sensors.sentinel2 import (sentinel2_grid,)
+from geowatch.gis.sensors.sentinel2 import (sentinel2_grid,)
 
 __all__ = ['sentinel2', 'sentinel2_grid']

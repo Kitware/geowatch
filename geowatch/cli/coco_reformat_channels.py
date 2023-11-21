@@ -24,7 +24,7 @@ class CocoReformatChannels(scfg.DataConfig):
 def main(cmdline=False, **kwargs):
     """
     Example:
-        >>> from watch.cli.coco_reformat_channels import *  # NOQA
+        >>> from geowatch.cli.coco_reformat_channels import *  # NOQA
         >>> import kwcoco
         >>> import kwarray
         >>> import shutil
@@ -233,8 +233,8 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 
 def schedule_quantization():
     # Temporary job
-    import watch
-    dvc_dpath = ub.Path(str(watch.find_dvc_dpath()) + '-hdd')
+    import geowatch
+    dvc_dpath = ub.Path(str(geowatch.find_dvc_dpath()) + '-hdd')
     dvc_dpath / 'models/fusion/'
 
     pred_globpat = dvc_dpath / 'models/fusion/Drop2-Aligned-TA1-2022-02-15/*/pred_*/*/pred.kwcoco.json'
@@ -247,7 +247,7 @@ def schedule_quantization():
     for pred_fpath in pred_fpaths:
         queue.submit(ub.codeblock(
             rf'''
-            python -m watch.cli.coco_reformat_channels \
+            python -m geowatch.cli.coco_reformat_channels \
                 --src={pred_fpath} \
                 --quantize="not_salient|salient,Site Preparation|Active Construction|Post Construction|No Activity" \
                 --remove="not_salient,negative,ignore,negative,positive,background|Unknown" \
@@ -261,6 +261,6 @@ def schedule_quantization():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_combine_features.py
+        python ~/code/watch/geowatch/cli/coco_combine_features.py
     """
     main(cmdline=True)

@@ -1,10 +1,10 @@
 __autogen__ = """
-mkinit ~/code/watch/watch/utils/__init__.py --lazy_loader --diff
-mkinit ~/code/watch/watch/utils/__init__.py --lazy_loader -w
+mkinit ~/code/watch/geowatch/utils/__init__.py --lazy_loader --diff
+mkinit ~/code/watch/geowatch/utils/__init__.py --lazy_loader -w
 
 TEST:
-    python -c "from watch import utils"
-    EAGER_IMPORT=1 python -c "from watch import utils"
+    python -c "from geowatch import utils"
+    EAGER_IMPORT=1 python -c "from geowatch import utils"
 """
 
 __submodules__ = {

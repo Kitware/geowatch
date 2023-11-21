@@ -1,9 +1,9 @@
 # Import models for the CLI registry
-from watch.tasks.fusion.methods import *  # NOQA
-from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
-from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
-from watch.utils.lightning_ext.lightning_cli_ext import LightningArgumentParser
-from watch.utils import lightning_ext as pl_ext
+from geowatch.tasks.fusion.methods import *  # NOQA
+from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
+from geowatch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
+from geowatch.utils.lightning_ext.lightning_cli_ext import LightningArgumentParser
+from geowatch.utils import lightning_ext as pl_ext
 
 import pytorch_lightning as pl
 import ubelt as ub
@@ -65,7 +65,7 @@ class SmartTrainer(pl.Trainer):
             draw_tensorboard.write_text(ub.codeblock(
                 fr'''
                 #!/bin/bash
-                WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+                WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
                     {dpath}
                 '''
             ))
@@ -123,7 +123,7 @@ class SmartTrainer(pl.Trainer):
                 ### --- Validation Prediction --- ###
 
                 # Predict on the validation set
-                python -m watch.tasks.fusion.predict \
+                python -m geowatch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
                     --test_dataset {vali_coco_fpath} \
                     --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
@@ -138,7 +138,7 @@ class SmartTrainer(pl.Trainer):
                 ### --- Training Prediction --- ###
 
                 # Predict on the training set
-                python -m watch.tasks.fusion.predict \
+                python -m geowatch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
                     --window_overlap 0 \
                     --test_dataset {train_coco_path} \
@@ -214,8 +214,8 @@ class WeightInitializer(pl.callbacks.Callback):
             return
         self._did_once = True
         if self.init != 'noop':
-            from watch.tasks.fusion.fit import coerce_initializer
-            from watch.utils import util_pattern
+            from geowatch.tasks.fusion.fit import coerce_initializer
+            from geowatch.utils import util_pattern
             initializer = coerce_initializer(self.init)
 
             model = pl_module
@@ -485,14 +485,14 @@ def main(config=None):
             with the specified config.
 
     CommandLine:
-        xdoctest -m watch.tasks.fusion.fit_lightning main:0
+        xdoctest -m geowatch.tasks.fusion.fit_lightning main:0
 
     Ignore:
         ...
 
         # export stats
-        from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        from watch.tasks.fusion.fit_lightning import *  # NOQA
+        from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         from kwutil.util_yaml import Yaml
         disable_lightning_hardware_warnings()
 
@@ -522,10 +522,10 @@ def main(config=None):
               mean: [87.572401, 87.572401, 87.572401]
               std: [99.449996, 99.449996, 99.449996]
             ''')
-        dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
+        dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
         config = {
             'subcommand': 'fit',
-            'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
+            'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
             'fit.trainer.default_root_dir': dpath,
             'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
             'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
@@ -538,13 +538,13 @@ def main(config=None):
 
 
     Example:
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
         >>> config = {
         >>>     'subcommand': 'fit',
-        >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
+        >>>     'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
         >>>     'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
@@ -557,15 +557,15 @@ def main(config=None):
         >>> cli = main(config=config)
 
     Example:
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
         >>> config = {
-        >>>     # 'model': 'watch.tasks.fusion.methods.MultimodalTransformer',
-        >>>     #'model': 'watch.tasks.fusion.methods.UNetBaseline',
+        >>>     # 'model': 'geowatch.tasks.fusion.methods.MultimodalTransformer',
+        >>>     #'model': 'geowatch.tasks.fusion.methods.UNetBaseline',
         >>>     'subcommand': 'fit',
-        >>>     'fit.model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
+        >>>     'fit.model.class_path': 'geowatch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
         >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
         >>>     'fit.optimizer.init_args.lr': 1e-3,
         >>>     'fit.trainer.default_root_dir': dpath,
@@ -586,15 +586,15 @@ def main(config=None):
 if __name__ == "__main__":
     r"""
     CommandLine:
-        python -m watch.tasks.fusion.fit_lightning fit --help
+        python -m geowatch.tasks.fusion.fit_lightning fit --help
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=MultimodalTransformer
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=NoopModel
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
             --data.window_dims=64 \
             --data.workers=4 \
@@ -606,7 +606,7 @@ if __name__ == "__main__":
             --optimizer.class_path=torch.optim.Adam \
             --trainer.default_root_dir ./demo_train
 
-        python -m watch.tasks.fusion.fit_lightning fit --config="
+        python -m geowatch.tasks.fusion.fit_lightning fit --config="
             data:
                 train_dataset: special:vidshapes8-frames9-speed0.5
                 window_dims: 64
@@ -633,7 +633,7 @@ if __name__ == "__main__":
 
         # Note: setting fast_dev_run seems to disable directory output.
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu \
             --trainer.devices=0, \

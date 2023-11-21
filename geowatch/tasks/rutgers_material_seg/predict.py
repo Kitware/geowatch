@@ -16,7 +16,7 @@ CommandLine:
     RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v3.kwcoco.json
 
     # Generate Rutgers Features
-    python -m watch.tasks.rutgers_material_seg.predict \
+    python -m geowatch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
@@ -38,10 +38,10 @@ import numpy as np
 from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.utils import util_parallel
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.utils import util_parallel
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 import torch.nn.functional as F
 
 try:
@@ -54,13 +54,13 @@ class Evaluator(object):
     """
     CommandLine:
         DVC_DPATH=$(geowatch_dvc)
-        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.rutgers_material_seg.predict Evaluator
+        DVC_DPATH=$DVC_DPATH xdoctest -m geowatch.tasks.rutgers_material_seg.predict Evaluator
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> from geowatch.tasks.rutgers_material_seg.predict import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
         >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
         >>> #  Write out smaller version of the dataset
@@ -203,7 +203,7 @@ class Evaluator(object):
                 # recon_up3 = None
                 recon_up5 = None
 
-        from watch.tasks.fusion.predict import quantize_float01
+        from geowatch.tasks.fusion.predict import quantize_float01
         # Note using -11 and +11 as a tradeoff range because we cannot
         # guarentee the bounds of this data. Usually it is mean zero with
         # a std < 3, so this should be a decent range to work within.
@@ -289,7 +289,7 @@ class Evaluator(object):
 
         Dumps images and the final kwcoco file to disk.
         """
-        # from watch.utils import util_kwimage
+        # from geowatch.utils import util_kwimage
         current_gids = []
         previous_gids = []
 
@@ -457,7 +457,7 @@ class Evaluator(object):
                                         device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
 
-                            from watch.tasks.fusion.predict import CocoStitchingManager
+                            from geowatch.tasks.fusion.predict import CocoStitchingManager
                             CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict[gid], slice_, output)
 
                             if self.save_raw_features:
@@ -623,7 +623,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for material prediction
     """
-    from watch.utils import configargparse_ext
+    from geowatch.utils import configargparse_ext
     from scriptconfig.smartcast import smartcast
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
@@ -669,7 +669,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
 def hardcoded_default_configs(default_config_key):
     # HACK: THIS IS NOT ROBUST
-    from watch.tasks import rutgers_material_seg
+    from geowatch.tasks import rutgers_material_seg
     from os.path import dirname, join
     module_dpath = dirname(rutgers_material_seg.__file__)
     main_config_path = join(module_dpath, "./configs/main.yaml")
@@ -701,7 +701,7 @@ def build_evaler(cmdline=False, **kwargs):
         random.seed(config['seed'])
         torch.set_default_dtype(torch.float32)
 
-    from watch.utils.lightning_ext import util_device
+    from geowatch.utils.lightning_ext import util_device
     from kwutil import util_resources
     devices = util_device.coerce_devices(args.devices)
     num_workers = util_parallel.coerce_num_workers(args.num_workers)

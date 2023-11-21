@@ -7,14 +7,14 @@ This following doctest illustrates the method on project data.
 
 
 CommandLine:
-    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
-    SMART_DATA_DVC_DPATH=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
+    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:3
+    SMART_DATA_DVC_DPATH=1 xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:3
 
 Example:
     >>> # Basic overview demo of the algorithm
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-    >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import geowatch
+    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -30,9 +30,9 @@ Example:
 
 Example:
     >>> # Demo multiple different settings
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-    >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import geowatch
+    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -60,9 +60,9 @@ Example:
 
 Example:
     >>> # Demo corner case where there are too few observations
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-    >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(8, 8))
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import geowatch
+    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -82,11 +82,11 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-    >>> import watch
-    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import geowatch
+    >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> coco_fpath = data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip'
-    >>> dset = watch.coerce_kwcoco(coco_fpath)
+    >>> dset = geowatch.coerce_kwcoco(coco_fpath)
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -107,11 +107,11 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-    >>> import watch
-    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import geowatch
+    >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> coco_fpath = data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip'
-    >>> dset = watch.coerce_kwcoco(coco_fpath)
+    >>> dset = geowatch.coerce_kwcoco(coco_fpath)
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = MultiTimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -129,9 +129,9 @@ Example:
     >>> # xdoctest: +SKIP
     >>> # TODO: fix the time kernel
     >>> # Test under / over sample with time kernels
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-    >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
+    >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import geowatch
+    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -201,7 +201,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
     affinity matrices to increase the diversity of temporal sampling.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import datetime as datetime_mod
         >>> from datetime import datetime as datetime_cls
         >>> low = datetime_cls.now().timestamp()
@@ -222,7 +222,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         >>> self.show_summary(10)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import datetime as datetime_mod
         >>> from datetime import datetime as datetime_cls
         >>> low = datetime_cls.now().timestamp()
@@ -474,10 +474,10 @@ class TimeWindowSampler(CommonSamplerMixin):
     Example:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import kwcoco
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = data_dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
@@ -531,9 +531,9 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-            >>> import watch
-            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+            >>> import geowatch
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
@@ -672,7 +672,7 @@ class TimeWindowSampler(CommonSamplerMixin):
     @property
     def main_indexes(self):
         ub.schedule_deprecation(
-            'watch', 'main_indexes', 'use indexes instead', deprecate='now')
+            'geowatch', 'main_indexes', 'use indexes instead', deprecate='now')
         return self.indexes
 
     @profile
@@ -693,8 +693,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> import kwcoco
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-            >>> from watch.utils.util_data import find_dvc_dpath
+            >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+            >>> from geowatch.utils.util_data import find_dvc_dpath
             >>> dvc_dpath = find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
@@ -712,9 +712,9 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> import os
             >>> import kwcoco
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-            >>> import watch
-            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+            >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+            >>> import geowatch
+            >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
@@ -788,8 +788,8 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-            >>> from watch.utils.util_data import find_dvc_dpath
+            >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> from geowatch.utils.util_data import find_dvc_dpath
             >>> import kwcoco
             >>> # xdoctest: +REQUIRES(--show)
             >>> dvc_dpath = find_dvc_dpath()
@@ -902,8 +902,8 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-            >>> from watch.utils.util_data import find_dvc_dpath
+            >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> from geowatch.utils.util_data import find_dvc_dpath
             >>> dvc_dpath = find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)

@@ -9,7 +9,7 @@ import shapely.ops
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Literal
 import ubelt as ub
-from watch.heuristics import PHASES as phases
+from geowatch.heuristics import PHASES as phases
 
 
 def _read(fpath):
@@ -641,10 +641,10 @@ def _devcheck():
     """
     rsync -avprLPR --exclude '.succ' --exclude 'tmp' $HOME/data/dvc-repos/smart_expt_dvc/_testpipe/aggregate/./agg_params_ffmpktiwwpbx horologic:data/dvc-repos/smart_expt_dvc/_testpipe/aggregate
     """
-    import watch
+    import geowatch
     region_dpaths = ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/aggregate/agg_params_ffmpktiwwpbx/KR_R001/KR_R001/']
     fbetas = []
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
     gt_dpath = data_dvc_dpath / 'annotations'
     true_region_dpath = gt_dpath / 'region_models'
     true_site_dpath =  gt_dpath / 'site_models'
@@ -681,13 +681,13 @@ def iarpa_bas_color_legend():
     """
     Ignore:
         import kwplot
-        from watch.tasks.metrics.merge_iarpa_metrics import *  # NOQA
+        from geowatch.tasks.metrics.merge_iarpa_metrics import *  # NOQA
         img = iarpa_bas_color_legend()
         kwplot.autompl()
         kwplot.imshow(img)
     """
     import kwplot
-    from watch import heuristics
+    from geowatch import heuristics
     colors = heuristics.IARPA_CONFUSION_COLORS
     img = kwplot.make_legend_img(colors)
     return img

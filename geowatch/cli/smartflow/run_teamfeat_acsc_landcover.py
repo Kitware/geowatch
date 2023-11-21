@@ -3,8 +3,8 @@ TODO: rectify with run_teamfeat_landcover.py
 """
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatLandcover(scfg.DataConfig):
@@ -40,9 +40,9 @@ def main():
     config = TeamFeatLandcover.cli(strict=True)
 
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
-    from watch.utils.util_framework import download_region
+    from geowatch.utils.util_framework import download_region
 
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -85,7 +85,7 @@ def main():
 
     # Use the existing prepare teamfeat script to get the features invocation.
     # This has a specific output pattern that we hard code here.
-    from watch.cli import prepare_teamfeats
+    from geowatch.cli import prepare_teamfeats
     base_fpath = ub.Path(input_kwcoco_fpath)
     # watch_coco_stats.main(cmdline=0, src=base_fpath)
     # coco_stats._CLI.main(cmdline=0, src=[base_fpath])

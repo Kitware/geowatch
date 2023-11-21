@@ -3,8 +3,8 @@ TODO: rectify with run_teamfeat_acsc_landcover.py
 """
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatLandcoverConfig(scfg.DataConfig):
@@ -47,12 +47,12 @@ def main():
 
 
 def run_landcover_for_baseline(config):
-    from watch.utils.util_framework import download_region
+    from geowatch.utils.util_framework import download_region
 
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -84,7 +84,7 @@ def run_landcover_for_baseline(config):
 
     enriched_bas_kwcoco_file = ingressed_assets['enriched_bas_kwcoco_file']
     ub.cmd([
-        'python', '-m', 'watch.tasks.landcover.predict',
+        'python', '-m', 'geowatch.tasks.landcover.predict',
         '--dataset', enriched_bas_kwcoco_file,
         '--deployed', config.model_path,
         '--output', dzyne_landcover_features_kwcoco_path,
@@ -99,7 +99,7 @@ def run_landcover_for_baseline(config):
     print("* Combining input features with computed landcover features *")
     combo_features_kwcoco_path = ingress_dir / 'features_combo_with_landcover_kwcoco.json'
     ub.cmd([
-        'python', '-m', 'watch.cli.coco_combine_features',
+        'python', '-m', 'geowatch.cli.coco_combine_features',
         '--src', enriched_bas_kwcoco_file, dzyne_landcover_features_kwcoco_path,
         '--dst', combo_features_kwcoco_path,
     ], check=True, verbose=3, capture=False)

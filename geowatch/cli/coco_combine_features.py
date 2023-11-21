@@ -43,10 +43,10 @@ class CocoCombineFeatures(scfg.DataConfig):
 def main(cmdline=True, **kwargs):
     """
     Example:
-        >>> from watch.cli import coco_combine_features
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi')
-        >>> dpath = ub.Path.appdir('watch/tests/combine_fetures').ensuredir()
+        >>> from geowatch.cli import coco_combine_features
+        >>> import geowatch
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi')
+        >>> dpath = ub.Path.appdir('geowatch/tests/combine_fetures').ensuredir()
         >>> # Breakup the data into two parts with different features
         >>> dset1 = dset.copy()
         >>> dset2 = dset.copy()
@@ -60,7 +60,7 @@ def main(cmdline=True, **kwargs):
         ...     del coco_img.img['auxiliary'][0]
         >>> dset1.dump()
         >>> dset2.dump()
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> chan_stats0 = kwcoco_extensions.coco_channel_stats(dset)['chan_hist']
         >>> chan_stats1 = kwcoco_extensions.coco_channel_stats(dset1)['chan_hist']
         >>> chan_stats2 = kwcoco_extensions.coco_channel_stats(dset2)['chan_hist']
@@ -73,7 +73,7 @@ def main(cmdline=True, **kwargs):
         >>> }
         >>> cmdline = 0
         >>> coco_combine_features.main(cmdline=cmdline, **kwargs)
-        >>> dst_dset = watch.coerce_kwcoco(dst_fpath)
+        >>> dst_dset = geowatch.coerce_kwcoco(dst_fpath)
         >>> chan_stats3 = kwcoco_extensions.coco_channel_stats(dst_dset)['chan_hist']
         >>> assert chan_stats3 == chan_stats0, (
         >>>     'combine features should have the same as the original dset')
@@ -82,7 +82,7 @@ def main(cmdline=True, **kwargs):
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # xdoctest: +SKIP
         >>> # drop1-S2-L8-aligned-old deprecated
-        >>> from watch.cli.coco_combine_features import *  # NOQA
+        >>> from geowatch.cli.coco_combine_features import *  # NOQA
         >>> import os
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
         >>> dvc_dpath = ub.Path(os.environ.get('DVC_DPATH', _default))
@@ -160,7 +160,7 @@ def combine_auxiliary_features(dst_dset, src_dsets):
         kwcoco.CocoDataset: returns input ``dst_dset``.
 
     Example:
-        >>> from watch.cli.coco_combine_features import *  # NOQA
+        >>> from geowatch.cli.coco_combine_features import *  # NOQA
         >>> import kwcoco
         >>> base = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> dset1 = base.copy()
@@ -250,7 +250,7 @@ def associate_images(dset1, dset2):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_combine_features.py
-        python -m watch.cli.coco_combine_features
+        python ~/code/watch/geowatch/cli/coco_combine_features.py
+        python -m geowatch.cli.coco_combine_features
     """
     main(cmdline=True)

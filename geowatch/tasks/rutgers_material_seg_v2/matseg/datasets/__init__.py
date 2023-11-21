@@ -1,5 +1,5 @@
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets.lb_materials import Material_LB_Dataset
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets.lb_materials_multi_sensor import Material_Multi_Sensor_Dataset
+from geowatch.tasks.rutgers_material_seg_v2.matseg.datasets.lb_materials import Material_LB_Dataset
+from geowatch.tasks.rutgers_material_seg_v2.matseg.datasets.lb_materials_multi_sensor import Material_Multi_Sensor_Dataset
 
 DATASETS = {'lb_materials': Material_LB_Dataset, 'lb_ms_materials': Material_Multi_Sensor_Dataset}
 

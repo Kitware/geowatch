@@ -14,7 +14,7 @@ class drop0_pairs(torch.utils.data.Dataset):
 
     Example:
         >>> # Test with coco demodata
-        >>> from watch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
+        >>> from geowatch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
         >>> sensor = None
         >>> coco_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral')
         >>> # Hack in date_captured to each image
@@ -87,7 +87,7 @@ class drop0_aligned_change(torch.utils.data.Dataset):
     """
     Example:
         >>> # Test with coco demodata
-        >>> from watch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
+        >>> from geowatch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
         >>> coco_dset = 'special:vidshapes8-multispectral'
         >>> sensor = None
         >>> self = drop0_aligned_change(coco_dset, sensor=sensor, video=None)
@@ -324,7 +324,7 @@ class drop0_aligned(torch.utils.data.Dataset):
 
     Example:
         >>> # Test with coco demodata
-        >>> from watch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
+        >>> from geowatch.tasks.uky_temporal_prediction.drop0_datasets import *  # NOQA
         >>> coco_dset = 'special:vidshapes8-multispectral'
         >>> sensor = None
         >>> self = drop0_aligned(coco_dset, sensor=sensor, video=None)

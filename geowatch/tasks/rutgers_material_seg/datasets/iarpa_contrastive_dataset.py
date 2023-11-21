@@ -15,7 +15,7 @@ import random
 class SequenceDataset(torch.utils.data.Dataset):
     """
     Example:
-        >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
+        >>> from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
         >>> import ndsampler
         >>> import itertools as it
         >>> sampler = ndsampler.CocoSampler.demo('vidshapes8', image_size=(64, 64))
@@ -42,7 +42,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         >>>     heatmap.draw(with_alpha=0.3)
 
     Example:
-        >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
+        >>> from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
         >>> import ndsampler
         >>> import itertools as it
         >>> sampler = ndsampler.CocoSampler.demo('vidshapes8-msi', image_size=(64, 64))

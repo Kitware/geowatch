@@ -14,12 +14,12 @@ import kwarray
 import netharn as nh
 import ubelt as ub
 
-from watch import heuristics
-from watch.tasks.fusion.methods.network_modules import coerce_criterion
-from watch.tasks.fusion.methods.network_modules import RobustModuleDict
-from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
-from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder, TransformerEncoderDecoder
-from watch.tasks.fusion.architectures import transformer
+from geowatch import heuristics
+from geowatch.tasks.fusion.methods.network_modules import coerce_criterion
+from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
+from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from geowatch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder, TransformerEncoderDecoder
+from geowatch.tasks.fusion.architectures import transformer
 
 from abc import ABCMeta, abstractmethod
 
@@ -36,7 +36,7 @@ SPLIT_ATTENTION_ENCODERS = list(transformer.encoder_configs.keys())
 def to_next_multiple(n, mult):
     """
     Example:
-        >>> from watch.tasks.fusion.methods.heterogeneous import to_next_multiple
+        >>> from geowatch.tasks.fusion.methods.heterogeneous import to_next_multiple
         >>> x = to_next_multiple(11, 4)
         >>> assert x == 1, f"x = {x}, should be 1"
     """
@@ -72,7 +72,7 @@ class PadToMultiple(nn.Module):
                 See: https://pytorch.org/docs/stable/generated/torch.nn.functional.pad.html#torch.nn.functional.pad
 
         Example:
-            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import PadToMultiple
             >>> import torch
             >>> pad_module = PadToMultiple(4)
             >>> inputs = torch.randn(1, 3, 10, 11)
@@ -80,7 +80,7 @@ class PadToMultiple(nn.Module):
             >>> assert outputs.shape == (1, 3, 12, 12), f"outputs.shape actually {outputs.shape}"
 
         Example:
-            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import PadToMultiple
             >>> import torch
             >>> pad_module = PadToMultiple(4)
             >>> inputs = torch.randn(3, 10, 11)
@@ -88,7 +88,7 @@ class PadToMultiple(nn.Module):
             >>> assert outputs.shape == (3, 12, 12), f"outputs.shape actually {outputs.shape}"
 
         Example:
-            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import PadToMultiple
             >>> from torch import nn
             >>> import torch
             >>> token_width = 10
@@ -219,7 +219,7 @@ class MipNerfPositionalEncoder(nn.Module, ScaleAwarePositionalEncoder):
             num_freqs: (int) number of frequencies to project dimensions onto.
 
         Example:
-            >>> from watch.tasks.fusion.methods.heterogeneous import MipNerfPositionalEncoder
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import MipNerfPositionalEncoder
             >>> import torch
             >>> pos_enc = MipNerfPositionalEncoder(3, 4)
             >>> input_means = torch.randn(1, 3, 10, 10)
@@ -268,7 +268,7 @@ class ScaleAgnostictPositionalEncoder(nn.Module, ScaleAwarePositionalEncoder):
             num_freqs: (int) number of frequencies to project dimensions onto.
 
         Example:
-            >>> from watch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
             >>> import torch
             >>> pos_enc = ScaleAgnostictPositionalEncoder(3, 4)
             >>> input_means = torch.randn(1, 3, 10, 10)
@@ -353,8 +353,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
-            >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -415,14 +415,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 )
             elif backbone == 'wu-vit':
                 """
-                    import watch
-                    from watch.utils.simple_dvc import SimpleDVC
-                    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+                    import geowatch
+                    from geowatch.utils.simple_dvc import SimpleDVC
+                    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
                     expt_dvc = SimpleDVC(expt_dvc_dpath)
                     ckpt_fpath = expt_dvc_dpath / 'models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt'
 
-                    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
-                    from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+                    from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+                    from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
                     position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
                     channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
                     model = HeterogeneousModel(
@@ -435,8 +435,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                       backbone='wu-vit',
                     )
 
-                    from watch.tasks.fusion.fit import coerce_initializer
-                    from watch.utils import util_pattern
+                    from geowatch.tasks.fusion.fit import coerce_initializer
+                    from geowatch.utils import util_pattern
                     initializer = coerce_initializer(str(ckpt_fpath))
                     initializer.forward(model)
 
@@ -444,7 +444,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     batch += model.demo_batch(width=55, height=75)
                     outputs = model.forward(batch)
                 """
-                from watch.tasks.fusion.architectures import wu_mae
+                from geowatch.tasks.fusion.architectures import wu_mae
                 pre_backbone = nn.Linear(token_dim + position_encoder.output_dim, 16)
                 # post_backbone = nn.Linear(16, token_dim + position_encoder.output_dim)
                 post_backbone = nn.Linear(16, token_dim)
@@ -452,17 +452,17 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             elif backbone == 'sits-former':
                 """
                 Ignore:
-                    import watch
-                    from watch.utils.simple_dvc import SimpleDVC
-                    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+                    import geowatch
+                    from geowatch.utils.simple_dvc import SimpleDVC
+                    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
                     expt_dvc = SimpleDVC(expt_dvc_dpath)
                     pretrained_fpath = expt_dvc_dpath / 'models/pretrained/sits-former/checkpoint.bert.tar'
 
                     import torch
                     model_state = torch.load(pretrained_fpath)
 
-                    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
-                    from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+                    from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+                    from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
                     position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
                     channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
                     model = HeterogeneousModel(
@@ -474,8 +474,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                       backbone='sits-former',
                     )
 
-                    from watch.tasks.fusion.fit import coerce_initializer
-                    from watch.utils import util_pattern
+                    from geowatch.tasks.fusion.fit import coerce_initializer
+                    from geowatch.utils import util_pattern
                     initializer = coerce_initializer(str(pretrained_fpath))
                     initializer.forward(model)
 
@@ -483,7 +483,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     batch += model.demo_batch(width=55, height=75)
                     outputs = model.forward(batch)
                 """
-                from watch.tasks.fusion.architectures import sits
+                from geowatch.tasks.fusion.architectures import sits
                 bert_config = {
                     'num_features': 10,
                     'hidden': 256,
@@ -555,7 +555,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
-        # ~/code/watch/watch/tasks/fusion/methods/sequence_aware.py
+        # ~/code/watch/geowatch/tasks/fusion/methods/sequence_aware.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         self.saliency_weights = self._coerce_saliency_weights('auto')
         self.class_weights = self._coerce_class_weights(class_weights)
@@ -764,9 +764,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def process_input_tokens(self, example):
         """
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -856,9 +856,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def process_query_tokens(self, example):
         """
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -939,8 +939,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def forward(self, batch):
         """
         Example:
-            >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks import fusion
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -973,8 +973,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Example:
-            >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks import fusion
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1008,8 +1008,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Example:
-            >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks import fusion
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1043,8 +1043,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Example:
-            >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks import fusion
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1079,8 +1079,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # xdoctest: +REQUIRES(module:mmseg)
-            >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoderDecoder
+            >>> from geowatch.tasks import fusion
+            >>> from geowatch.tasks.fusion.architectures.transformer import MM_VITEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = MM_VITEncoderDecoder(
             >>>     dim=position_encoder.output_dim + 16,
@@ -1108,7 +1108,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # xdoctest: +REQUIRES(module:mmseg)
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> self = fusion.methods.HeterogeneousModel(
@@ -1132,9 +1132,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Ignore:
-            from watch.tasks import fusion
-            from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
-            position_encoder = watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder(in_dims=3, max_freq=3, num_freqs=16)
+            from geowatch.tasks import fusion
+            from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            position_encoder = geowatch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder(in_dims=3, max_freq=3, num_freqs=16)
             token_dim = 256
             backbone = TransformerEncoderDecoder(
                 encoder_depth=6,
@@ -1397,9 +1397,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
         """
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1430,9 +1430,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> optimizer.step()
 
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1464,9 +1464,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> optimizer.step()
 
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1501,9 +1501,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> optimizer.step()
 
         Example:
-            >>> from watch.tasks import fusion
+            >>> from geowatch.tasks import fusion
             >>> import torch
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1697,20 +1697,20 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def save_package(self, package_path, verbose=1):
         """
         CommandLine:
-            xdoctest -m watch.tasks.fusion.methods.heterogeneous HeterogeneousModel.save_package
+            xdoctest -m geowatch.tasks.fusion.methods.heterogeneous HeterogeneousModel.save_package
 
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1735,7 +1735,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.HeterogeneousModel.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
@@ -1750,14 +1750,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1782,7 +1782,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.HeterogeneousModel.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
@@ -1797,14 +1797,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> #from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
             >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = TransformerEncoderDecoder(
             >>>     encoder_depth=1,
@@ -1829,7 +1829,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             >>> # Test that the package can be reloaded
             >>> #recon = methods.HeterogeneousModel.load_package(package_path)
-            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> from geowatch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
@@ -1841,7 +1841,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>     assert model_state[key] is not recon_state[key]
 
         Ignore:
-            7z l $HOME/.cache/watch/tests/package/my_package.pt
+            7z l $HOME/.cache/geowatch/tests/package/my_package.pt
         """
         self._save_package(package_path, verbose=verbose)
 

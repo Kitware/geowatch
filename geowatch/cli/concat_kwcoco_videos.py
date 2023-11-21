@@ -4,7 +4,7 @@ import sys
 import ubelt
 import kwcoco
 
-from watch.utils import kwcoco_extensions
+from geowatch.utils import kwcoco_extensions
 
 
 def main():

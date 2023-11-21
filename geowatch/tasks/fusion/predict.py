@@ -28,15 +28,15 @@ import numpy as np
 import kwimage
 import kwarray
 import kwcoco
-from watch.tasks.fusion import datamodules
-from watch.tasks.fusion import utils
-from watch.utils import util_parallel
-from watch.tasks.fusion.datamodules import data_utils
-from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
-from watch.tasks.fusion.coco_stitcher import quantize_float01  # NOQA
+from geowatch.tasks.fusion import datamodules
+from geowatch.tasks.fusion import utils
+from geowatch.utils import util_parallel
+from geowatch.tasks.fusion.datamodules import data_utils
+from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
+from geowatch.tasks.fusion.coco_stitcher import quantize_float01  # NOQA
 # APPLY Monkey Patches
-from watch.monkey import monkey_torch
-from watch.monkey import monkey_torchmetrics
+from geowatch.monkey import monkey_torch
+from geowatch.monkey import monkey_torchmetrics
 import scriptconfig as scfg
 
 monkey_torchmetrics.fix_torchmetrics_compatability()
@@ -233,7 +233,7 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         if hasattr(model, 'foreground_classes'):
             foreground_classes = model.foreground_classes
         else:
-            from watch import heuristics
+            from geowatch import heuristics
             not_foreground = (heuristics.BACKGROUND_CLASSES |
                               heuristics.IGNORE_CLASSNAMES |
                               heuristics.NEGATIVE_CLASSES)
@@ -377,7 +377,7 @@ def resolve_datamodule(config, model, datamodule_defaults):
         # of those channels, which means the recorded channels disagree with
         # what the model was actually trained with.
         if hasattr(model, 'sensor_channel_tokenizers'):
-            from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+            from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
             datamodule_sensorchan_spec = datamodule_vars['channels']
             unique_channel_streams = ub.oset()
             model_sensorchan_stem_parts = []
@@ -486,7 +486,7 @@ def _prepare_predict_data(config):
     # Fix issue with pre-2023-02 heterogeneous models
     if model.__class__.__name__ == 'HeterogeneousModel':
         if not hasattr(model, 'magic_padding_value'):
-            from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+            from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
             new_method = HeterogeneousModel(
                 **model.hparams,
                 position_encoder=model.position_encoder
@@ -577,7 +577,7 @@ def _debug_grid(test_dataloader):
         VIZ_SPACETIME_COV = 0
         if VIZ_SPACETIME_COV:
             import kwplot
-            from watch.utils.util_kwplot import time_sample_arcplot
+            from geowatch.utils.util_kwplot import time_sample_arcplot
             for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
                 fig = kwplot.figure(fnum=videoid)
                 ax = fig.gca()
@@ -653,7 +653,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
     UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
         # unpackage model hack
-        from watch.tasks.fusion import methods
+        from geowatch.tasks.fusion import methods
         unpackged_method = methods.MultimodalTransformer(**model.hparams)
         unpackged_method.load_state_dict(model.state_dict())
         model = unpackged_method
@@ -731,9 +731,9 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
     assert not list(util_json.find_json_unserializable(traintime_params))
 
     if config['record_context']:
-        from watch.utils import process_context
+        from geowatch.utils import process_context
         proc_context = process_context.ProcessContext(
-            name='watch.tasks.fusion.predict',
+            name='geowatch.tasks.fusion.predict',
             type='process',
             config=config_resolved,
             track_emissions=config['track_emissions'],
@@ -1055,18 +1055,18 @@ def predict(cmdline=False, **kwargs):
     Predict entry point and doctests
 
     CommandLine:
-        xdoctest -m watch.tasks.fusion.predict predict:0
+        xdoctest -m geowatch.tasks.fusion.predict predict:0
 
     Example:
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from geowatch.tasks.fusion.predict import *  # NOQA
         >>> import os
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
         >>> args = None
         >>> cmdline = False
         >>> devices = None
-        >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
+        >>> test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
         >>> results_path = (test_dpath / 'predict').ensuredir()
         >>> results_path.delete()
         >>> results_path.ensuredir()
@@ -1083,7 +1083,7 @@ def predict(cmdline=False, **kwargs):
         ...     'fit.data.time_sampling': 'hardish3',
         ...     'fit.data.num_workers': 0,
         ...     #'package_fpath': package_fpath,
-        ...     'fit.model.class_path': 'watch.tasks.fusion.methods.MultimodalTransformer',
+        ...     'fit.model.class_path': 'geowatch.tasks.fusion.methods.MultimodalTransformer',
         ...     'fit.model.init_args.global_change_weight': 1.0,
         ...     'fit.model.init_args.global_class_weight': 1.0,
         ...     'fit.model.init_args.global_saliency_weight': 1.0,
@@ -1096,7 +1096,7 @@ def predict(cmdline=False, **kwargs):
         ...     'fit.trainer.log_every_n_steps': 1,
         ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }
-        >>> from watch.tasks.fusion import fit_lightning
+        >>> from geowatch.tasks.fusion import fit_lightning
         >>> package_fpath = root_dpath / 'final_package.pt'
         >>> fit_lightning.main(fit_config)
         >>> # Unfortunately, its not as easy to get the package path of
@@ -1147,14 +1147,14 @@ def predict(cmdline=False, **kwargs):
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # FIXME: why does this test hang on the strict dashboard?
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.predict import *  # NOQA
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.tasks.fusion.predict import *  # NOQA
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
 
         >>> args = None
         >>> cmdline = False
         >>> devices = None
-        >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
+        >>> test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)
@@ -1174,8 +1174,8 @@ def predict(cmdline=False, **kwargs):
         >>> classes = datamodule.torch_datasets['train'].classes
         >>> print("classes = ", classes)
 
-        >>> from watch.tasks.fusion import methods
-        >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+        >>> from geowatch.tasks.fusion import methods
+        >>> from geowatch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
         >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
         >>> backbone = TransformerEncoderDecoder(
         >>>     encoder_depth=1,
@@ -1282,7 +1282,7 @@ def predict(cmdline=False, **kwargs):
             f'Got {config["pred_dataset"]=}')
     result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
 
-    from watch.utils.lightning_ext import util_device
+    from geowatch.utils.lightning_ext import util_device
     print('devices = {!r}'.format(config['devices']))
     devices = util_device.coerce_devices(config['devices'])
     print('devices = {!r}'.format(devices))
@@ -1302,7 +1302,7 @@ if __name__ == '__main__':
     r"""
     Test old model:
 
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
         --write_probs=True \
         --with_class=auto \
         --with_saliency=auto \

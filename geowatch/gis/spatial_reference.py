@@ -12,7 +12,7 @@ Notes:
 import ubelt as ub
 import numpy as np
 from functools import partial
-from watch.gis.elevation import ElevationDatabase
+from geowatch.gis.elevation import ElevationDatabase
 
 
 class RPCTransform(object):
@@ -41,7 +41,7 @@ class RPCTransform(object):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> from geowatch.gis.spatial_reference import *  # NOQA
         >>> self = RPCTransform.demo()
         >>> pxl_pts = np.array([
         >>>     [    0,     0],
@@ -280,7 +280,7 @@ class RPCTransform(object):
         Example:
             >>> # xdoctest: +SKIP
             >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-            >>> from watch.gis.spatial_reference import *  # NOQA
+            >>> from geowatch.gis.spatial_reference import *  # NOQA
             >>> self = RPCTransform.demo(elevation='gtop30')
             >>> pts_in = pxl_pts = np.array([
             >>>     [    0,     0],
@@ -292,7 +292,7 @@ class RPCTransform(object):
             >>> print('wld_pts =\n{}'.format(ub.urepr(wld_pts, nl=1, precision=2)))
             >>> #
             >>> import osgeo
-            >>> from watch.gis.spatial_reference import *  # NOQA
+            >>> from geowatch.gis.spatial_reference import *  # NOQA
             >>> gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P002_PAN/14JAN31020440-P1BS-011778204010_01_P002.NTF'
             >>> #gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P001_PAN/14JAN31020439-P1BS-011778204010_01_P001.NTF'
             >>> from osgeo import gdal

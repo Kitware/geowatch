@@ -5,11 +5,11 @@ import scriptconfig as scfg
 class PredictCLI(scfg.DataConfig):
     """
     Does not work from geowatch CLI yet. See help.
-    Use ``python -m watch.tasks.fusion.predict`` instead for now.
+    Use ``python -m geowatch.tasks.fusion.predict`` instead for now.
 
     ..code:: bash
 
-        python -m watch.tasks.fusion.predict --help
+        python -m geowatch.tasks.fusion.predict --help
 
     Execute fusion predict
     """
@@ -20,7 +20,7 @@ class PredictCLI(scfg.DataConfig):
     def main(cls, cmdline=1, **kwargs):
         """
         """
-        from watch.tasks.fusion import predict
+        from geowatch.tasks.fusion import predict
         return predict.main(cmdline=cmdline, **kwargs)
 
 

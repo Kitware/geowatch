@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import create_gif
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import create_gif
 
 
 class VideoPlotMaker:

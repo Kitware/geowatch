@@ -2,12 +2,12 @@ import kwcoco
 import ubelt as ub
 import torch
 import numpy as np
-from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 
 
 class WatchModuleMixins:
     """
-    Mixin methods for watch lightning modules
+    Mixin methods for geowatch lightning modules
     """
 
     def reset_weights(self):
@@ -75,7 +75,7 @@ class WatchModuleMixins:
     def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8, nans=0, rng=None, new_mode_sample=0):
         """
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -90,7 +90,7 @@ class WatchModuleMixins:
 
         Example:
             >>> # With nans
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -107,7 +107,7 @@ class WatchModuleMixins:
             >>>   print(nh.data.collate._debug_inbatch_shapes(result2))
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -277,7 +277,7 @@ class WatchModuleMixins:
     @classmethod
     def load_package(cls, package_path, verbose=1):
         """
-        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
+        DEPRECATE IN FAVOR OF geowatch.tasks.fusion.utils.load_model_from_package
 
         TODO:
             - [ ] Make the logic that defines the save_package and load_package
@@ -288,7 +288,7 @@ class WatchModuleMixins:
         # model, the model is defined by the package and the tool that loads it
         # is agnostic to the model contained in said package.
         # This classmethod existing is a convinience more than anything else
-        from watch.tasks.fusion.utils import load_model_from_package
+        from geowatch.tasks.fusion.utils import load_model_from_package
         self = load_model_from_package(package_path)
         return self
 
@@ -310,7 +310,7 @@ class WatchModuleMixins:
 
         Example:
             >>> # xdoctest: +IGNORE_WANT
-            >>> from watch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
             >>> self = WatchModuleMixins()
             >>> self.classes = ['a', 'b', 'c', 'd', 'e']
             >>> self.class_freq = {
@@ -326,7 +326,7 @@ class WatchModuleMixins:
             >>> self._coerce_class_weights('auto:a+1,b*2,c*0+31415')
             tensor([2.0000e+00, 2.0000e+00, 3.1415e+04, 3.3333e-01, 2.0000e-01])
         """
-        from watch import heuristics
+        from geowatch import heuristics
         hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
         if isinstance(class_weights, str):
             if class_weights.startswith('auto'):
@@ -402,7 +402,7 @@ class WatchModuleMixins:
 
         Example:
             >>> # xdoctest: +IGNORE_WANT
-            >>> from watch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
             >>> self = WatchModuleMixins()
             >>> self.saliency_num_classes = 2
             >>> self.background_classes = ['a', 'b', 'c']
@@ -523,18 +523,18 @@ class WatchModuleMixins:
         Overfit script and demo
 
         CommandLine:
-            python -m xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
+            python -m xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
 
         Example:
             >>> # xdoctest: +REQUIRES(--overfit-demo)
             >>> # ============
             >>> # DEMO OVERFIT:
             >>> # ============
-            >>> from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.utils.util_data import find_dvc_dpath
-            >>> import watch
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.utils.util_data import find_dvc_dpath
+            >>> import geowatch
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
@@ -550,11 +550,11 @@ class WatchModuleMixins:
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 1:
-            >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
             >>>     channels='blue|green|red|nir'
             >>> if 0:
-            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
             >>>     #channels='B1|B11|B8|r|g|b|gauss'
             >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
@@ -718,7 +718,7 @@ class WatchModuleMixins:
         import torch.package
 
         # Fix an issue on 3.10 with torch 1.12
-        from watch.monkey import monkey_torch
+        from geowatch.monkey import monkey_torch
         monkey_torch.fix_package_modules()
 
         # shallow copy of self, to apply attribute hacks to
@@ -775,11 +775,11 @@ class WatchModuleMixins:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks
                 exp.extern('**', exclude=[
-                    'watch.tasks.fusion.**',
-                    'watch.tasks.fusion.methods.*'
+                    'geowatch.tasks.fusion.**',
+                    'geowatch.tasks.fusion.methods.*'
                 ])
-                # exp.intern('watch.tasks.fusion.methods.*', allow_empty=False)
-                exp.intern('watch.tasks.fusion.**', allow_empty=False)
+                # exp.intern('geowatch.tasks.fusion.methods.*', allow_empty=False)
+                exp.intern('geowatch.tasks.fusion.**', allow_empty=False)
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements

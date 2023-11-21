@@ -1,7 +1,7 @@
 """
 CommandLine:
     # Benchmark time sampling
-    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
+    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
 
 
 TODO:
@@ -11,10 +11,10 @@ TODO:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-    >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-    >>> import watch
+    >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+    >>> import geowatch
     >>> import kwcoco
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
     >>> coco_fpath = dvc_dpath / 'Drop7-MedianNoWinter10GSD-V2/NZ_R001/imganns-NZ_R001-rawbands.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> window_dims = 128
@@ -50,8 +50,8 @@ import kwimage
 import numpy as np
 import ubelt as ub
 import warnings
-from watch.utils import kwcoco_extensions
-from watch import heuristics
+from geowatch.utils import kwcoco_extensions
+from geowatch import heuristics
 
 try:
     from xdev import profile
@@ -205,11 +205,11 @@ def sample_video_spacetime_targets(dset,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip'
-        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> dset = geowatch.coerce_kwcoco(coco_fpath)
         >>> window_overlap = 0.0
         >>> window_dims = (128, 128)
         >>> time_dims = 2
@@ -220,9 +220,9 @@ def sample_video_spacetime_targets(dset,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.5
@@ -238,7 +238,7 @@ def sample_video_spacetime_targets(dset,
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
@@ -256,7 +256,7 @@ def sample_video_spacetime_targets(dset,
         >>> assert np.all(all_boxes.width == window_dims[1])
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
@@ -280,10 +280,10 @@ def sample_video_spacetime_targets(dset,
         globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
 
     Ignore:
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
@@ -303,7 +303,7 @@ def sample_video_spacetime_targets(dset,
 
     if window_dims is not None and isinstance(window_dims, tuple) and len(window_dims) == 3:
         ub.schedule_deprecation(
-            'watch', 'window_dims', 'argument in spacetime_grid_builder',
+            'geowatch', 'window_dims', 'argument in spacetime_grid_builder',
             migration='window_dims no longer supports T,H,W specification, use time_times=T, window_dims=(H, W)',
             deprecate='now')
         winspace_time_dims = window_dims[0]
@@ -389,7 +389,7 @@ def sample_video_spacetime_targets(dset,
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
     dset_name = ub.Path(dset.fpath).name
-    cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
+    cache_dpath = ub.Path.appdir('geowatch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sample_grid-dataset-cache_' + dset_name,
                        dpath=cache_dpath, depends=depends, enabled=use_cache,
                        verbose=4)
@@ -415,7 +415,7 @@ def sample_video_spacetime_targets(dset,
         # Given an video
         all_vid_ids = sorted(set(selected_vidid_to_gids.keys()))
 
-        from watch.utils import util_parallel
+        from geowatch.utils import util_parallel
         workers = util_parallel.coerce_num_workers(workers)
         workers = min(len(all_vid_ids), workers)
         if workers == 1:
@@ -530,8 +530,8 @@ def _sample_single_video_spacetime_targets(
         This is only used internally. The final targets are returned in video
         space.
     """
-    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
-    from watch.tasks.fusion.datamodules import data_utils
+    from geowatch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+    from geowatch.tasks.fusion.datamodules import data_utils
 
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
@@ -621,7 +621,7 @@ def _sample_single_video_spacetime_targets(
     rough_num_cells = len(gid_arr) * rough_num_windows
     probably_slow = rough_num_cells > (16 * 30)
 
-    cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
+    cache_dpath = ub.Path.appdir('geowatch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache-' + video_name,
                        dpath=cache_dpath, depends=depends,
                        enabled=(use_cache and probably_slow))
@@ -827,7 +827,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
 
     Called as part of :func:`_sample_single_video_spacetime_targets`.
     """
-    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+    from geowatch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     y_sl, x_sl = vidspace_region
     vidspace_box = kwimage.Box.from_slice(vidspace_region).to_ltrb()
 
@@ -990,7 +990,7 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
     Attempt to remove images where valid data does not spatially intersect the
     query box.
     """
-    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+    from geowatch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     video_gids = time_sampler.video_gids
 
     with warnings.catch_warnings():
@@ -1075,8 +1075,8 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
           so they may visually be near an annotation.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
         >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
         >>> window_overlap = 0.0
         >>> window_dims = (32, 32)
@@ -1125,10 +1125,10 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import geowatch
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
-        >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
         >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
@@ -1162,7 +1162,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
     """
     # Visualize the sample grid
     import pandas as pd
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     targets = pd.DataFrame(sample_grid['targets'])
 
     dataset_canvases = []
@@ -1193,7 +1193,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
             # HACK: Use a temporal sampler once to get a nice overview of the
             # dataset in time.
             from kwutil import util_time
-            from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+            from geowatch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
             images = dset.images(common)
             datetimes = [util_time.coerce_datetime(date) for date in images.lookup('date_captured', None)]
             unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
@@ -1277,7 +1277,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
             if kw_invalid_poly is not None:
                 final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
 
-            # from watch import heuristics
+            # from geowatch import heuristics
             img = dset.index.imgs[gid]
             header_lines = heuristics.build_image_header_text(
                 img=img, vidname=vidname)

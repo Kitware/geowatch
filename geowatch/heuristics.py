@@ -60,7 +60,7 @@ with colors.
 
 .. code:: python
 
-    from watch.heuristics import *  # NOQA
+    from geowatch.heuristics import *  # NOQA
     import pandas as pd
     import rich
     df = pd.DataFrame(HUERISTIC_STATUS_DATA)
@@ -263,7 +263,7 @@ IARPA_CONFUSION_COLORS['sm_ignore'] = "lightsalmon"  # no IARPA color for this, 
 def iarpa_assign_truth_confusion(truth_status, has_positive_match):
     """
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> import pandas as pd
         >>> rows = []
         >>> for truth_status in IARPA_STATUS_TO_INFO.keys():
@@ -299,7 +299,7 @@ def iarpa_assign_truth_confusion(truth_status, has_positive_match):
 def iarpa_assign_pred_confusion(truth_match_statuses):
     """
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> import itertools as it
         >>> truth_match_statuses = {'positive_partial', 'positive_excluded'}
         >>> for combo in it.combinations(IARPA_STATUS_TO_INFO, 2):
@@ -419,7 +419,7 @@ def hack_track_categories(track_catnames, task):
         List[str]: Modified categories
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> basis = {
         >>>     #'task': ['class', 'saliency'],
         >>>     'task': ['class'],
@@ -440,7 +440,7 @@ def hack_track_categories(track_catnames, task):
         >>>     print('kw = {}'.format(ub.urepr(kw, nl=1)))
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> track_catnames = ['negative', 'negative']
         >>> task = 'saliency'
         >>> result = hack_track_categories(track_catnames, task)
@@ -576,7 +576,7 @@ def ensure_heuristic_coco_colors(coco_dset, force=False):
             :func:`kwcoco.CocoDataset.ensure_class_colors`
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo()
         >>> ensure_heuristic_coco_colors(coco_dset)
@@ -600,13 +600,13 @@ def ensure_heuristic_category_tree_colors(classes, force=False):
     TODO:
         - [ ] Move this non-heuristic functionality to
             :func:`kwcoco.CategoryTree.ensure_colors`
-        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> import kwcoco
         >>> classes = kwcoco.CategoryTree.coerce(['ignore', 'positive', 'Active Construction', 'foobar', 'Unknown', 'baz'])
         >>> ensure_heuristic_category_tree_colors(classes)
@@ -655,7 +655,7 @@ CONFUSION_COLOR_SCHEME = {
 def dummy_legend():
     # hack to make a legend for slides
     """
-    from watch.heuristics import *  # NOQA
+    from geowatch.heuristics import *  # NOQA
     dummy_legend()
 
     """
@@ -697,7 +697,7 @@ def build_image_header_text(**kwargs):
         date_captured
 
     Example:
-        >>> from watch.heuristics import *  # NOQA
+        >>> from geowatch.heuristics import *  # NOQA
         >>> img = {
         >>>     'id': 1,
         >>>     'frame_index': 0,
@@ -766,7 +766,7 @@ def build_image_header_text(**kwargs):
 
 # TODO: this could be a specially handled frame like ASI.
 # NOTE:
-# QA Information Moved to ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
+# QA Information Moved to ~/code/watch/geowatch/tasks/fusion/datamodules/qa_bands.py
 
 DVC_FIND_EXPT_KWARGS = {
     'tags': 'phase2_expt', 'envvar': 'DVC_EXPT_DPATH', 'hardware': 'auto'}
@@ -775,13 +775,13 @@ DVC_FIND_DATA_KWARGS = {
 
 
 def auto_expt_dvc():
-    import watch
-    return watch.find_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
+    import geowatch
+    return geowatch.find_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
 
 
 def auto_data_dvc():
-    import watch
-    return watch.find_dvc_dpath(**DVC_FIND_DATA_KWARGS)
+    import geowatch
+    return geowatch.find_dvc_dpath(**DVC_FIND_DATA_KWARGS)
 
 
 # We should be able to figure out a way to robustly introspect these
@@ -903,7 +903,7 @@ def normalize_sensors(coco_dset, sensor_warnings=True, format='te'):
     """
     Convert to / from internal representations or IAPRA sensor standards
     """
-    from watch.heuristics import TE_SENSOR_NAMES
+    from geowatch.heuristics import TE_SENSOR_NAMES
     sensor_dict = TE_SENSOR_NAMES
     good_sensors = set(sensor_dict.values())
 
@@ -929,9 +929,9 @@ def extract_region_id(fname):
         >>> fname = 'foobar_KR_R001_otherstuff'
         >>> extract_region_id(fname)
     """
-    import watch
+    import geowatch
     # Find a region pattern
-    pat = watch.utils.util_pattern.Pattern.coerce(r'([A-Z]+_[A-Z]\d+)', 'regex')
+    pat = geowatch.utils.util_pattern.Pattern.coerce(r'([A-Z]+_[A-Z]\d+)', 'regex')
     found = pat.search(fname)
     name = found.groups()[0]
     return name

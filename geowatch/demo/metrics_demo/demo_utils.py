@@ -30,7 +30,7 @@ def random_geo_points(num, rng=None):
         .. [SO68298220] https://stackoverflow.com/questions/68298220/random-geocoords
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> latlon = random_geo_points(num=3, rng=0)
         >>> print(ub.urepr(latlon, precision=4))
         np.array([[ 16.1579,   5.6025],
@@ -39,7 +39,7 @@ def random_geo_points(num, rng=None):
 
     Example:
         >>> # This example demonstrates that the points are randomly spread out
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> # xdoctest: +REQUIRES(--show)
         >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> import kwplot
@@ -81,7 +81,7 @@ def random_geo_polygon(max_rt_area=10_000, rng=None):
         kwimage.Polygon : polygon in CRS84 space
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> max_rt_area = 10000
         >>> region_poly = random_geo_polygon(max_rt_area, rng=321)
         >>> geo_poly = region_poly.round(6).to_geojson()
@@ -103,7 +103,7 @@ def random_geo_polygon(max_rt_area=10_000, rng=None):
 
     Example:
         >>> # This example demonstrates the distribution of random polygons
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> # xdoctest: +REQUIRES(--show)
         >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> import kwplot
@@ -170,7 +170,7 @@ def random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=None)
         List[datetime_cls]: sampled dates in the UTC timezone
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> min_date_iso = '1996-06-23'
         >>> max_date_iso = '2017-10-27'
         >>> num_observations = 3
@@ -232,7 +232,7 @@ def utm_epsg_from_latlon(lat, lon):
         .. [SE365584] https://gis.stackexchange.com/questions/365584/convert-utm-zone-into-epsg-code
 
     Example:
-        >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> epsg_code = utm_epsg_from_latlon(0, 0)
         >>> print('epsg_code = {!r}'.format(epsg_code))
         epsg_code = 32631

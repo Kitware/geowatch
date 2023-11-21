@@ -5,11 +5,11 @@ DZYNE Technologies
 
 Usage:
 
-1. Clone the `smart_watch_dvc` and `watch` repositories.
-2. From, the `watch` repository, build the container.
+1. Clone the `smart_watch_dvc` and `geowatch` repositories.
+2. From, the `geowatch` repository, build the container.
 
    ```
-   docker build -t watch .
+   docker build -t geowatch .
    ```
    
 3. Start the container.  Adjust your `smart_watch_dvc` path as necessary.
@@ -18,7 +18,7 @@ Usage:
    docker run --rm -it --gpus all \
      -v $(pwd)/output:/output \
      -v $(pwd)/../smart_watch_dvc:/dvc:ro \
-     watch bash
+     geowatch bash
    ```
 
 4. Run the prediction:
@@ -30,7 +30,7 @@ Usage:
     KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
     KWCOCO_FPATH=$KWCOCO_BUNDLE/data.kwcoco.json
 
-    python -m watch.tasks.depth.predict \
+    python -m geowatch.tasks.depth.predict \
         --dataset  $KWCOCO_BUNDLE/data.kwcoco.json \
         --output   $KWCOCO_BUNDLE/dzyne_depth/depth1.kwcoco.json \
         --deployed $DVC_DPATH/models/depth/weights_v1.pt
@@ -39,10 +39,10 @@ Usage:
             --dst $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json \
             --select_images '.sensor_coarse == "WV"' --channels='red|green|blue'
 
-    python -m watch stats $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json
+    python -m geowatch stats $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json
 
     # Visualize results
-    python -m watch visualize --src $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json \
+    python -m geowatch visualize --src $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json \
         --viz_dpath=$KWCOCO_BUNDLE/dzyne_depth/_vizdepth  \
         --channels "depth" --draw_anns=False --animate=True
     ```

@@ -45,10 +45,10 @@ def main(cmdline=1, **kwargs):
 
     import kwcoco
     import safer
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import util_gis
     from kwcoco.util import util_json
-    from watch.utils import process_context
+    from geowatch.utils import process_context
 
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
     jsonified_config = util_json.ensure_json_serializable(config.asdict())
@@ -58,7 +58,7 @@ def main(cmdline=1, **kwargs):
         walker[problem['loc']] = str(bad_data)
 
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.depth_pcd.filter_tracks', type='process',
+        name='geowatch.tasks.depth_pcd.filter_tracks', type='process',
         config=jsonified_config,
         track_emissions=False,
     )

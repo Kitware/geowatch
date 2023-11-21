@@ -1,7 +1,7 @@
 UKy temporal ordering prediction.
 ====
 
-UKy code for predicting the arrow of time of image pairs using a Siamese Network with UNet/UNet blur backbone. Code for training on drop0_aligned is located in `fit.py` and evaluating on `drop0_aligned` is located in `predict.py`. In addition, scripts for setting up datasets and training on SpaceNet 7 are located in the `spacenet` folder. Running these scripts should be done through Python's `-m` flag and the `watch` module. For instance to run `predict.py` you would run `python -m watch.tasks.uky_temporal_prediction`
+UKy code for predicting the arrow of time of image pairs using a Siamese Network with UNet/UNet blur backbone. Code for training on drop0_aligned is located in `fit.py` and evaluating on `drop0_aligned` is located in `predict.py`. In addition, scripts for setting up datasets and training on SpaceNet 7 are located in the `spacenet` folder. Running these scripts should be done through Python's `-m` flag and the `geowatch` module. For instance to run `predict.py` you would run `python -m geowatch.tasks.uky_temporal_prediction`
 
 Conda Environment
 ----
@@ -19,15 +19,15 @@ WATCH_DATA_DPATH=/u/eag-d1/data/watch
 WATCH_DATA_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
 # Print stats about the videos in the dataset
-python -m watch.scripts.watch_coco_stats $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
+python -m geowatch.scripts.watch_coco_stats $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
 
-python -m watch.tasks.uky_temporal_prediction.fit \
+python -m geowatch.tasks.uky_temporal_prediction.fit \
     --max_epochs 100 --sensor S2 --train_video 5 --val_video 4 --in_channels 3 \
     --train_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json \
     --val_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
 
 
-python -m watch.tasks.uky_temporal_prediction.fit \
+python -m geowatch.tasks.uky_temporal_prediction.fit \
     --max_epochs 100 --sensor LC --train_video 2 --val_video 4 --in_channels 1 \
     --train_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json \
     --val_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
@@ -49,7 +49,7 @@ find logs -iname "*.ckpt"
 CHECKPOINT_FPATH=$(find logs -iname "*.ckpt" | tail -n1)
 echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
 
-python -m watch.tasks.uky_temporal_prediction.predict \
+python -m geowatch.tasks.uky_temporal_prediction.predict \
     --sensor LC \
     --dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json \
     --data_folder $WATCH_DATA_DPATH/drop0_aligned/ \
@@ -69,9 +69,9 @@ SpaceNet 7
 To prepare to train on SpaceNet 7: run 
 
 ```
-python -m watch.tasks.uky_temporal_prediction.spacenet.data.create_splits --data_dir /path/to/SpaceNet/7/train
+python -m geowatch.tasks.uky_temporal_prediction.spacenet.data.create_splits --data_dir /path/to/SpaceNet/7/train
 
-python -m watch.tasks.uky_temporal_prediction.spacenet.data.splits_unmasked.create_splits  --data_dir /path/to/SpaceNet/7/train
+python -m geowatch.tasks.uky_temporal_prediction.spacenet.data.splits_unmasked.create_splits  --data_dir /path/to/SpaceNet/7/train
 
 ```
 

@@ -37,7 +37,7 @@ docker run \
 
 ipython
 
-from watch.cli.smartflow.run_sc_fusion import *  # NOQA
+from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
 
 
 # Copied from a smartflow run that failed,
@@ -106,22 +106,22 @@ def main(cmdline=1, **kwargs):
 
 
 def run_sc_fusion_for_baseline(config):
-    from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.smartflow_egress import smartflow_egress
-    from watch.tasks.fusion.predict import predict  # NOQA
-    from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
-    from watch.utils.util_framework import download_region, determine_region_id
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli.smartflow_egress import smartflow_egress
+    from geowatch.tasks.fusion.predict import predict  # NOQA
+    from geowatch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
+    from geowatch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
-    from watch.utils import util_framework
-    from watch.mlops import smart_pipeline
+    from geowatch.utils import util_framework
+    from geowatch.mlops import smart_pipeline
     import kwcoco
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
-        from watch.utils import util_fsspec
+        from geowatch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -252,7 +252,7 @@ def run_sc_fusion_for_baseline(config):
                 'site_summary': ub.Path(input_site_summary_dpath) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
             } | sc_track_kwargs
-            # See: ~/code/watch/watch/mlops/smart_pipeline.py
+            # See: ~/code/watch/geowatch/mlops/smart_pipeline.py
             sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
             sc_poly.configure(final_sc_poly_config)
             command = sc_poly.command()
@@ -274,7 +274,7 @@ def run_sc_fusion_for_baseline(config):
     os.makedirs(cropped_region_models_outdir, exist_ok=True)
 
     ub.cmd([
-        'python', '-m', 'watch.cli.crop_sites_to_regions',
+        'python', '-m', 'geowatch.cli.crop_sites_to_regions',
         '--site_models', site_models_outdir / '*.geojson',
         '--region_models', region_models_outdir / f'{region_id}.geojson',
         '--new_site_dpath', cropped_site_models_outdir,

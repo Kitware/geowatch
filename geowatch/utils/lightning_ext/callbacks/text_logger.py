@@ -14,9 +14,9 @@ class TextLogger(pl.callbacks.Callback):
 
     Example:
         >>> #
-        >>> from watch.utils.lightning_ext.callbacks.text_logger import *  # NOQA
-        >>> from watch.utils.lightning_ext import demo
-        >>> from watch.monkey import monkey_lightning
+        >>> from geowatch.utils.lightning_ext.callbacks.text_logger import *  # NOQA
+        >>> from geowatch.utils.lightning_ext import demo
+        >>> from geowatch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TextLogger').ensuredir()
@@ -143,7 +143,7 @@ class _InstanceLogger():
     instance of an object.
 
     Example:
-        >>> dpath = ub.Path.appdir('watch/test/logger').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/logger').ensuredir()
         >>> fpath = ub.Path(dpath) / 'mylog.log'
         >>> self = _InstanceLogger(fpath=fpath)
     """

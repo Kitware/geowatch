@@ -5,17 +5,17 @@ TODO:
     move to queue_cli
 
 CommandLine:
-    xdoctest -m watch.cli.prepare_splits __doc__
+    xdoctest -m geowatch.cli.prepare_splits __doc__
 
 Example:
-    >>> from watch.cli.prepare_splits import *  # NOQA
-    >>> dpath = ub.Path.appdir('watch', 'tests', 'prep_splits').ensuredir()
+    >>> from geowatch.cli.prepare_splits import *  # NOQA
+    >>> dpath = ub.Path.appdir('geowatch', 'tests', 'prep_splits').ensuredir()
     >>> (dpath / 'KR_R001.kwcoco.zip').touch()
     >>> (dpath / 'KR_R002.kwcoco.zip').touch()
     >>> (dpath / 'BR_R002.kwcoco.zip').touch()
     >>> config = {
     >>>     'base_fpath': dpath / '*.kwcoco.zip',
-    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'virtualenv_cmd': 'conda activate geowatch',
     >>>     'constructive_mode': True,
     >>>     'run': 0,
     >>>     'cache': False,
@@ -38,7 +38,7 @@ Example:
 CommandLine:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --src_kwcocos="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask/*/imganns-*.kwcoco.zip \
         --dst_dpath "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask \
         --suffix=rawbands \
@@ -285,8 +285,8 @@ def prep_splits(cmdline=False, **kwargs):
     if config['base_fpath'] == 'auto':
         # Auto hack.
         raise NotImplementedError
-        import watch
-        dvc_dpath = watch.find_dvc_dpath()
+        import geowatch
+        dvc_dpath = geowatch.find_dvc_dpath()
         # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
     else:
@@ -295,7 +295,7 @@ def prep_splits(cmdline=False, **kwargs):
     import cmd_queue
     queue = cmd_queue.Queue.create(
         backend=config['backend'],
-        name='watch-splits', size=config['workers'],
+        name='geowatch-splits', size=config['workers'],
     )
 
     if config['virtualenv_cmd']:
@@ -330,7 +330,7 @@ if __name__ == '__main__':
     CommandLine:
         DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data)
         BASE_FPATH=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
-        python -m watch.cli.prepare_splits \
+        python -m geowatch.cli.prepare_splits \
             --base_fpath=$BASE_FPATH \
             --backend=serial --run=0
     """

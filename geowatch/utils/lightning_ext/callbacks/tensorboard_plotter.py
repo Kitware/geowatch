@@ -6,9 +6,9 @@ Derived from netharn/mixins.py for dumping tensorboard plots to disk
 
 CommandLine:
     # cd into training directory
-    WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter .
+    WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
 
-    python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+    python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
         /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
 
 """
@@ -18,7 +18,7 @@ import ubelt as ub
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
-from watch.utils.lightning_ext import util_model
+from geowatch.utils.lightning_ext import util_model
 
 
 __all__ = ['TensorboardPlotter']
@@ -30,12 +30,12 @@ class TensorboardPlotter(pl.callbacks.Callback):
     exit
 
     CommandLine:
-        xdoctest -m watch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
+        xdoctest -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
 
     Example:
         >>> # xdoctest: +REQUIRES(module:tensorboard)
-        >>> from watch.utils.lightning_ext import demo
-        >>> from watch.monkey import monkey_lightning
+        >>> from geowatch.utils.lightning_ext import demo
+        >>> from geowatch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TensorboardPlotter').ensuredir()
@@ -202,7 +202,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     refresh_fpath.write_text(ub.codeblock(
         fr'''
         #!/bin/bash
-        WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {train_dpath_}
         '''))
     import stat

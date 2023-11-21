@@ -369,7 +369,7 @@ def number_of_parameters(model, trainable=True):
     Returns number of trainable parameters in a torch module
 
     Example:
-        >>> from watch.utils.util_netharn import *  # NOQA
+        >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> model = torch.nn.Conv1d(2, 3, 5)
         >>> number_of_parameters(model)
         33

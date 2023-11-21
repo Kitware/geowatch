@@ -24,7 +24,7 @@ class FilterBySensorConfig(scfg.Config):
 def main(**kwargs):
     r"""
     CommandLine:
-        python -m watch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
+        python -m geowatch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
 
@@ -59,7 +59,7 @@ def main(**kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
+        python -m geowatch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
             --src <existing kwcoco json> --dst <path to write new kwcoco json>
     """
     main()

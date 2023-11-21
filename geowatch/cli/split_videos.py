@@ -3,12 +3,12 @@ Split a coco dataset into one per video.
 
 Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    python -m watch.cli.split_videos \
+    python -m geowatch.cli.split_videos \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
               "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
         --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
-    python -m watch.cli.split_videos \
+    python -m geowatch.cli.split_videos \
         --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
 """
@@ -40,14 +40,14 @@ class SplitVideoConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     Ignore:
-        from watch.cli.split_videos import *  # NOQA
-        import watch
-        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.cli.split_videos import *  # NOQA
+        import geowatch
+        data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         src_fpath = [
             str(data_dvc_dpath / 'Drop4-BAS/data_train.kwcoco.json'),
             str(data_dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'),
         ]
-        from watch.utils import util_pattern
+        from geowatch.utils import util_pattern
         coco_fpaths = list(util_pattern.MultiPattern.coerce(list(map(str, src_fpath))) .paths())
         print(f'coco_fpaths={coco_fpaths}')
         cmdline = 0
@@ -55,8 +55,8 @@ def main(cmdline=1, **kwargs):
     """
     import kwcoco
     import ubelt as ub
-    from watch.utils import util_pattern
-    from watch.utils import util_parallel
+    from geowatch.utils import util_pattern
+    from geowatch.utils import util_parallel
     config = SplitVideoConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(config, nl=1)))
 
@@ -112,6 +112,6 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/split_videos.py
+        python ~/code/watch/geowatch/cli/split_videos.py
     """
     main()

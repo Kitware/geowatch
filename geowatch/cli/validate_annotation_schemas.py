@@ -16,9 +16,9 @@ Prereq:
 
 
 SeeAlso:
-    ~/code/watch/watch/geoannots/geomodels.py
-    ~/code/watch/watch/cli/validate_annotation_schemas.py
-    ~/code/watch/watch/cli/fix_region_models.py
+    ~/code/watch/geowatch/geoannots/geomodels.py
+    ~/code/watch/geowatch/cli/validate_annotation_schemas.py
+    ~/code/watch/geowatch/cli/fix_region_models.py
 
 
 References:
@@ -30,15 +30,15 @@ Example:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
-    python -m watch.cli.validate_annotation_schemas \
+    python -m geowatch.cli.validate_annotation_schemas \
         --site_models="$DVC_DATA_DPATH"/annotations/drop7/site_models \
         --region_models="$DVC_DATA_DPATH"/annotations/drop7/region_models
 
-    python -m watch.cli.validate_annotation_schemas \
+    python -m geowatch.cli.validate_annotation_schemas \
         --site_models="<path-to-site-models>" \
         --region_models="<path-to-region-models>"
 
-    python -m watch.cli.validate_annotation_schemas \
+    python -m geowatch.cli.validate_annotation_schemas \
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
 """
 
@@ -72,9 +72,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> import ubelt as ub
         >>> import sys, ubelt
-        >>> from watch.cli.validate_annotation_schemas import ValidateAnnotationConfig
-        >>> from watch.geoannots import geomodels
-        >>> dpath = ub.Path.appdir('watch', 'tests', 'test_validate_geoannot_schema')
+        >>> from geowatch.cli.validate_annotation_schemas import ValidateAnnotationConfig
+        >>> from geowatch.geoannots import geomodels
+        >>> dpath = ub.Path.appdir('geowatch', 'tests', 'test_validate_geoannot_schema')
         >>> dpath.ensuredir()
         >>> region, sites = geomodels.RegionModel.random(with_sites=True)
         >>> region_fpath = dpath / (region.region_id + '.geojson')
@@ -89,12 +89,12 @@ def main(cmdline=1, **kwargs):
         >>> ValidateAnnotationConfig.main(cmdline=cmdline, **kwargs)
     """
     config = ValidateAnnotationConfig.cli(data=kwargs, cmdline=cmdline)
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import rich
     rich.print(ub.urepr(config))
 
-    from watch.geoannots import geomodels
-    from watch.utils import util_parallel
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import util_parallel
 
     io_workers = util_parallel.coerce_num_workers(config['io_workers'])
 

@@ -6,7 +6,7 @@ import torchvision
 # import matplotlib.pyplot as plt
 # import math
 # from torch.utils.data.dataset import random_split
-from watch.tasks.rutgers_material_seg.utils import utils
+from geowatch.tasks.rutgers_material_seg.utils import utils
 # from torchvision import transforms
 # import matplotlib.patches as patches
 # import cv2

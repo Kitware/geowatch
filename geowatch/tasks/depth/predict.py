@@ -56,9 +56,9 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.depth.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> from geowatch.tasks.depth.predict import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> dataset = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_vali.kwcoco.json'
         >>> output = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/dzyne_depth_test.kwcoco.json'
         >>> deployed = dvc_dpath / "models/depth/weights_v1.pt"
@@ -89,8 +89,8 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     input_dset = kwcoco.CocoDataset.coerce(dataset)
     input_bundle_dpath = ub.Path(input_dset.bundle_dpath)
 
-    from watch.utils import kwcoco_extensions
-    from watch.tasks.fusion.predict import quantize_float01
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.tasks.fusion.predict import quantize_float01
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset,
         include_sensors=['WV'],
@@ -234,7 +234,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
                     'Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     if cache and hit_gids:
-        from watch.utils import util_gdal
+        from geowatch.utils import util_gdal
         # add metadata for cache items
         for gid in hit_gids:
             img_info = torch_dataset.dset.imgs[gid]
@@ -303,7 +303,7 @@ def _test():
                                  overlap=overlap,
                                  output_dtype=output_dtype)
 
-    from watch.tasks.fusion.predict import quantize_float01
+    from geowatch.tasks.fusion.predict import quantize_float01
     quant_pred, quantization = quantize_float01(pred, old_min=0, old_max=1,
                                                 quantize_dtype=np.uint8)
     print('quantization = {}'.format(ub.urepr(quantization, nl=1)))
@@ -319,7 +319,7 @@ def _test():
 def run_inference(image, model, device=0):
     """
     Example:
-        >>> from watch.tasks.depth.predict import *  # NOQA
+        >>> from geowatch.tasks.depth.predict import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> src = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))
@@ -566,7 +566,7 @@ def _write_output(img_info, pred, pred_filename,
 
 def _load_config():
     from importlib import resources as importlib_resources
-    fp = importlib_resources.open_text('watch.tasks.depth', 'config.json')
+    fp = importlib_resources.open_text('geowatch.tasks.depth', 'config.json')
     return json.load(fp)
 
 
@@ -589,7 +589,7 @@ if __name__ == '__main__':
     # window_size=1152: 21.007 GB
 
     ## Drop 4 ##
-    python3 -m watch.tasks.depth.predict \
+    python3 -m geowatch.tasks.depth.predict \
     --deployed=/smart/backup/models/depth/weights_v1.pt \
     --dataset=/output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv_superRes.kwcoco.json \
     --output=/output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv_superRes_depth.kwcoco.json \
@@ -599,11 +599,11 @@ if __name__ == '__main__':
     --use_super_res_bands=True \
     --scale=4
 
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
+    python -m geowatch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
         --animate=True --channels="depth,red|green|blue" --skip_missing=True \
         --select_images '.sensor_coarse == "WV"' --workers=4 --draw_anns=False
 
-    python -m watch stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
+    python -m geowatch stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 
     python -m kwcoco stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 

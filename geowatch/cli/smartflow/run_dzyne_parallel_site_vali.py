@@ -16,11 +16,11 @@ Notes:
 
     docker run -it $IMAGE python -c "if 1:
         import numpy as np
-        import watch
+        import geowatch
         import ubelt as ub
-        from watch.tasks.depth_pcd.model import getModel
+        from geowatch.tasks.depth_pcd.model import getModel
         model = getModel()
-        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         model.load_weights(expt_dvc_dpath + '/models/depth_pcd/basicModel2.h5')
         out = model.predict(np.zeros((1,400,400,3)))
         shapes = [o.shape for o in out]
@@ -34,7 +34,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
     """
     Run DZYNE's parallel site validation framework component
 
-    python ~/code/watch/watch/cli/smartflow/run_dzyne_parallel_site_vali.py
+    python ~/code/watch/geowatch/cli/smartflow/run_dzyne_parallel_site_vali.py
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
@@ -89,14 +89,14 @@ def main():
 def run_dzyne_parallel_site_vali_for_baseline(config):
     """
     SeeAlso:
-        ~/code/watch/watch/tasks/depth_pcd/score_tracks.py
-        ~/code/watch/watch/tasks/depth_pcd/filter_tracks.py
+        ~/code/watch/geowatch/tasks/depth_pcd/score_tracks.py
+        ~/code/watch/geowatch/tasks/depth_pcd/filter_tracks.py
     """
-    from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.smartflow_egress import smartflow_egress
-    # from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-    from watch.utils.util_framework import download_region, determine_region_id
-    # from watch.tasks.fusion.predict import predict
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli.smartflow_egress import smartflow_egress
+    # from geowatch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+    from geowatch.utils.util_framework import download_region, determine_region_id
+    # from geowatch.tasks.fusion.predict import predict
     # from kwutil.util_yaml import Yaml
 
     input_path = config.input_path
@@ -109,7 +109,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -148,8 +148,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
-    from watch.tasks.depth_pcd import score_tracks
-    from watch.tasks.depth_pcd import filter_tracks
+    from geowatch.tasks.depth_pcd import score_tracks
+    from geowatch.tasks.depth_pcd import filter_tracks
     from kwutil.util_yaml import Yaml
 
     default_score_config = ub.udict({
@@ -260,7 +260,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
                 raise
         else:
             # Validate and fix all outputs
-            from watch.utils import util_framework
+            from geowatch.utils import util_framework
             util_framework.fixup_and_validate_site_and_region_models(
                 region_dpath=output_region_fpath.parent,
                 site_dpath=output_sites_dpath,

@@ -52,7 +52,7 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/cli/special/finish_install.py
-        python -m watch.cli.special.finish_install
+        python ~/code/watch/geowatch/cli/special/finish_install.py
+        python -m geowatch.cli.special.finish_install
     """
     main()

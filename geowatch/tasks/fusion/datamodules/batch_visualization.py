@@ -15,13 +15,13 @@ class BatchVisualizationBuilder:
     prediction, loss weights, or raw input channels.
 
     CommandLine:
-        xdoctest -m watch.tasks.fusion.datamodules.batch_visualization BatchVisualizationBuilder
+        xdoctest -m geowatch.tasks.fusion.datamodules.batch_visualization BatchVisualizationBuilder
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
+        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2-geowatch', num_frames=5)
         >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
@@ -50,12 +50,12 @@ class BatchVisualizationBuilder:
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
+        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2-geowatch', num_frames=5)
         >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
-        >>> #coco_dset = watch.coerce_kwcoco('vidshapes2', num_frames=5)
+        >>> #coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=5)
         >>> #channels = None
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
@@ -119,7 +119,7 @@ class BatchVisualizationBuilder:
         >>> kwplot.imshow(rescaled_canvas, fnum=2, doclf=True, figtitle='Rescaled Sampling')
         >>> plt.gcf().tight_layout()
         >>> ######
-        >>> from watch.tasks.fusion.datamodules.batch_visualization import _debug_sample_in_context
+        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import _debug_sample_in_context
         >>> _debug_sample_in_context(self, target)
         >>> kwplot.show_if_requested()
     """
@@ -162,7 +162,7 @@ class BatchVisualizationBuilder:
         Make dummy output for a batch item for testing
         """
         # Calculate the probability of change for each frame
-        from watch.tasks.fusion.datamodules import data_utils
+        from geowatch.tasks.fusion.datamodules import data_utils
         import kwarray
         item_output = {}
         change_prob_list = []
@@ -416,7 +416,7 @@ class BatchVisualizationBuilder:
                     cell['norm_signal'] = norm_signal
         else:
             import warnings
-            from watch.utils import util_kwimage
+            from geowatch.utils import util_kwimage
             # Normalize each timestep by itself
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
@@ -972,7 +972,7 @@ def colorize_weights(weights):
     the 1-infinity range in color
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
         >>> import kwarray
         >>> weights = kwimage.gaussian_patch((32, 32))
         >>> weights = kwarray.normalize(weights)
@@ -993,7 +993,7 @@ def colorize_weights(weights):
         >>> kwplot.imshow(canvas)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
         >>> import kwarray
         >>> weights = kwimage.gaussian_patch((32, 32))
         >>> n = 512

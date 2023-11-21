@@ -4,7 +4,7 @@ import kwcoco
 import kwimage
 import numpy as np
 import torch.utils.data
-from watch.utils import util_kwimage
+from geowatch.utils import util_kwimage
 
 log = logging.getLogger(__name__)
 

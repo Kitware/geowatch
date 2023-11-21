@@ -9,8 +9,8 @@ predictions should be stitched back together at.
 The following attempts to provide a minimal example with a visualization.
 
 Example:
-    >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
-    >>> from watch.tasks.fusion.coco_stitcher import demo_coco_stitching_manager
+    >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
+    >>> from geowatch.tasks.fusion.coco_stitcher import demo_coco_stitching_manager
     >>> # See the contents of the function for details, might port it to a full
     >>> # doctest later.
     >>> demo_coco_stitching_manager()
@@ -27,10 +27,10 @@ from os.path import relpath
 
 def demo_coco_stitching_manager():
     import kwcoco
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
 
     # This test will write to this output directory and we seed our RNG
-    out_dpath = ub.Path.appdir('watch/kwcoco_stitcher/demo')
+    out_dpath = ub.Path.appdir('geowatch/kwcoco_stitcher/demo')
     rng = kwarray.ensure_rng(0)
 
     # Given some kwcoco dataset
@@ -205,9 +205,9 @@ class CocoStitchingManager(object):
         - [ ] TODO: remove polygon "predictions" from this completely.
 
     Example:
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True,
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> import geowatch
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True,
         >>>                            multispectral=True)
         >>> result_dataset = dset.copy()
         >>> self = CocoStitchingManager(
@@ -237,9 +237,9 @@ class CocoStitchingManager(object):
         >>> assert im2.shape[0] == my_feature.shape[0]
 
     Example:
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True,
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> import geowatch
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True,
         >>>                            multispectral=True)
         >>> result_dataset = dset.copy()
         >>> self = CocoStitchingManager(
@@ -289,7 +289,7 @@ class CocoStitchingManager(object):
                  assets_dname='_assets',
                  dtype='float32'):
 
-        from watch.utils import util_parallel
+        from geowatch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -347,7 +347,7 @@ class CocoStitchingManager(object):
 
         if self.write_preds:
             ub.schedule_deprecation(
-                'watch', 'write_preds', 'needs a different abstraction.',
+                'geowatch', 'write_preds', 'needs a different abstraction.',
                 deprecate='now')
             from kwcoco import channel_spec
             chan_spec = channel_spec.FusedChannelSpec.coerce(chan_code)
@@ -396,14 +396,14 @@ class CocoStitchingManager(object):
             asset_dsize = kwargs.get('dsize', None)
             if 0:
                 ub.schedule_deprecation(
-                    'watch', 'dsize', 'arg of accumulate_image',
+                    'geowatch', 'dsize', 'arg of accumulate_image',
                     'use asset_dsize instad', deprecate='now')
 
         if kwargs.get('scale', None) is not None:
             scale_asset_from_stitchspace = kwargs.get('scale', None)
             if 0:
                 ub.schedule_deprecation(
-                    'watch', 'scale', 'arg of accumulate_image',
+                    'geowatch', 'scale', 'arg of accumulate_image',
                     'use scale_asset_from_stitchspace instad', deprecate='now')
 
         self._stitched_gid_patch_histograms[gid] += 1
@@ -494,7 +494,7 @@ class CocoStitchingManager(object):
         """
         TODO: refactor
         """
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
 
         if weights is not None:
             weights = kwarray.ArrayAPI.numpy(weights)
@@ -818,9 +818,9 @@ class CocoStitchingManager(object):
                 raise
 
         if self.write_preds:
-            from watch.tasks.tracking.utils import mask_to_polygons
+            from geowatch.tasks.tracking.utils import mask_to_polygons
             ub.schedule_deprecation(
-                'watch', 'write_preds', 'needs a different abstraction.',
+                'geowatch', 'write_preds', 'needs a different abstraction.',
                 deprecate='now')
             # NOTE: The typical pipeline will never do this.
             # This is generally reserved for a subsequent tracking stage.
@@ -894,7 +894,7 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
         them.
 
     Example:
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> from delayed_image.helpers import dequantize
         >>> # Test error when input is not nicely between 0 and 1
         >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
@@ -912,7 +912,7 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
 
     Example:
         >>> # Test dequantize with uint8
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> from delayed_image.helpers import dequantize
         >>> imdata = np.random.randn(32, 32, 3)
         >>> quant1, quantization1 = quantize_image(imdata, quantize_dtype=np.uint8)
@@ -922,7 +922,7 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
 
     Example:
         >>> # Test quantization with different signed / unsigned combos
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> print(quantize_image(None, 0, 1, np.int16))
         >>> print(quantize_image(None, 0, 1, np.int8))
         >>> print(quantize_image(None, 0, 1, np.uint8))
@@ -998,7 +998,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
         them.
 
     Example:
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> from delayed_image.helpers import dequantize
         >>> # Test error when input is not nicely between 0 and 1
         >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
@@ -1016,7 +1016,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
     Example:
         >>> # Test dequantize with uint8
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> from delayed_image.helpers import dequantize
         >>> imdata = np.random.randn(32, 32, 3)
         >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1,
@@ -1027,7 +1027,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
     Example:
         >>> # Test quantization with different signed / unsigned combos
-        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> print(quantize_float01(None, 0, 1, np.int16))
         >>> print(quantize_float01(None, 0, 1, np.int8))
         >>> print(quantize_float01(None, 0, 1, np.uint8))

@@ -39,7 +39,7 @@ def _build_stac_item(region_path,
     with open(region_path) as f:
         data = json.load(f)
 
-    from watch.geoannots.geomodels import RegionModel
+    from geowatch.geoannots.geomodels import RegionModel
     region = RegionModel(**data)
 
     # These are fast checks that include the assertion that there is only one
@@ -120,13 +120,13 @@ def smartflow_egress(assetnames_and_local_paths,
         Dict: the new STAC item
 
     CommandLine:
-        xdoctest -m watch.cli.smartflow_egress smartflow_egress
+        xdoctest -m geowatch.cli.smartflow_egress smartflow_egress
 
     Example:
-        >>> from watch.cli.smartflow_egress import *  # NOQA
-        >>> from watch.geoannots.geomodels import RegionModel
+        >>> from geowatch.cli.smartflow_egress import *  # NOQA
+        >>> from geowatch.geoannots.geomodels import RegionModel
         >>> from os.path import join
-        >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
         >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
         >>> #outbucket = 's3://fake/bucket'
@@ -157,11 +157,11 @@ def smartflow_egress(assetnames_and_local_paths,
 
     Ignore:
         >>> # Requires a real S3 bucket
-        >>> from watch.cli.smartflow_egress import *  # NOQA
-        >>> from watch.geoannots.geomodels import RegionModel
-        >>> from watch.utils import util_fsspec
+        >>> from geowatch.cli.smartflow_egress import *  # NOQA
+        >>> from geowatch.geoannots.geomodels import RegionModel
+        >>> from geowatch.utils import util_fsspec
         >>> from os.path import join
-        >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
         >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
         >>> # A REAL AWS PATH WE HAVE ACCESS TO
@@ -194,8 +194,8 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> outbucket.ls()
         >>> (outbucket / 'my_dir1').ls()
         >>> # Test subsequent ingress
-        >>> from watch.cli.smartflow_ingress import smartflow_ingress
-        >>> in_dpath = ub.Path.appdir('watch/tests/smartflow_ingress2').delete().ensuredir()
+        >>> from geowatch.cli.smartflow_ingress import smartflow_ingress
+        >>> in_dpath = ub.Path.appdir('geowatch/tests/smartflow_ingress2').delete().ensuredir()
         >>> input_path = output_path
         >>> assets = ['asset_file1', 'asset_dir1']
         >>> kwcoco_stac_item_assets = smartflow_ingress(
@@ -205,7 +205,7 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> )
     """
     # TODO: handle aws_profile.
-    from watch.utils.util_fsspec import FSPath
+    from geowatch.utils.util_fsspec import FSPath
     print('--- BEGIN EGRESS ---')
     print(f'outbucket   = {outbucket}')
     print(f'output_path = {output_path}')
@@ -292,8 +292,8 @@ def fallback_copy(local_path, asset_s3_outpath):
     Copying with fsspec alone seems to be causing issues.
     This provides a fallback to a raw S3 command, as well as other verbosity.
     """
-    from watch.utils import util_fsspec
-    from watch.utils import util_framework
+    from geowatch.utils import util_fsspec
+    from geowatch.utils import util_framework
     assert isinstance(local_path, util_fsspec.LocalPath)
 
     DO_FALLBACK = 1

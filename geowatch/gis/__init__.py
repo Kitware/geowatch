@@ -1,8 +1,8 @@
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
-mkinit -m watch.gis --lazy --noattr
-mkinit -m watch.gis --lazy --noattr -w
+mkinit -m geowatch.gis --lazy --noattr
+mkinit -m geowatch.gis --lazy --noattr -w
 """
 
 

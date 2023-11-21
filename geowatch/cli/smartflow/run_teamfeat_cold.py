@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatColdConfig(scfg.DataConfig):
@@ -41,9 +41,9 @@ def main():
     # os.environ['NO_COLOR'] = '1'
     config = TeamFeatColdConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
-    from watch.utils.util_framework import download_region
-    from watch.mlops.pipeline_nodes import ProcessNode
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import download_region
+    from geowatch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.utils.util_framework import NodeStateDebugger
 
     node_state = NodeStateDebugger()
     node_state.print_environment()
@@ -93,7 +93,7 @@ def main():
     timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
         stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
 
-    from watch.cli import watch_coco_stats
+    from geowatch.cli import watch_coco_stats
     from kwcoco.cli import coco_stats
     watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
@@ -106,7 +106,7 @@ def main():
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
-    from watch.cli import prepare_teamfeats
+    from geowatch.cli import prepare_teamfeats
     base_fpath = ub.Path(full_input_kwcoco_fpath)
     prepare_teamfeats.main(
         cmdline=0,
@@ -139,7 +139,7 @@ def main():
     transfer_node = ProcessNode(
         command=ub.codeblock(
             r'''
-            python -m watch.tasks.cold.transfer_features
+            python -m geowatch.tasks.cold.transfer_features
             '''),
         in_paths={
             'coco_fpath': full_output_kwcoco_fpath,

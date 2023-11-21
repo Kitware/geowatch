@@ -6,7 +6,7 @@ import pygtrie
 import kwarray
 import wrapt
 from kwutil import slugify_ext
-from watch.utils.util_stringalgo import shortest_unique_suffixes
+from geowatch.utils.util_stringalgo import shortest_unique_suffixes
 
 
 class DataFrame(pd.DataFrame):
@@ -14,8 +14,8 @@ class DataFrame(pd.DataFrame):
     https://stackoverflow.com/questions/22155951/how-can-i-subclass-a-pandas-dataframe
 
     Example:
-        from watch.utils.util_pandas import *  # NOQA
-        from watch.utils import util_pandas
+        from geowatch.utils.util_pandas import *  # NOQA
+        from geowatch.utils import util_pandas
         df = util_pandas.DataFrame.random()
     """
     # _metadata = ['added_property']
@@ -55,7 +55,7 @@ class DataFrame(pd.DataFrame):
             axis (int): todo
 
         Example:
-            >>> from watch.utils.util_pandas import *  # NOQA
+            >>> from geowatch.utils.util_pandas import *  # NOQA
             >>> import numpy as np
             >>> self = DataFrame({k: np.random.rand(10) for k in 'abcde'})
             >>> self.safe_drop(list('bdf'), axis=1)
@@ -75,7 +75,7 @@ class DataFrame(pd.DataFrame):
                 will occur if a label is specified that does not exist.
 
         Example:
-            >>> from watch.utils import util_pandas
+            >>> from geowatch.utils import util_pandas
             >>> self = util_pandas.DataFrame.random(columns=['a', 'b', 'c', 'd', 'e', 'f'])
             >>> self.reorder(['b', 'c'], axis=1)
             >>> self.reorder([1, 0], axis=0)
@@ -103,7 +103,7 @@ class DataFrame(pd.DataFrame):
             ** kwargs: groupby kwargs
 
         Example:
-            >>> from watch.utils import util_pandas
+            >>> from geowatch.utils import util_pandas
             >>> df = util_pandas.DataFrame({
             >>>     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
             >>>     'Color': ['Blue', 'Blue', 'Blue', 'Yellow'],
@@ -140,7 +140,7 @@ class DataFrame(pd.DataFrame):
         return found
 
     def varied_values(self, **kwargs):
-        from watch.utils.result_analysis import varied_values
+        from geowatch.utils.result_analysis import varied_values
         varied = varied_values(self, **kwargs)
         return varied
 
@@ -169,7 +169,7 @@ def pandas_argmaxima(data, columns, k=1):
             requested columns.
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> import numpy as np
         >>> import pandas as pd
         >>> data = pd.DataFrame({k: np.random.rand(10) for k in 'abcde'})
@@ -207,7 +207,7 @@ def pandas_shorten_columns(summary_table, return_mapping=False, min_length=0):
     Shorten column names
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> df = pd.DataFrame([
         >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1': 0.9, 'metrics.eval.mcc': 0.8, 'metrics.eval.acc': 0.3},
         >>>     {'param_hashid': 'decaf', 'metrics.eval.f1': 0.6, 'metrics.eval.mcc': 0.2, 'metrics.eval.acc': 0.4},
@@ -226,7 +226,7 @@ def pandas_shorten_columns(summary_table, return_mapping=False, min_length=0):
             feedcode 0.5  0.3  0.1
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> df = pd.DataFrame([
         >>>     {'param_hashid': 'badbeaf', 'metrics.eval.f1.mean': 0.9, 'metrics.eval.f1.std': 0.8},
         >>>     {'param_hashid': 'decaf', 'metrics.eval.f1.mean': 0.6, 'metrics.eval.f1.std': 0.2},
@@ -268,7 +268,7 @@ def pandas_condense_paths(colvals):
 
 def pandas_truncate_items(data, paths=False, max_length=16):
     """
-    from watch.utils.util_pandas import pandas_truncate_items
+    from geowatch.utils.util_pandas import pandas_truncate_items
 
     Args:
         data (pd.DataFrame): data frame to truncate
@@ -337,7 +337,7 @@ class DotDictDataFrame(pd.DataFrame):
         DotDict
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> rows = [
         >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
         >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
@@ -410,7 +410,7 @@ class DotDictDataFrame(pd.DataFrame):
 
     @property
     def nested_columns(self):
-        from watch.utils.util_dotdict import dotkeys_to_nested
+        from geowatch.utils.util_dotdict import dotkeys_to_nested
         return dotkeys_to_nested(self.columns)
 
     def find_column(self, col):
@@ -533,10 +533,10 @@ def aggregate_columns(df, aggregator=None, fallback='const',
         - [ ] optimize this
 
     CommandLine:
-        xdoctest -m watch.utils.util_pandas aggregate_columns
+        xdoctest -m geowatch.utils.util_pandas aggregate_columns
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> import numpy as np
         >>> num_rows = 10
         >>> columns = {
@@ -603,7 +603,7 @@ def aggregate_columns(df, aggregator=None, fallback='const',
         >>> assert len(subagg) == 0
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> import numpy as np
         >>> num_rows = 10
         >>> columns = {
@@ -621,7 +621,7 @@ def aggregate_columns(df, aggregator=None, fallback='const',
         >>> print('row = {}'.format(ub.urepr(row.to_dict(), nl=1)))
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> import numpy as np
         >>> num_rows = 10
         >>> columns = {
@@ -804,7 +804,7 @@ def pandas_fixed_groupby(df, by=None, **kwargs):
         ** kwargs: groupby kwargs
 
     Example:
-        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> from geowatch.utils.util_pandas import *  # NOQA
         >>> df = pd.DataFrame({
         >>>     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
         >>>     'Color': ['Blue', 'Blue', 'Blue', 'Yellow'],

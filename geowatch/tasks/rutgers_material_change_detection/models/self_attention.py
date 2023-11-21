@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from watch.tasks.rutgers_material_change_detection.models.apnb import AFNB
+from geowatch.tasks.rutgers_material_change_detection.models.apnb import AFNB
 
 
 class Attention(nn.Module):

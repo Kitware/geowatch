@@ -72,9 +72,9 @@ def smartflow_ingress(input_path,
             mapping from downloaded assets to their local path
 
     Example:
-        >>> from watch.cli.smartflow_ingress import *  # NOQA
-        >>> dpath = ub.Path.appdir('watch/tests/smartflow_ingress/dst').ensuredir()
-        >>> fake_remote = ub.Path.appdir('watch/tests/smartflow_ingress/fake_remote').ensuredir()
+        >>> from geowatch.cli.smartflow_ingress import *  # NOQA
+        >>> dpath = ub.Path.appdir('geowatch/tests/smartflow_ingress/dst').ensuredir()
+        >>> fake_remote = ub.Path.appdir('geowatch/tests/smartflow_ingress/fake_remote').ensuredir()
         >>> fake_fpath = fake_remote / 'my_path.txt'
         >>> fake_fpath.write_text('foobar')
         >>> fake_dpath = (fake_remote / 'my_dir').ensuredir()
@@ -121,7 +121,7 @@ def smartflow_ingress(input_path,
     os.makedirs(outdir, exist_ok=True)
 
     assert aws_profile is None, 'unhandled'
-    from watch.utils.util_fsspec import FSPath
+    from geowatch.utils.util_fsspec import FSPath
     input_path = FSPath.coerce(input_path)
 
     def _loads_input(text):

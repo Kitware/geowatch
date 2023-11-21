@@ -37,7 +37,7 @@ class DotDict(ub.UDict):
         DotDictDataFrame
 
     Example:
-        >>> from watch.utils.util_dotdict import *  # NOQA
+        >>> from geowatch.utils.util_dotdict import *  # NOQA
         >>> self = DotDict({
         >>>     'proc1.param1': 1,
         >>>     'proc1.param2': 2,
@@ -133,7 +133,7 @@ class DotDict(ub.UDict):
             index (int): the depth to insert the new param
 
         Example:
-            >>> from watch.utils.util_dotdict import *  # NOQA
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
             >>> self = DotDict({
             >>>     'proc1.param1': 1,
             >>>     'proc1.param2': 2,
@@ -164,7 +164,7 @@ class DotDict(ub.UDict):
         Finds columns where one level has this key
 
         Example:
-            >>> from watch.utils.util_dotdict import *  # NOQA
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
             >>> self = DotDict({
             >>>     'proc1.param1': 1,
             >>>     'proc1.param2': 2,

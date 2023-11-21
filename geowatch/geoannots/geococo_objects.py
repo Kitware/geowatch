@@ -8,9 +8,9 @@ class CocoGeoVideo(AliasedDictProxy, ub.NiceRepr):
     TODO: general coco scalars
 
     Example:
-        >>> from watch.geoannots.geococo_objects import *  # NOQA
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> from geowatch.geoannots.geococo_objects import *  # NOQA
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
         >>> video = coco_dset.videos().objs[0]
         >>> self = CocoGeoVideo(video, coco_dset)
     """
@@ -56,7 +56,7 @@ class CocoGeoVideo(AliasedDictProxy, ub.NiceRepr):
 
     @property
     def wld_crs(self):
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         wld_crs = util_gis.coerce_crs(self._proxy['wld_crs_info'])
         return wld_crs
 

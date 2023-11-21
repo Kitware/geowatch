@@ -5,7 +5,7 @@ import scriptconfig as scfg
 class FitCLI(scfg.DataConfig):
     """
     Does not work from geowatch CLI yet. See help.
-    Use ``python -m watch.tasks.fusion.fit_lightning fit`` instead for now. See
+    Use ``python -m geowatch.tasks.fusion.fit_lightning fit`` instead for now. See
 
     ..code:: bash
 
@@ -20,7 +20,7 @@ class FitCLI(scfg.DataConfig):
     def main(cls, cmdline=1, **kwargs):
         """
         """
-        from watch.tasks.fusion import fit_lightning
+        from geowatch.tasks.fusion import fit_lightning
         return fit_lightning.main(cmdline=cmdline, **kwargs)
 
 

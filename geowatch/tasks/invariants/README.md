@@ -10,7 +10,7 @@ Ex:
 SMART_WATCH_DVC=$(geowatch_dvc)
 
 export CUDA_VISIBLE_DEVICES=2
-python -m watch.tasks.invariants.predict \
+python -m geowatch.tasks.invariants.predict \
     --input_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
     --output_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json \
     --pretext_ckpt_path $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/pretext/pretext.ckpt \
@@ -33,7 +33,7 @@ This folder contains code for training and generating features using a multi-hea
 Ex: 
 
 ```
-python -m watch.tasks.invariants.fit 
+python -m geowatch.tasks.invariants.fit 
     --train_dataset path/to/train_dataset.kwcoco.json 
     --save_dir logs
 ```
@@ -41,7 +41,7 @@ python -m watch.tasks.invariants.fit
 Ex: 
 
 ```
-python -m watch.tasks.invariants.predict \
+python -m geowatch.tasks.invariants.predict \
     --input_kwcoco path/to/kwcoco_for_feature_generation.kwcoco.json \
     --output_kwcoco path/to/store_updated_features.kwcoco.json \
     --ckpt_path path/to/pytorch-lightning_checkpoint.ckpt

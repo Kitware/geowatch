@@ -36,7 +36,7 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 
 def score_tracks(img_coco_dset, model_fpath):
-    from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
+    from geowatch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
     import cv2
@@ -261,11 +261,11 @@ def main(cmdline=True, **kwargs):
 
     # Import this first
     print('Importing tensorflow stuff (can take a sec)')
-    from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
+    from geowatch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
 
     import kwcoco
     from kwcoco.util import util_json
-    from watch.utils import process_context
+    from geowatch.utils import process_context
 
     if args.model_fpath is None:
         print('warning: the path to the model was not explicitly specified, '
@@ -290,7 +290,7 @@ def main(cmdline=True, **kwargs):
         walker[problem['loc']] = str(bad_data)
 
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.depth_pcd.score_tracks', type='process',
+        name='geowatch.tasks.depth_pcd.score_tracks', type='process',
         config=jsonified_config,
         track_emissions=False,
     )
@@ -299,7 +299,7 @@ def main(cmdline=True, **kwargs):
     img_coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
 
     # Project the site polygons onto the kwcoco dataset.
-    from watch.cli import reproject_annotations
+    from geowatch.cli import reproject_annotations
     img_coco_dset = reproject_annotations.main(
         cmdline=0, src=img_coco_dset,
         dst='return',
@@ -335,7 +335,7 @@ Example:
     BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 
     # Predict BAS Heatmaps
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
         --package_fpath="$BAS_MODEL_FPATH" \
         --test_dataset=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip \
         --pred_dataset=$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip \
@@ -353,7 +353,7 @@ Example:
         --with_change="False"
 
     # Convert Heatmaps to Polygons
-    python -m watch.cli.run_tracker \
+    python -m geowatch.cli.run_tracker \
         --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{
@@ -380,7 +380,7 @@ Example:
         --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip"
 
     # Score the Initial Predictions
-    python -m watch.cli.run_metrics_framework \
+    python -m geowatch.cli.run_metrics_framework \
         --merge=True \
         --name "todo" \
         --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
@@ -391,7 +391,7 @@ Example:
         --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 
     # Run the Site Validation Filter
-    python -m watch.tasks.depth_pcd.score_tracks \
+    python -m geowatch.tasks.depth_pcd.score_tracks \
         --input_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
         --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
         --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
@@ -405,7 +405,7 @@ Example:
         --threshold 0.4
 
     # Score the Filtered Predictions
-    python -m watch.cli.run_metrics_framework \
+    python -m geowatch.cli.run_metrics_framework \
         --merge=True \
         --name "todo" \
         --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \

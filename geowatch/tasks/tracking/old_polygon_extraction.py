@@ -5,10 +5,10 @@ import ubelt as ub
 import itertools
 import scriptconfig as scfg
 
-from watch.heuristics import SITE_SUMMARY_CNAME
-from watch.tasks.tracking import agg_functions
+from geowatch.heuristics import SITE_SUMMARY_CNAME
+from geowatch.tasks.tracking import agg_functions
 
-from watch.tasks.tracking.utils import (
+from geowatch.tasks.tracking.utils import (
     mask_to_polygons,
     score_track_polys,
     gpd_len)
@@ -126,10 +126,10 @@ def _gids_polys(sub_dset, **kwargs):
     This is associated with :class:`PolygonExtractConfig`
 
     Example:
-        >>> from watch.tasks.tracking.old_polygon_extraction import *  # NOQA
-        >>> from watch.tasks.tracking.old_polygon_extraction import _gids_polys
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=True, geodata=True, heatmap=True)
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import *  # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import _gids_polys
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco(data='geowatch-msi', dates=True, geodata=True, heatmap=True)
         >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
         >>> key = ['salient']
         >>> agg_fn = 'probs'
@@ -211,7 +211,7 @@ def _gids_polys(sub_dset, **kwargs):
         import kwimage
         if config.use_boundaries:
             # HACK TO LOAD BOUNDS FOR POLYGONS
-            from watch.tasks.tracking.utils import _build_annot_gdf
+            from geowatch.tasks.tracking.utils import _build_annot_gdf
             cnames = [SITE_SUMMARY_CNAME]
             resolution = config.resolution
             gdf, flat_scales = _build_annot_gdf(sub_dset, cnames=cnames, resolution=resolution)
@@ -221,7 +221,7 @@ def _gids_polys(sub_dset, **kwargs):
         else:
             bounds = None
 
-        from watch.tasks.tracking import polygon_extraction
+        from geowatch.tasks.tracking import polygon_extraction
         import kwcoco
         classes = kwcoco.CategoryTree.from_mutex(channels_list)
         extractor = polygon_extraction.PolygonExtractor(
@@ -336,11 +336,11 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         config (PolygonExtractConfig): polygon extraction config
 
     Example:
-        >>> from watch.tasks.tracking.old_polygon_extraction import *  # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import *  # NOQA
         >>> import kwimage
         >>> from kwutil import util_time
         >>> import numpy as np
-        >>> from watch.tasks.tracking.old_polygon_extraction import PolygonExtractConfig  # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import PolygonExtractConfig  # NOQA
         >>> config = PolygonExtractConfig()
         >>> heatmaps = np.zeros((7, 64, 64))
         >>> heatmaps[2, 20:40, 20:40] = 1
@@ -561,8 +561,8 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
             Codename for the algorithm used. Can be "v1", "v2", "v3", or "v3_noop".
 
     Example:
-        >>> from watch.tasks.tracking.old_polygon_extraction import * # NOQA
-        >>> from watch.tasks.tracking.old_polygon_extraction import _merge_polys  # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import * # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import _merge_polys  # NOQA
         >>> import kwimage
         >>> import numpy as np
         >>> #
@@ -575,8 +575,8 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
         >>> _merge_polys(p1, t1, p2, t2, poly_merge_method)
 
     Ignore:
-        from watch.tasks.tracking.old_polygon_extraction import * # NOQA
-        from watch.tasks.tracking.old_polygon_extraction import _merge_polys  # NOQA
+        from geowatch.tasks.tracking.old_polygon_extraction import * # NOQA
+        from geowatch.tasks.tracking.old_polygon_extraction import _merge_polys  # NOQA
 
         p1 = [kwimage.Polygon.random().scale(0.2).to_shapely() for _ in range(1)]
         p2 = [kwimage.Polygon.random().to_shapely() for _ in range(1)]
@@ -668,7 +668,7 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
 
     elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         import geopandas as gpd
         geom_df = gpd.GeoDataFrame(geometry=p1 + p2)
         isect_idxs = util_gis.geopandas_pairwise_overlaps(geom_df, geom_df)

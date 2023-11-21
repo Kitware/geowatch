@@ -9,7 +9,7 @@ import functools
 import operator
 import numpy as np
 import math
-from watch.utils import util_pattern
+from geowatch.utils import util_pattern
 
 
 def _dump_qa_debug_vid():
@@ -17,9 +17,9 @@ def _dump_qa_debug_vid():
     Make human interpretable sequences of QA bands and RGB data.
     """
     import kwcoco
-    import watch
+    import geowatch
     import kwimage
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
     dset = kwcoco.CocoDataset(coco_fpath)
 
@@ -38,7 +38,7 @@ def _dump_qa_debug_vid():
         sensor = coco_img.img.get('sensor_coarse')
         print(f'sensor={sensor}')
         # Use the spec to draw it
-        from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+        from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
         table = QA_SPECS.find_table('ACC-1', 'L8')
         #table = QA_SPECS.find_table('FMASK', '*')
         #table = QA_SPECS.find_table('Phase1_QA', '*')
@@ -72,9 +72,9 @@ class QA_SpecMixin:
 
         Ignore:
             >>> import kwcoco
-            >>> import watch
-            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> import geowatch
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> gid = dset.images()[18]
@@ -87,7 +87,7 @@ class QA_SpecMixin:
             >>> sensor = coco_img.img.get('sensor_coarse')
             >>> print(f'sensor={sensor}')
             >>> # Use the spec to draw it
-            >>> from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            >>> from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
             >>> table = QA_SPECS.find_table('ACC-1', 'L8')
             >>> #table = QA_SPECS.find_table('FMASK', '*')
             >>> #table = QA_SPECS.find_table('Phase1_QA', '*')
@@ -103,10 +103,10 @@ class QA_SpecMixin:
 
         Ignore:
             >>> import kwcoco
-            >>> import watch
+            >>> import geowatch
             >>> import kwimage
-            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> wv_gids = [g for g, s in dset.images().lookup('sensor_coarse', keepid=True).items() if s == 'WV']
@@ -121,7 +121,7 @@ class QA_SpecMixin:
             >>> sensor = coco_img.img.get('sensor_coarse')
             >>> print(f'sensor={sensor}')
             >>> # Use the spec to draw it
-            >>> from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            >>> from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
             >>> table = QA_SPECS.find_table('ACC-1', 'WV')
             >>> #table = QA_SPECS.find_table('FMASK', '*')
             >>> #table = QA_SPECS.find_table('Phase1_QA', '*')
@@ -225,7 +225,7 @@ class QA_BitSpecTable(QA_SpecMixin):
     Bit tables are more efficient because we can reduce over the query input
 
     Example:
-        >>> from watch.tasks.fusion.datamodules import qa_bands
+        >>> from geowatch.tasks.fusion.datamodules import qa_bands
         >>> import kwimage
         >>> # Lookup a table for this spec
         >>> self = qa_bands.QA_SPECS.find_table('ACC-1', 'S2')
@@ -257,7 +257,7 @@ class QA_BitSpecTable(QA_SpecMixin):
         >>> kwplot.set_figtitle(f"QA Spec: name={self.spec['qa_spec_name']} sensor={self.spec['sensor']}")
 
     Example:
-        >>> from watch.tasks.fusion.datamodules import qa_bands
+        >>> from geowatch.tasks.fusion.datamodules import qa_bands
         >>> import kwimage
         >>> # Lookup a table for this spec
         >>> self = qa_bands.QA_SPECS.find_table('qa_pixel', 'L8')
@@ -455,7 +455,7 @@ class QA_SpecRegistry(list):
     def query_table(self, spec_name='*', sensor='*'):
         """
         Ignore:
-            from watch.tasks.fusion.datamodules.qa_bands import *  # NOQA
+            from geowatch.tasks.fusion.datamodules.qa_bands import *  # NOQA
             self = QA_SPECS
             spec_name = 'ACC-1'
             sensor = 'L8'
@@ -879,7 +879,7 @@ QA_SPECS.append(QA_BitSpecTable({
 def demo():
     import sys
     fpath = sys.argv[1]
-    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     table = QA_SPECS.find_table('ACC-1', 'WV')
     import kwimage
     quality_im = kwimage.imread(fpath)
@@ -895,6 +895,6 @@ def demo():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop7-DEBUG/US_R007/WV/affine_warp/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0_quality.tif
+        python ~/code/watch/geowatch/tasks/fusion/datamodules/qa_bands.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop7-DEBUG/US_R007/WV/affine_warp/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0_quality.tif
     """
     demo()

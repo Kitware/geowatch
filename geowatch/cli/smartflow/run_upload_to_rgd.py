@@ -121,7 +121,7 @@ def upload_to_rgd(input_site_models_s3,
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
 
     from retry.api import retry_call
-    from watch.utils import util_framework
+    from geowatch.utils import util_framework
     logger = util_framework.PrintLogger()
     request_results = retry_call(
         get_model_results, fargs=[model_run_results_url], tries=3,

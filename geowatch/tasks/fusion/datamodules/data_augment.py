@@ -4,7 +4,7 @@ Data augmentation utilities
 import kwimage
 import ubelt as ub
 
-from watch.tasks.fusion.datamodules import data_utils
+from geowatch.tasks.fusion.datamodules import data_utils
 
 
 class SpacetimeAugmentMixin:
@@ -91,11 +91,11 @@ class SpacetimeAugmentMixin:
         Given a target dictionary, shift around the space and time slice
 
         Ignore:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
-            >>> import watch
-            >>> coco_dset = watch.coerce_kwcoco('watch')
+            >>> import geowatch
+            >>> coco_dset = geowatch.coerce_kwcoco('geowatch')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(sampler, time_dims=2, window_dims=(128, 128))
             >>> index = 0

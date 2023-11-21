@@ -5,8 +5,8 @@ import kwcoco
 import numpy as np
 from tqdm import tqdm
 
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import create_gif
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import colorize_material_mask
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import create_gif
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import colorize_material_mask
 
 
 def normalize_rgb(image, gamma=0.6):

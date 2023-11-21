@@ -5,9 +5,9 @@ TODO:
 
 SeeAlso:
     ../cli/find_dvc.py
-    python -m watch find_dvc list --hardware=ssd --tags=phase2_data
-    python -m watch find_dvc list --hardware=hdd --tags=phase2_data
-    python -m watch find_dvc list --hardware=auto --tags=phase2_data
+    python -m geowatch find_dvc list --hardware=ssd --tags=phase2_data
+    python -m geowatch find_dvc list --hardware=hdd --tags=phase2_data
+    python -m geowatch find_dvc list --hardware=auto --tags=phase2_data
 """
 import ubelt as ub
 import warnings
@@ -19,11 +19,11 @@ class DataRegistry:
     Provide a quick way of storing and querying for machine specific paths
 
     Ignore:
-        from watch.utils.util_data import *  # NOQA
+        from geowatch.utils.util_data import *  # NOQA
         self = DataRegistry()
         self.read()
 
-        test_dpath = ub.Path.appdir('watch/tests/dvc_registry').ensuredir()
+        test_dpath = ub.Path.appdir('geowatch/tests/dvc_registry').ensuredir()
 
         repo1 = (test_dpath / 'repo1').ensuredir()
         repo2 = (test_dpath / 'repo2').ensuredir()
@@ -47,7 +47,7 @@ class DataRegistry:
 
     def __init__(self, registry_fpath=None):
         if registry_fpath is None:
-            watch_config_dpath = ub.Path.appdir(type='config', appname='watch')
+            watch_config_dpath = ub.Path.appdir(type='config', appname='geowatch')
             registry_dpath = (watch_config_dpath / 'registry').ensuredir()
             registry_fpath = registry_dpath / 'watch_dvc_registry.shelf'
 
@@ -92,7 +92,7 @@ class DataRegistry:
 
         if 'hardware' in kwargs:
             if kwargs['hardware'] == 'auto':
-                from watch.utils import util_hardware
+                from geowatch.utils import util_hardware
                 info = util_hardware.disk_info_of_path(path)
                 if 'hwtype' in info:
                     kwargs['hardware'] = info['hwtype']
@@ -304,8 +304,8 @@ def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     SeeAlso:
         WATCH_DATA_DPATH=$(geowatch_dvc)
 
-        python -m watch.cli.find_dvc --hardware=hdd
-        python -m watch.cli.find_dvc --hardware=ssd
+        python -m geowatch.cli.find_dvc --hardware=hdd
+        python -m geowatch.cli.find_dvc --hardware=ssd
     """
     registry = DataRegistry()
     if name is not ub.NoParam:

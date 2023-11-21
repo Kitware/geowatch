@@ -72,13 +72,13 @@ def baseline_framework_ingress(input_path,
                                jobs=1,
                                virtual=False):
 
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     from kwutil import util_progress
     import rich
     import pystac
     import traceback
-    from watch.utils import util_fsspec
-    from watch.utils.util_framework import ingress_item
+    from geowatch.utils import util_fsspec
+    from geowatch.utils.util_framework import ingress_item
 
     workers = util_parallel.coerce_num_workers(jobs)
     print(f'Runing baseline_framework_ingress with workers={workers}')
@@ -223,7 +223,7 @@ def load_input_stac_items(input_path, aws_base_command):
 
     if aws_base_command is None or not input_path.startswith('s3'):
         # New method
-        from watch.utils import util_fsspec
+        from geowatch.utils import util_fsspec
         input_path = util_fsspec.FSPath.coerce(input_path)
         input_stac_items = read_input_stac_items(input_path)
     else:

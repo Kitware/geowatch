@@ -228,7 +228,7 @@ class DecoderLinear(nn.Module):
 def _string_to_hashvec(key, hasher='blake3'):
     """
     Example:
-        from watch.tasks.fusion.architectures.segmenter_decoder import *  # NOQA
+        from geowatch.tasks.fusion.architectures.segmenter_decoder import *  # NOQA
         key = ''
         key_tensor = _string_to_hashvec(key)
         _string_to_hashvec('hi')
@@ -253,7 +253,7 @@ class MaskTransformerDecoder(nn.Module):
     arbitrary output size design.
 
     Example:
-        >>> from watch.tasks.fusion.architectures.segmenter_decoder import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.segmenter_decoder import *  # NOQA
         >>> self = MaskTransformerDecoder(8, n_layers=8)
         >>> # Batch size, number of tokens, and token dimension size
         >>> B, N, D = 1, 10, self.d_model

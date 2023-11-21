@@ -74,7 +74,7 @@ def demo_trainer():
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.utils.lightning_ext.demo import *  # NOQA
+        >>> from geowatch.utils.lightning_ext.demo import *  # NOQA
         >>> trainer = demo_trainer()
         >>> print('trainer.log_dir = {!r}'.format(trainer.log_dir))
         >>> trainer.fit(trainer.model)
@@ -85,7 +85,7 @@ def demo_trainer():
     default_root_dir = ub.Path.appdir('lightning_ext/demo_trainer').ensuredir()
     model = LightningToyNet2d(num_train=55)
 
-    from watch.utils import lightning_ext as pl_ext
+    from geowatch.utils import lightning_ext as pl_ext
     kwargs = {}
 
     callbacks = [

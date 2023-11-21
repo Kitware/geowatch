@@ -1,26 +1,26 @@
 """
-mkinit -m watch.tasks.fusion --lazy --noattrs
+mkinit -m geowatch.tasks.fusion --lazy --noattrs
 -w
-mkinit -m watch.tasks.fusion --noattrs -w
+mkinit -m geowatch.tasks.fusion --noattrs -w
 """
 
 # Hack to supress pytorch-lightning warning
 import setuptools  # NOQA
 
-from watch.tasks.fusion import utils
-from watch.tasks.fusion import datamodules
-from watch.tasks.fusion import architectures
-from watch.tasks.fusion import methods
+from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion import datamodules
+from geowatch.tasks.fusion import architectures
+from geowatch.tasks.fusion import methods
 
 
 # Not including these removes the runtime warning:
-# 'watch.tasks.fusion.fit' found in sys.modules after import of package
-# 'watch.tasks.fusion', but prior to execution of 'watch.tasks.fusion.fit';
+# 'geowatch.tasks.fusion.fit' found in sys.modules after import of package
+# 'geowatch.tasks.fusion', but prior to execution of 'geowatch.tasks.fusion.fit';
 # this may result in unpredictable behaviour
 
-# from watch.tasks.fusion import fit
-# from watch.tasks.fusion import predict
-# from watch.tasks.fusion import evaluate
+# from geowatch.tasks.fusion import fit
+# from geowatch.tasks.fusion import predict
+# from geowatch.tasks.fusion import evaluate
 
 # We can include them via lazy imports. The other packages are not given lazy
 # imports so torch.package can introspect them.

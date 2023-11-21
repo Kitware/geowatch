@@ -4,7 +4,7 @@ Handle the batch transfer of COLD features to time averaged data
 Ignore:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-    python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py \
+    python ~/code/watch/geowatch/cli/queue_cli/prepare_cold_transfer.py \
         --src_kwcocos "$DVC_DATA_DPATH/Aligned-Drop7/*/*cold.kwcoco.zip" \
         --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2LS.kwcoco.zip" \
         --run=1
@@ -18,7 +18,7 @@ Ignore:
         --channels="(red|green|blue,pan,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse,sam.0:3,landcover_hidden.0:3,invariants.0:3)"
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns*_I2LSC*.kwcoco.zip \
         --suffix=I2LSC \
         --backend=tmux --tmux_workers=6 \
@@ -32,7 +32,7 @@ from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 class PrepareColdTransferConfig(CMDQueueConfig):
     """
-    Run watch.tasks.cold.transfer_features on multiple regions in a cmd-queue
+    Run geowatch.tasks.cold.transfer_features on multiple regions in a cmd-queue
     """
     src_kwcocos = scfg.Value(None, help='input pattern for cold kwcoco files')
     dst_kwcocos = scfg.Value(None, help='pattern for cold files to transfer onto. Note this is *not* the output')
@@ -88,7 +88,7 @@ def main(cmdline=1, **kwargs):
 
     common_region_ids = set(region_id_to_src_paths) & set(region_id_to_dst_paths)
 
-    from watch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.mlops.pipeline_nodes import ProcessNode
 
     def submit_job_step(node, depends=None, name=None):
         if config.skip_existing and node.outputs_exist:
@@ -114,7 +114,7 @@ def main(cmdline=1, **kwargs):
         node = ProcessNode(
             command=ub.codeblock(
                 r'''
-                python -m watch.tasks.cold.transfer_features
+                python -m geowatch.tasks.cold.transfer_features
                 '''),
             in_paths={
                 'coco_fpath': src_fpath,
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py
-        python -m watch.cli.queue_cli.prepare_cold_transfer
+        python ~/code/watch/geowatch/cli/queue_cli/prepare_cold_transfer.py
+        python -m geowatch.cli.queue_cli.prepare_cold_transfer
     """
     main()

@@ -115,8 +115,8 @@ class FSPath(str):
     def open(self, mode='rb', block_size=None, cache_options=None, compression=None):
         """
         Example:
-            >>> from watch.utils import util_fsspec
-            >>> dpath = util_fsspec.LocalPath.appdir('watch/fsspec/tests/open').ensuredir()
+            >>> from geowatch.utils import util_fsspec
+            >>> dpath = util_fsspec.LocalPath.appdir('geowatch/fsspec/tests/open').ensuredir()
             >>> fpath = dpath / 'file.txt'
             >>> file = fpath.open(mode='w')
             >>> file.write('hello world')
@@ -283,8 +283,8 @@ class FSPath(str):
             https://filesystem-spec.readthedocs.io/en/latest/copying.html
 
         Example:
-            >>> from watch.utils import util_fsspec
-            >>> dpath = util_fsspec.LocalPath.appdir('watch/fsspec/tests/copy').ensuredir()
+            >>> from geowatch.utils import util_fsspec
+            >>> dpath = util_fsspec.LocalPath.appdir('geowatch/fsspec/tests/copy').ensuredir()
             >>> src_dpath = (dpath / 'src').ensuredir()
             >>> for i in range(100):
             ...     (src_dpath / 'file_{i:03d}.txt').write_text('hello world' * 100)
@@ -565,12 +565,12 @@ class LocalPath(FSPath):
     The implementation for the local filesystem
 
     CommandLine:
-        xdoctest -m watch.utils.util_fsspec LocalPath
-        xdoctest watch/utils/util_fsspec.py
+        xdoctest -m geowatch.utils.util_fsspec LocalPath
+        xdoctest geowatch/utils/util_fsspec.py
 
     Example:
-        >>> from watch.utils.util_fsspec import *  # NOQA
-        >>> dpath = ub.Path.appdir('watch/tests/util_fsspec/demo')
+        >>> from geowatch.utils.util_fsspec import *  # NOQA
+        >>> dpath = ub.Path.appdir('geowatch/tests/util_fsspec/demo')
         >>> dpath.delete().ensuredir()
         >>> (dpath / 'file1.txt').write_text('data')
         >>> (dpath / 'dpath').ensuredir()

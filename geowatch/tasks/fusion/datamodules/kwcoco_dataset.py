@@ -7,7 +7,7 @@ from needing to specify what the available options are in multiple places.
 # import liberator
 # lib = liberator.Liberator()
 # lib.add_dynamic(KWCocoVideoDataset)
-# lib.expand(['watch'])
+# lib.expand(['geowatch'])
 # print(lib.current_sourcecode())
 
 
@@ -15,12 +15,12 @@ For notes on Spaces, see
     ~/code/watch/docs/coding_conventions.rst
 
 CommandLine:
-    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
-    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
+    xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
+    xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
 
 Example:
     >>> # Demo toy data without augmentation
-    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
     >>> channels = 'B10,B8a|B1,B8'
@@ -57,7 +57,7 @@ Example:
 
 Example:
     >>> # Demo toy data with augmentation
-    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
     >>> channels = 'B10,B8a|B1,B8'
@@ -106,18 +106,18 @@ from torch.utils import data
 from typing import Dict
 from typing import NamedTuple
 
-from watch import heuristics
-from watch.utils import kwcoco_extensions
-from watch.utils import util_bands
-from watch.utils import util_iter
-from watch.utils import util_kwarray
-from watch.utils import util_kwimage
+from geowatch import heuristics
+from geowatch.utils import kwcoco_extensions
+from geowatch.utils import util_bands
+from geowatch.utils import util_iter
+from geowatch.utils import util_kwarray
+from geowatch.utils import util_kwimage
 from kwutil import util_time
-from watch.tasks.fusion import utils
-from watch.tasks.fusion.datamodules import data_utils
-from watch.tasks.fusion.datamodules import spacetime_grid_builder
-from watch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
-from watch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
+from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion.datamodules import data_utils
+from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
+from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
+from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 
 try:
     import xdev
@@ -353,7 +353,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             New in 0.4.3: Can specified as list of dictionaries that
             effectively contains the dataset statistics to use. Details
             of that will be documented as the feature matures. See the
-            watch.cli.coco_spectra script to help determine reasonable
+            geowatch.cli.coco_spectra script to help determine reasonable
             values for this. These normalizations are applied at the
             dataloader getitem level. This should be specified as a list
             of dictionaries each containing: * mean: * std: * min: *
@@ -609,11 +609,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     Example:
         >>> # Native Data Sampling
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('watch-multisensor-msi', geodata=True)
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-multisensor-msi', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -635,11 +635,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     Example:
         >>> # Target GSD Data Sampling
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
-        >>> import watch
-        >>> coco_dset = watch.coerce_kwcoco('watch', geodata=True)
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -676,7 +676,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if config.sampler_backend is None:
             sampler = ndsampler.CocoSampler.coerce(sampler)
         else:
-            from watch.utils import util_parallel
+            from geowatch.utils import util_parallel
             sampler = ndsampler.CocoSampler.coerce(
                 sampler,
                 workdir=config.sampler_workdir,
@@ -1432,10 +1432,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> # Native sampling project data doctest
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
             >>> import kwcoco
-            >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates')
+            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-geodata-dates')
             >>> self = KWCocoVideoDataset(
             >>>     coco_dset,
             >>>     time_dims=5, window_dims=(320, 320),
@@ -1468,10 +1468,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
             >>> # Native sampling project data doctest
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> self = KWCocoVideoDataset(
@@ -1507,10 +1507,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> self = KWCocoVideoDataset(
@@ -1557,10 +1557,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Dict
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
-            >>> import watch
-            >>> coco_dset = watch.coerce_kwcoco('watch-msi-dates-geodata-heatmap', num_frames=5, image_size=(256, 256), num_videos=1)
+            >>> import geowatch
+            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-dates-geodata-heatmap', num_frames=5, image_size=(256, 256), num_videos=1)
             >>> # Remove two annotations to test new time weights
             >>> aids = coco_dset.images().take([0]).annots[0].lookup('id')
             >>> coco_dset.remove_annotations(aids)
@@ -1577,9 +1577,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = True
             >>> # Pretend that some external object has given us information about desired class weights
-            >>> from watch.tasks.fusion.methods import watch_module_mixins
+            >>> from geowatch.tasks.fusion.methods import watch_module_mixins
             >>> dataset_stats = self.cached_dataset_stats()
-            >>> from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+            >>> from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
             >>> class_keys = dataset_stats['class_freq']
             >>> total_freq = np.array(list(dataset_stats['class_freq'].values()))
             >>> class_importance_weights = _class_weights_from_freq(total_freq)
@@ -2786,17 +2786,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             num (int | None): number of input items to compute stats for
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset KWCocoVideoDataset.compute_dataset_stats:2
+            xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset KWCocoVideoDataset.compute_dataset_stats:2
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
             >>> self = KWCocoVideoDataset(dct_dset, time_dims=2, window_dims=(256, 256), channels='auto')
             >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=2, window_dims=(256, 256), channels='auto')
@@ -2805,12 +2805,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> assert stats['class_freq']['background'] > 0
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
+            >>> from geowatch.tasks.fusion import datamodules
             >>> num = 1
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='vidshapes-watch', window_dims=64, time_steps=3,
+            >>>     train_dataset='vidshapes-geowatch', window_dims=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
             >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
@@ -2827,7 +2827,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> stats3 = self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
 
         Ignore:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> for img in coco_dset.imgs.values():
@@ -3242,7 +3242,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import kwarray
             >>> import rich
@@ -3273,12 +3273,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Ignore:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> import watch
+            >>> import geowatch
             >>> import rich
-            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
             >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
-            >>> from watch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
+            >>> from geowatch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
             >>> config = PredictConfig(**{
             >>>     'key': 'set_cover_algo',
             >>>     'test_dataset': coco_fpath,
@@ -3323,7 +3323,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if norm_over_time == 'auto':
             norm_over_time = self.normalize_peritem is not None
 
-        from watch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
+        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
             default_combinable_channels=default_combinable_channels,
@@ -3434,7 +3434,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 this dataset instead of ``self``.
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(530, 610), channels='auto')
@@ -3457,16 +3457,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 def more_demos():
     """
     CommandLine:
-        USE_RTREE=1 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
-        USE_RTREE=0 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
+        USE_RTREE=1 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
+        USE_RTREE=0 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset more_demos:0
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Demo with real data
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> ##'red|green|blue',
@@ -3506,10 +3506,10 @@ def more_demos():
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # This shows how you can use the dataloader to sample an arbitrary
         >>> # spacetime volume.
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
         >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
@@ -3542,10 +3542,10 @@ def more_demos():
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Tests the hard negative sampling
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = dvc_dpath / 'Drop6-MeanYear10GSD/data.kwcoco.zip'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> ##'red|green|blue',

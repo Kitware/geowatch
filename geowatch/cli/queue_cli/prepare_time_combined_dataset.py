@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 SeeAlso:
-    ~/code/watch/watch/cli/coco_time_combine.py
-    ~/code/watch/watch/cli/prepare_teamfeats.py
+    ~/code/watch/geowatch/cli/coco_time_combine.py
+    ~/code/watch/geowatch/cli/prepare_teamfeats.py
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -42,8 +42,8 @@ class PrepareTimeAverages(CMDQueueConfig):
 
 
 def _find_valid_regions():
-    import watch
-    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    import geowatch
+    dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpaths = list((dvc_data_dpath / 'Drop6').glob('imgonly*.kwcoco*'))
     import kwcoco
     dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_fpaths, workers='avail'))
@@ -64,12 +64,12 @@ def main(cmdline=1, **kwargs):
     """
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
-    from watch.utils.partial_format import subtemplate
+    from geowatch.utils.partial_format import subtemplate
     rich.print('config = ' + ub.urepr(config, nl=1))
     assert config.output_bundle_dpath is not None
     assert config.input_bundle_dpath is not None
-    # import watch
-    # dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    # import geowatch
+    # dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
 
     if config.regions == 'all':
         all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
@@ -82,7 +82,7 @@ def main(cmdline=1, **kwargs):
         from kwutil.util_yaml import Yaml
         chosen_regions = Yaml.coerce(config.regions)
 
-    from watch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.mlops.pipeline_nodes import ProcessNode
 
     rich.print('chosen_regions = {}'.format(ub.urepr(chosen_regions, nl=1)))
 
@@ -145,7 +145,7 @@ def main(cmdline=1, **kwargs):
 
         code = subtemplate(ub.codeblock(
             r'''
-            python -m watch.cli.coco_time_combine \
+            python -m geowatch.cli.coco_time_combine \
                 --kwcoco_fpath="$INPUT_KWCOCO_FPATH" \
                 --output_kwcoco_fpath="$TAVE_KWCOCO_FPATH" \
                 --channels="$CHANNELS" \
@@ -171,7 +171,7 @@ def main(cmdline=1, **kwargs):
 
         code = subtemplate(ub.codeblock(
             r'''
-            python -m watch add_fields \
+            python -m geowatch add_fields \
                 --src $TAVE_KWCOCO_FPATH \
                 --dst $FIELDED_KWCOCO_FPATH
             '''), fmtdict)
@@ -188,7 +188,7 @@ def main(cmdline=1, **kwargs):
         if config.reproject:
             code = subtemplate(ub.codeblock(
                 r'''
-                python -m watch reproject \
+                python -m geowatch reproject \
                     --src $FIELDED_KWCOCO_FPATH \
                     --dst $FINAL_KWCOCO_FPATH \
                     --status_to_catname="positive_excluded: positive" \
@@ -212,7 +212,7 @@ SUMMER_CONFIG = """
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
-python -m watch.cli.queue_cli.prepare_time_combined_dataset \
+python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --regions="[
             # T&E Regions
             AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
@@ -244,7 +244,7 @@ export CUDA_VISIBLE_DEVICES="0,1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \
@@ -257,7 +257,7 @@ python -m watch.cli.prepare_teamfeats \
     --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
 
 # DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-# python -m watch.cli.prepare_splits \
+# python -m geowatch.cli.prepare_splits \
 #     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_L*.kwcoco.zip \
 #     --constructive_mode=True \
 #     --suffix=L \
@@ -265,7 +265,7 @@ python -m watch.cli.prepare_teamfeats \
 #     --run=1
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_I2L*.kwcoco.zip \
     --constructive_mode=True \
     --suffix=I2L \
@@ -273,7 +273,7 @@ python -m watch.cli.prepare_splits \
     --run=1
 
 # DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-# python -m watch.cli.prepare_splits \
+# python -m geowatch.cli.prepare_splits \
 #     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/imganns-*.kwcoco.zip \
 #     --constructive_mode=True \
 #     --suffix=rawbands \
@@ -304,7 +304,7 @@ if __name__ == '__main__':
     CommandLine:
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        python watch.cli.queue_cli.prepare_time_combined_dataset.py \
+        python geowatch.cli.queue_cli.prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
                     AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
@@ -327,7 +327,7 @@ if __name__ == '__main__':
             --run=1
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m watch.cli.prepare_splits \
+        python -m geowatch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=rawbands \
@@ -341,7 +341,7 @@ if __name__ == '__main__':
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
             --expt_dvc_dpath="$DVC_EXPT_DPATH" \
             --with_landcover=1 \
@@ -354,7 +354,7 @@ if __name__ == '__main__':
             --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m watch.cli.prepare_splits \
+        python -m geowatch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=I2L \
@@ -365,7 +365,7 @@ if __name__ == '__main__':
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
         OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-        python -m watch reproject \
+        python -m geowatch reproject \
             --src data_vali_I2L_split6.kwcoco.zip \
             --dst data_vali_I2L_split6.kwcoco.zip \
             --site_models=$TRUE_SITE_DPATH
@@ -374,7 +374,7 @@ if __name__ == '__main__':
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
         OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-        python -m watch reproject \
+        python -m geowatch reproject \
             --src data_train_I2L_split6.kwcoco.zip \
             --dst data_train_I2L_split6.kwcoco.zip \
             --site_models=$TRUE_SITE_DPATH

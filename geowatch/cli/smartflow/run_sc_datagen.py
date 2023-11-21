@@ -2,9 +2,9 @@
 """
 Handles building datasets for AC/SC
 """
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
-from watch.utils.util_framework import download_region
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
+from geowatch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -63,16 +63,16 @@ def main():
 
 def run_generate_sc_cropped_kwcoco(config):
     from kwutil.util_yaml import Yaml
-    from watch.utils import util_framework
-    from watch.cli import coco_align
-    from watch.utils import util_fsspec
-    from watch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.utils import util_framework
+    from geowatch.cli import coco_align
+    from geowatch.utils import util_fsspec
+    from geowatch.mlops.pipeline_nodes import ProcessNode
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -132,7 +132,7 @@ def run_generate_sc_cropped_kwcoco(config):
         print('******************')
         print('Cluster input site summaries')
         # If specified cluster sites first.
-        from watch.mlops import smart_pipeline
+        from geowatch.mlops import smart_pipeline
         site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
         acsc_cluster_config = ub.udict(Yaml.coerce(config.acsc_cluster_config))
         cluster_region_dpath = (ingress_dir / 'clustered_regions').ensuredir()
@@ -193,7 +193,7 @@ def run_generate_sc_cropped_kwcoco(config):
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
         align_node = ProcessNode(
-            command='python -m watch.cli.coco_align',
+            command='python -m geowatch.cli.coco_align',
             config=align_config,
         )
         command = align_node.final_command()

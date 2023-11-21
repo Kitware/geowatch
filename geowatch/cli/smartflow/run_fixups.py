@@ -49,10 +49,10 @@ def main():
     config = FixupConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
 
-    from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.smartflow_egress import smartflow_egress
-    from watch.utils.util_framework import download_region
-    from watch.utils import util_framework
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli.smartflow_egress import smartflow_egress
+    from geowatch.utils.util_framework import download_region
+    from geowatch.utils import util_framework
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -123,6 +123,6 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/smartflow/run_fixups.py
+        python ~/code/watch/geowatch/cli/smartflow/run_fixups.py
     """
     main()

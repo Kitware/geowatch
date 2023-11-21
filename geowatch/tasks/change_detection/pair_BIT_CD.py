@@ -115,12 +115,12 @@ if __name__ == '__main__':
 
     """
     example:
-    python3 -W ignore -m watch.tasks.change_detection.pair_BIT_CD     \
+    python3 -W ignore -m geowatch.tasks.change_detection.pair_BIT_CD     \
     --project_name CD_base_transformer_pos_s4_dd8_LEVIR_b2_lr0.01_trainval_test_1000_linear     \
     --net_G base_transformer_pos_s4_dd8     \
     --output_folder /output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC     \
     --src_kwcoco /output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv_superRes_depth.kwcoco.json \
-    --checkpoint_root watch/tasks/change_detection/checkpoints/
+    --checkpoint_root geowatch/tasks/change_detection/checkpoints/
     """
 
     # setup args

@@ -15,7 +15,7 @@ Example:
 
     # Dummy inputs, just for demonstration
 
-    python -m watch.mlops.schedule_evaluation \
+    python -m geowatch.mlops.schedule_evaluation \
         --params="
             matrix:
                 bas_pxl.package_fpath:
@@ -55,7 +55,7 @@ Example:
         --pipeline=joint_bas_sc \
         --run=0
 
-    python -m watch.mlops.schedule_evaluation \
+    python -m geowatch.mlops.schedule_evaluation \
         --params="
             matrix:
                 bas_pxl.package_fpath:
@@ -90,7 +90,7 @@ Example:
     SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
     BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
-    python -m watch.mlops.schedule_evaluation \
+    python -m geowatch.mlops.schedule_evaluation \
         --params="
             matrix:
                 bas_pxl.package_fpath:
@@ -130,7 +130,7 @@ Example:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-    python -m watch.mlops.schedule_evaluation \
+    python -m geowatch.mlops.schedule_evaluation \
         --params="
             matrix:
                 bas_pxl.package_fpath:
@@ -268,14 +268,14 @@ def schedule_evaluation(config):
     from kwutil import slugify_ext
     from kwutil import util_progress
     from kwutil.util_yaml import Yaml
-    from watch.mlops import smart_pipeline
-    from watch.utils.result_analysis import varied_values
-    from watch.utils.util_param_grid import expand_param_grid
+    from geowatch.mlops import smart_pipeline
+    from geowatch.utils.result_analysis import varied_values
+    from geowatch.utils.util_param_grid import expand_param_grid
 
     # Dont put in post-init because it is called by the CLI!
     if config['root_dpath'] in {None, 'auto'}:
-        import watch
-        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        import geowatch
+        expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
     root_dpath = ub.Path(config['root_dpath'])
@@ -296,7 +296,7 @@ def schedule_evaluation(config):
                 raise Exception('cant hack submatrices with submatrices on')
 
             submatrices = []
-            from watch import heuristics
+            from geowatch import heuristics
             for bas_fpath in param_arg['matrix']['bas_pxl.test_dataset']:
                 region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
                 region_dpath = (smart_highres_bundle / region_id)
@@ -418,7 +418,7 @@ def ensure_iterable(inputs):
 
 
 def _auto_gpus():
-    from watch.utils.util_nvidia import nvidia_smi
+    from geowatch.utils.util_nvidia import nvidia_smi
     # TODO: liberate the needed code from netharn
     # Use all unused devices
     GPUS = []
@@ -440,17 +440,17 @@ Ignore:
     # object has enough metadata. With scriptconfig+jsonargparse we should be
     # able to do this.
 
-    import watch.cli.run_metrics_framework
-    import watch.cli.run_tracker
-    import watch.tasks.fusion.predict
+    import geowatch.cli.run_metrics_framework
+    import geowatch.cli.run_tracker
+    import geowatch.tasks.fusion.predict
 
-    watch.cli.run_tracker.__config__.__default__
+    geowatch.cli.run_tracker.__config__.__default__
 
-    list(watch.tasks.fusion.predict.make_predict_config().__dict__.keys())
+    list(geowatch.tasks.fusion.predict.make_predict_config().__dict__.keys())
 
-    from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
-    from watch.tasks.tracking.from_heatmap import TimeAggregatedSC
-    # from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
+    from geowatch.tasks.tracking.from_heatmap import TimeAggregatedBAS
+    from geowatch.tasks.tracking.from_heatmap import TimeAggregatedSC
+    # from geowatch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
 
     import jsonargparse
     parser = jsonargparse.ArgumentParser()

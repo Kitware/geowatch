@@ -1,5 +1,5 @@
 """
-A registry of resource files bundled with the watch package
+A registry of resource files bundled with the geowatch package
 
 Schemas are from
 * https://smartgitlab.com/TE/aristeas/-/tree/main/src/aristeas/schemas
@@ -30,7 +30,7 @@ def load_site_model_schema(strict=True):
             towards things like region names and originator.
 
     Example:
-        >>> from watch.rc.registry import *  # NOQA
+        >>> from geowatch.rc.registry import *  # NOQA
         >>> data1 = load_site_model_schema(strict=True)
         >>> data2 = load_site_model_schema(strict=False)
         >>> import rich
@@ -42,10 +42,10 @@ def load_site_model_schema(strict=True):
         >>> cls = jsonschema.validators.validator_for(data2)
         >>> cls.check_schema(data2)
     """
-    rc_dpath = importlib_resources.files('watch.rc')
+    rc_dpath = importlib_resources.files('geowatch.rc')
     schema_fpath = rc_dpath / 'site-model.schema.json'
     data = json.loads(schema_fpath.read_text())
-    # file = importlib_resources.open_text('watch.rc', 'site-model.schema.json')
+    # file = importlib_resources.open_text('geowatch.rc', 'site-model.schema.json')
     # data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
@@ -118,10 +118,10 @@ def load_region_model_schema(strict=True):
         Dict: the schema
 
     CommandLine:
-        xdoctest -m watch.rc.registry load_region_model_schema
+        xdoctest -m geowatch.rc.registry load_region_model_schema
 
     Example:
-        >>> from watch.rc.registry import *  # NOQA
+        >>> from geowatch.rc.registry import *  # NOQA
         >>> data1 = load_region_model_schema(strict=True)
         >>> data2 = load_region_model_schema(strict=False)
         >>> import rich
@@ -133,10 +133,10 @@ def load_region_model_schema(strict=True):
         >>> cls = jsonschema.validators.validator_for(data2)
         >>> cls.check_schema(data2)
     """
-    rc_dpath = importlib_resources.files('watch.rc')
+    rc_dpath = importlib_resources.files('geowatch.rc')
     schema_fpath = rc_dpath / 'region-model.schema.json'
     data = json.loads(schema_fpath.read_text())
-    # file = importlib_resources.open_text('watch.rc',
+    # file = importlib_resources.open_text('geowatch.rc',
     #                                      'region-model.schema.json')
     # data = json.load(file)
     if not strict:
@@ -185,26 +185,26 @@ def load_region_model_schema(strict=True):
 def load_job_schema():
     """
     Example:
-        >>> from watch.rc.registry import *  # NOQA
+        >>> from geowatch.rc.registry import *  # NOQA
         >>> data = load_job_schema()
         >>> print('data = {!r}'.format(data))
     """
-    file = importlib_resources.open_text('watch.rc', 'job.schema.json')
+    file = importlib_resources.open_text('geowatch.rc', 'job.schema.json')
     data = json.load(file)
     return data
 
 
 def geoidgrid_path():
-    with importlib_resources.path('watch.rc', 'egm96_15.gtx') as p:
+    with importlib_resources.path('geowatch.rc', 'egm96_15.gtx') as p:
         return ub.Path(p)
 
 
 def dem_path(cache_dir=None, overwrite=False):
-    with importlib_resources.path('watch.rc', 'dem.xml') as p:
+    with importlib_resources.path('geowatch.rc', 'dem.xml') as p:
         orig_pth = ub.Path(p)
 
     if cache_dir is None:
-        cache_dir = ub.Path.appdir('watch/dem')
+        cache_dir = ub.Path.appdir('geowatch/dem')
     cache_dir = ub.Path(cache_dir).ensuredir()
 
     cached_pth = ub.Path(cache_dir) / orig_pth.name

@@ -90,7 +90,7 @@ def tukey_biweight_loss(r, c=4.685):
         https://arxiv.org/pdf/1505.06606.pdf
 
     Example:
-        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> from geowatch.utils.util_kwarray import *  # NOQA
         >>> import ubelt as ub
         >>> r = np.linspace(-20, 20, 1000)
         >>> data = {'r': r}
@@ -134,7 +134,7 @@ def asymptotic(x, offset=1, gamma=1, degree=0, horizontal=1):
         - [ ] Move elsewhere (kwarray?) or find a package that provides it
 
     Example:
-        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> from geowatch.utils.util_kwarray import *  # NOQA
         >>> import ubelt as ub
         >>> x = np.linspace(0, 27, 1000)
         >>> data = {'x': x}
@@ -649,7 +649,7 @@ def balanced_number_partitioning(items, num_parts):
         https://en.wikipedia.org/wiki/Balanced_number_partitioning
 
     Example:
-        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> from geowatch.utils.util_kwarray import *  # NOQA
         >>> items = np.array([1, 3, 29, 22, 4, 5, 9])
         >>> num_parts = 3
         >>> bin_assignments = balanced_number_partitioning(items, num_parts)
@@ -771,7 +771,7 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         >>> assert np.allclose(cs2, cs3)
 
     Example:
-        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> from geowatch.utils.util_kwarray import *  # NOQA
         >>> means = np.random.rand(2, 3, 5, 7)
         >>> stds = np.random.rand(2, 3, 5, 7)
         >>> nums = (np.random.rand(2, 3, 5, 7) * 10) + 1
@@ -876,11 +876,11 @@ def _postprocess_keepdims(original, result, axis):
 def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
     """
         data = [self.dataset[idx] for idx in possibly_batched_index]
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1004, in __getitem__
+      File "/home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1004, in __getitem__
         return self.getitem(index)
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1375, in getitem
+      File "/home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1375, in getitem
         imdata_normalized = apply_robust_normalizer(
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 2513, in apply_robust_normalizer
+      File "/home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/kwcoco_dataset.py", line 2513, in apply_robust_normalizer
         imdata_valid_normalized = kwarray.normalize(
       File "/home/joncrall/code/kwarray/kwarray/util_numpy.py", line 760, in normalize
         old_min = np.nanmin(float_out)
@@ -917,7 +917,7 @@ def biased_1d_weights(upweight_time, num_frames):
     kwplot.figure()
     import sys, ubelt
     sys.path.append(ubelt.expandpath('~/code/watch'))
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
 
     kwplot.figure(fnum=1, doclf=1)
     num_frames = 5
@@ -1011,7 +1011,7 @@ class Remedian:
 
     Examples:
         >>> import sys, ubelt
-        >>> from watch.utils.util_kwarray import Remedian
+        >>> from geowatch.utils.util_kwarray import Remedian
         >>> #
         >>> shape = (7, 5)
         >>> self = Remedian(shape, n_obs=11, t=101)
@@ -1152,7 +1152,7 @@ def argsort_threshold(arr, threshold=None, num_top=None, objective='maximize'):
         ndarray: top indexes
 
     Example:
-        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> from geowatch.utils.util_kwarray import *  # NOQA
         >>> arr = np.array([0.3, .2, 0.1, 0.15, 0.11, 0.15, 0.2, 0.6, 0.32])
         >>> argsort_threshold(arr, threshold=0.5, num_top=0)
         array([7])

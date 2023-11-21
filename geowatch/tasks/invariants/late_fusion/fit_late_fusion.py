@@ -57,9 +57,9 @@ def main(args):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.tasks.invariants.fit --help
+        python -m geowatch.tasks.invariants.fit --help
 
-        python -m watch.tasks.invariants.fit \
+        python -m geowatch.tasks.invariants.fit \
             --train_dataset=path/to/train.kwcoco.json \
             --vali_dataset=path/to/vali.kwcoco.json
     """
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     args.bands = list(set(args.bands))
 
     # check save directory
-    default_log_path = os.path.join(os.getcwd(), 'watch/tasks/invariants')
+    default_log_path = os.path.join(os.getcwd(), 'geowatch/tasks/invariants')
     if args.save_dir is None and os.path.exists(default_log_path):
         args.save_dir = os.path.join(default_log_path, 'logs')
     elif args.save_dir is None:

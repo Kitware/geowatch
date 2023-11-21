@@ -7,13 +7,13 @@ class PolygonExtractor:
     Given a timesequence of heatmaps, extract spatially static polygons.
 
     This class is being developed on ``dev/refine-ac-polys`` in the file:
-    watch/tasks/tracking/polygon_extraction.py
+    geowatch/tasks/tracking/polygon_extraction.py
 
     Distributed Tweaking on:
         https://colab.research.google.com/drive/1NEJpm36LviesZb45qy59myezi7JHu0bI#scrollTo=G8kHgCXSI3VS
 
     Example:
-        >>> from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        >>> from geowatch.tasks.tracking.polygon_extraction import *  # NOQA
         >>> cls = PolygonExtractor
         >>> self = PolygonExtractor.demo(real_categories=True)
         >>> self.config['algo'] = 'crall'
@@ -24,7 +24,7 @@ class PolygonExtractor:
 
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
-        >>> from watch.utils import util_kwimage
+        >>> from geowatch.utils import util_kwimage
         >>> kwplot.autompl()
         >>> stacked = self.draw_timesequence()
         >>> canvas = label_mask.colorize()
@@ -179,7 +179,7 @@ class PolygonExtractor:
         import kwplot
         import numpy as np
         from scipy import ndimage
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         cube = FeatureCube(masked,
                            TimeIntervalSequence.coerce(self.heatmap_time_intervals),
                            self.classes)
@@ -488,7 +488,7 @@ class PolygonExtractor:
             # coords = peak_local_max(max_saliency_2d, footprint=np.ones((7, 7)), labels=saliency_mask)
             # lbl = watershed(max_saliency_2d, mask=saliency_mask)
             if 0:
-                from watch.utils import util_kwimage
+                from geowatch.utils import util_kwimage
                 import kwplot
                 # canvas = util_kwimage.colorize_label_image(lbl)
                 kwplot.imshow(max_saliency_2d, fnum=1, doclf=1)
@@ -559,7 +559,7 @@ class PolygonExtractor:
         if 0:
             import kwplot
             kwplot.autompl()
-            from watch.utils import util_kwimage  # NOQA
+            from geowatch.utils import util_kwimage  # NOQA
             canvas = util_kwimage.colorize_label_image(label_img, label_to_color={0: 'black'})
             kwplot.imshow(canvas, fnum=1, doclf=1)
 
@@ -589,7 +589,7 @@ class PolygonExtractor:
     def draw_intermediate(self):
         import kwimage
         import numpy as np
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         salient = self._intermediates['salient_chan']
         # active = self._intermediates['active_chan']
         # siteprep = self._intermediates['siteprep_chan']
@@ -619,7 +619,7 @@ class PolygonExtractor:
         import kwimage
         import numpy as np
         import kwarray
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         heatmaps = self.heatmap_thwc
         norm_heatmaps = kwarray.robust_normalize(heatmaps)
 
@@ -953,7 +953,7 @@ class FeatureCube(ub.NiceRepr):
         import kwimage
         import numpy as np
         import kwarray
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         heatmaps = self.heatmap_thwc
         norm_heatmaps = kwarray.robust_normalize(heatmaps)
 
@@ -982,7 +982,7 @@ class TimeIntervalSequence(list):
     A list of non-overlapping time intervals
 
     Ignore:
-        from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        from geowatch.tasks.tracking.polygon_extraction import *  # NOQA
         a = TimeInterval.coerce(('2020-01-01', '2020-02-01'))
         b = TimeInterval.coerce(('2020-02-01', '2020-03-01'))
         c = TimeInterval.coerce(('2020-03-01', '2020-03-15'))
@@ -1065,7 +1065,7 @@ class TimeInterval(portion.Interval):
         print(lib.current_sourcecode())
 
     Example:
-        from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        from geowatch.tasks.tracking.polygon_extraction import *  # NOQA
         a = TimeInterval.coerce(('2020-01-01', '2020-02-01'))
         b = TimeInterval.coerce(('2020-02-01', '2020-03-01'))
         c = TimeInterval.coerce(('2020-03-01', '2020-03-15'))
@@ -1123,11 +1123,11 @@ class TimeInterval(portion.Interval):
 def toydata_demo():
     """
     Example:
-        from watch.tasks.tracking.polygon_extraction import *  # NOQA
+        from geowatch.tasks.tracking.polygon_extraction import *  # NOQA
         cls = PolygonExtractor(heatmaps, bounds)
         self = PolygonExtractor.demo()
     """
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     import kwplot
 
     def autompl2():
@@ -1163,8 +1163,8 @@ def toydata_demo():
 
 
 def real_data_demo_case_1():
-    from watch.utils import util_girder
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_girder
+    from geowatch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
@@ -1263,8 +1263,8 @@ def real_data_demo_case_1():
 
 
 def real_data_demo_case_2():
-    from watch.utils import util_girder
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_girder
+    from geowatch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
@@ -1370,8 +1370,8 @@ def real_data_demo_case_2():
 
 
 def real_data_demo_case_3():
-    from watch.utils import util_girder
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_girder
+    from geowatch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
@@ -1460,8 +1460,8 @@ def real_data_demo_case_3():
 
 
 def real_data_demo_case_1_fixed():
-    from watch.utils import util_girder
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_girder
+    from geowatch.utils import util_kwimage
     import pickle
     import kwimage
     import kwarray
@@ -1649,7 +1649,7 @@ def generate_real_example():
 
     if 0:
         # Upload data
-        pickle_fpath = ub.Path.appdir('watch/polyextract').ensuredir() / 'demo0-fixed.pkl'
+        pickle_fpath = ub.Path.appdir('geowatch/polyextract').ensuredir() / 'demo0-fixed.pkl'
         pickle_fpath.write_bytes(pickle.dumps(data))
 
         hash_prefix = ub.hash_file(pickle_fpath)[0:16]
@@ -1670,7 +1670,7 @@ def generate_real_example():
 class LabelMask:
     """
     Ignore:
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         import kwplot
         kwplot.autompl()
         self = LabelMask.demo()
@@ -1684,7 +1684,7 @@ class LabelMask:
         self.data = data
 
     def colorize(self):
-        from watch.utils import util_kwimage
+        from geowatch.utils import util_kwimage
         canvas = util_kwimage.colorize_label_image(self.data, legend_dpi=300)
         return canvas
 

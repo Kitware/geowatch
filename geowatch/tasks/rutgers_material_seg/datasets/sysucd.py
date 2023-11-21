@@ -10,7 +10,7 @@ import random
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.deterministic = True
 import itertools
-from watch.tasks.rutgers_material_seg.utils import utils
+from geowatch.tasks.rutgers_material_seg.utils import utils
 
 # if 1:
 #     torch.set_printoptions(precision=6, sci_mode=False)

@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torchvision.models as models
 
-import watch.tasks.rutgers_material_change_detection.models.resnet as resnet
+import geowatch.tasks.rutgers_material_change_detection.models.resnet as resnet
 
 
 class BaseFramework(nn.Module):

@@ -5,9 +5,9 @@ Exposes the mlops tools in the CLI
 """
 from scriptconfig.modal import ModalCLI
 import ubelt as ub
-from watch.mlops import manager
-from watch.mlops import aggregate
-from watch.mlops import schedule_evaluation
+from geowatch.mlops import manager
+from geowatch.mlops import aggregate
+from geowatch.mlops import schedule_evaluation
 
 
 modal = ModalCLI(description=ub.codeblock(

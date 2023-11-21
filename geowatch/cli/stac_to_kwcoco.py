@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SeeAlso:
-    ~/code/watch/watch/cli/stac_search.py
+    ~/code/watch/geowatch/cli/stac_search.py
 """
 import os
 import re
@@ -41,7 +41,7 @@ class StacToCocoConfig(scfg.DataConfig):
             Ignore duplicate items when creating the kwcoco file
             '''))
 
-    populate_watch_fields = scfg.Value(False, isflag=True, help='Populate video / watch fields')
+    populate_watch_fields = scfg.Value(False, isflag=True, help='Populate video / geowatch feilds')
 
     verbose = scfg.Value(1, help='verbosity')
 
@@ -92,7 +92,7 @@ def _construct_sensor_channel_alias():
     Construct mappings from possible names for each bands to the ones that we
     want to use in kwcoco.
     """
-    from watch.utils import util_bands
+    from geowatch.utils import util_bands
     UTIL_BAND_INFOS = {
         'S2': util_bands.SENTINEL2,
         'L8': util_bands.LANDSAT8,
@@ -142,8 +142,8 @@ def _determine_channels_collated(asset_name, asset_dict, platform):
 
 def _determine_s2_channels(asset_name, asset_dict):
     """
-        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.stac_to_kwcoco import _determine_s2_channels
+        >>> from geowatch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from geowatch.cli.stac_to_kwcoco import _determine_s2_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2020/9/21/S2A_14TQL_20200921_0_L1C_ACC/S2A_14TQL_20200921_0_L1C_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/9/LC08_L1TP_028032_20200809_20200917_02_T1_ACC/LC08_L1TP_028032_20200809_20200917_02_T1_ACC_cloud_mask.tif',
@@ -216,8 +216,8 @@ def _determine_s2_channels(asset_name, asset_dict):
 def _determine_l8_channels(asset_name, asset_dict):
     """
     Example:
-        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.stac_to_kwcoco import _determine_l8_channels
+        >>> from geowatch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from geowatch.cli.stac_to_kwcoco import _determine_l8_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_TCI.tif',
@@ -283,7 +283,7 @@ def _determine_l8_channels(asset_name, asset_dict):
 
 
 def _determine_wv_channels(asset_name, asset_dict):
-    from watch.utils import util_bands
+    from geowatch.utils import util_bands
     asset_href = asset_dict['href']
 
     eo_band_names = []
@@ -533,7 +533,7 @@ def stac_to_kwcoco(input_stac_catalog,
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
                                   'as a secondary step instead')
 
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     import pystac
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)

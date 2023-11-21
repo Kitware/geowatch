@@ -2,7 +2,7 @@
 """
 CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.geojson_site_stats \
+    python -m geowatch.cli.geojson_site_stats \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*" \
         --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/*"
 
@@ -37,9 +37,9 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     Ignore:
-        from watch.cli.geojson_site_stats import *  # NOQA
-        import watch
-        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.cli.geojson_site_stats import *  # NOQA
+        import geowatch
+        data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         kwargs = {
             'site_models': data_dvc_dpath / 'annotations/drop6/site_models/*',
         }
@@ -48,7 +48,7 @@ def main(cmdline=1, **kwargs):
         kwargs['site_models'] = '/data/joncrall/dvc-repos/smart_expt_dvc/smartflow_evals/kit_pre_eval_8_20230131/BR_R001/sc_out_site_models'
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-        python -m watch.cli.geojson_site_stats \
+        python -m geowatch.cli.geojson_site_stats \
             --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/PE_R001.geojson" \
             --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/PE_R001_*.geojson"
     """
@@ -59,9 +59,9 @@ def main(cmdline=1, **kwargs):
     import numpy as np
     import pandas as pd
     from kwutil import util_time
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
-    from watch.utils import util_parallel
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import util_gis
+    from geowatch.utils import util_parallel
 
     site_models = []
     region_models = []
@@ -248,7 +248,7 @@ def main(cmdline=1, **kwargs):
 
 def gdf_site_overlaps(summary_utm):
     import kwutil
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import numpy as np
     import rich
     import pandas as pd
@@ -319,9 +319,9 @@ def gdf_site_overlaps(summary_utm):
 
 
 def viz_site_stats(unique_region_ids, region_to_obs_accum, region_to_site_accum, viz_dpath):
-    from watch.mlops.aggregate import hash_regions
-    from watch.utils import util_kwplot
-    from watch.utils import util_pandas
+    from geowatch.mlops.aggregate import hash_regions
+    from geowatch.utils import util_kwplot
+    from geowatch.utils import util_pandas
     import matplotlib.dates as mdates
     import numpy as np
     import pandas as pd
@@ -548,6 +548,6 @@ __config__.main = main
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/geojson_site_stats.py
+        python ~/code/watch/geowatch/cli/geojson_site_stats.py
     """
     main()

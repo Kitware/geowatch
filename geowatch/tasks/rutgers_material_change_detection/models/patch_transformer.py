@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
-from watch.tasks.rutgers_material_change_detection.models.vit import ViT
-from watch.tasks.rutgers_material_change_detection.models.pos_embedding import PositionEncoder
+from geowatch.tasks.rutgers_material_change_detection.models.vit import ViT
+from geowatch.tasks.rutgers_material_change_detection.models.pos_embedding import PositionEncoder
 
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
 
 
 class PatchTransformerEncoder(nn.Module):

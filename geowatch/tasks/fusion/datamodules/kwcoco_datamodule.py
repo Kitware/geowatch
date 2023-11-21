@@ -11,10 +11,10 @@ import pytorch_lightning as pl
 import ubelt as ub
 import scriptconfig as scfg
 
-from watch.utils import util_globals
-from watch.utils import util_parallel
-from watch.tasks.fusion import utils
-from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
+from geowatch.utils import util_globals
+from geowatch.utils import util_parallel
+from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
 
 from typing import Dict
 
@@ -110,10 +110,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     Example:
         >>> # Demo of the data module on auto-generated toy data
-        >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
-        >>> import watch
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> coco_dset = watch.coerce_kwcoco('vidshapes8-watch')
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes8-geowatch')
         >>> channels = None
         >>> batch_size = 1
         >>> time_steps = 3
@@ -144,11 +144,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> # Run the following tests on real watch data if DVC is available
-        >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
-        >>> import watch
+        >>> # Run the following tests on real geowatch data if DVC is available
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+        >>> import geowatch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_ILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/combo_DILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
@@ -201,7 +201,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> # xdoctest: +SKIP
         >>> # NOTE: I DONT KNOW WHY THIS IS FAILING ON CI AT THE MOMENT. FIXME!
         >>> # Run the data module on coco demo datamodules for the CI
-        >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
         >>> import kwcoco
         >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
@@ -312,7 +312,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('datamodules are already setup. Ignoring extra setup call')
             return
 
-        import watch
+        import geowatch
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
 
@@ -349,7 +349,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     print(f'Read {_key} kwcoco dataset')
                 # Use the demo coerce function to read the kwcoco file because
                 # it allows for special demo inputs useful in doctests.
-                _coco_output = watch.coerce_kwcoco(_coco_input, sqlview=sqlview)
+                _coco_output = geowatch.coerce_kwcoco(_coco_input, sqlview=sqlview)
                 self.coco_datasets[_key] = _coco_output
             return _coco_output
 
@@ -512,12 +512,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         objects can be transformed into argparse objects.
 
         CommandLine:
-            xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_datamodule.py add_argparse_args
+            xdoctest -m /home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/kwcoco_datamodule.py add_argparse_args
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> cls = KWCocoVideoDataModule
-            >>> # TODO: make use of watch.utils.lightning_ext import argparse_ext
+            >>> # TODO: make use of geowatch.utils.lightning_ext import argparse_ext
             >>> import argparse
             >>> parent_parser = argparse.ArgumentParser()
             >>> cls.add_argparse_args(parent_parser)
@@ -581,8 +581,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 cluttered view.
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+            >>> from geowatch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', channels='auto', num_workers=0)
             >>> self.setup('fit')
@@ -607,10 +607,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         Example:
             >>> # xdoctest: +REQUIRES(--slow)
-            >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
-            >>> from watch.tasks.fusion import datamodules
-            >>> import watch
-            >>> train_dataset = watch.demo.demo_kwcoco_multisensor()
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> import geowatch
+            >>> train_dataset = geowatch.demo.demo_kwcoco_multisensor()
             >>> self = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=train_dataset, chip_size=256, time_steps=5, num_workers=0, batch_size=3)
             >>> self.setup('fit')
@@ -636,7 +636,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>>                 outputs['change_probs'][-1].append(torch.rand(H, W))
             >>>             outputs['class_probs'][-1].append(torch.rand(H, W, 10))
             >>>             outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
-            >>> from watch.utils import util_nesting
+            >>> from geowatch.utils import util_nesting
             >>> print(ub.urepr(util_nesting.shape_summary(outputs), nl=1, sort=0))
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
@@ -647,8 +647,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> kwplot.show_if_requested()
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+            >>> from geowatch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
             >>>     batch_size = 3,
             >>>     train_dataset='special:vidshapes8-multispectral', channels='auto', num_workers=0)

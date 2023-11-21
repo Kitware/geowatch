@@ -104,7 +104,7 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
             as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
 
     Example:
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MultiheadSelfAttention(4, 1).eval()
         >>> S, B, F = (7, 3, 4)
         >>> x  = (torch.rand(S, B, F) * 10).round()
@@ -207,7 +207,7 @@ try:
         C-bindings in normal attention make this lose all of its benefit.
 
         Ignore:
-            from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
             D = 9  # embedding dimension
             H = 3   # number of heads
             B = 5   # batch size
@@ -252,7 +252,7 @@ except ImportError:
 def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
     """
     Example:
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> batch_size = 1
         >>> embedding_size = 4
@@ -270,7 +270,7 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwarg
 
     Example:
         >>> # Test with a mask
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> batch_size = 1
         >>> embedding_size = 4
@@ -358,7 +358,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         in the area.
 
     Example:
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> image_size = 128
         >>> #
@@ -475,11 +475,11 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 token.
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.architectures.transformer ChannelwiseTransformerEncoderLayer.forward
+            xdoctest -m geowatch.tasks.fusion.architectures.transformer ChannelwiseTransformerEncoderLayer.forward
 
         Example:
             >>> # Test that coordinate aware implementation exactly reproduces aligned variant
-            >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
             >>> import numpy as np
             >>> F = embedding_size = 4
             >>> B, T, M, H, W = 1, 3, 5, 7, 11
@@ -637,7 +637,7 @@ class TimmEncoder:
 
     Example:
         >>> # xdoctest: +REQUIRES(module:timm)
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
         >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
@@ -679,7 +679,7 @@ class MM_VITEncoder(nn.Module):
 
     Ignore:
         >>> from mmseg.models.backbones import vit
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MM_VITEncoder()
         >>> x = torch.rand(2, 3, 768)
         >>> self.forward(x)
@@ -717,7 +717,7 @@ class MM_VITEncoder(nn.Module):
         # pretrained_fpath = ub.grabdata('https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth')
         # FIXME: Having this import here breaks torch.package
         # not exactly sure why
-        # from watch.tasks.fusion.fit import coerce_initializer
+        # from geowatch.tasks.fusion.fit import coerce_initializer
         # initializer = coerce_initializer(pretrained_fpath)
         # info = initializer.forward(self, verbose=0)  # NOQA
         ...
@@ -753,7 +753,7 @@ class DeiTEncoder(nn.Module):
 
     Example:
         >>> # xdoctest: +REQUIRES(module:timm)
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
         >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
@@ -786,7 +786,7 @@ class PerceiverEncoder(nn.Module):
     https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
 
     Example:
-        >>> from watch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
         >>> import torch
         >>> B, T, M, H, W, F = 1, 2, 3, 5, 8, 13
         >>> self = PerceiverEncoder(F, dropout=0.1)
@@ -834,7 +834,7 @@ class FusionEncoder(nn.Module):
     encodings in a row
 
     Example:
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
         >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
@@ -880,7 +880,7 @@ class FusionEncoder(nn.Module):
 
     Ignore:
         >>> # Get a sense of the arch size
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> rows = []
         >>> import netharn as nh  # NOQA
         >>> for key, config in ub.ProgIter(list(encoder_configs.items())):
@@ -1334,7 +1334,7 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
 
     Example:
         >>> # xdoctest: +REQUIRES(module:mmseg)
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MM_VITEncoderDecoder(16, 16, 16)
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)
@@ -1342,7 +1342,7 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     Ignore:
         >>> # xdoctest: +REQUIRES(module:mmseg)
         >>> # This tests downloading weights from the MM repo
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MM_VITEncoderDecoder(16, 16, 16, pretrained="upernet_vit-b16_mln_512x512_80k_ade20k")
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)

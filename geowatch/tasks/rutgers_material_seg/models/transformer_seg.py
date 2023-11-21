@@ -2,7 +2,7 @@ import math
 
 from torch import nn
 from einops import rearrange
-from watch.tasks.rutgers_material_seg.models.transformer_model import TransModel2d, TransConfig
+from geowatch.tasks.rutgers_material_seg.models.transformer_model import TransModel2d, TransConfig
 
 
 class Encoder2D(nn.Module):

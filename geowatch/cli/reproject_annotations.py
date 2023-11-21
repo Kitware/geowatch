@@ -15,21 +15,21 @@ CommandLine:
     # You dont need to run this, but if you plan on running the reproject
     # annotations script multiple times, preloading this work will make it
     # faster
-    python -m watch add_fields \
+    python -m geowatch add_fields \
         --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --overwrite=warp --workers 10
 
     # Update to whatever the state of the annotations submodule is.  The
     # viz_dpath argument can be specified to visualize the algorithm details.
-    python -m watch reproject_annotations \
+    python -m geowatch reproject_annotations \
         --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --viz_dpath $DVC_DATA_DPATH/Drop6/_viz_propogate \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
 
     # Finally we can review the polygons.
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --space="video" \
         --num_workers=avail \
@@ -39,7 +39,7 @@ CommandLine:
 Notes:
     To add iMerit regions, we will need to recognize site-summaries from
     region models instead of site-models themselves.  Code to do this is in:
-        https://gitlab.kitware.com/smart/watch/-/blob/master/watch/cli/kwcoco_to_geojson.py#L476
+        https://gitlab.kitware.com/smart/watch/-/blob/master/geowatch/cli/kwcoco_to_geojson.py#L476
     in `add_site_summary_to_kwcoco`.
 
 TODO:
@@ -76,9 +76,9 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
 
     .. code:: python
 
-        from watch.cli import reproject_annotations
-        import watch
-        dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        from geowatch.cli import reproject_annotations
+        import geowatch
+        dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         # Note that every CLI argument has a corresponding key/value argument
         kwargs = {
             'src': dvc_data_dpath / 'Drop6/data.kwcoco.json',
@@ -191,14 +191,14 @@ DUMMY_END_DATE = '2050-01-01'
 def main(cmdline=False, **kwargs):
     r"""
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/cli/reproject_annotations.py main
-        HAS_DVC=1 xdoctest -m watch.cli.reproject_annotations main
+        xdoctest -m /home/joncrall/code/watch/geowatch/cli/reproject_annotations.py main
+        HAS_DVC=1 xdoctest -m geowatch.cli.reproject_annotations main
 
     Example:
-        >>> from watch.cli import reproject_annotations
-        >>> from watch.demo import smart_kwcoco_demodata
+        >>> from geowatch.cli import reproject_annotations
+        >>> from geowatch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/tests/reproject/doctest0')
+        >>> dpath = ub.Path.appdir('geowatch/tests/reproject/doctest0')
         >>> dpath.delete()
         >>> coco_dset, region_dpath, site_dpath = smart_kwcoco_demodata.demo_dataset_with_regions_and_sites(dpath)
         >>> coco_fpath = coco_dset.fpath
@@ -223,11 +223,11 @@ def main(cmdline=False, **kwargs):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
-        >>> from watch.cli.reproject_annotations import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> from geowatch.cli.reproject_annotations import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
-        >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
@@ -245,11 +245,11 @@ def main(cmdline=False, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    from watch.utils import util_gis
-    from watch.utils import util_parallel
+    from geowatch.utils import util_gis
+    from geowatch.utils import util_parallel
     from kwutil.util_yaml import Yaml
-    from watch import heuristics
-    from watch.utils import kwcoco_extensions
+    from geowatch import heuristics
+    from geowatch.utils import kwcoco_extensions
     import kwcoco
     import rich
     import numpy as np
@@ -508,7 +508,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     """
     import pandas as pd
     import numpy as np
-    from watch.utils.util_pandas import pandas_reorder_columns
+    from geowatch.utils.util_pandas import pandas_reorder_columns
     from kwutil import util_time
     import rich
 
@@ -657,7 +657,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     # if 0:
     #     # Use the json schema to ensure we are coding this correctly
     #     import jsonref
-    #     from watch.rc.registry import load_site_model_schema
+    #     from geowatch.rc.registry import load_site_model_schema
     #     site_model_schema = load_site_model_schema()
     #     # Expand the schema
     #     site_model_schema = jsonref.loads(jsonref.dumps(site_model_schema))
@@ -784,7 +784,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     import geojson
     import json
     import kwimage
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_time
     # observation_properties = [
     #     'type', 'observation_date', 'source', 'sensor_name',
@@ -876,7 +876,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     return pseudo_sites
 
     # if 1:
-    #     from watch.rc.registry import load_site_model_schema
+    #     from geowatch.rc.registry import load_site_model_schema
     #     site_model_schema = load_site_model_schema()
     #     real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
     #     ret = jsonschema.validate(real_site_model, schema=site_model_schema)
@@ -964,9 +964,9 @@ def assign_sites_to_images(coco_dset,
     import numpy as np
     import pandas as pd
     from shapely.ops import unary_union
-    from watch import heuristics
-    from watch.utils import kwcoco_extensions
-    from watch.utils import util_gis
+    from geowatch import heuristics
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.utils import util_gis
     from kwutil import util_time
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
@@ -1135,14 +1135,14 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
     Given a set of site observations determines how to propogate them onto
     potential images in the assigned region.
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from kwutil import util_time
-    from watch import heuristics
+    from geowatch import heuristics
     import rich
     import kwimage
     import pandas as pd
     import numpy as np
-    from watch.geoannots.geomodels import SiteModel
+    from geowatch.geoannots.geomodels import SiteModel
 
     if __debug__ and 0:
         # Sanity check, the sites should have spatial overlap with each image in the video
@@ -1315,7 +1315,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
 
         if catname is None:
             # Based on the status choose a kwcoco category name
-            # using the watch heuristics
+            # using the geowatch heuristics
             catname = status_to_catname[status]
 
         if catname is None:
@@ -1426,7 +1426,7 @@ def keyframe_interpolate(image_times, key_infos):
             a list of associated image indexes for each key frame.
 
     Example:
-        >>> from watch.cli.reproject_annotations import *  # NOQA
+        >>> from geowatch.cli.reproject_annotations import *  # NOQA
         >>> import numpy as np
         >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
         >>> # TODO: likely also needs a range for a maximum amount of time you will
@@ -1448,7 +1448,7 @@ def keyframe_interpolate(image_times, key_infos):
         >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
 
     Example:
-        >>> from watch.cli.reproject_annotations import *  # NOQA
+        >>> from geowatch.cli.reproject_annotations import *  # NOQA
         >>> import numpy as np
         >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
         >>> # TODO: likely also needs a range for a maximum amount of time you will
@@ -1729,11 +1729,11 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
     ax.cla()
 
-    from watch import heuristics
+    from geowatch import heuristics
     import matplotlib as mpl
     import kwimage
     import numpy as np
-    from watch.utils import util_kwplot
+    from geowatch.utils import util_kwplot
     from kwutil import util_progress
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
@@ -1838,7 +1838,7 @@ def draw_geospace(dvc_dpath, sites):
     """
     Developer function
     """
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     import geopandas as gpd
     import kwplot
     kwplot.autompl()
@@ -1875,12 +1875,12 @@ __cli__.main = main
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/reproject_annotations.py
+        python ~/code/watch/geowatch/cli/reproject_annotations.py
     """
     main(cmdline=True)
 
 
-# python -m watch reproject_annotations \
+# python -m geowatch reproject_annotations \
 #     --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imgonly-VN_C002.kwcoco.zip" \
 #     --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imganns-VN_C002.kwcoco.zip" \
 #     --io_workers avail \

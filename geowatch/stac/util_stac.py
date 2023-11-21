@@ -46,8 +46,8 @@ def parallel_map_items(catalog,
 
     Example:
         >>> # xdoctest: +SKIP("too many https errors")
-        >>> from watch.stac.util_stac import *  # NOQA
-        >>> from watch.demo import stac_demo
+        >>> from geowatch.stac.util_stac import *  # NOQA
+        >>> from geowatch.demo import stac_demo
         >>> catalog_fpath = stac_demo.demo()
         >>> catalog = pystac.Catalog.from_file(catalog_fpath)
         >>> def demo_mapper_func(item):

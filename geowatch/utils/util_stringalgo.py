@@ -37,7 +37,7 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
 
     Example:
         >>> # xdoctest: +REQUIRES(module:pygtrie)
-        >>> from watch.utils.util_stringalgo import *  # NOQA
+        >>> from geowatch.utils.util_stringalgo import *  # NOQA
         >>> smeti = ["params.metrics.foo.mean", "params.metrics.foo.std", "params.metrics.foo.count"]
         >>> items = [p[::-1] for p in smeti]
         >>> euqine = shortest_unique_prefixes(items, sep='.', min_length=2)
@@ -136,7 +136,7 @@ def _trie_iternodes(self):
     # Hack into the internal structure and insert frequencies at each node
 
     Ignore:
-            from watch.utils.util_dotdict import *  # NOQA
+            from geowatch.utils.util_dotdict import *  # NOQA
             dat = DotDict({
                 'proc1.param1': 1,
                 'proc1.param2': 2,
@@ -169,8 +169,8 @@ def _trie_iteritems(self):
     # Hack into the internal structure and insert frequencies at each node
 
     Ignore:
-        from watch.utils.util_dotdict import *  # NOQA
-        from watch.utils.util_stringalgo import *  # NOQA
+        from geowatch.utils.util_dotdict import *  # NOQA
+        from geowatch.utils.util_stringalgo import *  # NOQA
         dat = DotDict({
             'proc1.param1': 1,
             'proc1.param2': 2,

@@ -6,12 +6,12 @@ Basline Example:
     MAE_MODEL_FPATH="$DVC_EXPT_DPATH/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt"
     KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
 
-    python -m watch.utils.simple_dvc request "$MAE_MODEL_FPATH"
+    python -m geowatch.utils.simple_dvc request "$MAE_MODEL_FPATH"
 
     # NOTE: different predict files correspond to different models
     # TODO: make the model size a parameter (or better yet inferred)
 
-    python -m watch.tasks.mae.predictV3 \
+    python -m geowatch.tasks.mae.predictV3 \
         --device="cuda:0"\
         --mae_ckpt_path="$MAE_MODEL_FPATH"\
         --input_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip"\
@@ -22,7 +22,7 @@ Basline Example:
 
     # After your model predicts the outputs, you should be able to use the
     # smartwatch visualize tool to inspect your features.
-    python -m watch visualize "$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip" \
+    python -m geowatch visualize "$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip" \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False
 
@@ -42,8 +42,8 @@ from torch.utils.data import DataLoader, Dataset
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import numpy as np
-from watch.utils import util_parallel
-from watch.tasks.fusion.predict import CocoStitchingManager
+from geowatch.utils import util_parallel
+from geowatch.tasks.fusion.predict import CocoStitchingManager
 
 
 class WatchDataset(Dataset):
@@ -88,7 +88,7 @@ class WatchDataset(Dataset):
         NEW_GRID = 1
         if NEW_GRID:
             print('make grid')
-            from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
+            from geowatch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
             sample_grid = sample_video_spacetime_targets(
                 self.coco_dset, window_dims=window_dims,
                 time_dims=time_dims, window_overlap=patch_overlap,
@@ -214,7 +214,7 @@ class WatchDataset(Dataset):
         Populate the target so it has the correct input scale and bands.
         """
         # Handle target scale
-        from watch.tasks.fusion.datamodules import data_utils
+        from geowatch.tasks.fusion.datamodules import data_utils
         gids : list[int] = target['gids']
         im1_id = gids[0]
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
@@ -528,11 +528,11 @@ class Predict():
             quantize=True,
         )
 
-        from watch.utils import process_context
+        from geowatch.utils import process_context
         self.proc_context = process_context.ProcessContext(
             args=sys.argv,
             type='process',
-            name='watch.tasks.mae.predict',
+            name='geowatch.tasks.mae.predict',
         )
 
     def __call__(self):
@@ -643,7 +643,7 @@ if __name__ == '__main__':
         # Team Features on Drop3
         DVC_DPATH=$(geowatch_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
-        python -m watch.cli.prepare_teamfeats \
+        python -m geowatch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --with_depth=0 \
             --with_landcover=0 \
@@ -653,14 +653,14 @@ if __name__ == '__main__':
             --gres=0 --backend=serial --run=1
 
     CommandLine:
-        python -m watch.tasks.template.predict --help
+        python -m geowatch.tasks.template.predict --help
 
         DVC_DPATH=$(geowatch_dvc)
         PRETEXT_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt
         SSEG_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt
         PCA_FPATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-        python -m watch.tasks.invariants.predict \
+        python -m geowatch.tasks.invariants.predict \
             --pretext_package_path "$PRETEXT_PATH" \
             --segmentation_package_path "$SSEG_PATH" \
             --pca_projection_path "$PCA_FPATH" \
@@ -671,15 +671,15 @@ if __name__ == '__main__':
             --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json \
             --tasks before_after pretext
 
-        python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
+        python -m geowatch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
 
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
+        python -m geowatch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
             --channels "invariants.7,invariants.6,invariants.5" --animate=True \
             --select_images '.sensor_coarse != "WV"' --draw_anns=False
 
     Ignore:
-        ### Command 1 / 2 - watch-teamfeat-job-0
-        python -m watch.tasks.invariants.predict \
+        ### Command 1 / 2 - geowatch-teamfeat-job-0
+        python -m geowatch.tasks.invariants.predict \
             --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2.kwcoco.json" \
             --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2_uky_invariants.kwcoco.json" \
             --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
@@ -694,7 +694,7 @@ if __name__ == '__main__':
         kwcoco subset --src=data.kwcoco.json --dst=AE_R001.kwcoco.json --select_videos='.name == "AE_R001"'
         kwcoco subset --src=data.kwcoco.json --dst=NZ_R001.kwcoco.json --select_videos='.name == "NZ_R001"'
 
-        python -m watch.tasks.mae.predict \
+        python -m geowatch.tasks.mae.predict \
         --device="cuda:0"\
         --mae_ckpt_path="/storage1/fs1/jacobsn/Active/user_s.sastry/smart_watch/new_models/checkpoints/Drop6-epoch=01-val_loss=0.20.ckpt"\
         --input_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_train_I2L_split6.kwcoco.zip"\
@@ -703,7 +703,7 @@ if __name__ == '__main__':
         --workers=8 \
         --io_workers=8
 
-        python -m watch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
+        python -m geowatch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False
 

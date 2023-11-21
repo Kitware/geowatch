@@ -70,19 +70,19 @@ from torch import nn
 # from einops.layers.torch import Rearrange
 # from torchvision import transforms
 from torch.optim import lr_scheduler
-from watch import heuristics
-from watch.tasks.fusion import utils
-from watch.tasks.fusion.architectures import transformer
-from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
-from watch.tasks.fusion.methods.network_modules import coerce_criterion
-from watch.tasks.fusion.methods.network_modules import torch_safe_stack
-from watch.tasks.fusion.methods.network_modules import RobustModuleDict
-from watch.tasks.fusion.methods.network_modules import RobustParameterDict
-from watch.tasks.fusion.methods.network_modules import RearrangeTokenizer
-from watch.tasks.fusion.methods.network_modules import ConvTokenizer
-from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
-from watch.tasks.fusion.methods.network_modules import DWCNNTokenizer
-from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from geowatch import heuristics
+from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion.architectures import transformer
+from geowatch.tasks.fusion.methods.network_modules import _torch_meshgrid
+from geowatch.tasks.fusion.methods.network_modules import coerce_criterion
+from geowatch.tasks.fusion.methods.network_modules import torch_safe_stack
+from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
+from geowatch.tasks.fusion.methods.network_modules import RobustParameterDict
+from geowatch.tasks.fusion.methods.network_modules import RearrangeTokenizer
+from geowatch.tasks.fusion.methods.network_modules import ConvTokenizer
+from geowatch.tasks.fusion.methods.network_modules import LinearConvTokenizer
+from geowatch.tasks.fusion.methods.network_modules import DWCNNTokenizer
+from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 
 import scriptconfig as scfg
 
@@ -239,21 +239,21 @@ class MultimodalTransformerConfig(scfg.DataConfig):
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     """
     CommandLine:
-        xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
+        xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
 
     TODO:
         - [ ] Change name MultimodalTransformer -> FusionModel
         - [ ] Move parent module methods -> models
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py MultimodalTransformer
+        xdoctest -m /home/joncrall/code/watch/geowatch/tasks/fusion/methods/channelwise_transformer.py MultimodalTransformer
 
     Example:
-        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-        >>> from watch.tasks.fusion import datamodules
+        >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> from geowatch.tasks.fusion import datamodules
         >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes-watch', num_workers=4, channels='auto')
+        >>>     train_dataset='special:vidshapes-geowatch', num_workers=4, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
@@ -303,7 +303,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
             >>> self = model = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> assert "classes" in model.hparams
             >>> assert "dataset_stats" in model.hparams
@@ -391,13 +391,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
-        # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
+        # ~/code/watch/geowatch/tasks/fusion/methods/channelwise_transformer.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         class_weights = self.hparams.class_weights
         modulate_class_weights = self.hparams.modulate_class_weights
         if modulate_class_weights:
             ub.schedule_deprecation(
-                'watch', 'modulate_class_weights', 'param',
+                'geowatch', 'modulate_class_weights', 'param',
                 migration='Use class_weights:<modulate_str> instead',
                 deprecate='0.3.9', error='0.3.11', remove='0.3.13')
             if isinstance(class_weights, str) and class_weights == 'auto':
@@ -536,7 +536,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             """
             Ignore:
                 >>> # Note: it is important that the non-kwargs are saved as hyperparams
-                >>> from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
+                >>> from geowatch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
                 >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
                 >>> self = model = MultimodalTransformer(arch_name="vit", stream_channels='720 !', input_sensorchan=channels, classes=classes, dataset_stats=dataset_stats, tokenizer='linconv')
                 >>> batch = self.demo_batch()
@@ -633,7 +633,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         norm=None
                     )
                 elif self.hparams.decoder == 'segmenter':
-                    from watch.tasks.fusion.architectures import segmenter_decoder
+                    from geowatch.tasks.fusion.architectures import segmenter_decoder
                     self.heads[head_name] = segmenter_decoder.MaskTransformerDecoder(
                         d_model=feat_dim,
                         n_layers=prop['hidden'],
@@ -674,8 +674,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         is the primary entry point.
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.utils.configargparse_ext import ArgumentParser
             >>> cls = MultimodalTransformer
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
@@ -724,8 +724,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
-            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # noqa
+            >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
             >>> disable_lightning_hardware_warnings()
             >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
@@ -746,7 +746,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Verify lr and decay is set correctly
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> my_lr = 2.3e-5
             >>> my_decay = 2.3e-5
             >>> kw = dict(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
@@ -821,18 +821,18 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         Overfit script and demo
 
         CommandLine:
-            python -m xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
+            python -m xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
 
         Example:
             >>> # xdoctest: +REQUIRES(--overfit-demo)
             >>> # ============
             >>> # DEMO OVERFIT:
             >>> # ============
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.utils.util_data import find_dvc_dpath
-            >>> import watch
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.utils.util_data import find_dvc_dpath
+            >>> import geowatch
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
@@ -849,13 +849,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 0:
-            >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'data_vali.kwcoco.json'
             >>>     channels='swir16|swir22|blue|green|red|nir'
             >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'combo_vali_I2.kwcoco.json'
             >>>     channels='blue|green|red|nir,invariants.0:17'
             >>> if 0:
-            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
             >>>     #channels='B1|B11|B8|r|g|b|gauss'
             >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
@@ -1043,12 +1043,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         Generic forward step used for test / train / validation
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
-            >>> import watch
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> import geowatch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes-watch',
+            >>>     train_dataset='special:vidshapes-geowatch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
             >>>     channels='auto',
@@ -1080,7 +1080,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> kwplot.show_if_requested()
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -1093,7 +1093,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Test learned_linear multimodal reduce
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -1224,7 +1224,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     def forward_item(self, item, with_loss=False):
         """
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -1239,7 +1239,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Decoupled resolutions
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -1818,19 +1818,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
+            xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
 
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
             >>> model = self = methods.MultimodalTransformer(
             >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
             >>>     change_head_hidden=0, saliency_head_hidden=0,
@@ -1863,8 +1863,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> import pytest
             >>> pytest.skip('not currently used')
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.tasks.fusion import datamodules
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.tasks.fusion import datamodules
             >>> channels = 'B1,B8|B8a,B10|B11'
             >>> channels = 'B1|B8|B10|B8a|B11'
             >>> datamodule = datamodules.KWCocoVideoDataModule(
@@ -1897,7 +1897,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 def slice_to_agree(a1, a2, axes=None):
     """
     Example:
-        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         a1 = np.random.rand(3, 5, 7, 9, 3)
         a2 = np.random.rand(3, 5, 6, 9, 3)
         b1, b2 = slice_to_agree(a1, a2)

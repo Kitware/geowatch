@@ -46,7 +46,7 @@ def pad(fn):
 def predict_image(image, model):
     """
     Example:
-        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> from geowatch.tasks.landcover.detector import *  # NOQA
         >>> import kwimage
         >>> def fake_model(t_image):
         ...     np_img = t_image.cpu().numpy()[0].transpose(1, 2, 0)
@@ -87,7 +87,7 @@ def predict_image(image, model):
 def normalize(image, invalid_mask, low=2, high=98):
     """
     Example:
-        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> from geowatch.tasks.landcover.detector import *  # NOQA
         >>> import kwimage
         >>> # orig_image = np.random.rand(32, 32, 3)
         >>> orig_image = kwimage.ensure_float01(kwimage.grab_test_image())
@@ -102,7 +102,7 @@ def normalize(image, invalid_mask, low=2, high=98):
         >>> kwplot.imshow(output, pnum=(1, 2, 2))
 
     Example:
-        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> from geowatch.tasks.landcover.detector import *  # NOQA
         >>> # Test 100% nan case
         >>> image = np.full((32, 32, 3), fill_value=np.nan)
         >>> invalid_mask = np.isnan(image)

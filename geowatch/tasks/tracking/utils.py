@@ -94,8 +94,8 @@ def gpd_compute_scores(gdf, sub_dset, thrs: Iterable, ks: Dict, USE_DASK=False,
 
     Example:
         >>> import kwcoco
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> from watch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
+        >>> from geowatch.tasks.tracking.utils import *  # NOQA
+        >>> from geowatch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
         >>> sub_dset = kwcoco.CocoDataset.demo('vidshapes1')
         >>> gdf, _ = _build_annot_gdf(sub_dset)
         >>> thrs = [-1, 'median']
@@ -206,8 +206,8 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None,
 
     Example:
         >>> import kwcoco
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> from watch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
+        >>> from geowatch.tasks.tracking.utils import *  # NOQA
+        >>> from geowatch.tasks.tracking.utils import _compute_group_scores, _build_annot_gdf
         >>> _valid_keys = ['r', 'g', 'b']
         >>> sub_dset = kwcoco.CocoDataset.demo('vidshapes1')
         >>> aids = list(sub_dset.images().annots[0])
@@ -445,7 +445,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     Example:
         >>> import numpy as np
         >>> import kwimage
-        >>> from watch.tasks.tracking.utils import score_poly
+        >>> from geowatch.tasks.tracking.utils import score_poly
         >>> h = w = 64
         >>> poly = kwimage.Polygon.random().scale((w, h))
         >>> probs = np.random.rand(1, 3, h, w)
@@ -563,7 +563,7 @@ def mask_to_polygons(probs,
         kwcoco.Polygon: extracted polygons.
 
     Example:
-        >>> from watch.tasks.tracking.utils import mask_to_polygons
+        >>> from geowatch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
         >>> probs = kwimage.Heatmap.random(dims=(64, 64),
         >>>                                rng=0).data['class_probs'][0]
@@ -576,7 +576,7 @@ def mask_to_polygons(probs,
         >>> kwplot.imshow(probs > 0.5)
 
     Example:
-        >>> from watch.tasks.tracking.utils import mask_to_polygons
+        >>> from geowatch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
         >>> import kwarray
         >>> rng = kwarray.ensure_rng(1043462368)

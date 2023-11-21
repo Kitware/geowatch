@@ -36,14 +36,14 @@ def resolve_scale_request(request=None, data_gsd=None):
         WINDOW, then it needs to be used inversely.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> resolve_scale_request(1.0)
         >>> resolve_scale_request('native')
         >>> resolve_scale_request('10 GSD', data_gsd=10)
         >>> resolve_scale_request('20 GSD', data_gsd=10)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> import ubelt as ub
         >>> grid = list(ub.named_product({
         >>>     'request': ['10GSD', '30GSD'],
@@ -166,7 +166,7 @@ def fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
 def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
     """
     Ignore:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> import kwimage
         >>> H, W = 121, 153
         >>> canvas_dsize = (W, H)
@@ -300,10 +300,10 @@ def _string_to_hashvec(key):
 def _boxes_snap_to_edges(given_box, snap_target):
     """
     Ignore:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> import kwimage
-        >>> from watch.tasks.fusion.datamodules.data_utils import _string_to_hashvec, _boxes_snap_to_edges
-        >>> from watch.tasks.fusion.datamodules.data_utils import _boxes_snap_to_edges
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import _string_to_hashvec, _boxes_snap_to_edges
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import _boxes_snap_to_edges
         >>> snap_target = kwimage.Boxes([[0, 0, 10, 10]], 'ltrb')
         >>> given_box = kwimage.Boxes([[-3, 5, 3, 13]], 'ltrb')
         >>> adjusted_box = _boxes_snap_to_edges(given_box, snap_target)
@@ -336,7 +336,7 @@ class NestedPool(list):
     Helps with balancing samples over multiple criteria
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import NestedPool
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import NestedPool
         >>> # Lets say that you have a grid of sample locations with information
         >>> # about them - say a source region and what category they contain.
         >>> # In this case region1 occurs more often than region2 and there is
@@ -380,7 +380,7 @@ class NestedPool(list):
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
         >>> list(nested1.leafs())
 
@@ -466,7 +466,7 @@ def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
     This is typically done by finding clusters of zeros in specific bands.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> import kwcoco
         >>> import kwarray
         >>> stream = kwcoco.FusedChannelSpec.coerce('foo|red|green|bar')
@@ -482,7 +482,7 @@ def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
         >>>     samecolor_values=samecolor_values)
         >>> assert samecolor_mask.sum() == (hwc[..., relevant_band_idxs] == 0).any(axis=2).sum()
     """
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     stream_oset = ub.oset(stream)
     relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands]
     relevant_masks = []
@@ -513,7 +513,7 @@ class MultiscaleMask:
     based on data from different resolution.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> image = kwimage.grab_test_image()
         >>> image = kwimage.ensure_float01(image)
         >>> rng = kwarray.ensure_rng(1)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
 
 
 __debugging__ = r"""
@@ -32,7 +32,7 @@ ipython
 
 import sys, ubelt
 sys.path.append(ubelt.expandpath('~/code/watch'))
-from watch.cli.smartflow.run_teamfeat_mae import *  # NOQA
+from geowatch.cli.smartflow.run_teamfeat_mae import *  # NOQA
 
 
 # Copied from a smartflow run that failed,
@@ -51,7 +51,7 @@ config = TeamFeatMAE(**{
 
 ###
 
-python -m watch.tasks.mae.predict \
+python -m geowatch.tasks.mae.predict \
         --input_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc.json \
         --mae_ckpt_path=/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt \
         --output_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc_wu_mae.kwcoco.zip \
@@ -62,7 +62,7 @@ python -m watch.tasks.mae.predict \
 
 import sys, ubelt
 sys.path.append(ubelt.expandpath('~/code/watch'))
-from watch.tasks.mae.predict import *  # NOQA
+from geowatch.tasks.mae.predict import *  # NOQA
 kwargs = {
     'device': 'cuda:0',
     'mae_ckpt_path': '/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt',
@@ -121,9 +121,9 @@ def main():
     config = TeamFeatMAE.cli(strict=True)
 
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
-    from watch.utils.util_framework import download_region
+    from geowatch.utils.util_framework import download_region
 
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -166,7 +166,7 @@ def main():
 
     # Use the existing prepare teamfeat script to get the features invocation.
     # This has a specific output pattern that we hard code here.
-    from watch.cli import prepare_teamfeats
+    from geowatch.cli import prepare_teamfeats
     base_fpath = ub.Path(input_kwcoco_fpath)
     # watch_coco_stats.main(cmdline=0, src=base_fpath)
     # coco_stats._CLI.main(cmdline=0, src=[base_fpath])

@@ -3,7 +3,7 @@ Module for access to simple data for demo and testing purposes.
 """
 
 __devnotes__ = """
-mkinit -m watch.demo --lazy -w
+mkinit -m geowatch.demo --lazy -w
 """
 
 

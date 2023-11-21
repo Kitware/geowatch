@@ -3,7 +3,7 @@
 import kwcoco
 import ndsampler
 import ubelt as ub
-# import watch
+# import geowatch
 import numpy as np
 import matplotlib.pyplot as plt
 # from tqdm import tqdm
@@ -12,7 +12,7 @@ import torch
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from metric_learn import NCA, LMNN, MMC_Supervised, LSML_Supervised
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 visualize_images = False
 coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json')

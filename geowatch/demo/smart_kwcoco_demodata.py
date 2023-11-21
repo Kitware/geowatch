@@ -7,7 +7,7 @@ import kwcoco
 import kwimage
 import numpy as np
 import ubelt as ub
-import watch
+import geowatch
 
 
 def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)):
@@ -15,10 +15,10 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
     Return a dummy kwcoco file with special metdata
 
     DEPRECATED:
-        Instead use watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames20-gsize512') or something similar
+        Instead use geowatch.coerce_kwcoco('geowatch-msi-geodata-dates-heatmap-videos1-frames20-gsize512') or something similar
 
     Example:
-        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
         >>> coco_dset = demo_kwcoco_with_heatmaps()
 
         key = 'salient'
@@ -35,7 +35,7 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
     """
     assert image_size[0] == image_size[1]
     return coerce_kwcoco(
-        f'watch-msi-geodata-dates-heatmap-videos{num_videos}-frames{num_frames}-gsize{image_size[0]}')
+        f'geowatch-msi-geodata-dates-heatmap-videos{num_videos}-frames{num_frames}-gsize{image_size[0]}')
 
 
 def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
@@ -147,7 +147,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
     Add random geo coordinates to one asset in each video
 
     Example:
-        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes5-multispectral')
         >>> modified = hack_seed_geometadata_in_dset(coco_dset, force=True)
         >>> fpath = modified[0]
@@ -155,7 +155,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
     """
     import kwarray
     import kwimage
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     rng = kwarray.ensure_rng(rng)
     modified = []
     print('Hacking in seed geom data')
@@ -203,13 +203,13 @@ def _random_utm_box(rng=None):
     rng = None
 
     Example:
-        >>> from watch.demo.smart_kwcoco_demodata import _random_utm_box
+        >>> from geowatch.demo.smart_kwcoco_demodata import _random_utm_box
         >>> _random_utm_box()
     """
     import numpy as np
     from kwarray.distributions import Uniform
     import kwarray
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     from osgeo import osr
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
@@ -230,7 +230,7 @@ def _random_utm_box(rng=None):
     utm_crs.ImportFromEPSG(utm_epsg_int)
     utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
 
-    utm_crs_info = watch.gis.geotiff.make_crs_info_object(utm_crs)
+    utm_crs_info = geowatch.gis.geotiff.make_crs_info_object(utm_crs)
 
     utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
     # keep the aspect ratio more or less squareish
@@ -277,11 +277,11 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                             **kwargs):
     """
     Ignore:
-        import watch
-        coco_dset = watch.demo.demo_kwcoco_multisensor()
-        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+        import geowatch
+        coco_dset = geowatch.demo.demo_kwcoco_multisensor()
+        coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
 
-        from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
         import xdev
         globals().update(xdev.get_func_kwargs(demo_kwcoco_multisensor))
         kwargs = {}
@@ -317,7 +317,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         kwcoco.CocoDataset
 
     Example:
-        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
         >>> num_frames = 10
         >>> num_videos = 4
         >>> dates=True
@@ -327,7 +327,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         >>> kwargs = {}
         >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=True)
     """
-    dpath = ub.Path.appdir('watch', 'demo_kwcoco_bundles').ensuredir()
+    dpath = ub.Path.appdir('geowatch', 'demo_kwcoco_bundles').ensuredir()
 
     demo_kwargs = {
         'num_frames': num_frames,
@@ -432,7 +432,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         for ann in coco_dset.anns.values():
 
             # both of these errors occur in the call:
-            # watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16,
+            # geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16,
             #                     image_size=(8, 8))
 
             has_seg = (ann['segmentation'] is not None and
@@ -466,7 +466,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         region_geom = geodata.get('region_geom', 'random')
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng,
                                       region_geom=region_geom)
-        from watch.utils import kwcoco_extensions
+        from geowatch.utils import kwcoco_extensions
         # Do a consistent transfer of the hacked seeded geodata to the other images
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
         kwcoco_extensions.coco_populate_geo_heuristics(coco_dset)
@@ -510,11 +510,11 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
     return coco_dset
 
 
-def coerce_kwcoco(data='watch-msi', **kwargs):
+def coerce_kwcoco(data='geowatch-msi', **kwargs):
     """
-    coerce with watch special datasets
+    coerce with geowatch special datasets
 
-    Calls `kwcoco.CocoDataset.coerce` unless the code is `watch-msi`, and then
+    Calls `kwcoco.CocoDataset.coerce` unless the code is `geowatch-msi`, and then
     we construct a special dataset with extra variables expected by the watch
     project.
 
@@ -523,21 +523,21 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             the special code to coerce
 
         **kwargs:
-            modify how the demodata is created. For `watch-msi`, see
+            modify how the demodata is created. For `geowatch-msi`, see
             :func:`demo_kwcoco_multisensor`, which has args like: `dates`,
             `geodata`, `heatmap`.
 
     Example:
-        >>> import watch
+        >>> import geowatch
         >>> dates=True
         >>> geodata=True
         >>> heatmap=True
         >>> kwargs = {}
-        >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=dates, geodata=geodata, heatmap=heatmap)
-        >>> coco_dset2 = watch.coerce_kwcoco(data='watch-msi-dates-geodata-gsize32')
+        >>> coco_dset = geowatch.coerce_kwcoco(data='geowatch-msi', dates=dates, geodata=geodata, heatmap=heatmap)
+        >>> coco_dset2 = geowatch.coerce_kwcoco(data='geowatch-msi-dates-geodata-gsize32')
         >>> assert 'date_captured' in coco_dset2.images().peek()
     """
-    if isinstance(data, str) and 'watch' in data.split('-'):
+    if isinstance(data, str) and 'geowatch' in data.split('-'):
         defaults = {
             'render': True,
             'num_videos': 4,
@@ -590,7 +590,7 @@ def _parse_demostr(data, defaults, alias_to_key=None):
     demo method.
 
     Example:
-        >>> from watch.demo.smart_kwcoco_demodata import _random_utm_box, _parse_demostr
+        >>> from geowatch.demo.smart_kwcoco_demodata import _random_utm_box, _parse_demostr
         >>> data = 'foo-bar-baz1-biz2.3'
         >>> defaults = {}
         >>> alias_to_key = None
@@ -599,7 +599,7 @@ def _parse_demostr(data, defaults, alias_to_key=None):
     """
     if alias_to_key is None:
         alias_to_key = {}
-    from watch.utils.util_codes import parse_delimited_argstr
+    from geowatch.utils.util_codes import parse_delimited_argstr
     handled = defaults.copy()
     unhandled = parse_delimited_argstr(data)
     for key, value in list(unhandled.items()):
@@ -639,15 +639,15 @@ def demo_dataset_with_regions_and_sites(dpath=None):
     Get a demo coco dataset with region and site models.
     """
     import ubelt as ub
-    import watch
-    from watch.geoannots import geomodels
-    from watch.geoannots.geococo_objects import CocoGeoVideo
-    from watch.utils import util_gis
+    import geowatch
+    from geowatch.geoannots import geomodels
+    from geowatch.geoannots.geococo_objects import CocoGeoVideo
+    from geowatch.utils import util_gis
     import kwimage
     import kwarray
 
-    coco_dset = watch.coerce_kwcoco(
-        'watch-msi', heatmap=True, geodata=True,
+    coco_dset = geowatch.coerce_kwcoco(
+        'geowatch-msi', heatmap=True, geodata=True,
         dates=True, image_size=(96, 96)
     )
     rng = kwarray.ensure_rng(4329423)
@@ -692,7 +692,7 @@ def demo_dataset_with_regions_and_sites(dpath=None):
         'should be on different dates')
 
     if dpath is None:
-        dpath = ub.Path.appdir('watch', 'demo', 'regions_and_sites').ensuredir()
+        dpath = ub.Path.appdir('geowatch', 'demo', 'regions_and_sites').ensuredir()
     dpath.delete().ensuredir()
 
     # Write region models to disk

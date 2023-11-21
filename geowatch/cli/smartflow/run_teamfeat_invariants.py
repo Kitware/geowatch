@@ -1,7 +1,7 @@
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.smartflow_ingress import smartflow_ingress
-from watch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.smartflow_ingress import smartflow_ingress
+from geowatch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatInvariantsConfig(scfg.DataConfig):
@@ -45,12 +45,12 @@ def main():
 
 
 def run_uky_invariants_for_baseline(config):
-    from watch.utils.util_framework import download_region
+    from geowatch.utils.util_framework import download_region
 
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -84,7 +84,7 @@ def run_uky_invariants_for_baseline(config):
     # FIXME: probably should not be called "SC" invariants
     invariants_kwcoco_path = ingress_dir / 'sc_invariants_kwcoco.json'
     ub.cmd([
-        'python', '-m', 'watch.tasks.invariants.predict',
+        'python', '-m', 'geowatch.tasks.invariants.predict',
         '--input_kwcoco', timecombined_kwcoco_file_for_bas,
         '--output_kwcoco', invariants_kwcoco_path,
         '--pretext_package_path', config.model_path,

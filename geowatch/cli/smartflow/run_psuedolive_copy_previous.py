@@ -12,7 +12,7 @@ import json
 import ubelt as ub
 import scriptconfig as scfg
 
-from watch.utils.util_framework import download_region
+from geowatch.utils.util_framework import download_region
 
 
 class PsuedoliveCopyPreviousConfig(scfg.DataConfig):

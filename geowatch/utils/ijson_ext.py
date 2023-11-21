@@ -8,7 +8,7 @@ References:
 
 Example:
     >>> import ubelt as ub
-    >>> from watch.utils import ijson_ext as ijson_ext
+    >>> from geowatch.utils import ijson_ext as ijson_ext
     >>> #
     >>> import kwcoco
     >>> dset = kwcoco.CocoDataset.demo()

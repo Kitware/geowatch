@@ -3,7 +3,7 @@ CommandLine:
 
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     echo $DVC_DPATH
-    python -m watch.cli.coco_crop_tracks \
+    python -m geowatch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --mode=process --workers=8
@@ -12,7 +12,7 @@ CommandLine:
     # Small test of KR only
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     echo $DVC_DPATH
-    python -m watch.cli.coco_crop_tracks \
+    python -m geowatch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop2-TA1-test/data.kwcoco.json" \
         --mode=process --workers=8 --channels="red|green|blue" \
@@ -81,10 +81,10 @@ def main(cmdline=0, **kwargs):
     Simple CLI for cropping to tracks
 
     Ignore:
-        from watch.cli.coco_crop_tracks import *  # NOQA
-        import watch
-        dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
-        # dvc_dpath = watch.find_dvc_dpath(hardware='ssd')
+        from geowatch.cli.coco_crop_tracks import *  # NOQA
+        import geowatch
+        dvc_dpath = geowatch.find_dvc_dpath(hardware='hdd')
+        # dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd')
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
@@ -95,9 +95,9 @@ def main(cmdline=0, **kwargs):
             src=src, dst=dst, include_sensors=include_sensors)
 
     Ignore:
-        from watch.cli.coco_crop_tracks import *  # NOQA
-        import watch
-        dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
+        from geowatch.cli.coco_crop_tracks import *  # NOQA
+        import geowatch
+        dvc_dpath = geowatch.find_dvc_dpath(hardware='hdd')
         base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json'
@@ -121,7 +121,7 @@ def main(cmdline=0, **kwargs):
     # sql_coco_dset = coco_dset.view_sql()
     # coco_dset = sql_coco_dset
 
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
         include_sensors=config['include_sensors'],
@@ -144,7 +144,7 @@ def main(cmdline=0, **kwargs):
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     workers = util_parallel.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
 
@@ -219,7 +219,7 @@ def main(cmdline=0, **kwargs):
        $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json
 
 
-    python -m watch reproject_annotations \
+    python -m geowatch reproject_annotations \
         --src "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json" \
         --dst "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/projected.kwcoco.json" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
@@ -238,7 +238,7 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
     TODO:
         - [ ] populate auxiliary is taking a long time, speed it up.
     """
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     import kwimage
     import kwcoco
     # Make the new kwcoco file where 1 track is mostly 1 video
@@ -563,7 +563,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
 def run_crop_asset_task(crop_asset_task, keep):
     from osgeo import osr
     osr.GetPROJSearchPaths()
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     import kwimage
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')
@@ -580,6 +580,6 @@ def run_crop_asset_task(crop_asset_task, keep):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_crop_tracks.py
+        python ~/code/watch/geowatch/cli/coco_crop_tracks.py
     """
     main(cmdline=1)

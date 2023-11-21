@@ -65,11 +65,11 @@ The following example illustrates how to read region / site models efficiently
 
 Example:
     >>> # xdoctest: +REQUIRES(env:HAS_DVC)
-    >>> import watch
-    >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> import geowatch
+    >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> region_models_dpath = dvc_data_dpath / 'annotations/drop6/region_models'
     >>> site_models_dpath = dvc_data_dpath / 'annotations/drop6/site_models'
-    >>> from watch.geoannots import geomodels
+    >>> from geowatch.geoannots import geomodels
     >>> region_models = list(geomodels.RegionModel.coerce_multiple(region_models_dpath))
     >>> site_models = list(geomodels.SiteModel.coerce_multiple(site_models_dpath, workers=8))
     >>> print(f'Number of region models: {len(region_models)}')
@@ -84,7 +84,7 @@ Example:
     >>> print(gdf)
 
 
-XDEV_PROFILE=1 xdoctest ~/code/watch/watch/geoannots/geomodels.py
+XDEV_PROFILE=1 xdoctest ~/code/watch/geowatch/geoannots/geomodels.py
 
 
 For testing the following example shows how to generate and inspect a random
@@ -92,7 +92,7 @@ site / region model.
 
 
 Example:
-    >>> from watch.geoannots.geomodels import *
+    >>> from geowatch.geoannots.geomodels import *
     >>> # Generate a region model and also return its sites
     >>> region, sites = RegionModel.random(with_sites=True, rng=0)
     >>> # A region model consists of a region header
@@ -226,11 +226,11 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             Self
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> import ubelt as ub
             >>> #
             >>> ### Setup demo data
-            >>> dpath = ub.Path.appdir('watch/tests/geoannots/coerce_multiple')
+            >>> dpath = ub.Path.appdir('geowatch/tests/geoannots/coerce_multiple')
             >>> dpath.delete().ensuredir()
             >>> regions, sites = [], []
             >>> for i in range(3):
@@ -266,7 +266,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> # assert len(sites4) == len(sites)
 
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
             data, format='json', allow_raw=allow_raw, workers=workers,
             mode=mode, verbose=verbose, desc=desc, parse_float=parse_float))
@@ -341,7 +341,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def geometry(self):
         """
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> RegionModel.random().geometry
             >>> SiteModel.random().geometry
         """
@@ -360,7 +360,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def strip_body_features(self):
         """
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random()
             >>> assert len(list(self.body_features())) > 0
             >>> self.strip_body_features()
@@ -445,7 +445,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         collection independently to better localize where the errors are.
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random(rng=0)
             >>> self._validate_parts(strict=False)
             >>> self = SiteModel.random(rng=0)
@@ -476,7 +476,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         Ensure we are using the up to date schema cache.
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random(rng=0)
             >>> feat = list(self.site_summaries())[0]
             >>> self._update_cache_key()
@@ -506,7 +506,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         Ensure that dates are provided as dates and not datetimes
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> region = RegionModel.random()
             >>> region.header['properties']['start_date'] = '1970-01-01T000000'
             >>> region.ensure_isodates()
@@ -531,7 +531,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         If start and end dates are backwards, flip them.
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> ss = SiteSummary.random()
             >>> ss['properties']['start_date'] = '1970-01-01T000000'
             >>> ss.ensure_isodates()
@@ -590,7 +590,7 @@ class RegionModel(_Model):
         Rename to Region?
 
     Example:
-        >>> from watch.geoannots.geomodels import *  # NOQA
+        >>> from geowatch.geoannots.geomodels import *  # NOQA
         >>> self = RegionModel.random()
         >>> print(self)
         >>> self.validate(strict=False)
@@ -609,8 +609,8 @@ class RegionModel(_Model):
 
     @classmethod
     def load_schema(cls, strict=True):
-        import watch
-        schema = watch.rc.registry.load_region_model_schema(strict=strict)
+        import geowatch
+        schema = geowatch.rc.registry.load_region_model_schema(strict=strict)
         return schema
 
     def site_summaries(self):
@@ -620,9 +620,9 @@ class RegionModel(_Model):
     def coerce(cls, data, parse_float=None):
         """
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> import ubelt as ub
-            >>> dpath = ub.Path.appdir('watch/tests/geoannots/coerce').ensuredir()
+            >>> dpath = ub.Path.appdir('geowatch/tests/geoannots/coerce').ensuredir()
             >>> region = RegionModel.random(with_sites=False, rng=0)
             >>> data = fpath = (dpath/ 'region.geojson')
             >>> fpath.write_text(region.dumps())
@@ -639,7 +639,7 @@ class RegionModel(_Model):
             geopandas.GeoDataFrame: the site summaries as a data frame
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random()
             >>> gdf = self.pandas_summaries()
             >>> print(gdf)
@@ -649,7 +649,7 @@ class RegionModel(_Model):
             >>> print(gdf)
             >>> assert len(gdf) == 0
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         crs84 = util_gis.get_crs84()
         site_summaries = list(self.site_summaries())
         if len(site_summaries):
@@ -666,11 +666,11 @@ class RegionModel(_Model):
             geopandas.GeoDataFrame: the region header as a data frame
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random()
             >>> print(self.pandas_region())
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         crs84 = util_gis.get_crs84()
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
@@ -684,7 +684,7 @@ class RegionModel(_Model):
 
             **kwargs :
                 passed to
-                :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+                :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
                 Some of these args are:
                     num_sites
                     num_observations
@@ -697,12 +697,12 @@ class RegionModel(_Model):
             RegionModel | Tuple[RegionModel, SiteModelCollection]
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> region1 = RegionModel.random(with_sites=False, rng=0)
             >>> region2, sites2 = RegionModel.random(with_sites=True, rng=0)
             >>> assert region1 == region2, 'rngs should be the same'
         """
-        from watch.demo.metrics_demo import demo_truth
+        from geowatch.demo.metrics_demo import demo_truth
 
         region, sites, _ = demo_truth.random_region_model(
             **kwargs, with_renderables=False)
@@ -725,7 +725,7 @@ class RegionModel(_Model):
                 it is converted to a site summary and then added.
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> region = RegionModel.random(num_sites=False)
             >>> site1 = SiteModel.random(region=region)
             >>> site2 = SiteModel.random(region=region)
@@ -802,7 +802,7 @@ class RegionModel(_Model):
             * :func:`SiteModelCollection.as_region_model`
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> # Make a region without a header
             >>> self = RegionModel.random()
             >>> self.features.remove(self.header)
@@ -841,7 +841,7 @@ class SiteModel(_Model):
         Rename to Site?
 
     Example:
-        >>> from watch.geoannots.geomodels import *  # NOQA
+        >>> from geowatch.geoannots.geomodels import *  # NOQA
         >>> self = SiteModel.random()
         >>> print(self)
         >>> self.validate(strict=False)
@@ -861,8 +861,8 @@ class SiteModel(_Model):
 
     @classmethod
     def load_schema(cls, strict=True):
-        import watch
-        schema = watch.rc.registry.load_site_model_schema(strict=strict)
+        import geowatch
+        schema = geowatch.rc.registry.load_site_model_schema(strict=strict)
         return schema
 
     @property
@@ -881,7 +881,7 @@ class SiteModel(_Model):
             geopandas.GeoDataFrame: the site summaries as a data frame
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = SiteModel.random()
             >>> gdf = self.pandas_observations()
             >>> print(gdf)
@@ -891,7 +891,7 @@ class SiteModel(_Model):
             >>> print(gdf)
             >>> assert len(gdf) == 0
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         crs84 = util_gis.get_crs84()
         features = list(self.observations())
         if len(features):
@@ -907,11 +907,11 @@ class SiteModel(_Model):
             geopandas.GeoDataFrame: the region header as a data frame
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> self = SiteModel.random()
             >>> print(self.pandas_site())
         """
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         crs84 = util_gis.get_crs84()
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
@@ -933,25 +933,25 @@ class SiteModel(_Model):
                 typically this is only used when num_sites=1.
 
             **kwargs :
-                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
 
         Returns:
             SiteModel
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> region1 = RegionModel.random(with_sites=False, rng=0)
             >>> region2, sites2 = RegionModel.random(with_sites=True, rng=0)
             >>> assert region1 == region2, 'rngs should be the same'
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> region = RegionModel.random(with_sites=False, rng=0)
             >>> site = SiteModel.random(region=region)
             >>> assert region.region_id == site.region_id
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> import kwimage
             >>> region = RegionModel.random(with_sites=False, rng=0)
             >>> # Test specification of the site geometry.
@@ -961,7 +961,7 @@ class SiteModel(_Model):
             >>> site = SiteModel.random(region=region, site_poly=site_poly.scale(10))
             >>> assert abs(region.geometry.area - site.geometry.area) > 1e-7
         """
-        from watch.demo.metrics_demo import demo_truth
+        from geowatch.demo.metrics_demo import demo_truth
         kwargs.setdefault('with_renderables', False)
         kwargs['site_poly'] = site_poly
         if region is not None:
@@ -1067,7 +1067,7 @@ class SiteModel(_Model):
         Ensure that dates are provided as dates and not datetimes
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> site = SiteModel.random()
             >>> # Set props as datetimes
             >>> site.header['properties']['start_date'] = '1970-01-01T000000'
@@ -1272,7 +1272,7 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         Ensure that dates are provided as dates and not datetimes
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> ss = SiteSummary.random()
             >>> ss['properties']['start_date'] = '1970-01-01T000000'
             >>> ss.ensure_isodates()
@@ -1298,7 +1298,7 @@ class _Feature(ub.NiceRepr, geojson.Feature):
             strict (bool): if False, do not error if this fails
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> ss = SiteSummary.random()
             >>> ss.infer_mgrs()
         """
@@ -1363,7 +1363,7 @@ class _SiteOrSummaryMixin:
         Common logic for converting site <-> site_summary
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> site = SiteModel.random()
             >>> site.validate(strict=False)
             >>> region = RegionModel.random()
@@ -1528,7 +1528,7 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
 
         Example:
             >>> # Convert a RegionModel to a collection of SiteModels
-            >>> from watch.geoannots import geomodels
+            >>> from geowatch.geoannots import geomodels
             >>> region = geomodels.RegionModel.random()
             >>> sites = []
             >>> for sitesum in region.site_summaries():
@@ -1580,13 +1580,13 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
                 typically this is only used when num_sites=1.
 
             **kwargs :
-                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
 
         Returns:
             SiteSummary
 
         Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
             >>> sitesum = SiteSummary.random(rng=0)
             >>> print('sitesum = {}'.format(ub.urepr(sitesum, nl=2)))
         """
@@ -1607,7 +1607,7 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
         Create an empty region header
 
         Example:
-            from watch.geoannots.geomodels import *  # NOQA
+            from geowatch.geoannots.geomodels import *  # NOQA
             self = SiteHeader.empty()
             ...
         """
@@ -1777,7 +1777,7 @@ class SiteModelCollection(ModelCollection):
                 appears as a site summary.
 
         Example:
-            >>> from watch.geoannots.geomodels import RegionModel
+            >>> from geowatch.geoannots.geomodels import RegionModel
             >>> region, sites = RegionModel.random(with_sites=True, rng=0)
             >>> self = SiteModelCollection(sites)
             >>> self.as_region_model()

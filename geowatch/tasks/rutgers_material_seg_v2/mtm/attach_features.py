@@ -29,11 +29,11 @@ CommandLine:
     "
 
     cat "$RUTGERS_MATERIAL_MODEL_CONFIG_FPATH"
-    python -m watch.utils.simple_dvc request $RUTGERS_MATERIAL_MODEL_FPATH
+    python -m geowatch.utils.simple_dvc request $RUTGERS_MATERIAL_MODEL_FPATH
     kwcoco stats "$INPUT_DATASET_FPATH"
 
     export CUDA_VISIBLE_DEVICES="1"
-    python -m watch.tasks.rutgers_material_seg_v2.predict \
+    python -m geowatch.tasks.rutgers_material_seg_v2.predict \
         --kwcoco_fpath="$INPUT_DATASET_FPATH" \
         --model_fpath="$RUTGERS_MATERIAL_MODEL_FPATH" \
         --config_fpath="$RUTGERS_MATERIAL_MODEL_CONFIG_FPATH" \
@@ -46,7 +46,7 @@ CommandLine:
         --animate=True --channels="red|green|blue,mtm,materials.0:3,mat_feats.0:3,mat_feats.3:6" \
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 
-    python -m watch.tasks.rutgers_material_seg_v2.visualize_material_features \
+    python -m geowatch.tasks.rutgers_material_seg_v2.visualize_material_features \
         $OUTPUT_DATASET_FPATH ./mat_visualize_test/
 
 
@@ -56,7 +56,7 @@ CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_materials=1 \
@@ -140,11 +140,11 @@ def make_material_predictions(eval_loader,
     import scipy
     from einops import rearrange
 
-    from watch.utils.util_parallel import BlockingJobQueue
-    from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
+    from geowatch.utils.util_parallel import BlockingJobQueue
+    from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
 
-    from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
-    from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
+    from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
+    from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
 
     # Initialize model in case it hasnt been already.
     device = torch.device('cuda')
@@ -287,11 +287,11 @@ def predict(cmdline=1, **kwargs):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.rutgers_material_seg_v2.predict import *  # NOQA
+        >>> from geowatch.tasks.rutgers_material_seg_v2.predict import *  # NOQA
         >>> import kwcoco
-        >>> import watch
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> import geowatch
+        >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_expt_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         >>> dset = kwcoco.CocoDataset(dvc_data_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip')
         >>> deployed_weights_path = dvc_expt_dpath / 'models/rutgers/ru_model_05_25_2023.ckpt'
         >>> deployed_config_path = dvc_expt_dpath / 'models/rutgers/ru_model_05_25_2023.yaml'
@@ -311,10 +311,10 @@ def predict(cmdline=1, **kwargs):
     import kwcoco
     from torch.utils.data import DataLoader
 
-    from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
-    from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID
-    from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_hash_str
-    from watch.tasks.rutgers_material_seg_v2.mtm.dataset.inference_dataset import InferenceDataset
+    from geowatch.tasks.rutgers_material_seg_v2.matseg.models import build_model
+    from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID
+    from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_hash_str
+    from geowatch.tasks.rutgers_material_seg_v2.mtm.dataset.inference_dataset import InferenceDataset
 
     # Get config.
     script_config = MaterialsPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)

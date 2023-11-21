@@ -4,7 +4,7 @@ Print stats about a torch model
 Exapmle Usage:
     DVC_DPATH=$(geowatch_dvc)
     PACKAGE_FPATH=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt
-    python -m watch.cli.torch_model_stats $PACKAGE_FPATH
+    python -m geowatch.cli.torch_model_stats $PACKAGE_FPATH
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -24,9 +24,9 @@ class TorchModelStatsConfig(scfg.DataConfig):
 def main(cmdline=False, **kwargs):
     """
     Ignore:
-        import watch
-        from watch.cli.torch_model_stats import *  # NOQA
-        dvc_dpath = watch.find_dvc_dpath()
+        import geowatch
+        from geowatch.cli.torch_model_stats import *  # NOQA
+        dvc_dpath = geowatch.find_dvc_dpath()
         package_fpath1 = dvc_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt'
         package_fpath2 = dvc_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58_epoch=3-step=81135.pt'
         package_fpath = dvc_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=3-step=85011.pt'
@@ -37,7 +37,7 @@ def main(cmdline=False, **kwargs):
 
     """
     config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import watch
+    import geowatch
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     package_paths = config['src']
@@ -46,7 +46,7 @@ def main(cmdline=False, **kwargs):
         package_paths = [package_paths]
 
     try:
-        dvc_dpath = watch.find_dvc_dpath()
+        dvc_dpath = geowatch.find_dvc_dpath()
     except Exception:
         dvc_dpath = None
 
@@ -71,9 +71,9 @@ def main(cmdline=False, **kwargs):
 
 def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     import kwcoco
-    from watch.tasks.fusion import utils
-    from watch.utils import util_netharn
-    from watch.monkey import monkey_torchmetrics
+    from geowatch.tasks.fusion import utils
+    from geowatch.utils import util_netharn
+    from geowatch.monkey import monkey_torchmetrics
     monkey_torchmetrics.fix_torchmetrics_compatability()
 
     package_fpath = ub.Path(package_fpath)
@@ -280,6 +280,6 @@ __config__ = TorchModelStatsConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.torch_model_stats
+        python -m geowatch.cli.torch_model_stats
     """
     main(cmdline=True)

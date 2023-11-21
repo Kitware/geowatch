@@ -98,7 +98,7 @@ Example:
     >>> # one image per band
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B')]
     >>>
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> assert dicts_contain(SENTINEL2, bands)
 '''
 SENTINEL2 = [
@@ -163,7 +163,7 @@ Example:
     >>> # one image for all bands
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B') and (k != 'BQA')]
     >>>
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT8, bands)
 '''
 LANDSAT8 = [
@@ -221,7 +221,7 @@ Example:
     >>> keys = sorted(k for k in assets.keys() if 'B' in k)
     >>> bands = [assets[k]['eo:bands'][0] for k in keys]
     >>>
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT7, bands)
 '''
 LANDSAT7 = [
@@ -274,7 +274,7 @@ Example:
     >>> assert wv02_pan == wv03_pan
     >>> assert wv02_ms8 == wv03_ms8
     >>>
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> assert dicts_contain(WORLDVIEW1_PAN, wv01_pan)
     >>> assert dicts_contain(WORLDVIEW2_PAN, wv02_pan)
     >>> assert dicts_contain(WORLDVIEW2_MS4, wv02_ms4)
@@ -364,7 +364,7 @@ TODO do we even need to conform to this? Should we only collect
 "true" synonyms like {'pan': 'panchromatic'} ?
 
 Example:
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> import itertools
     >>> names = set(b.get('common_name', '') for b in ALL_BANDS)
     >>> accounted_names = set(EO_COMMONNAMES.keys()).union(
@@ -403,7 +403,7 @@ Bands that are used to observe targets on the ground
 This is just a rough first pass
 
 Example:
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> assert GROUND.issubset(set(EO_COMMONNAMES.keys()))
 '''
 GROUND = {
@@ -424,7 +424,7 @@ These band fields can be accessed as python objects as well using pystac
 
 Example:
     >>> from pystac.extensions.eo import Band
-    >>> from watch.utils.util_bands import *
+    >>> from geowatch.utils.util_bands import *
     >>> for band in ALL_BANDS:
     >>>     band.pop('gsd', None)  # pystac doesn't support this yet
     >>>     b = Band.create(**band)
@@ -521,14 +521,14 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.util_bands import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.util_bands import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> import ubelt as ub
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> from watch.utils import kwcoco_extensions
+        >>> from geowatch.utils import kwcoco_extensions
         >>> gid = ub.peek(dset.index.imgs.keys())
         >>> vidid = dset.index.name_to_video['BH_Manama_R01']['id']
         >>> gid = dset.index.vidid_to_gids[vidid][0]
@@ -555,7 +555,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
 
     # Example:
     #     >>> # xdoctest: +REQUIRES(module:sympy)
-    #     >>> from watch.utils.util_bands import *  # NOQA
+    #     >>> from geowatch.utils.util_bands import *  # NOQA
     #     >>> symbolic = True
     #     >>> indexes = specialized_index_bands(coco_img=None, symbolic=symbolic)
     #     >>> import sympy as sym
@@ -845,13 +845,13 @@ def specialized_index_bands2(delayed=None):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.utils.util_bands import *  # NOQA
-        >>> from watch.utils.util_data import find_dvc_dpath
+        >>> from geowatch.utils.util_bands import *  # NOQA
+        >>> from geowatch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> #from watch.utils import kwcoco_extensions
+        >>> #from geowatch.utils import kwcoco_extensions
         >>> gid = dset.images().compress([s == 'L8' for s in dset.images().get('sensor_coarse')]).objs[200]['id']
         >>> #gid = ub.peek(dset.index.imgs.keys())
         >>> coco_img = dset.coco_image(gid)
@@ -881,9 +881,9 @@ def specialized_index_bands2(delayed=None):
 
     Ignore:
         >>> # xdoctest: +SKIP("Something is wrong with grabbing L8 images")
-        >>> from watch.utils.util_bands import *  # NOQA
-        >>> import watch
-        >>> dset = watch.demo.demo_smart_raw_kwcoco()
+        >>> from geowatch.utils.util_bands import *  # NOQA
+        >>> import geowatch
+        >>> dset = geowatch.demo.demo_smart_raw_kwcoco()
         >>> coco_img = [img for img in dset.images().coco_images if img.get('sensor_coarse', None) == 'L8'][0]
         >>> delayed = coco_img.imdelay().crop((slice(4000, 5000), slice(4000, 5000)))
         >>> indexes = specialized_index_bands2(delayed)

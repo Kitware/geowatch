@@ -13,8 +13,8 @@ except ImportError:
 
 
 def build_plotter(agg, rois, plot_config):
-    from watch.mlops.smart_global_helper import SMART_HELPER
-    from watch.utils import util_kwplot
+    from geowatch.mlops.smart_global_helper import SMART_HELPER
+    from geowatch.utils import util_kwplot
 
     build_special_columns(agg)
     agg.build()
@@ -45,7 +45,7 @@ def build_plotter(agg, rois, plot_config):
 
     plot_dpath = plot_config.get('plot_dpath', None)
     if plot_dpath is None:
-        from watch.mlops.aggregate import hash_regions
+        from geowatch.mlops.aggregate import hash_regions
         if rois is not None:
             region_hash = hash_regions(rois)
         else:
@@ -96,7 +96,7 @@ def build_all_param_plots(agg, rois, plot_config):
 
 
 def build_special_columns(agg):
-    from watch.utils import util_pandas
+    from geowatch.utils import util_pandas
     resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
     part1 = resolved_params.query_column('batch_size')
     if len(part1) > 1:
@@ -136,7 +136,7 @@ class ParamPlotter:
     Working on cleaning this up
     """
     def __init__(plotter, agg, vantage_points=None):
-        from watch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
         plotter.agg = agg
 
         # We will conduct analysis under serveral different vantage points
@@ -164,7 +164,7 @@ class ParamPlotter:
 
     def plot_resources(plotter):
         import rich
-        from watch.utils import util_kwplot
+        from geowatch.utils import util_kwplot
         agg = plotter.agg
         resource_summary_df = agg.resource_summary_table()
         rich.print(resource_summary_df.to_string())
@@ -206,13 +206,13 @@ class ParamPlotter:
         rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
 
     def plot_vantage_per_region_overview(plotter, vantage):
-        from watch.utils import util_kwplot
-        from watch.utils.util_kwplot import scatterplot_highlight
+        from geowatch.utils import util_kwplot
+        from geowatch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
         import kwplot
         import kwimage
         import rich
-        from watch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
         kwplot.close_figures()
@@ -294,13 +294,13 @@ class ParamPlotter:
         kwimage.imwrite(roi_legend_fpath, roi_legend)
 
     def plot_vantage_macro_overview(plotter, vantage):
-        from watch.utils import util_kwplot
-        from watch.utils.util_kwplot import scatterplot_highlight
+        from geowatch.utils import util_kwplot
+        from geowatch.utils.util_kwplot import scatterplot_highlight
         import kwplot
         import kwimage
         import numpy as np
         # import rich
-        from watch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
         kwplot.close_figures()
@@ -360,9 +360,9 @@ class ParamPlotter:
         import pandas as pd
         import rich
         from kwcoco.metrics.drawing import concice_si_display
-        from watch.utils import util_pandas
-        from watch.utils import util_kwplot
-        from watch.utils.util_kwplot import scatterplot_highlight
+        from geowatch.utils import util_pandas
+        from geowatch.utils import util_kwplot
+        from geowatch.utils.util_kwplot import scatterplot_highlight
 
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -389,7 +389,7 @@ class ParamPlotter:
             size_inches=np.array([6.4, 4.8]) * 1.0,
         )
 
-        from watch.mlops.smart_global_helper import SMART_HELPER
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
@@ -426,7 +426,7 @@ class ParamPlotter:
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
         if DO_STAT_ANALYSIS:
             ### Build param analysis
-            from watch.utils import result_analysis
+            from geowatch.utils import result_analysis
             metrics_table = util_pandas.DotDictDataFrame(macro_table).subframe('metrics', drop_prefix=False)
             results = {'params': resolved_params,
                        'metrics': metrics_table}

@@ -10,13 +10,13 @@ from typing import Tuple
 from typing import Literal
 import scriptconfig as scfg
 
-from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
-from watch.tasks.tracking.abstract_classes import NewTrackFunction
+from geowatch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
+from geowatch.tasks.tracking.abstract_classes import NewTrackFunction
 
-from watch.tasks.tracking.old_polygon_extraction import PolygonExtractConfig
-from watch.tasks.tracking.old_polygon_extraction import _gids_polys
+from geowatch.tasks.tracking.old_polygon_extraction import PolygonExtractConfig
+from geowatch.tasks.tracking.old_polygon_extraction import _gids_polys
 
-from watch.tasks.tracking.utils import (
+from geowatch.tasks.tracking.utils import (
     _validate_keys,
     score_track_polys,
     trackid_is_default,
@@ -197,7 +197,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     """
     import kwcoco
     import kwimage
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     key, bg_key = _validate_keys(key, bg_key)
 
     print('Add tracks to dset')
@@ -300,7 +300,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
-        from watch.utils.util_json import debug_json_unserializable
+        from geowatch.utils.util_json import debug_json_unserializable
         debug_json_unserializable(sub_dset.dataset)
 
     return sub_dset
@@ -310,10 +310,10 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 def site_validation(sub_dset, thresh=0.25, span_steps=15):
     """
     Example:
-        >>> import watch
-        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
-        >>> coco_dset = watch.coerce_kwcoco(
-        >>>     'watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> import geowatch
+        >>> from geowatch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> coco_dset = geowatch.coerce_kwcoco(
+        >>>     'geowatch-msi', heatmap=True, geodata=True, dates=True)
         >>> vid_id = coco_dset.videos()[0]
         >>> sub_dset = coco_dset.subset(list(coco_dset.images(video_id=vid_id)))
         >>> import numpy as np
@@ -390,17 +390,17 @@ def time_aggregated_polys(sub_dset, **kwargs):
     Ignore:
         # For debugging
         import xdev
-        from watch.tasks.tracking.from_heatmap import *  # NOQA
-        from watch.tasks.tracking.from_heatmap import _validate_keys
+        from geowatch.tasks.tracking.from_heatmap import *  # NOQA
+        from geowatch.tasks.tracking.from_heatmap import _validate_keys
         globals().update(xdev.get_func_kwargs(time_aggregated_polys))
 
     Example:
         >>> # test interpolation
-        >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
-        >>> from watch.demo import demo_kwcoco_with_heatmaps
-        >>> import watch
-        >>> sub_dset = watch.coerce_kwcoco(
-        >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>> from geowatch.tasks.tracking.from_heatmap import time_aggregated_polys
+        >>> from geowatch.demo import demo_kwcoco_with_heatmaps
+        >>> import geowatch
+        >>> sub_dset = geowatch.coerce_kwcoco(
+        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> min_area_square_meters = None
@@ -416,11 +416,11 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
     Example:
         >>> # test interpolation
-        >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
-        >>> from watch.demo import demo_kwcoco_with_heatmaps
-        >>> import watch
-        >>> sub_dset = watch.coerce_kwcoco(
-        >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>> from geowatch.tasks.tracking.from_heatmap import time_aggregated_polys
+        >>> from geowatch.demo import demo_kwcoco_with_heatmaps
+        >>> import geowatch
+        >>> sub_dset = geowatch.coerce_kwcoco(
+        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> min_area_square_meters = None
@@ -706,7 +706,7 @@ class TimeAggregatedPolysConfig(PolygonExtractConfig):
     current dataclass configuration and a new scriptconfig based one.
 
     python -c "if 1:
-        from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
+        from geowatch.tasks.tracking.from_heatmap import TimeAggregatedBAS
         TimeAggregatedBAS().argparse().print_help()
     "
 

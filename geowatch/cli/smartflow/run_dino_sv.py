@@ -12,7 +12,7 @@ import shutil
 
 import scriptconfig as scfg
 import ubelt as ub
-from watch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
+from geowatch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
 
 
 class DinoSVConfig(scfg.DataConfig):
@@ -60,11 +60,11 @@ def main():
 
 
 def run_dino_sv(config):
-    from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.smartflow_egress import smartflow_egress
-    from watch.utils.util_framework import download_region, determine_region_id
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli.smartflow_egress import smartflow_egress
+    from geowatch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
-    from watch.utils import util_framework
+    from geowatch.utils import util_framework
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -77,7 +77,7 @@ def run_dino_sv(config):
     ####
     # DEBUGGING:
     # Print info about what version of the code we are running on
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 

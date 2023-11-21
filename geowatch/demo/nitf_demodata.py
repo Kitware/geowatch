@@ -186,7 +186,7 @@ def grab_nitf_fpath(key=None):
     Example:
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.demo.nitf_demodata import *  # NOQA
+        >>> from geowatch.demo.nitf_demodata import *  # NOQA
         >>> fpath = grab_nitf_fpath()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -213,7 +213,7 @@ def grab_nitf_fpath(key=None):
         try:
             fname = info['key']
             sha512 = info['sha512']
-            fpath = ub.grabdata(info['alt_url'], appname='watch/demodata/nitf',
+            fpath = ub.grabdata(info['alt_url'], appname='geowatch/demodata/nitf',
                                 fname=fname, hash_prefix=sha512)
             return fpath
         except Exception:
@@ -236,7 +236,7 @@ def grab_nitf_fpath(key=None):
         for try_idx, gateway in enumerate(ipfs_gateways):
             url = gateway + '/' + url_fname
             try:
-                fpath = ub.grabdata(url, appname='watch/demodata/nitf',
+                fpath = ub.grabdata(url, appname='geowatch/demodata/nitf',
                                     fname=fname, hash_prefix=sha512)
             except urllib.error.HTTPError as ex:
                 print('caught error ex = {!r}'.format(ex))
@@ -244,7 +244,7 @@ def grab_nitf_fpath(key=None):
                     # ipfs_exe = ub.find_exe('ipfs')
                     # print(f'ipfs_exe={ipfs_exe}')
                     # if ipfs_exe:
-                    #     fpath = ub.Path.appdir('watch/demodata/nitf') / fname
+                    #     fpath = ub.Path.appdir('geowatch/demodata/nitf') / fname
                     #     print(f'fpath={fpath}')
                     #     ub.cmd([ipfs_exe, 'get', '-o', str(fpath), str(url_fname)], verbose=3)
                     # else:
@@ -311,7 +311,7 @@ def _build_test_image_table():
         # fpath = grab_nitf_fpath(fname, safe=True)
         base = 'https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/'
         url = base + fname
-        fpath = ub.grabdata(url, appname='watch/demodata/nitf')
+        fpath = ub.grabdata(url, appname='geowatch/demodata/nitf')
         sha512 = ub.hash_file(fpath)[0:32]
         os.stat(fpath)
         new_row = ub.dict_union({
@@ -333,7 +333,7 @@ def _build_test_image_table():
 
 
 def _check_properties():
-    from watch.gis.geotiff import geotiff_crs_info  # NOQA
+    from geowatch.gis.geotiff import geotiff_crs_info  # NOQA
 
     cid_map = ub.codeblock(
         '''

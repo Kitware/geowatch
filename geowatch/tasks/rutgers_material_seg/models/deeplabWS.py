@@ -5,8 +5,8 @@ import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
-from watch.tasks.rutgers_material_seg.models.sg import StochasticGate
-from watch.tasks.rutgers_material_seg.models.gci import GCI
+from geowatch.tasks.rutgers_material_seg.models.sg import StochasticGate
+from geowatch.tasks.rutgers_material_seg.models.gci import GCI
 
 __all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
 

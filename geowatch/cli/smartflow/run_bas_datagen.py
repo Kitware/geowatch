@@ -9,11 +9,11 @@ import os
 import json
 import shutil
 
-from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
-from watch.cli.smartflow_egress import smartflow_egress
-from watch.cli.stac_to_kwcoco import stac_to_kwcoco
-from watch.cli import coco_add_watch_fields
-from watch.utils.util_framework import download_region
+from geowatch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
+from geowatch.cli.smartflow_egress import smartflow_egress
+from geowatch.cli.stac_to_kwcoco import stac_to_kwcoco
+from geowatch.cli import coco_add_watch_fields
+from geowatch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -157,7 +157,7 @@ def input_stac_to_kwcoco(stac_items_path,
                    from_collated=from_collated,
                    ignore_duplicates=True)
 
-    print("* Adding watch fields *")
+    print("* Adding geowatch feilds *")
     coco_add_watch_fields.main(cmdline=False,
                                src=out_kwcoco_path,
                                inplace=True,
@@ -168,17 +168,17 @@ def input_stac_to_kwcoco(stac_items_path,
 
 
 def run_stac_to_cropped_kwcoco(config):
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_fsspec
     from kwutil.util_yaml import Yaml
     from delayed_image.channel_spec import ChannelSpec
     # from kwcoco import ChannelSpec
-    from watch.cli import coco_align
-    from watch.cli import coco_time_combine
-    from watch.mlops.pipeline_nodes import ProcessNode
-    from watch.cli.smartflow_ingress import smartflow_ingress
+    from geowatch.cli import coco_align
+    from geowatch.cli import coco_time_combine
+    from geowatch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.cli.smartflow_ingress import smartflow_ingress
     import kwcoco
 
-    from watch.utils.util_framework import NodeStateDebugger
+    from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
 
@@ -273,13 +273,13 @@ def run_stac_to_cropped_kwcoco(config):
 
     # HACK: this is what coco-align outputs by default. We should have this be
     # explicit and configurable so we can set it to what we want here.
-    from watch.utils.util_framework import determine_region_id
+    from geowatch.utils.util_framework import determine_region_id
     region_id = determine_region_id(local_region_path)
     ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
 
     node_state.print_current_state(ingress_dir)
 
-    from watch.geoannots.geomodels import RegionModel
+    from geowatch.geoannots.geomodels import RegionModel
     region = RegionModel.coerce(local_region_path)
 
     # Returned as datetime
@@ -416,7 +416,7 @@ def run_stac_to_cropped_kwcoco(config):
         coco_align.main(cmdline=False, **align_config)
     elif ALIGN_EXEC_MODE == 'cmd':
         align_node = ProcessNode(
-            command='python -m watch.cli.coco_align',
+            command='python -m geowatch.cli.coco_align',
             config=align_config,
         )
         command = align_node.final_command()
@@ -498,8 +498,8 @@ def run_stac_to_cropped_kwcoco(config):
             else:
                 raise
         else:
-            # Add watch fields
-            print("* Adding watch fields to time combined data *")
+            # Add geowatch feilds
+            print("* Adding geowatch feilds to time combined data *")
             coco_add_watch_fields.main(cmdline=False,
                                        src=preproc_kwcoco_fpath,
                                        dst=preproc_kwcoco_fpath,
@@ -543,7 +543,7 @@ def run_stac_to_cropped_kwcoco(config):
 
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
-        from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+        from geowatch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
         if filtered_previous_timecombined_kwcoco_path.is_file() and len(previous_timecombined_dset.images()) > 0:
             # Don't bother to concatenate if previous (now filtered)
             # dset is empty (has no images)

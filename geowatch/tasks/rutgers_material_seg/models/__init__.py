@@ -1,13 +1,13 @@
 # from models.unet_stn import  UNet
-from watch.tasks.rutgers_material_seg.models import deeplabWS
-from watch.tasks.rutgers_material_seg.models.shallow_seg import ShallowSeg
-from watch.tasks.rutgers_material_seg.models.linear_classifier import VSNet
-from watch.tasks.rutgers_material_seg.models import resnet
-from watch.tasks.rutgers_material_seg.models import resnetGNWS
-from watch.tasks.rutgers_material_seg.models import resnet_enc
-from watch.tasks.rutgers_material_seg.models import deeplab
-from watch.tasks.rutgers_material_seg.models import deeplab_diff
-from watch.tasks.rutgers_material_seg.models import resnet_classification_finetune
+from geowatch.tasks.rutgers_material_seg.models import deeplabWS
+from geowatch.tasks.rutgers_material_seg.models.shallow_seg import ShallowSeg
+from geowatch.tasks.rutgers_material_seg.models.linear_classifier import VSNet
+from geowatch.tasks.rutgers_material_seg.models import resnet
+from geowatch.tasks.rutgers_material_seg.models import resnetGNWS
+from geowatch.tasks.rutgers_material_seg.models import resnet_enc
+from geowatch.tasks.rutgers_material_seg.models import deeplab
+from geowatch.tasks.rutgers_material_seg.models import deeplab_diff
+from geowatch.tasks.rutgers_material_seg.models import resnet_classification_finetune
 
 models = {
     'deeplabWS': deeplabWS,

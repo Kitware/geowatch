@@ -8,7 +8,7 @@ and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
 
 SeeAlso:
-    ~/code/watch/watch/utils/kwcoco_extensions.py
+    ~/code/watch/geowatch/utils/kwcoco_extensions.py
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -69,7 +69,7 @@ def main(cmdline=True, **kwargs):
         jq .videos toydata.kwcoco.json
         jq .images[0] toydata.kwcoco.json
 
-        python -m watch.cli.coco_add_watch_fields \
+        python -m geowatch.cli.coco_add_watch_fields \
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
             --target_gsd=10
@@ -78,7 +78,7 @@ def main(cmdline=True, **kwargs):
         jq .images[0] toydata-gsd10.kwcoco.json
 
     Ignore:
-        python -m watch.cli.coco_add_watch_fields \
+        python -m geowatch.cli.coco_add_watch_fields \
             --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json \
             --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json \
             --target_gsd=10
@@ -87,7 +87,7 @@ def main(cmdline=True, **kwargs):
         jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
 
     Example:
-        >>> from watch.cli.coco_add_watch_fields import *  # NOQA
+        >>> from geowatch.cli.coco_add_watch_fields import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -100,12 +100,12 @@ def main(cmdline=True, **kwargs):
     import rich
     config = AddWatchFieldsConfig.cli(default=kwargs, cmdline=cmdline, strict=True)
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
-    from watch import heuristics
+    from geowatch import heuristics
     import numpy as np
     import kwcoco
     import kwimage
-    from watch.utils import util_parallel
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import util_parallel
+    from geowatch.utils import kwcoco_extensions
 
     if config['dst'] is None:
         if config['inplace']:
@@ -162,6 +162,6 @@ __config__ = AddWatchFieldsConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python  -m watch.cli.coco_add_watch_fields
+        python  -m geowatch.cli.coco_add_watch_fields
     """
     main()

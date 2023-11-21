@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from watch.tasks.rutgers_material_change_detection.models.base_model import BaseModel
-from watch.tasks.rutgers_material_change_detection.models.unet import UNetDecoder, UNetEncoder
+from geowatch.tasks.rutgers_material_change_detection.models.base_model import BaseModel
+from geowatch.tasks.rutgers_material_change_detection.models.unet import UNetDecoder, UNetEncoder
 
 
 class SiameseDifference(BaseModel):

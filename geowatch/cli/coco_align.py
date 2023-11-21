@@ -30,21 +30,21 @@ Notes:
 
     # Quick stats about input datasets
     python -m kwcoco stats $INPUT_COCO_FPATH
-    python -m watch stats $INPUT_COCO_FPATH
+    python -m geowatch stats $INPUT_COCO_FPATH
 
     # Combine the region models
-    python -m watch.cli.merge_region_models \
+    python -m geowatch.cli.merge_region_models \
         --src $DVC_DPATH/drop1/region_models/*.geojson \
         --dst $REGION_FPATH
 
-    python -m watch.cli.coco_add_watch_fields \
+    python -m geowatch.cli.coco_add_watch_fields \
         --src $INPUT_COCO_FPATH \
         --dst $INPUT_COCO_FPATH.prepped \
         --workers 16 \
         --target_gsd=10
 
     # Execute alignment / crop script
-    python -m watch.cli.coco_align \
+    python -m geowatch.cli.coco_align \
         --src $INPUT_COCO_FPATH.prepped \
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
@@ -159,7 +159,7 @@ class AssetExtractConfig(scfg.DataConfig):
             '''))
 
     def __post_init__(config):
-        from watch.utils.util_resolution import ResolvedUnit
+        from geowatch.utils.util_resolution import ResolvedUnit
         if config['force_min_gsd'] is not None:
             resolution = ResolvedUnit.coerce(config['force_min_gsd'], default_unit='GSD')
             assert resolution.unit == 'GSD'
@@ -251,7 +251,7 @@ class ExtractConfig(ImageExtractConfig):
 
     def __post_init__(config):
         super().__post_init__()
-        from watch.utils.util_resolution import ResolvedUnit
+        from geowatch.utils.util_resolution import ResolvedUnit
         resolution = ResolvedUnit.coerce(config['target_gsd'], default_unit='GSD')
         assert resolution.unit == 'GSD'
         config['target_gsd'] = resolution.mag
@@ -340,12 +340,12 @@ def main(cmdline=True, **kw):
     See :class:``CocoAlignGeotiffConfig` for details
 
     CommandLine:
-        xdoctest -m watch.cli.coco_align main:0
+        xdoctest -m geowatch.cli.coco_align main:0
 
     Example:
-        >>> from watch.cli.coco_align import *  # NOQA
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> from watch.gis.geotiff import geotiff_metadata
+        >>> from geowatch.cli.coco_align import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
         >>> import dateutil.parser
         >>> import kwcoco
@@ -369,7 +369,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle1').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -391,9 +391,9 @@ def main(cmdline=True, **kw):
     Example:
         >>> # Test timeout
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTESTS)
-        >>> from watch.cli.coco_align import *  # NOQA
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> from watch.gis.geotiff import geotiff_metadata
+        >>> from geowatch.cli.coco_align import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
         >>> import dateutil.parser
         >>> import kwcoco
@@ -410,10 +410,10 @@ def main(cmdline=True, **kw):
         >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
         >>> dummy_poly = dummy_poly.scale(0.03, about='center')
         >>> sseg_geos = dummy_poly.to_geojson()
-        >>> from watch.geoannots import geomodels
+        >>> from geowatch.geoannots import geomodels
         >>> region = geomodels.RegionModel.random(region_poly=dummy_poly, start_time=dt.isoformat())
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle_timeout').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -435,9 +435,9 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> # Confirm expected behavior of `force_min_gsd` keyword argument
-        >>> from watch.cli.coco_align import *  # NOQA
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> from watch.gis.geotiff import geotiff_metadata, geotiff_crs_info
+        >>> from geowatch.cli.coco_align import *  # NOQA
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.gis.geotiff import geotiff_metadata, geotiff_crs_info
         >>> # Create a dead simple coco dataset with one image
         >>> import kwcoco
         >>> import kwimage
@@ -461,7 +461,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -489,14 +489,14 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> from watch.cli.coco_align import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
-        >>> from watch.utils import util_gdal
+        >>> from geowatch.cli.coco_align import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> from geowatch.utils import util_gdal
         >>> import kwimage
         >>> import geojson
         >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
-        >>> dpath = ub.Path.appdir('watch/test/coco_align2').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
@@ -540,7 +540,7 @@ def main(cmdline=True, **kw):
 
 
         >>> # Test that the input dataset visualizes ok
-        >>> from watch.cli import coco_visualize_videos
+        >>> from geowatch.cli import coco_visualize_videos
         >>> viz_dpath = (dpath / 'viz_input_align_bundle2').ensuredir()
         >>> coco_visualize_videos.main(cmdline=False, **{
         >>>     'src': new_dset,
@@ -561,10 +561,10 @@ def main(cmdline=True, **kw):
         raise Exception('The visualize option was deprecated and will be removed')
 
     from kwcoco.util.util_json import ensure_json_serializable
-    from watch.utils import util_gis
-    from watch.utils import util_parallel
-    from watch.utils import util_resolution
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import util_gis
+    from geowatch.utils import util_parallel
+    from geowatch.utils import util_resolution
+    from geowatch.utils import kwcoco_extensions
     import kwcoco
     import pandas as pd
     import warnings
@@ -585,7 +585,7 @@ def main(cmdline=True, **kw):
         warnings.warn('environ GDAL_DISABLE_READDIR_ON_OPEN should probably be set to EMPTY_DIR')
         os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
 
-    from watch.utils import process_context
+    from geowatch.utils import process_context
     proc_context = process_context.ProcessContext(
         name='coco_align',
         type='process',
@@ -836,7 +836,7 @@ class SimpleDataCube:
     def __init__(cube, coco_dset, gids=None):
         import geopandas as gpd
         import shapely
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         from kwcoco.util import ensure_json_serializable
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
@@ -888,15 +888,15 @@ class SimpleDataCube:
 
     @classmethod
     def demo(SimpleDataCube, with_region=False, extra=0):
-        from watch.demo.landsat_demodata import grab_landsat_product
-        from watch.gis.geotiff import geotiff_metadata
+        from geowatch.demo.landsat_demodata import grab_landsat_product
+        from geowatch.gis.geotiff import geotiff_metadata
         # Create a dead simple coco dataset with one image
         import geopandas as gpd
         import kwcoco
         import kwimage
         import dateutil.parser
-        from watch.utils import util_gis
-        from watch.utils import kwcoco_extensions
+        from geowatch.utils import util_gis
+        from geowatch.utils import kwcoco_extensions
         coco_dset = kwcoco.CocoDataset()
 
         landsat_products = []
@@ -1003,14 +1003,14 @@ class SimpleDataCube:
                 subdirectories in the extract step.
 
         Example:
-            >>> from watch.cli.coco_align import *  # NOQA
+            >>> from geowatch.cli.coco_align import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps(region_df)
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
         from kwutil import util_time
-        from watch.utils import util_gis
+        from geowatch.utils import util_gis
         import kwimage
 
         # Quickly find overlaps using a spatial index
@@ -1194,10 +1194,10 @@ class SimpleDataCube:
 
         Example:
             >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-            >>> from watch.cli.coco_align import *  # NOQA
+            >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> to_extract = cube.query_image_overlaps(region_df)
@@ -1208,10 +1208,10 @@ class SimpleDataCube:
 
         Example:
             >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-            >>> from watch.cli.coco_align import *  # NOQA
+            >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps2').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
@@ -1225,8 +1225,8 @@ class SimpleDataCube:
         import geopandas as gpd
         from kwutil import util_time
         from kwutil.util_yaml import Yaml
-        from watch.utils import util_gis
-        from watch.utils import kwcoco_extensions
+        from geowatch.utils import util_gis
+        from geowatch.utils import kwcoco_extensions
         import kwcoco
         import kwimage
         import pandas as pd
@@ -1685,7 +1685,7 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
     """
     import geopandas as gpd
     from shapely import geometry
-    from watch.utils import util_gis
+    from geowatch.utils import util_gis
     conflict_imges = coco_dset.images(gids)
     sensors = list(conflict_imges.lookup('sensor_coarse', None))
 
@@ -1808,7 +1808,7 @@ def extract_image_job(img,
     #     ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
     #     ```
     # When the cache is not computed and workers > 0
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     from kwutil import util_time
     from osgeo import osr
     import kwimage
@@ -2162,9 +2162,9 @@ def _aligncrop(obj_group,
     """
     Threaded worker function for :func:`SimpleDataCube.extract_image_job`.
     """
-    import watch
+    import geowatch
     import kwcoco
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     from os.path import join
 
     assert asset_config is not None
@@ -2250,7 +2250,7 @@ def _aligncrop(obj_group,
         if 'geotiff_metadata' in first_obj:
             info = first_obj['geotiff_metadata']
         else:
-            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+            info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
         # No RPCS exist, use affine-warp instead
         rpcs = info['rpc_transform']
     else:
@@ -2316,7 +2316,7 @@ def _aligncrop(obj_group,
                         done.  To ensure pre-population use the '--geo_preprop=True'
                         argument.
                         '''))
-                    info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+                    info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
                 approx_meter_gsd = info.get('approx_meter_gsd', None)
             if approx_meter_gsd is not None:
                 obj_approx_gsds.append(approx_meter_gsd)
@@ -2454,7 +2454,7 @@ def _debug_valid_regions(cube, coco_dset, space_region_crs84,
 
             def main():
                 import kwcoco
-                from watch.utils import kwcoco_extensions
+                from geowatch.utils import kwcoco_extensions
                 parent_dset = kwcoco.CocoDataset(debug_info['coco_fpath'])
                 coco_imgs = parent_dset.images(debug_info['gids']).coco_images
 
@@ -2481,6 +2481,6 @@ __config__ = CocoAlignGeotiffConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.coco_align --help
+        python -m geowatch.cli.coco_align --help
     """
     main()

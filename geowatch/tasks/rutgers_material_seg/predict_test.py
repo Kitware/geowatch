@@ -18,7 +18,7 @@ CommandLine:
 
 
     # Generate Rutgers Features
-    python -m watch.tasks.rutgers_material_seg.predict_test \
+    python -m geowatch.tasks.rutgers_material_seg.predict_test \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
@@ -39,9 +39,9 @@ import numpy as np
 from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+import geowatch.tasks.rutgers_material_seg.utils.utils as utils
+from geowatch.tasks.rutgers_material_seg.models import build_model
+from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 
 
 class Evaluator(object):
@@ -167,7 +167,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for material prediction
     """
-    from watch.utils import configargparse_ext
+    from geowatch.utils import configargparse_ext
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Prediction script for the fusion task',
@@ -206,7 +206,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
 def hardcoded_default_configs(default_config_key):
     # HACK: THIS IS NOT ROBUST
-    from watch.tasks import rutgers_material_seg
+    from geowatch.tasks import rutgers_material_seg
     from os.path import dirname, join
     module_dpath = dirname(rutgers_material_seg.__file__)
     main_config_path = join(module_dpath, "./configs/main.yaml")
@@ -223,9 +223,9 @@ def main(cmdline=True, **kwargs):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.rutgers_material_seg.predict_test import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath()
+        >>> from geowatch.tasks.rutgers_material_seg.predict_test import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath()
         >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
         >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
         >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
@@ -255,7 +255,7 @@ def main(cmdline=True, **kwargs):
         random.seed(config['seed'])
         torch.set_default_dtype(torch.float32)
 
-    from watch.utils.lightning_ext import util_device
+    from geowatch.utils.lightning_ext import util_device
     devices = util_device.coerce_devices(args.devices)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -275,7 +275,7 @@ def main(cmdline=True, **kwargs):
     print(dataset.__len__())
 
     from kwutil import util_resources
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     num_workers = util_parallel.coerce_num_workers(args.num_workers)
     if num_workers > 0:
         util_resources.request_nofile_limits()

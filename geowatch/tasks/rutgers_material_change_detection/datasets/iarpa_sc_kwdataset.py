@@ -10,8 +10,8 @@ from datetime import datetime
 from collections import namedtuple
 from matplotlib.colors import to_rgba
 
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
-from watch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
+from geowatch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
 
 
 class IARPA_SC_EVAL_DATASET(BaseDataset):
@@ -439,8 +439,8 @@ class IARPA_SC_EVAL_DATASET(BaseDataset):
 
 if __name__ == "__main__":
     # Get root directory of dataset on local machine.
-    from watch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
-    from watch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
 
     dset_name = "iarpa_drop2v2"
     root_dir = get_dataset_root_dir(dset_name)

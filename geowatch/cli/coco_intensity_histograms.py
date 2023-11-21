@@ -1,9 +1,9 @@
 """
 Deprecated and moved to coco_spectra
 """
-from watch.cli.coco_spectra import *  # NOQA
-from watch.cli.coco_spectra import __config__  # NOQA
-from watch.cli.coco_spectra import main
+from geowatch.cli.coco_spectra import *  # NOQA
+from geowatch.cli.coco_spectra import __config__  # NOQA
+from geowatch.cli.coco_spectra import main
 
 
 if __name__ == '__main__':

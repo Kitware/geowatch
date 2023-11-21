@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from watch.tasks.rutgers_material_change_detection.models.base_model import BaseDecoder
+from geowatch.tasks.rutgers_material_change_detection.models.base_model import BaseDecoder
 
 
 class SimpleDecoder(BaseDecoder):

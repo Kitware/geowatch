@@ -10,9 +10,9 @@ from tqdm import tqdm
 from osgeo import gdal
 
 
-from watch.tasks.rutgers_material_change_detection.models import build_model
-from watch.tasks.rutgers_material_change_detection.datasets import build_dataset, create_loader
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_n_frames, generate_video_slice_object
+from geowatch.tasks.rutgers_material_change_detection.models import build_model
+from geowatch.tasks.rutgers_material_change_detection.datasets import build_dataset, create_loader
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_n_frames, generate_video_slice_object
 
 
 class Evaluator:

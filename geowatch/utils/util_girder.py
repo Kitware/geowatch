@@ -10,7 +10,7 @@ PER_PROCESS_THREAD_LOCKS = {}
 
 
 def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=None,
-                    appname='watch/girder', api_key=None,
+                    appname='geowatch/girder', api_key=None,
                     verbose=1):
     """
     Downloads and caches a file or folder from girder.
@@ -31,7 +31,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
             hash provided by girder matches this prefix. If the item is a
             folder, then this is not used.
 
-        appname (str, default='watch'):
+        appname (str, default='geowatch'):
             if ``dpath`` is not given, then the ubelt app_cache_dir for this
             application name is used.
 
@@ -47,7 +47,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_girder import *  # NOQA
+        >>> from geowatch.utils.util_girder import *  # NOQA
         >>> from os.path import basename
         >>> api_url = 'https://data.kitware.com/api/v1'
         >>> resource_id = '59eb64678d777f31ac6477eb'

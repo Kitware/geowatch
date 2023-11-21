@@ -8,7 +8,7 @@ import subprocess
 import ubelt as ub
 import scriptconfig as scfg
 
-from watch.utils.util_framework import download_region
+from geowatch.utils.util_framework import download_region
 
 
 class PseudoliveConsolidateConfig(scfg.DataConfig):
@@ -57,7 +57,7 @@ def main():
 
 def run_pseudolive_consolidate(config):
 
-    from watch.cli.pseudolive_consolidate import pseudolive_consolidate
+    from geowatch.cli.pseudolive_consolidate import pseudolive_consolidate
     if config.aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', config.aws_profile, 'cp']

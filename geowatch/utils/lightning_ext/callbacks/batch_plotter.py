@@ -6,8 +6,8 @@ import warnings
 import traceback
 from kwutil import util_time
 from kwutil.slugify_ext import smart_truncate
-from watch.utils import util_kwimage
-from watch.utils.lightning_ext import util_model
+from geowatch.utils import util_kwimage
+from geowatch.utils.lightning_ext import util_model
 
 try:
     import xdev
@@ -52,9 +52,9 @@ class BatchPlotter(pl.callbacks.Callback):
 
     Example:
         >>> #
-        >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
-        >>> from watch.utils.lightning_ext import demo
-        >>> from watch.monkey import monkey_lightning
+        >>> from geowatch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
+        >>> from geowatch.utils.lightning_ext import demo
+        >>> from geowatch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> model = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/BatchPlotter').ensuredir()
@@ -69,7 +69,7 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> print('trainer.logger.log_dir = {!r}'.format(train_dpath))
 
     Ignore:
-        >>> from watch.tasks.fusion.fit import make_lightning_modules # NOQA
+        >>> from geowatch.tasks.fusion.fit import make_lightning_modules # NOQA
         >>> args = None
         >>> cmdline = False
         >>> kwargs = {
@@ -115,15 +115,15 @@ class BatchPlotter(pl.callbacks.Callback):
     def add_argparse_args(cls, parent_parser):
         """
         Example:
-            >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
-            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> from geowatch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
+            >>> from geowatch.utils.configargparse_ext import ArgumentParser
             >>> cls = BatchPlotter
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
             >>> parent_parser.parse_known_args()
         """
-        from watch.utils.lightning_ext import argparse_ext
+        from geowatch.utils.lightning_ext import argparse_ext
         arg_infos = argparse_ext.parse_docstring_args(cls)
         argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
         return parent_parser

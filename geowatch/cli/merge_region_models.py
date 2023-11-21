@@ -33,12 +33,12 @@ class MergeRegionModelConfig(scfg.DataConfig):
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
-        python -m watch merge_region_models \
+        python -m geowatch merge_region_models \
             --src $DVC_DPATH/drop1/region_models/*.geojson \
             --dst $DVC_DPATH/drop1/all_regions.geojson \
             --match_type "region"
 
-        python -m watch.cli.merge_region_models \
+        python -m geowatch.cli.merge_region_models \
             --src $DVC_DPATH/drop1/region_models/*.geojson \
             --dst $DVC_DPATH/drop1/all_regions.geojson
     """
@@ -49,7 +49,7 @@ def main(cmdline=False, **kwargs):
 
     CommandLine:
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc \
-            xdoctest -m watch.cli.merge_region_models main
+            xdoctest -m geowatch.cli.merge_region_models main
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)

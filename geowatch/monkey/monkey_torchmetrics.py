@@ -1,7 +1,7 @@
 def fix_torchmetrics_compatability():
     import torchmetrics
-    from watch.monkey._monkey_fbeta import FBetaScore_Patched
-    from watch.monkey._monkey_fbeta import Accuracy_Patched
+    from geowatch.monkey._monkey_fbeta import FBetaScore_Patched
+    from geowatch.monkey._monkey_fbeta import Accuracy_Patched
     f_beta = torchmetrics.classification.f_beta
     accuracy = torchmetrics.classification.accuracy
 

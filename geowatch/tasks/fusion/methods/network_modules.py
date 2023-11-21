@@ -45,7 +45,7 @@ class RobustModuleDict(torch.nn.ModuleDict):
     Regular torch.nn.ModuleDict doesnt allow empty str. Hack around this.
 
     Example:
-        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
         >>> import string
         >>> torch_dict = RobustModuleDict()
         >>> # All printable characters should be usable as keys
@@ -107,7 +107,7 @@ class RobustParameterDict(torch.nn.ParameterDict):
     Regular torch.nn.ParameterDict doesnt allow empty str. Hack around this.
 
     Example:
-        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
         >>> import string
         >>> torch_dict = RobustParameterDict()
         >>> # All printable characters should be usable as keys
@@ -165,7 +165,7 @@ class OurDepthwiseSeparableConv(nn.Module):
     From timm
 
     Example:
-        from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
 
         norm = nh.layers.rectify_normalizer(in_channels=3, key={'type': 'group', 'num_groups': 1})
         norm(torch.rand(2, 1))
@@ -277,7 +277,7 @@ class DWCNNTokenizer(nh.layers.Sequential):
 class LinearConvTokenizer(nh.layers.Sequential):
     """
     Example:
-        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
         >>> LinearConvTokenizer(1, 512)
     """
 
@@ -317,7 +317,7 @@ class ConvTokenizer(nn.Module):
     """
     Example:
 
-        from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
         self = ConvTokenizer(13, 64)
         print('self = {!r}'.format(self))
         inputs = torch.rand(2, 13, 128, 128)
@@ -470,7 +470,7 @@ def _torch_meshgrid(*basis_dims):
 def _class_weights_from_freq(total_freq, mode='median-idf'):
     """
     Example:
-        >>> from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+        >>> from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
         >>> total_freq = np.array([19503736, 92885, 883379, 0, 0])
         >>> print(_class_weights_from_freq(total_freq, mode='idf'))
         >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))
@@ -583,7 +583,7 @@ def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
         logit_shape = '(b t h w) c'
         target_shape = '(b t h w)'
     elif loss_code == 'focal':
-        from watch.utils.ext_monai import FocalLoss
+        from geowatch.utils.ext_monai import FocalLoss
         # from monai.losses import FocalLoss
         criterion = FocalLoss(
             reduction='none',
@@ -597,7 +597,7 @@ def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
         target_shape = 'b c h w t'
 
     elif loss_code == 'dicefocal':
-        from watch.utils.ext_monai import DiceFocalLoss
+        from geowatch.utils.ext_monai import DiceFocalLoss
         # from monai.losses import DiceFocalLoss
         criterion = DiceFocalLoss(
             sigmoid=True,
@@ -658,7 +658,7 @@ def torch_safe_stack(tensors, dim=0, *, out=None, item_shape=None, dtype=None, d
             the expected output device when tensors is empty.
 
     Example:
-        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
         >>> import ubelt as ub
         >>> grid = list(ub.named_product({
         >>>     # 'num': [0, 1, 2, 3],

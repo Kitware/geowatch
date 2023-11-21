@@ -17,13 +17,13 @@ from pycm import ConfusionMatrix
 from torch.utils.data import DataLoader
 from sklearn.metrics import precision_recall_fscore_support
 
-from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets.bas_dataset import BAS_Dataset
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher, ImageStitcher_v2
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_conf_matrix_pred_image
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID, colorize_material_mask
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models import build_model
+from geowatch.tasks.rutgers_material_seg_v2.matseg.datasets import build_dataset
+from geowatch.tasks.rutgers_material_seg_v2.matseg.datasets.bas_dataset import BAS_Dataset
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher, ImageStitcher_v2
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_conf_matrix_pred_image
+from geowatch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID, colorize_material_mask
 
 
 def compute_metrics(pred_change, gt_change):

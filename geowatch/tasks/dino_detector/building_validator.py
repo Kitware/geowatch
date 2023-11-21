@@ -138,9 +138,9 @@ DONT_IGNORE_CLASSNAMES = ub.codeblock(
 def main(cmdline=1, **kwargs):
     """
     Ignore:
-        from watch.tasks.dino_detector.building_validator import *  # NOQA
+        from geowatch.tasks.dino_detector.building_validator import *  # NOQA
         NODE_DPATH = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba'
-        from watch.utils.partial_format import fsubtemplate
+        from geowatch.utils.partial_format import fsubtemplate
         coco_fpath = fsubtemplate('$NODE_DPATH/pred_boxes.kwcoco.zip')
         from kwutil.util_path import coerce_patterned_paths
         site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
@@ -158,8 +158,8 @@ def main(cmdline=1, **kwargs):
         cmdline = 0
 
     Ignore:
-        >>> import watch
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> import geowatch
+        >>> dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = dvc_data_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> region_fpath = dvc_data_dpath / 'annotations/drop6_hard_v1/region_models/KR_R001.geojson'
 
@@ -173,13 +173,13 @@ def main(cmdline=1, **kwargs):
     import rich
     rich.print('config = ' + ub.urepr(config, nl=1))
 
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
+    from geowatch.geoannots import geomodels
+    from geowatch.utils import util_gis
     import kwcoco
-    from watch.cli import reproject_annotations
+    from geowatch.cli import reproject_annotations
     from kwutil import util_time
     from kwcoco.util import util_json
-    from watch.utils import process_context
+    from geowatch.utils import process_context
     import os
     import safer
     import json
@@ -197,7 +197,7 @@ def main(cmdline=1, **kwargs):
     }
     # Track process info
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.dino_detector.building_validator', type='process',
+        name='geowatch.tasks.dino_detector.building_validator', type='process',
         config=jsonified_config,
         track_emissions=False,
     )
@@ -435,8 +435,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/tasks/dino_detector/building_validator.py
-        python -m watch.tasks.dino_detector.building_validator
+        python ~/code/watch/geowatch/tasks/dino_detector/building_validator.py
+        python -m geowatch.tasks.dino_detector.building_validator
     """
     main()
 
@@ -613,7 +613,7 @@ geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dv
 python ~/code/watch/dev/wip/grid_sitevali_crops.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/_viz_*
 
 
-python -m watch.tasks.dino_detector.predict \
+python -m geowatch.tasks.dino_detector.predict \
     --package_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino.pt" \
     --coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/sv_crop.kwcoco.zip" \
     --out_coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes.kwcoco.zip" \
@@ -665,7 +665,7 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py \
     --sub=_anns \
     $NODE_DPATH/_vizme
 
-python -m watch.tasks.dino_detector.building_validator \
+python -m geowatch.tasks.dino_detector.building_validator \
     --input_kwcoco "$NODE_DPATH/pred_boxes.kwcoco.zip" \
     --input_region $NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json \
     --output_region_fpath "$NODE_DPATH/filtered_summaries.json" \
@@ -674,7 +674,7 @@ python -m watch.tasks.dino_detector.building_validator \
     --start_max_score 0.0 \
     --end_min_score 0.3
 
-python -m watch.tasks.dino_detector.building_validator \
+python -m geowatch.tasks.dino_detector.building_validator \
     --input_kwcoco="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_663bd461/pred_boxes.kwcoco.zip" \
     --input_region="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_f8061df6/site_summaries_manifest.json" \
     --input_sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_f8061df6/sites_manifest.json" \

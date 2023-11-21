@@ -68,9 +68,9 @@ class UpdateGeotiffMetadataConfig(scfg.DataConfig):
 def main(cmdline=True, **kwargs):
     """
     Ignore:
-        from watch.cli.coco_update_geotiff_metadata import *  # NOQA
-        import watch
-        dvc_dpath = watch.find_dvc_dpath()
+        from geowatch.cli.coco_update_geotiff_metadata import *  # NOQA
+        import geowatch
+        dvc_dpath = geowatch.find_dvc_dpath()
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/dzyne_landcover.kwcoco.json'
         kwargs = {'src': base_fpath}
@@ -78,7 +78,7 @@ def main(cmdline=True, **kwargs):
     config = UpdateGeotiffMetadataConfig.cli(data=kwargs, cmdline=cmdline,
                                              strict=True)
 
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     import kwcoco
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
@@ -90,7 +90,7 @@ def main(cmdline=True, **kwargs):
         select_videos=config['select_videos'],
     )
 
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     workers = util_parallel.coerce_num_workers(config['workers'])
 
     mode = config['mode']

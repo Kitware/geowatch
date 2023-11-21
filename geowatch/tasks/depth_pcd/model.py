@@ -30,8 +30,8 @@ if 1:
     import cv2
     import numpy as np
     # import sys
-    # sys.path.append('watch/tasks/depth_pcd')
-    # sys.path.append('watch/tasks/depth_pcd/deeplab2')
+    # sys.path.append('geowatch/tasks/depth_pcd')
+    # sys.path.append('geowatch/tasks/depth_pcd/deeplab2')
 
 
 img_size = 400

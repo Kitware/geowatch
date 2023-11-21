@@ -31,7 +31,7 @@ def coerce_devices(gpus):
         List[torch.device]
 
     Example:
-        >>> from watch.utils.lightning_ext import util_device
+        >>> from geowatch.utils.lightning_ext import util_device
         >>> print(util_device.coerce_devices('cpu'))
         >>> print(util_device.coerce_devices(None))
         >>> # xdoctest: +SKIP
@@ -83,7 +83,7 @@ def coerce_devices(gpus):
         gpu_ids = auto_gpu_select.pick_multiple_gpus(gpus)
     elif needs_gpu_coerce:
         try:
-            from watch.utils.lightning_ext import old_parser_devices
+            from geowatch.utils.lightning_ext import old_parser_devices
             # from pytorch_lightning.utilities import device_parser
             gpu_ids = old_parser_devices.parse_gpu_ids(gpus)
         except Exception as ex:
@@ -101,7 +101,7 @@ def coerce_devices(gpus):
 
 
 def _test_lightning_is_sane():
-    from watch.utils.lightning_ext import old_parser_devices as device_parser
+    from geowatch.utils.lightning_ext import old_parser_devices as device_parser
     # from pytorch_lightning.utilities import device_parser
     import torch
     num_devices = torch.cuda.device_count()

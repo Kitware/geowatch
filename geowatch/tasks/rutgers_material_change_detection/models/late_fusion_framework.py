@@ -3,7 +3,7 @@ from collections import defaultdict
 import torch
 import numpy as np
 
-from watch.tasks.rutgers_material_change_detection.models.base_model import BaseFramework
+from geowatch.tasks.rutgers_material_change_detection.models.base_model import BaseFramework
 
 
 class LateFusionFramework(BaseFramework):

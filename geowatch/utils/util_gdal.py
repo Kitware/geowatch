@@ -95,7 +95,7 @@ def _demo_geoimg_with_nodata():
 
     # Make a dummy geotiff
     imdata = kwimage.grab_test_image('airport')
-    dpath = ub.Path.appdir('watch/test/geotiff').ensuredir()
+    dpath = ub.Path.appdir('geowatch/test/geotiff').ensuredir()
     geo_fpath = dpath / 'dummy_geotiff.tif'
 
     # compute dummy values for a geotransform to CRS84
@@ -176,7 +176,7 @@ class GDalCommandBuilder:
     Helper for templating out gdal commands
 
     Example:
-        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import *  # NOQA
         >>> builder = GDalCommandBuilder('madeupcmd')
         >>> builder.flags.append('-flag1')
         >>> builder.flags.append('-flag2')
@@ -337,13 +337,13 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
             number of seconds allowed to run gdal before giving up
 
     CommandLine:
-        xdoctest -m watch.utils.util_gdal gdal_single_translate
+        xdoctest -m geowatch.utils.util_gdal gdal_single_translate
 
     Example:
-        >>> from watch.utils.util_gdal import *  # NOQA
-        >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
-        >>> from watch.utils import util_gis
-        >>> from watch.gis import geotiff
+        >>> from geowatch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import _demo_geoimg_with_nodata
+        >>> from geowatch.utils import util_gis
+        >>> from geowatch.gis import geotiff
         >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
         >>> info = geotiff.geotiff_crs_info(in_fpath)
         >>> gdf = util_gis.crs_geojson_to_gdf(info['geos_corners'])
@@ -382,7 +382,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         >>> kwplot.imshow(imdata3, pnum=(1, 4, 4), title='pxl-crop')
 
     Example:
-        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import *  # NOQA
         >>> import kwimage
         >>> in_fpath = kwimage.grab_test_image_fpath('amazon')
         >>> out_fpath = 'foo.tif'
@@ -443,7 +443,7 @@ class _ShrinkingTimeout:
     time shrinks down to a minimum value which is zero by default.
 
     Example:
-        >>> from watch.utils.util_gdal import _ShrinkingTimeout
+        >>> from geowatch.utils.util_gdal import _ShrinkingTimeout
         >>> self = _ShrinkingTimeout(3.5)
         >>> assert self.remaining() >= 0
         >>> assert _ShrinkingTimeout(-3).remaining() == 0
@@ -529,7 +529,7 @@ def gdal_single_warp(in_fpath,
             only specify if in_fpath does not already have a nodata value
 
         rpcs (dict): the "rpc_transform" from
-            ``watch.gis.geotiff.geotiff_crs_info``, if that information
+            ``geowatch.gis.geotiff.geotiff_crs_info``, if that information
             is available and orthorectification is desired.
 
         as_vrt (bool): undocumented
@@ -572,7 +572,7 @@ def gdal_single_warp(in_fpath,
 
     Example:
         >>> import kwimage
-        >>> from watch.utils.util_gdal import gdal_single_warp
+        >>> from geowatch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
@@ -592,7 +592,7 @@ def gdal_single_warp(in_fpath,
     Example:
         >>> # Test non-eager version
         >>> import kwimage
-        >>> from watch.utils.util_gdal import gdal_single_warp
+        >>> from geowatch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
@@ -609,7 +609,7 @@ def gdal_single_warp(in_fpath,
     Ignore:
         import xdev
         import sys, ubelt
-        from watch.utils.util_gdal import *  # NOQA
+        from geowatch.utils.util_gdal import *  # NOQA
         globals().update(xdev.get_func_kwargs(gdal_single_warp))
 
     Ignore:
@@ -629,7 +629,7 @@ def gdal_single_warp(in_fpath,
 
     Ignore:
         # Debug cropping out nodata regions with good nodat inputs
-        from watch.utils.util_gdal import gdal_single_warp
+        from geowatch.utils.util_gdal import gdal_single_warp
         import os
         import kwimage
         os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
@@ -644,7 +644,7 @@ def gdal_single_warp(in_fpath,
             'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
             'auth': ['EPSG', '4326']}}})
         space_box = poly.bounding_box()
-        out_fpath = ub.Path.appdir('watch/test/gdal-warp/').ensuredir() / 'acc_red_nodata.tif'
+        out_fpath = ub.Path.appdir('geowatch/test/gdal-warp/').ensuredir() / 'acc_red_nodata.tif'
         gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3)
 
         info = gdal.Info(os.fspath(out_fpath), format='json')
@@ -724,7 +724,7 @@ def gdal_single_warp(in_fpath,
     if use_te_geoidgrid:
         # assumes source CRS is WGS84
         # https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
-        from watch.rc import geoidgrid_path
+        from geowatch.rc import geoidgrid_path
         geoidgrids = geoidgrid_path()
         builder['-s_srs'] = f'"+proj=longlat +datum=WGS84 +no_defs +geoidgrids={geoidgrids}"'
 
@@ -797,13 +797,13 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
-        >>> from watch.utils.util_gdal import *  # NOQA
-        >>> from watch.cli.coco_align import SimpleDataCube
+        >>> from geowatch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.cli.coco_align import SimpleDataCube
         >>> import ubelt as ub
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        >>> dpath = ub.Path.appdir('watch/test/gdal_multi_warp').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/test/gdal_multi_warp').ensuredir()
         >>> out_fpath = ub.Path(dpath) / 'test_multi_warp.tif'
         >>> out_fpath.delete()
         >>> in_fpath1 = cube.coco_dset.get_image_fpath(2)
@@ -814,10 +814,10 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         >>>                 local_epsg=local_epsg, rpcs=rpcs, verbose=3)
 
     Example:
-        >>> from watch.utils.util_gdal import *  # NOQA
-        >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
-        >>> from watch.utils import util_gis
-        >>> from watch.gis import geotiff
+        >>> from geowatch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import _demo_geoimg_with_nodata
+        >>> from geowatch.utils import util_gis
+        >>> from geowatch.gis import geotiff
         >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
         >>> info = geotiff.geotiff_crs_info(in_fpath)
         >>> gdf = util_gis.crs_geojson_to_gdf(info['geos_corners'])
@@ -843,7 +843,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     Ignore:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> import kwimage
-        >>> from watch.utils.util_gdal import gdal_single_warp
+        >>> from geowatch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
@@ -869,7 +869,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
-        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import *  # NOQA
         >>> import ubelt as ub
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.random().bounding_box().to_ltrb()
@@ -896,7 +896,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
             '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/17/S/QD/2017/4/9/S2A_17SQD_20170409_0_L1C_ACC/S2A_17SQD_20170409_0_L1C_ACC_B02.tif',
             '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/18/S/TJ/2017/4/9/S2A_18STJ_20170409_0_L1C_ACC/S2A_18STJ_20170409_0_L1C_ACC_B02.tif',
         ]
-        from watch.utils.util_gdal import *  # NOQA
+        from geowatch.utils.util_gdal import *  # NOQA
         os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
         os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
         poly = kwimage.Polygon.from_geojson({
@@ -908,7 +908,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
             'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
                                         'auth': ['EPSG', '4326']}}})
         space_box = poly.bounding_box()
-        dpath = ub.Path.appdir('watch/test/gdal-warp/')
+        dpath = ub.Path.appdir('geowatch/test/gdal-warp/')
         out_fpath = dpath.ensuredir() / 'acc_multi_data.tif'
 
         # Put data on disk for faster debug iteration
@@ -983,7 +983,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
 
     if nodata is not None:
         # FIXME: might not be necessary
-        # from watch.utils import util_raster
+        # from geowatch.utils import util_raster
         # valid_polygons = []
         # if 0:
         #     for part_out_fpath in warped_gpaths:
@@ -1113,7 +1113,7 @@ def list_gdal_drivers():
         list((driver_shortname, driver_longname, list(driver_file_extension)))
 
     Example:
-        >>> from watch.utils.util_gdal import *
+        >>> from geowatch.utils.util_gdal import *
         >>> drivers = list_gdal_drivers()
         >>> print('drivers = {}'.format(ub.urepr(drivers, nl=1)))
         >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
@@ -1146,9 +1146,9 @@ def GdalOpen(path, mode='r', **kwargs):
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_gdal import *
+        >>> from geowatch.utils.util_gdal import *
         >>> from osgeo import gdal
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from geowatch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
         >>> #
         >>> # standard use:
@@ -1225,7 +1225,7 @@ class GdalDataset(ub.NiceRepr):
 
     Example:
         >>> # Demonstrate use cases of this object
-        >>> from watch.utils.util_gdal import *
+        >>> from geowatch.utils.util_gdal import *
         >>> import kwimage
         >>> # Grab demo path we can test with
         >>> path = kwimage.grab_test_image_fpath()
@@ -1253,7 +1253,7 @@ class GdalDataset(ub.NiceRepr):
     Example:
         >>> # Test virtual filesystem
         >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from geowatch.utils.util_gdal import *  # NOQA
         >>> path = '/vsicurl/https://i.imgur.com/KXhKM72.png'
         >>> ref = GdalDataset.open(path)
         >>> data = ref.GetRasterBand(1).ReadAsArray()
@@ -1262,25 +1262,25 @@ class GdalDataset(ub.NiceRepr):
     Ignore:
         gpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/14/T/QL/2014/9/29/14SEP29174805-M1BS-014484503010_01_P003_ACC/14SEP29174805-M1BS-014484503010_01_P003_ACC_B05.tif'
 
-        from watch.utils import util_gdal
+        from geowatch.utils import util_gdal
         import sys, ubelt
-        from watch.utils.util_gdal import *  # NOQA
+        from geowatch.utils.util_gdal import *  # NOQA
         os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
         gpath = '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/23/K/PQ/2017/9/6/S2A_23KPQ_20170906_0_L1C_ACC/S2A_23KPQ_20170906_0_L1C_ACC_B10.tif'
         ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
         with GdalErrorHandler() as handler:
             ref.GetMetadataDomainList()
 
-        from watch.gis.geotiff import *  # NOQA
+        from geowatch.gis.geotiff import *  # NOQA
         _ = geotiff_metadata(gpath)
 
 
         # Test 404 handling
-        from watch.utils import util_gdal
+        from geowatch.utils import util_gdal
         gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
-        import watch
-        meta = watch.gis.geotiff.geotiff_metadata(gpath)
-        from watch.utils import util_gdal
+        import geowatch
+        meta = geowatch.gis.geotiff.geotiff_metadata(gpath)
+        from geowatch.utils import util_gdal
         infos = {}
         try:
             util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)

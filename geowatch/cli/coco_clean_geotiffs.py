@@ -135,23 +135,23 @@ __config__ = CleanGeotiffConfig
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
-        xdoctest -m watch.cli.coco_clean_geotiffs main
+        xdoctest -m geowatch.cli.coco_clean_geotiffs main
 
     Example:
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTESTS)
         >>> # Generate a dataset that has bad nodata values
-        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> from geowatch.cli.coco_clean_geotiffs import *  # NOQA
         >>> import kwimage
-        >>> import watch
+        >>> import geowatch
         >>> import kwarray
         >>> import numpy as np
         >>> # Create a copy of the test dataset to clean inplace
-        >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
+        >>> orig_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, bad_nodata=True)
         >>> orig_dpath = ub.Path(orig_dset.bundle_dpath)
         >>> dpath = orig_dpath.augment(stemsuffix='_cleaned')
         >>> dpath.delete()
         >>> orig_dpath.copy(dpath)
-        >>> dset = watch.coerce_kwcoco(dpath / 'data.kwcoco.json')
+        >>> dset = geowatch.coerce_kwcoco(dpath / 'data.kwcoco.json')
         >>> coco_img = dset.images().coco_images[0]
         >>> kwargs = {
         >>>     'src': dset,
@@ -185,7 +185,7 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), title='before')
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
     """
-    from watch.utils import util_parallel
+    from geowatch.utils import util_parallel
     import kwcoco
 
     config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -395,10 +395,10 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
         globals().update((ub.udict(xdev.get_func_kwargs(probe_image_issues)) | probe_kwargs))
 
     Example:
-        >>> import watch
-        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> import geowatch
+        >>> from geowatch.cli.coco_clean_geotiffs import *  # NOQA
         >>> import numpy as np
-        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
+        >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, bad_nodata=True)
         >>> coco_img = dset.images().coco_images[4]
         >>> channels = 'B11|B10|X.1'
         >>> prefilter_channels = 'B11'
@@ -563,7 +563,7 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
 
 def _probe_correct_nodata_value(fpath, band_idxs, nodata_value=-9999):
     asset_summary = {}
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     gdal_dset = util_gdal.GdalDataset.open(fpath)
     band_infos = gdal_dset.info()['bands']
     gdal_dset = None
@@ -599,7 +599,7 @@ def probe_asset_imdata(imdata, band_idxs, min_region_size_=256,
 
 def probe_band_imdata(band_imdata, min_region_size_=256,
                       possible_nodata_values=None):
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     import numpy as np
 
     band_imdata = np.ascontiguousarray(band_imdata)
@@ -675,11 +675,11 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         - [ ] Can restructure this as a more general context manager.
 
     Example:
-        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
-        >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
+        >>> from geowatch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_rendering import write_demo_geotiff
         >>> import kwimage
         >>> import numpy as np
-        >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
         >>> fpath1.delete()
@@ -715,11 +715,11 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> #kwplot.imshow((asset_summary['is_samecolor'] > 0), pnum=(3, 2, 5), title='is samecolor mask')
 
     Example:
-        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
-        >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
+        >>> from geowatch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> from geowatch.demo.metrics_demo.demo_rendering import write_demo_geotiff
         >>> import kwimage
         >>> import numpy as np
-        >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
         >>> fpath1.delete()
@@ -753,7 +753,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> #kwplot.imshow((asset_summary['is_samecolor'] > 0), pnum=(3, 2, 5), title='is samecolor mask')
     """
     import os
-    from watch.utils import util_gdal
+    from geowatch.utils import util_gdal
     from osgeo import gdal
     import numpy as np
     import tempfile
@@ -857,7 +857,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
 
 
 def draw_asset_summary(coco_img, asset_summary):
-    from watch.utils import util_kwimage
+    from geowatch.utils import util_kwimage
     import kwimage
     import numpy as np
     is_samecolor = asset_summary['is_samecolor']
@@ -896,6 +896,6 @@ def draw_asset_summary(coco_img, asset_summary):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_clean_geotiffs.py
+        python ~/code/watch/geowatch/cli/coco_clean_geotiffs.py
     """
     main()

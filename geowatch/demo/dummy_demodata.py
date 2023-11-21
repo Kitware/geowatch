@@ -5,8 +5,8 @@ def dummy_rpc_geotiff_fpath():
     import rasterio
     import ubelt as ub
     from os.path import join
-    from watch.gis import spatial_reference as watch_crs
-    dpath = ub.Path.appdir('watch/demodata').ensuredir()
+    from geowatch.gis import spatial_reference as watch_crs
+    dpath = ub.Path.appdir('geowatch/demodata').ensuredir()
     gpath = join(dpath, 'test_rpc.tif')
     rpcs = watch_crs.RPCTransform.demo()
 

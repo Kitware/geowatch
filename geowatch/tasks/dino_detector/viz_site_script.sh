@@ -118,7 +118,7 @@ geowatch visualize --smart 1 \
     --viz_dpath "$ANALYSIS_DPATH"/_viz_bas_pred_and_truth
 
 
-python -m watch.mlops.confusor_analysis \
+python -m geowatch.mlops.confusor_analysis \
     --detections_fpath "$EVAL_DPATH"/"$FILTERED_REGION_ID"/overall/bas/detections_tau=0.2_rho=0.5_min_area=0.csv \
     --proposals_fpath "$EVAL_DPATH"/"$FILTERED_REGION_ID"/overall/bas/proposals_tau=0.2_rho=0.5_min_area=0.csv \
     --bas_metric_dpath "$EVAL_DPATH"/"$FILTERED_REGION_ID"/overall/bas \

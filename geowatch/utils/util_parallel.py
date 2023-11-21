@@ -12,7 +12,7 @@ class BlockingJobQueue:
     The wait_until_finished should always be called at the end.
 
     Example:
-        >>> from watch.utils.util_parallel import *  # NOQA
+        >>> from geowatch.utils.util_parallel import *  # NOQA
         >>> import time
         >>> import random
         >>> # Test with zero workers
@@ -94,10 +94,10 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         int : number of available cpus based on request parameters
 
     CommandLine:
-        xdoctest -m watch.utils.util_parallel coerce_num_workers
+        xdoctest -m geowatch.utils.util_parallel coerce_num_workers
 
     Example:
-        >>> from watch.utils.util_parallel import *  # NOQA
+        >>> from geowatch.utils.util_parallel import *  # NOQA
         >>> print(coerce_num_workers('all'))
         >>> print(coerce_num_workers('avail'))
         >>> print(coerce_num_workers('auto'))

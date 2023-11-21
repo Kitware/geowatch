@@ -256,8 +256,8 @@ class segmentation_model(pl.LightningModule):
             module_name = 'watch_tasks_invariants'
 
             with torch.package.PackageExporter(package_path) as exp:
-                exp.extern('**', exclude=['watch.tasks.invariants.**'])
-                exp.intern('watch.tasks.invariants.**', allow_empty=False)
+                exp.extern('**', exclude=['geowatch.tasks.invariants.**'])
+                exp.intern('geowatch.tasks.invariants.**', allow_empty=False)
 
                 package_header = {
                     'version': '0.1.0',
@@ -281,7 +281,7 @@ class segmentation_model(pl.LightningModule):
     @classmethod
     def load_package(cls, package_path):
         """
-        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
+        DEPRECATE IN FAVOR OF geowatch.tasks.fusion.utils.load_model_from_package
 
         TODO:
             - [ ] Make the logic that defines the save_package and load_package
@@ -292,7 +292,7 @@ class segmentation_model(pl.LightningModule):
         # model, the model is defined by the package and the tool that loads it
         # is agnostic to the model contained in said package.
         # This classmethod existing is a convinience more than anything else
-        from watch.tasks.fusion.utils import load_model_from_package
+        from geowatch.tasks.fusion.utils import load_model_from_package
 
         self = load_model_from_package(package_path)
         return self

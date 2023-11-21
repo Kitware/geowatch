@@ -140,7 +140,7 @@ def expand_param_grid(arg, max_configs=None):
     method under the hood with our own
 
     Ignore:
-        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
             '''
             - matrix:
@@ -190,7 +190,7 @@ def expand_param_grid(arg, max_configs=None):
             ''')
         >>> grid_items = list(expand_param_grid(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1, sort=0)))
-        >>> from watch.utils.util_dotdict import dotdict_to_nested
+        >>> from geowatch.utils.util_dotdict import dotdict_to_nested
         >>> print(ub.urepr([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
         >>> print(len(grid_items))
     """
@@ -230,10 +230,10 @@ def github_action_matrix(arg):
         https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
 
     CommandLine:
-        xdoctest -m watch.utils.util_param_grid github_action_matrix:2
+        xdoctest -m geowatch.utils.util_param_grid github_action_matrix:2
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
                  '''
                    matrix:
@@ -261,7 +261,7 @@ def github_action_matrix(arg):
         ]
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
                 '''
                   matrix:
@@ -290,7 +290,7 @@ def github_action_matrix(arg):
         ]
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
                  '''
                  matrix:
@@ -394,11 +394,11 @@ def extended_github_action_matrix(arg):
         item : a single entry in the grid.
 
     CommandLine:
-        xdoctest -m watch.utils.util_param_grid extended_github_action_matrix:2
+        xdoctest -m geowatch.utils.util_param_grid extended_github_action_matrix:2
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                    matrix:
@@ -418,7 +418,7 @@ def extended_github_action_matrix(arg):
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
                 '''
                   matrix:
@@ -436,8 +436,8 @@ def extended_github_action_matrix(arg):
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils import util_param_grid
         >>> # Specifying an explicit list of things to run
         >>> arg = ub.codeblock(
                  '''
@@ -462,8 +462,8 @@ def extended_github_action_matrix(arg):
         >>> assert len(grid_items) == 5
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                  matrix:
@@ -496,8 +496,8 @@ def extended_github_action_matrix(arg):
         >>> assert len(grid_items) == 14
 
     Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
+        >>> from geowatch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                  matrix:

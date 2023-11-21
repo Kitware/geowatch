@@ -1,4 +1,4 @@
-I think watch is onto a really nice way of phrasing model training as fit -> predict -> evaluate. 
+I think geowatch is onto a really nice way of phrasing model training as fit -> predict -> evaluate. 
 
 
 TODO: netharn-ish plugins for lightning
@@ -25,7 +25,7 @@ kwcoco toydata vidshapes2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_tes
 
 
 DATA_DPATH=$HOME/data/work/toy_change
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --train_dataset=$DATA_DPATH/vidshapes_train/data.kwcoco.json \
     --vali_dataset=$DATA_DPATH/vidshapes_vali/data.kwcoco.json \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
@@ -34,7 +34,7 @@ python -m watch.tasks.fusion.fit \
     --max_steps=1 --gpus 1 # [**train_hyperparams]
 
 DATA_DPATH=$HOME/data/work/toy_change
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --package_fpath=deployed.pt \
     --thresh=0.0605 --gpus 1 \
@@ -44,7 +44,7 @@ python -m watch.tasks.fusion.predict \
 kwcoco show $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gid 1 --channels B1
 
 DATA_DPATH=$HOME/data/work/toy_change
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
     --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
     --eval_dpath=$DATA_DPATH/vidshapes_test_pred_eval  # [**eval_hyperparams]
@@ -59,9 +59,9 @@ python -m watch.tasks.fusion.evaluate \
 See Help 
 
 ```bash
-python -m watch.tasks.fusion.fit --help
-python -m watch.tasks.fusion.predict --help
-python -m watch.tasks.fusion.evaluate --help
+python -m geowatch.tasks.fusion.fit --help
+python -m geowatch.tasks.fusion.predict --help
+python -m geowatch.tasks.fusion.evaluate --help
 ```
 
 

@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
-import watch.tasks.rutgers_material_seg.models.moco as moco
+import geowatch.tasks.rutgers_material_seg.models.moco as moco
 # import moco.builder
 
 model_names = sorted(name for name in models.__dict__

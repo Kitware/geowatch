@@ -8,8 +8,8 @@ import kwimage
 import numpy as np
 from matplotlib.colors import to_rgba
 
-from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
-from watch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
+from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
+from geowatch.tasks.rutgers_material_change_detection.datasets.base_dataset import BaseDataset
 
 
 class IARPA_KWDATASET(BaseDataset):
@@ -693,7 +693,7 @@ class IARPA_KWDATASET(BaseDataset):
         rgb_anno_images = [self.color_annotation(a_img) for a_img in anno_images]
 
         # Generate GIF of annotation images.
-        from watch.tasks.rutgers_material_change_detection.utils.util_misc import create_gif
+        from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import create_gif
 
         ## Get save path.
         if save_path is None:
@@ -708,8 +708,8 @@ class IARPA_KWDATASET(BaseDataset):
 
 
 if __name__ == "__main__":
-    from watch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
-    from watch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_paths import get_dataset_root_dir
+    from geowatch.tasks.rutgers_material_change_detection.utils.util_misc import generate_video_slice_object
 
     root_dir = get_dataset_root_dir("iarpa_drop1")
     # root_dir = get_dataset_root_dir('iarpa_drop1_ta1')

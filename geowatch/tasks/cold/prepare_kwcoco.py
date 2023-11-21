@@ -35,7 +35,7 @@ Limitations:
     * Configurations are hard-coded
 
 TODO:
-    - [ ] Incorporate watch/tasks/fusion/datamodules/qa_bands.py
+    - [ ] Incorporate geowatch/tasks/fusion/datamodules/qa_bands.py
 """
 import kwcoco
 import json
@@ -131,13 +131,13 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.prepare_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.prepare_kwcoco prepare_kwcoco_main
+        python -m geowatch.tasks.cold.prepare_kwcoco --help
+        TEST_COLD=1 xdoctest -m geowatch.tasks.cold.prepare_kwcoco prepare_kwcoco_main
 
     Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.prepare_kwcoco import prepare_kwcoco_main
-        >>> from watch.tasks.cold.prepare_kwcoco import *
+        >>> from geowatch.tasks.cold.prepare_kwcoco import prepare_kwcoco_main
+        >>> from geowatch.tasks.cold.prepare_kwcoco import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/data_vali_split1_KR_R001.kwcoco.json'),
         >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
@@ -323,7 +323,7 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
         >>> # TODO: readd this doctest
         >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
         >>> setup_logging()
-        >>> coco_dset = watch.coerce_kwcoco('watch-msi')
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi')
         >>> coco_fpath = coco_dset.fpath
         >>> #coco_fpath = grab_demo_kwcoco_dataset()
         >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
@@ -434,7 +434,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     HACK_QA = 1
     if HACK_QA:
         # TODO: use
-        # from watch.tasks.fusion.datamodules import qa_bands
+        # from geowatch.tasks.fusion.datamodules import qa_bands
         # if 'qa_pixel' in coco_image.channels:
         #     quality_channels = 'qa_pixel'
         ...

@@ -3,8 +3,8 @@ import numpy as np
 
 from segmentation_models_pytorch.losses import JaccardLoss
 
-from watch.tasks.rutgers_material_seg_v2.matseg.models.pl_wrapper import MaterialSegmentationModel
-from watch.tasks.rutgers_material_seg_v2.matseg.models.loss import CrossEntropyLossWithOHEM
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models.pl_wrapper import MaterialSegmentationModel
+from geowatch.tasks.rutgers_material_seg_v2.matseg.models.loss import CrossEntropyLossWithOHEM
 
 
 def build_model(class_count,

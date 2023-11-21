@@ -1,5 +1,5 @@
 __dev__ = """
-mkinit ~/code/watch/watch/rc/__init__.py --lazy -w
+mkinit ~/code/watch/geowatch/rc/__init__.py --lazy -w
 """
 
 
