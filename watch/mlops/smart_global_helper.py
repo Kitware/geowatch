@@ -719,8 +719,10 @@ class SmartGlobalHelper:
             Yaml.loads(
                 '''
                 delivery: Eval14
-                task: BAS
+                dag: KIT_TA2_PREEVAL14_BATCH_V27.py
                 bas_pxl.package_fpath: models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
+                sc_pxl.package_fpath: 'models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt',
+
                 bas_poly.thresh: 0.3875
                 bas_poly.time_thresh: 0.8
                 sv_dino_filter.end_min_score: 0.1
@@ -751,8 +753,24 @@ class SmartGlobalHelper:
 
             Yaml.loads(
                 '''
+                delivery: Eval16
+                dag: KIT_TA2_PREEVAL16_BATCH_V62.py
+                bas_pxl.package_fpath: 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt'
+                sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+                bas_poly.thresh: 0.4,
+                bas_poly.time_thresh: 0.8,
+                sv_depth_filter.threshold: 0.1,
+                sv_dino_filter.end_min_score: 0.15,
+                sc_poly.smoothing: 0.66,
+                sc_poly.thresh: 0.1,
+                sc_poly.site_score_thresh: 0.35,
+                sc_crop.sensor_to_time_window: 'S2: 1month',
+                '''),
+
+            Yaml.loads(
+                '''
                 delivery: Eval17
-                dag: KIT_TA2_PREEVAL17_BATCH_V128.py
+                dag: KIT_TA2_PREEVAL17_BATCH_V126.py
 
                 bas_pxl.package_fpath: models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
                 bas_poly.thresh: 0.3875
@@ -762,9 +780,9 @@ class SmartGlobalHelper:
                 sv_depth_filter.threshold: 0.1
 
                 sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
-                sc_poly.thresh: 0.07
-                sc_poly.smoothing: null
-                sc_poly.site_score_thresh: null,
+                sc_poly.smoothing: 0.66
+                sc_poly.thresh: 0.1
+                sc_poly.site_score_thresh: 0.35
                 sc_crop.sensor_to_time_window: S2: 1month
                 ''')
         ]

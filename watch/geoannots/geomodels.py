@@ -1291,8 +1291,12 @@ class _Feature(ub.NiceRepr, geojson.Feature):
                         print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
                     props[key] = newval
 
-    def infer_mgrs(self):
+    def infer_mgrs(self, strict=True):
         """
+
+        Args:
+            strict (bool): if False, do not error if this fails
+
         Example:
             >>> from watch.geoannots.geomodels import *  # NOQA
             >>> ss = SiteSummary.random()
@@ -1301,11 +1305,15 @@ class _Feature(ub.NiceRepr, geojson.Feature):
 
         from shapely.geometry import shape
         import mgrs
-        _geom = shape(self.geometry)
-        lon = _geom.centroid.xy[0][0]
-        lat = _geom.centroid.xy[1][0]
-        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
-        self.properties['mgrs'] = mgrs_code
+        if self.geometry is None:
+            handle_error('Cannot infer mgrs, missing geometry',
+                         extype=Exception, strict=strict)
+        else:
+            _geom = shape(self.geometry)
+            lon = _geom.centroid.xy[0][0]
+            lat = _geom.centroid.xy[1][0]
+            mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+            self.properties['mgrs'] = mgrs_code
         return self
 
 
@@ -1748,7 +1756,7 @@ class ModelCollection(list):
 
 class SiteModelCollection(ModelCollection):
 
-    def as_region_model(self, region_header=None):
+    def as_region_model(self, region_header=None, region_id=None, strict=True):
         """
         Convert a set of site models to a region model
 
@@ -1757,6 +1765,12 @@ class SiteModelCollection(ModelCollection):
                 If specified, use this information to generate the new region
                 header. If unspecified, we attempt to infer this from the site
                 models.
+
+            region_id (str | None):
+                if specified, use this as the region id
+
+            strict (bool):
+                if False, ignore missing uninferable information.
 
         Returns:
             RegonModel: a new region model where each site in this collection
@@ -1777,24 +1791,28 @@ class SiteModelCollection(ModelCollection):
         else:
             region_header = RegionHeader.empty()
 
+        if region_id is not None:
+            region_header['properties']['region_id'] = region_id
+
         region_props = region_header['properties']
         # note: region_id does not appear in a site summary, but it does in the
         # site model.
         key = 'region_id'
         if region_props.get(key, None) is None:
             if len(self) == 0:
-                raise ValueError(f'No sites. Unable to infer {key}.')
-            region_props[key] = _rectify_keys(key, site_header_properties)
+                handle_error(f'No sites. Unable to infer {key}.', strict=strict)
+            else:
+                region_props[key] = _rectify_keys(key, site_header_properties)
 
         region_header = _infer_region_header_from_site_summaries(
-            region_header, site_summaries)
+            region_header, site_summaries, strict)
 
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)
         return region_model
 
 
-def _infer_region_header_from_site_summaries(region_header, site_summaries):
+def _infer_region_header_from_site_summaries(region_header, site_summaries, strict=True):
     """
     Given a RegionHeader use site_summaries to fill missing data.
     """
@@ -1813,8 +1831,9 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
         if region_props.get(key, None) is None:
             try:
                 if len(site_summaries) == 0:
-                    raise ValueError(f'No sites. Unable to infer {key}.')
-                region_props[key] = _rectify_keys(key, site_summary_properties)
+                    handle_error(f'No sites. Unable to infer {key}.', strict=strict)
+                else:
+                    region_props[key] = _rectify_keys(key, site_summary_properties)
             except ValueError:
                 # Allow MGRS to fail. We can use region geometry to get the
                 # right one.
@@ -1823,31 +1842,38 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
 
     if region_props.get('start_date', None) is None:
         if len(site_summaries) == 0:
-            raise ValueError('No sites. Unable to infer start_date.')
+            handle_error('No sites. Unable to infer start_date.', strict=strict)
         dates = [p['start_date'] for p in site_summary_properties if p['start_date'] is not None]
         if len(dates) == 0:
-            raise ValueError('No sites with start dates')
-        region_props['start_date'] = min(dates)
+            handle_error('No sites with start dates', strict=strict)
+        else:
+            region_props['start_date'] = min(dates)
 
     if region_props.get('end_date', None) is None:
         if len(site_summaries) == 0:
-            raise ValueError('No sites. Unable to infer end_date.')
+            handle_error('No sites. Unable to infer end_date.', strict=strict)
         dates = [p['end_date'] for p in site_summary_properties if p['end_date'] is not None]
         if len(dates) == 0:
-            raise ValueError('No sites with end dates')
-        region_props['end_date'] = max(dates)
+            handle_error('No sites with end dates', strict=strict)
+        else:
+            region_props['end_date'] = max(dates)
 
     if region_header.get('geometry', None) is None:
         if len(site_summaries) == 0:
-            raise ValueError(f'No sites. Unable to infer {key}.')
-        from shapely.ops import unary_union
-        import shapely.geometry
-        site_geoms = [shapely.geometry.shape(s['geometry']).buffer(0)
-                      for s in site_summaries]
-        region_header['geometry'] = unary_union(site_geoms).envelope
+            handle_error(f'No sites. Unable to infer {key}.', strict=strict)
+            # region_header['geometry'] = {'type': 'Point', 'coordinates': []}
+        else:
+            from shapely.ops import unary_union
+            import kwimage
+            import shapely.geometry
+            site_geoms = [shapely.geometry.shape(s['geometry']).buffer(0)
+                          for s in site_summaries]
+            sh_geom = unary_union(site_geoms).envelope
+            dct_geom = kwimage.Polygon.from_shapely(sh_geom).to_geojson()
+            region_header['geometry'] = dct_geom
 
     if region_props.get('mgrs', None) is None:
-        RegionHeader(**region_header).infer_mgrs()
+        RegionHeader(**region_header).infer_mgrs(strict=strict)
 
     return region_header
 
@@ -1873,6 +1899,14 @@ def _rectify_keys(key, properties_list):
         raise ValueError(msg)
     value = list(unique_values)[0]
     return value
+
+
+def handle_error(msg, extype=ValueError, strict=True):
+    import rich
+    if strict:
+        raise extype(msg)
+    else:
+        rich.print(f'[yellow]WARNING: {msg}')
 
 
 def _update_propery_cache(prop):

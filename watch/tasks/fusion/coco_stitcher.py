@@ -411,12 +411,16 @@ class CocoStitchingManager(object):
         dset = self.result_dataset
         img = dset.index.imgs[gid]
         if self.stiching_space == 'video':
-            vidid = img['video_id']
+            vidid = img.get('video_id', None)
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
                 if asset_dsize is None:
-                    video = dset.index.videos[vidid]
-                    height, width = video['height'], video['width']
+                    if vidid is None:
+                        # Assume fake video space
+                        height, width = img['height'], img['width']
+                    else:
+                        video = dset.index.videos[vidid]
+                        height, width = video['height'], video['width']
                 else:
                     width, height = asset_dsize
                 if self.num_bands == 'auto':

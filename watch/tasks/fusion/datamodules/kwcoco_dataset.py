@@ -4,12 +4,19 @@ Defines a torch Dataset for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
+# import liberator
+# lib = liberator.Liberator()
+# lib.add_dynamic(KWCocoVideoDataset)
+# lib.expand(['watch'])
+# print(lib.current_sourcecode())
+
 
 For notes on Spaces, see
     ~/code/watch/docs/coding_conventions.rst
 
 CommandLine:
     xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
+    xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
 
 Example:
     >>> # Demo toy data without augmentation
@@ -656,7 +663,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, mode='fit', **kwargs):
+    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
         """
         Args:
             sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
@@ -757,6 +764,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         )
         # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
 
+        grid_kw = common_grid_kw.copy()
+
+        negative_classes = (
+            self.ignore_classes | self.background_classes | self.negative_classes)
+
+        annot_helper_kws = dict(
+            negative_classes=negative_classes,
+            keepbound=False,
+            use_annot_info=True,
+            use_centered_positives=config['use_centered_positives'],
+            use_grid_positives=config['use_grid_positives'],
+            use_grid_negatives=config['use_grid_negatives'],
+        )
+
         if mode == 'custom':
             new_sample_grid = None
             self.length = 1
@@ -764,27 +785,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # FIXME: something is wrong with the cache when using an sqlview.
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
+
+            if test_with_annot_info:
+                grid_kw.update(annot_helper_kws)
+            else:
+                grid_kw.update(dict(
+                    keepbound=True,
+                    use_annot_info=False,
+                ))
+
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset,
-                keepbound=True,
-                use_annot_info=False,
-                **common_grid_kw
+                dset=sampler.dset, **grid_kw
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
         else:
-            negative_classes = (
-                self.ignore_classes | self.background_classes | self.negative_classes)
-
+            grid_kw.update(annot_helper_kws)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset,
-                negative_classes=negative_classes,
-                keepbound=False,
-                use_annot_info=True,
-                use_centered_positives=config['use_centered_positives'],
-                use_grid_positives=config['use_grid_positives'],
-                use_grid_negatives=config['use_grid_negatives'],
-                **common_grid_kw
+                sampler.dset, **grid_kw
             )
             new_sample_grid = builder.build()
 
@@ -1039,7 +1057,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Do this for unique video ids otherwise SQLviews will take forever
         unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
-        unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        coco_dset = self.sampler.dset
+        try:
+            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        except KeyError:
+            # hack for loose images
+            unique_vidnames = []
+            for video_id in unique_vidids:
+                if video_id in coco_dset.index.videos:
+                    vidname = coco_dset.index.videos[video_id]['name']
+                else:
+                    vidname = video_id
+                unique_vidnames.append(vidname)
+
         vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
 
         # if 0:
@@ -1511,6 +1541,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         try:
             return self.getitem(index)
         except FailedSample:
+            raise
             return None
 
     @profile
@@ -1585,7 +1616,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # hack for single image datasets
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
 
         resolution_info = self._resolve_resolution(target_, video)
 
@@ -1946,7 +1983,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         coco_dset = self.sampler.dset
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # Hack for loose images
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
+            is_loose_img = True
+        else:
+            is_loose_img = False
 
         with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
@@ -1971,7 +2017,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
         num_images_wanted = len(target_['gids'])
-        if resample_invalid:
+        if resample_invalid and not is_loose_img:
             if resample_invalid is True:
                 max_tries = 3
             else:
@@ -3293,7 +3339,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             summary = ub.udict(summary) - {'frame_summaries'}
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
-            canvas = kwimage.stack_images([header, canvas])
+            canvas = kwimage.stack_images([canvas, header])
 
         return canvas
 
@@ -3329,6 +3375,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
 
+            if 0:
+                dset = self.sampler.dset
+                for gid in item['requested_target']['gids']:
+                    assert gid in dset.imgs
+
             annots = self.sampler.dset.annots(frame['ann_aids'])
             cids = annots.lookup('category_id')
             class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
@@ -3336,21 +3387,26 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if frame.get('ann_aids') is not None:
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
-        vidname = item['video_name']
-        video = self.coco_dset.index.name_to_video[vidname]
-        vid_w = video['width']
-        vid_h = video['height']
-        item_summary['video_name'] = vidname
-        item_summary['video_hw'] = (vid_h, vid_w)
+        vidname = item.get('video_name', None)
+        if vidname is not None:
+            item_summary['video_name'] = vidname
+            try:
+                video = self.coco_dset.index.name_to_video[vidname]
+                vid_w = video['width']
+                vid_h = video['height']
+                item_summary['video_hw'] = (vid_h, vid_w)
+            except KeyError:
+                item_summary['video_hw'] = '?'
 
-        if timestamps:
+        if len(timestamps) > 1:
             deltas = np.diff(timestamps)
             deltas = [d.total_seconds() for d in deltas]
             item_summary['min_time'] = ub.timestamp(min(timestamps))
             item_summary['max_time'] = ub.timestamp(max(timestamps))
-            item_summary['min_delta'] = min(deltas)
-            item_summary['max_delta'] = max(deltas)
-            item_summary['mean_delta'] = np.mean(deltas)
+            if len(deltas):
+                item_summary['min_delta'] = min(deltas)
+                item_summary['max_delta'] = max(deltas)
+                item_summary['mean_delta'] = np.mean(deltas)
         item_summary['input_gsd'] = item['input_gsd']
         item_summary['output_gsd'] = item['output_gsd']
 
@@ -3359,6 +3415,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         if 'target' in item:
             item_summary['resolved_target'] = item['target']
+
+        item_summary['producer_rank'] = item.get('producer_rank', None)
+        item_summary['producer_mode'] = item.get('producer_mode', None)
+        item_summary['requested_index'] = item.get('requested_index', None)
+        item_summary['resolved_index'] = item.get('resolved_index', None)
 
         return item_summary
 

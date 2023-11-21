@@ -3,6 +3,7 @@ import numpy as np
 import pytorch_lightning as pl
 import ubelt as ub
 import warnings
+import traceback
 from kwutil import util_time
 from kwutil.slugify_ext import smart_truncate
 from watch.utils import util_kwimage
@@ -42,6 +43,9 @@ class BatchPlotter(pl.callbacks.Callback):
             if True overlay annotations on image data for a more compact
             view. if False separate annotations / images for a less
             cluttered view.
+
+    FIXME:
+        - [ ] This breaks when using strategy=DDP and multiple gpus
 
     TODO:
         - [ ] Doctest
@@ -163,7 +167,11 @@ class BatchPlotter(pl.callbacks.Callback):
                 'Implement draw_batch in your datamodule',
                 org=(1, 1))
         else:
+            stage = trainer.state.stage.value
+            if stage == 'validate':
+                stage = 'vali'
             canvas = datamodule.draw_batch(batch, outputs=outputs,
+                                           stage=stage,
                                            **self.draw_batch_kwargs)
 
         canvas = np.nan_to_num(canvas)
@@ -225,9 +233,10 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_train_batch_end")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))
 
     #  Old sig
     # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
@@ -238,15 +247,17 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_validation_batch_end")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         try:
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
             print("========")
-            print("Exception raised during batch rendering callback.")
+            print("Exception raised during batch rendering callback: on_test_batch_end")
             print("========")
-            print(e)
+            print(traceback.format_exc())
+            print(repr(e))

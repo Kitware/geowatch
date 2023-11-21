@@ -121,7 +121,13 @@ class SpacetimeAugmentMixin:
             rng = self.augment_rng
 
             vidid = target_['video_id']
-            video = self.sampler.dset.index.videos[vidid]
+            try:
+                video = self.sampler.dset.index.videos[vidid]
+            except KeyError:
+                # Hack for loose images
+                assert len(target_['gids']) == 1
+                gid = target_['gids'][0]
+                video = self.sampler.dset.index.imgs[gid]
             vid_width = video['width']
             vid_height = video['height']
 
@@ -158,14 +164,15 @@ class SpacetimeAugmentMixin:
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
             if do_temporal_dropout and frame_dropout_thresh > 0:
                 gids = target_['gids']
-                main_gid = target_['main_gid']
-                main_frame_idx = gids.index(main_gid)
-                keep_score = rng.rand(len(gids))
-                keep_score[main_frame_idx] = 1.0
-                keep_flags = keep_score >= frame_dropout_thresh
-                gids = list(ub.compress(gids, keep_flags))
-                # target_['main_idx'] = gids.index(main_gid)
-                target_['gids'] = gids
+                if len(gids) > 1:
+                    main_gid = target_['main_gid']
+                    main_frame_idx = gids.index(main_gid)
+                    keep_score = rng.rand(len(gids))
+                    keep_score[main_frame_idx] = 1.0
+                    keep_flags = keep_score >= frame_dropout_thresh
+                    gids = list(ub.compress(gids, keep_flags))
+                    # target_['main_idx'] = gids.index(main_gid)
+                    target_['gids'] = gids
 
         # force_flip = target_.get('flip_axis', None)
         # See data_utils.fliprot_annot for a visualization of various

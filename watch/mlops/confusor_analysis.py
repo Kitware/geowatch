@@ -345,6 +345,7 @@ class ConfusionAnalysis:
         from watch.geoannots.geomodels import RegionModel
         from watch.geoannots.geomodels import SiteModelCollection
         from watch.utils import util_gis
+        import rich
         import itertools as it
 
         config = self.config
@@ -366,20 +367,21 @@ class ConfusionAnalysis:
         #         raise AssertionError
         orig_regions = list(RegionModel.coerce_multiple(rm_files))
         if len(orig_regions) != 1:
-            raise AssertionError(ub.paragraph(
+            msg = ub.paragraph(
                 f'''
                 Unable to load groundtruth region files. Got {orig_regions=}.
                 Set the value of ``true_region_dpath`` correctly. The current
                 value is {config.true_region_dpath}
-                '''))
+                ''')
+            rich.print(f'[yellow]WARNING {msg}')
+            true_region_model = None
+        else:
+            true_region_model = orig_regions[0]
+            true_region_model.fixup()
+            true_region_model.header['properties'].setdefault('cache', {})
 
         # Ensure all site data has misc-info
         # Ensure all data cast to site models
-
-        true_region_model = orig_regions[0]
-        true_region_model.fixup()
-        true_region_model.header['properties'].setdefault('cache', {})
-
         for site in it.chain(pred_sites, true_sites):
             for feat in site.features:
                 feat['properties'].setdefault('cache', {})
@@ -414,8 +416,19 @@ class ConfusionAnalysis:
 
         config.detections_fpath = ub.Path(config.detections_fpath)
         config.proposals_fpath = ub.Path(config.proposals_fpath)
-        assert config.proposals_fpath.exists()
-        assert config.detections_fpath.exists()
+
+        confusion_unavailable = False
+        if not config.proposals_fpath.exists():
+            confusion_unavailable = True
+            rich.print('[yellow]WARNING: no proposal path, cannot compute confusion')
+        if not config.detections_fpath.exists():
+            rich.print('[yellow]WARNING: no detection path, cannot compute confusion')
+            confusion_unavailable = True
+
+        if confusion_unavailable:
+            self.true_confusion_rows = []
+            self.pred_confusion_rows = []
+            return
 
         true_assign = pd.read_csv(config.detections_fpath)
         pred_assign = pd.read_csv(config.proposals_fpath)
@@ -641,9 +654,14 @@ class ConfusionAnalysis:
         for row in true_confusion_rows:
             site = id_to_true_site[row['true_site_id']]
             site.header['properties']['cache']['confusion'] = row
+
         for row in pred_confusion_rows:
-            site = id_to_pred_site[row['pred_site_id']]
-            site.header['properties']['cache']['confusion'] = row
+            try:
+                pred_site_id = row['pred_site_id']
+                site = id_to_pred_site[pred_site_id]
+                site.header['properties']['cache']['confusion'] = row
+            except Exception:
+                print('warning: unexpected key error')
 
         # TODO: need to figure out if it was correctly or incorrectly
         # rejected, and what stage rejected it.
@@ -688,19 +706,33 @@ class ConfusionAnalysis:
         type_to_summary = {}
         for group_type, sites in type_to_sites.items():
             sites = SiteModelCollection(sites)
-            cfsn_summary = sites.as_region_model(true_region_model.header)
+            if true_region_model is not None:
+                cfsn_summary = sites.as_region_model(
+                    true_region_model.header,
+                    region_id=self.config.region_id
+                )
+            else:
+                cfsn_summary = sites.as_region_model(
+                    region_id=self.config.region_id, strict=False)
+
             if group_type not in {'true', 'pred'}:
+                if 'cache' not in cfsn_summary.header['properties']:
+                    cfsn_summary.header['properties']['cache'] = {}
                 cfsn_summary.header['properties']['cache']['confusion_type'] = group_type
                 cfsn_summary.header['properties']['cache']['originator'] = performer_id
             type_to_summary[group_type] = cfsn_summary
 
         for group_type, summary in type_to_summary.items():
             for feat in summary.features:
+                if 'cache' not in feat['properties']:
+                    feat['properties']['cache'] = {}
                 assert 'cache' in feat['properties']
 
         for group_type, sites in type_to_sites.items():
             for site in sites:
                 for feat in site.features:
+                    if 'cache' not in feat['properties']:
+                        feat['properties']['cache'] = {}
                     assert 'cache' in feat['properties']
 
         self.type_to_sites = type_to_sites
@@ -716,6 +748,7 @@ class ConfusionAnalysis:
         2. Finds the false negative examples and increases their weight.
         """
         from watch.utils import util_gis
+        import rich
 
         true_sites = self.true_sites
         pred_sites = self.pred_sites
@@ -723,6 +756,12 @@ class ConfusionAnalysis:
         true_region_model = self.true_region_model
         region_id = self.region_id
         id_to_pred_site = self.id_to_pred_site
+
+        if true_region_model is None:
+            rich.print('[yellow] WARNING: Cannot build hard cases without region truth')
+            self.new_sites = None
+            self.new_region = None
+            return
 
         pred_region_model = pred_sites.as_region_model(true_region_model.header)
         pred_df = pred_region_model.pandas_summaries()
@@ -804,11 +843,13 @@ class ConfusionAnalysis:
         print(ub.urepr(type_to_sites.map_values(len)))
 
         for group_type, sites in type_to_sites.items():
-            cfsn_summary = type_to_summary[group_type]
-            group_site_dpath = (cfsn_group_dpath / group_type).ensuredir()
-            group_region_fpath = (cfsn_group_dpath / (group_type + '.geojson'))
-            text = cfsn_summary.dumps(indent='    ')
-            group_region_fpath.write_text(text)
+            import xdev
+            with xdev.embed_on_exception_context:
+                cfsn_summary = type_to_summary[group_type]
+                group_site_dpath = (cfsn_group_dpath / group_type).ensuredir()
+                group_region_fpath = (cfsn_group_dpath / (group_type + '.geojson'))
+                text = cfsn_summary.dumps(indent='    ')
+                group_region_fpath.write_text(text)
             for site in sites:
                 site_fpath = group_site_dpath / (site.site_id + '.geojson')
                 text = json.dumps(site, indent='    ')
@@ -824,10 +865,16 @@ class ConfusionAnalysis:
                 cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
                 for group_type, sites in type_to_sites.items():
                     cfsn_summary = type_to_summary[group_type]
-                    # data = cfsn_summary
-                    kml = to_styled_kml(cfsn_summary)
-                    kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
-                    kml.save(kml_fpath)
+                    try:
+                        # data = cfsn_summary
+                        kml = to_styled_kml(cfsn_summary)
+                        kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
+                        kml.save(kml_fpath)
+                    except Exception:
+                        if cfsn_summary.header['geometry'] is not None:
+                            raise
+                        else:
+                            print('skip kml with empty geom')
 
                 if 0:
                     # TODO: write nice images that can be used with QGIS
@@ -859,6 +906,10 @@ class ConfusionAnalysis:
         new_sites = self.new_sites
         new_region = self.new_region
 
+        if new_sites is None:
+            rich.print('[yellow] WARNING: Cannot dump hardneg without truth')
+            return
+
         enriched_dpath = self.enriched_dpath
         enriched_region_dpath = self.enriched_region_dpath.ensuredir()
         enriched_sites_dpath = self.enriched_sites_dpath.ensuredir()
@@ -871,16 +922,17 @@ class ConfusionAnalysis:
             text = json.dumps(new_site, indent='    ')
             fpath.write_text(text)
 
-        self.enriched_dpath = enriched_dpath
-        self.enriched_sites_dpath = enriched_sites_dpath
-        self.enriched_region_dpath = enriched_region_dpath
-
     def dump_hardneg_kwcoco(self):
         """
         Write kwcoco files for potential system feedback (not used atm)
         """
         from watch.cli import reproject_annotations
         config = self.config
+
+        if self.new_sites is None:
+            import rich
+            rich.print('[yellow] WARNING: Cannot dump_hardneg_kwcoco')
+            return
 
         region_id = self.region_id
         enriched_dpath = self.enriched_dpath
@@ -1040,7 +1092,10 @@ class ConfusionAnalysis:
         if 1:
             import pandas as pd
             case_df = pd.DataFrame(cases)
-            print(case_df[['te_association_status', 'te_associated', 'te_color_code', 'type']].value_counts())
+            try:
+                print(case_df[['te_association_status', 'te_associated', 'te_color_code', 'type']].value_counts())
+            except KeyError:
+                ...
 
         true_id_to_site = {s.site_id: s for s in type_to_sites['true']}
         pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
@@ -1137,7 +1192,10 @@ class ConfusionAnalysis:
             summary_gdf = summary.pandas_summaries()
             assert not ub.find_duplicates([s.site_id for s in sites])
             id_to_site = ub.udict({s.site_id: s for s in sites})
-            new_sites = list(id_to_site.take(summary_gdf['site_id']))
+            if len(summary_gdf):
+                new_sites = list(id_to_site.take(summary_gdf['site_id']))
+            else:
+                new_sites = []
             assert len(new_sites) == len(sites)
             type_to_sites[key] = new_sites
 
@@ -1146,14 +1204,18 @@ class ConfusionAnalysis:
             summary = type_to_summary[key]
             sites = type_to_sites[key]
             summary_gdf = summary.pandas_summaries()
-            assert summary_gdf['site_id'].values.tolist() == [s.site_id for s in sites]
+            if len(summary_gdf):
+                assert summary_gdf['site_id'].values.tolist() == [s.site_id for s in sites]
 
         # Time analysis of false positives that overlap with something.
         true_sites_all = type_to_sites['true']
 
         true_region = type_to_summary['true']
         true_gdf = true_region.pandas_summaries()
-        true_utm_gdf = util_gis.project_gdf_to_local_utm(true_gdf, mode=1)
+        if len(true_gdf):
+            true_utm_gdf = util_gis.project_gdf_to_local_utm(true_gdf, mode=1)
+        else:
+            true_utm_gdf = true_gdf
 
         region_start_date = true_region.start_date
         region_end_date = true_region.end_date
@@ -1215,26 +1277,27 @@ class ConfusionAnalysis:
             cases.append(case)
 
         # Handle truth sites that didn't match anything.
-        _true_utm_gdf = true_utm_gdf.set_index('site_id')
-        for true_site in type_to_sites.get('gt_false_neg', []):
-            confusion_type = true_site.header['properties']['cache']['confusion']['type']
-            # true_geom = true_site.geometry
-            cfsn_status = '_falseneg'
+        if len(true_utm_gdf):
+            _true_utm_gdf = true_utm_gdf.set_index('site_id')
+            for true_site in type_to_sites.get('gt_false_neg', []):
+                confusion_type = true_site.header['properties']['cache']['confusion']['type']
+                # true_geom = true_site.geometry
+                cfsn_status = '_falseneg'
 
-            true_utm_geoms = _true_utm_gdf.loc[[true_site.site_id]].geometry
+                true_utm_geoms = _true_utm_gdf.loc[[true_site.site_id]].geometry
 
-            case = make_case(
-                [],
-                [true_site],
-                true_utm_geoms,
-                None,
-                None,
-                region_start_date,
-                region_end_date,
-                performer_id,
-                confusion_type + cfsn_status,
-            )
-            cases.append(case)
+                case = make_case(
+                    [],
+                    [true_site],
+                    true_utm_geoms,
+                    None,
+                    None,
+                    region_start_date,
+                    region_end_date,
+                    performer_id,
+                    confusion_type + cfsn_status,
+                )
+                cases.append(case)
 
         print(f'Found {len(cases)} cases')
         return cases
@@ -1681,10 +1744,28 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             tostack.append(det_true_canvas)
 
         if main_pred_aids:
+            # For some reason this isn't the real "main" prediction.
             is_main_pred = [a in main_pred_aids for a in dets.data['aids']]
             pred_dets = rel_dets.compress(is_main_pred)
             det_pred_canvas = np.ones_like(tci_canvas)
             det_pred_canvas = pred_dets.draw_on(det_pred_canvas, alpha=0.9, color='classes')
+
+            # Highlight the the actual singular main case:
+            if case.get('main_pred_site', None) is not None:
+                actual_main_aid = None
+                annots = coco_dset.annots(dets.data['aids'])
+                for aid, tid in zip(annots, annots.lookup('track_id')):
+                    # FIXME: this will break when tids become integers
+                    if tid.replace('_kit', '') == case['main_pred_site'].site_id:
+                        actual_main_aid = aid
+
+                if actual_main_aid is not None:
+                    is_actual_main_pred = [a == actual_main_aid for a in dets.data['aids']]
+                    actual_main_pred_dets = rel_dets.compress(is_actual_main_pred)
+                    det_pred_canvas = actual_main_pred_dets.data['boxes'].draw_on(det_pred_canvas, alpha=0.9, color='kitware_orange')
+                    det_pred_canvas = kwimage.draw_text_on_image(
+                        det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
+
             det_pred_canvas = kwimage.draw_text_on_image(
                 det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
             tostack.append(det_pred_canvas)
@@ -1812,8 +1893,14 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
             # cell_canvas = kwimage.draw_header_text(cell_canvas, '\n'.join(header_lines), fit='grow')
         cells.append(cell_canvas)
 
+    case = case.copy()
+
+    if video_id is not None:
+        case['video_name'] = coco_dset.index.videos[video_id]['name']
+
     toshow = ub.udict(case) & {
         'name',
+        'video_name',
         'pred_coco_site_id',
         'pred_area',
         'te_associated',
@@ -1836,8 +1923,6 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
         'time_iop',
         'type',
     }
-
-    case = case.copy()
 
     case['img_dates'] = all_images.lookup('date_captured')
 

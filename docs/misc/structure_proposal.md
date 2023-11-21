@@ -1,10 +1,20 @@
 ## Directory Structure for Multi-task Integration
 
 
-## Goals: 
-    - Standard format in which individual tasks (e.g. semantic segmentation, fusion, etc...) can be executed.
-    - Make common code shared among teams for increased re-usability.
-    - All tasks can be executed through a common fit and predict modules with similar APIs.
+## Design Goals (2021): 
+
+    - [ ] Standard format in which individual tasks (e.g. semantic segmentation, fusion, etc...) can be executed.
+
+    - [ ] Make common code shared among teams for increased re-usability.
+
+    - [ ] All tasks can be executed through a common fit and predict modules with similar APIs.
+
+
+## Design Goals (2023): 
+
+    - [ ] Have tools infer sensible defaults whenever possible.
+
+    - [ ] 
 
 
 ## Directory Structure:

@@ -18,6 +18,8 @@ References:
 
 SeeAlso:
     * ../tasks/tracking/from_heatmap.py
+    * ../tasks/tracking/old_polygon_extraction.py
+    * ../tasks/tracking/polygon_extraction.py
     * ../tasks/tracking/utils.py
     * ../../tests/test_tracker.py
 
@@ -164,6 +166,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             coco_dset_sc, thresh, key. Any file paths will be loaded as
             CocoDatasets if possible.
 
+            IN THE FUTURE THESE MEMBERS WILL LIKELY BECOME FLAT CONFIG OPTIONS.
+
             Valid params for each track_fn are: {_trackfn_details_docs}
             '''), group='track')
     viz_out_dir = scfg.Value(None, help=ub.paragraph(
@@ -202,6 +206,9 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     #         '''), group='behavior')
 
     sensor_warnings = scfg.Value(True, help='if False, disable sensor warnings')
+
+    time_pad_before = scfg.Value(None, help='A time delta to extend start times')
+    time_pad_after = scfg.Value(None, help='A time delta to extend end times')
 
     #### New Eval 16 params
 
@@ -685,6 +692,15 @@ def classify_site(site, config):
             status = 'system_rejected'
             site_header['properties']['cache']['reject_reason'] = 'failed_site_score_thresh'
 
+    # Hack to modify time bounds
+    import kwutil
+    if config.time_pad_before is not None:
+        delta_before = kwutil.util_time.timedelta.coerce(config.time_pad_before)
+        start_date = (kwutil.util_time.datetime.coerce(start_date) - delta_before).date().isoformat()
+    if config.time_pad_after is not None:
+        delta_after = kwutil.util_time.timedelta.coerce(config.time_pad_after)
+        end_date = (kwutil.util_time.datetime.coerce(end_date) + delta_after).date().isoformat()
+
     site_header['properties'].update({
         'score': site_score,
         'status': status,
@@ -801,14 +817,23 @@ def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
         >>>             json.dump(site, open(f.name, 'w'))
         >>>             SiteStack(f.name)
     """
+    import itertools as it
+    counter = it.count()
     sites = []
     for vidid, video in coco_dset.index.videos.items():
         region_id = video.get('name', default_region_id)
         gids = coco_dset.index.vidid_to_gids[vidid]
-        sub_dset = coco_dset.subset(gids=gids)
+        region_annots = coco_dset.images(gids).annots
+        region_track_ids = sorted(set(ub.flatten(region_annots.lookup('track_id'))))
 
-        for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-            site = coco_track_to_site(sub_dset, trackid, region_id, site_idx)
+        # SUPER HACK:
+        # There isn't a good mechanism to get the region id,
+        # This is fragile, but currently works. Need better mechanism.
+        if '_CLUSTER' in region_id:
+            region_id = region_id.split('_CLUSTER')[0]
+
+        for site_idx, trackid in zip(counter, region_track_ids):
+            site = coco_track_to_site(coco_dset, trackid, region_id, site_idx)
             sites.append(site)
 
     return sites
@@ -841,8 +866,9 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
             site_idx = trackid
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
     else:
-        site_id = trackid
+        # HACK:
         # TODO make more robust
+        site_id = trackid
         region_id = '_'.join(site_id.split('_')[:2])
 
     site_header = coco_create_site_header(region_id, site_id, trackid, observations)
@@ -1119,7 +1145,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     print('Projecting regions to pixel coords')
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
-    print('Done projecting')
+    rich.print(f'[green]Done projecting: {coco_dset.n_annots} annotations')
     return coco_dset
 
 
@@ -1393,7 +1419,7 @@ def main(argv=None, **kwargs):
     track_fn = args.track_fn
     if track_fn is None:
         track_fn = (
-            watch.tasks.tracking.utils.NoOpTrackFunction
+            watch.tasks.tracking.abstract_classes.NoOpTrackFunction
             if args.default_track_fn is None else
             args.default_track_fn
         )
@@ -1439,6 +1465,7 @@ def main(argv=None, **kwargs):
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
+
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
                                                args.region_id)
         cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
@@ -1452,7 +1479,7 @@ def main(argv=None, **kwargs):
         # case if there are legidimately no sites to score!) But in our main
         # use case where site_summary should be specified, this is an error so
         # we are treating it that way for now.
-        if track_kwargs.get('boundaries_as') == 'polys' and coco_dset.n_annots:
+        if track_kwargs.get('boundaries_as') == 'polys' and not coco_dset.n_annots:
             raise Exception(ub.codeblock(
                 '''
                 You requested scoring boundaries as polygons, but the dataset
@@ -1479,6 +1506,8 @@ def main(argv=None, **kwargs):
 
     # Measure how long tracking takes
     proc_context.stop()
+
+    rich.print('[green] Finished main tracking phase')
 
     out_kwcoco = args.out_kwcoco
 

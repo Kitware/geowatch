@@ -24,7 +24,7 @@ Example:
     >>> #
     >>>     'virtualenv_cmd': 'conda activate watch',
     >>> #
-    >>>     #'with_landcover': 1,
+    >>>     #'with_s2_landcover': 1,
     >>>     #'with_materials': 1,
     >>>     #'with_invariants2': 1,
     >>>     'with_mae': 1,
@@ -35,14 +35,39 @@ Example:
     >>>     'backend': 'serial',
     >>> }
     >>> config['backend'] = 'slurm'
-    >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.print_commands(0, 0)
+    >>> outputs = prep_feats(cmdline=False, **config)
+    >>> outputs['queue'].print_commands(0, 0)
     >>> config['backend'] = 'tmux'
-    >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.print_commands(0, 0)
+    >>> outputs = prep_feats(cmdline=False, **config)
+    >>> outputs['queue'].print_commands(0, 0)
     >>> config['backend'] = 'serial'
-    >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.print_commands(0, 0)
+    >>> outputs = prep_feats(cmdline=False, **config)
+    >>> outputs['queue'].print_commands(0, 0)
+
+
+Example:
+    >>> # Test landcover commands
+    >>> from watch.cli.prepare_teamfeats import *  # NOQA
+    >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
+    >>> config = {
+    >>>     'src_kwcocos': './PRETEND_BUNDLE/data.kwcoco.json',
+    >>>     'gres': [0, 1],
+    >>>     'expt_dvc_dpath': './PRETEND_EXPT_DVC',
+    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'with_s2_landcover': 1,
+    >>>     'with_wv_landcover': 1,
+    >>>     'num_wv_landcover_hidden': 0,
+    >>>     'num_s2_landcover_hidden': 0,
+    >>>     'run': 0,
+    >>>     'check': False,
+    >>>     'skip_existing': False,
+    >>>     'backend': 'serial',
+    >>> }
+    >>> config['backend'] = 'serial'
+    >>> outputs = prep_feats(cmdline=False, **config)
+    >>> outputs['queue'].print_commands(0, 0)
+    >>> output_paths = outputs['final_output_paths']
+    >>> print('output_paths = {}'.format(ub.urepr(output_paths, nl=1)))
 
 Ignore:
 
@@ -55,7 +80,7 @@ Ignore:
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=0 \
-        --with_landcover=0 \
+        --with_s2_landcover=0 \
         --with_materials=0 \
         --with_depth=0 \
         --with_cold=1 \
@@ -71,7 +96,7 @@ Ignore:
         --src_kwcocos "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
-        --with_landcover=0 \
+        --with_s2_landcover=0 \
         --with_materials=0 \
         --with_depth=0 \
         --with_cold=0 \
@@ -88,7 +113,7 @@ Ignore:
     python -m watch.cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-        --with_landcover=1 \
+        --with_s2_landcover=1 \
         --with_invariants2=1 \
         --with_sam=1 \
         --with_materials=0 \
@@ -150,13 +175,17 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
 
     gres = scfg.Value('auto', help='comma separated list of gpus or auto', group='cmd-queue')
 
-    with_landcover = scfg.Value(False, help='Include DZYNE landcover features', group='team feature enablers')
+    with_s2_landcover = scfg.Value(False, help='Include DZYNE S2 landcover features', group='team feature enablers')
+    with_wv_landcover = scfg.Value(False, help='Include DZYNE WV landcover features', group='team feature enablers')
     with_materials = scfg.Value(False, help='Include Rutgers material features', group='team feature enablers')
     with_mae = scfg.Value(False, help='Include WU MAE features', group='team feature enablers')
     with_invariants2 = scfg.Value(False, help='Include UKY invariant features', group='team feature enablers')
     with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', group='team feature enablers')
     with_cold = scfg.Value(False, help='Include COLD features')
     with_sam = scfg.Value(False, help='Include SAM features')
+
+    num_s2_landcover_hidden = 32
+    num_wv_landcover_hidden = 32
 
     invariant_segmentation = scfg.Value(False, help=ub.paragraph(
             '''
@@ -233,6 +262,8 @@ def prep_feats(cmdline=True, **kwargs):
 
     blocklist = [
         '_dzyne_landcover',
+        '_dzyne_s2_landcover',
+        '_dzyne_wv_landcover',
         '_uky_invariants',
         '_rutgers_material_seg_v4',
     ]
@@ -244,6 +275,7 @@ def prep_feats(cmdline=True, **kwargs):
     from watch.mlops.pipeline_nodes import Pipeline
 
     dag_nodes = []
+    final_output_paths = []
 
     for src_fpath in base_fpath_list:
         # Hack to prevent doubling up.
@@ -259,8 +291,10 @@ def prep_feats(cmdline=True, **kwargs):
                     'Specified kwcoco file: {src_fpath!r=} does not exist and check=True')
         aligned_bundle_dpath = src_fpath.parent
 
-        nodes = _make_teamfeat_nodes(src_fpath, expt_dvc_dpath,
-                                     aligned_bundle_dpath, config)
+        nodes, base_combo_fpath = _make_teamfeat_nodes(
+            src_fpath, expt_dvc_dpath,
+            aligned_bundle_dpath, config)
+        final_output_paths.append(base_combo_fpath)
         dag_nodes.extend(nodes)
 
     dag = Pipeline(dag_nodes)
@@ -278,12 +312,11 @@ def prep_feats(cmdline=True, **kwargs):
     # pipeline._populate_explicit_dependency_queue(queue)
     config.run_queue(queue)
 
-    """
-    Ignore:
-        python -m kwcoco stats data.kwcoco.json uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
-        python -m watch stats uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
-    """
-    return queue
+    outputs = {
+        'queue': queue,
+        'final_output_paths': final_output_paths,
+    }
+    return outputs
 
 
 def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
@@ -301,8 +334,9 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         'wu_mae_v1': expt_dvc_dpath / 'models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt',
 
 
-        # 'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
-        'dzyne_landcover': expt_dvc_dpath / 'models/landcover/sentinel2.pt',
+        # 'dzyne_s2_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
+        'dzyne_s2_landcover': expt_dvc_dpath / 'models/landcover/sentinel2.pt',
+        'dzyne_wv_landcover': expt_dvc_dpath / 'models/landcover/worldview.pt',
 
         # 2022-02-11
         # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
@@ -341,7 +375,8 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         'rutgers_materials_v4': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v4' + config['kwcoco_ext']),
         'wu_mae': aligned_bundle_dpath / (subset_name + '_wu_mae' + config['kwcoco_ext']),
 
-        'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover' + config['kwcoco_ext']),
+        'dzyne_s2_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_s2_landcover' + config['kwcoco_ext']),
+        'dzyne_wv_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_wv_landcover' + config['kwcoco_ext']),
         'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
         'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants' + config['kwcoco_ext']),
         'cold': aligned_bundle_dpath / (subset_name + '_cold' + config['kwcoco_ext']),
@@ -354,7 +389,8 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
 
     # TODO: different versions of features need different codes.
     codes = {
-        'with_landcover': 'L',
+        'with_s2_landcover': 'LS2',
+        'with_wv_landcover': 'LWV',
         'with_depth': 'D',
         'with_materials': 'M',
         'with_mae': 'E',
@@ -367,24 +403,54 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
     feature_nodes = []
 
     combo_code_parts = []
-    key = 'with_landcover'
+
+    key = 'with_s2_landcover'
     if config[key]:
         if config.check:
-            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
+            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_s2_landcover'])
         # Landcover is fairly fast to run
         node = ProcessNode(
             name=key + name_suffix,
             executable='python -m watch.tasks.landcover.predict',
             in_paths={
                 'dataset': src_fpath,
-                'deployed': model_fpaths['dzyne_landcover'],
+                'deployed': model_fpaths['dzyne_s2_landcover'],
             },
             out_paths={
-                'output': outputs['dzyne_landcover']
+                'output': outputs['dzyne_s2_landcover']
             },
             algo_params={
-                'with_hidden': 32,
+                'with_hidden': config.num_s2_landcover_hidden,
                 'select_images': '.sensor_coarse == "S2"',
+                'assets_dname': config.assets_dname,
+            },
+            perf_params={
+                'device': 0,
+                'num_workers': data_workers,
+            },
+            node_dpath='.',
+        )
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
+
+    key = 'with_wv_landcover'
+    if config[key]:
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_wv_landcover'])
+        # Landcover is fairly fast to run
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable='python -m watch.tasks.landcover.predict',
+            in_paths={
+                'dataset': src_fpath,
+                'deployed': model_fpaths['dzyne_wv_landcover'],
+            },
+            out_paths={
+                'output': outputs['dzyne_wv_landcover']
+            },
+            algo_params={
+                'with_hidden': config.num_wv_landcover_hidden,
+                'select_images': '.sensor_coarse == "WV"',
                 'assets_dname': config.assets_dname,
             },
             perf_params={
@@ -655,7 +721,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
     combine_node.configure(cache=False)
 
     nodes = [combine_node] + feature_nodes
-    return nodes
+    return nodes, base_combo_fpath
 
 
 main = prep_feats
@@ -702,7 +768,7 @@ if __name__ == '__main__':
             --src_kwcocos=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=1 \
-            --with_landcover=1 \
+            --with_s2_landcover=1 \
             --with_materials=1 \
             --depth_workers=auto \
             --skip_existing=0 --run=0
@@ -712,7 +778,7 @@ if __name__ == '__main__':
             --src_kwcocos=./mydata/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=0 \
-            --with_landcover=1 \
+            --with_s2_landcover=1 \
             --with_materials=1 \
             --skip_existing=0 \
             --backend=tmux \

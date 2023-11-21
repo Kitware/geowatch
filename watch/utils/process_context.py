@@ -448,6 +448,11 @@ def jsonify_config(config):
     return jsonified_config
 
 
+class Reconstruction:
+    # TODO
+    ...
+
+
 def main():
     """
     Simple CLI to get hardware measurements that process context would provide.

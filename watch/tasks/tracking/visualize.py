@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import itertools
 from watch.heuristics import CNAMES_DCT
-from watch.tasks.tracking.from_heatmap import mean_normalized  # NOQA
 
 
 def visualize_videos(pred_dset,

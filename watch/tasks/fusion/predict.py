@@ -2,10 +2,25 @@
 """
 Fusion prediction script.
 
+Given a kwcoco file and a packaged model, run prediction and output a new
+kwcoco file where predicted heatmaps are new raster bands.
+
+This is the module that handles heatmap prediction over a kwcoco file.
+There are SMART-specific parts, but it's mostly general. It makes heavy use of
+:class:`CocoStitchingManager` and :class:`KWCocoVideoDataModule`. The critical
+loop is a simple custom for loop over a dataloader. We currently do not
+integrate with LightningCLI here, but we may want to in the future (it is
+unclear).
+
 TODO:
     - [ ] Prediction caching?
     - [ ] Reduce memory usage?
     - [ ] Pseudo Live.
+    - [ ] Investigate benefits of LightningCLI integration?
+    - [ ] Option to keep annotations and only loop over relevant areas for
+          drawing interesting validation / test batches.
+    - [ ] Optimize for the case where we have an image-only dataset.
+    - [ ] Integrate debug visualizations to the CLI
 """
 import torch
 import ubelt as ub
@@ -33,6 +48,7 @@ except Exception:
 
 
 class DataModuleConfigMixin(scfg.DataConfig):
+    # Helps extend our custom predict config with datamodule config settings
     __default__ = {
         k: v.copy()
         for k, v in datamodules.kwcoco_datamodule.KWCocoVideoDataModuleConfig.__default__.items()}
@@ -518,7 +534,8 @@ def _prepare_predict_data(config):
     print('Construct dataloader')
     test_torch_dataset = datamodule.torch_datasets['test']
     # hack this setting
-    test_torch_dataset.inference_only = True
+    if not config.draw_batches:
+        test_torch_dataset.inference_only = True
 
     config.traintime_params = traintime_params
     return config, model, datamodule

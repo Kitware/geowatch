@@ -1195,11 +1195,11 @@ class ProcessNode(Node):
         # ... so the next question is, does anything currently depend on the
         # input paths being in the final algo config? If not we should
         # probably remove it.
-
         if self._no_inarg:
             unconnected_in_paths = ub.udict({})
         else:
             unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
+
         final_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
 
         if isinstance(self.algo_params, dict):

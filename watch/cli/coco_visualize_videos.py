@@ -116,8 +116,16 @@ class CocoVisualizeConfig(scfg.DataConfig):
             Aggresively skip frames based on heuristics of badness.
             ''')),
 
-        'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
-        'draw_labels': scfg.Value(True, help='if True draw text labels on polygons'),
+        'only_boxes': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            If false, draws full annotation - which can be time consuming if
+            there are a lot. DEPRECATED. Set draw_labels=0 and
+            draw_segmentations=0
+            ''')),
+
+        'draw_segmentations': scfg.Value(True, help='if True draw annotation segmentation polygons'),
+        'draw_labels': scfg.Value(True, help='if True draw text labels on annotations'),
+        'draw_boxes': scfg.Value(True, help='if True draw bounding boxes around annotations'),
         'alpha': scfg.Value(None, help='transparency / opacity of annotations'),
 
         # TODO: better support for this
@@ -481,9 +489,8 @@ def main(cmdline=True, **kwargs):
         common_kw = ub.udict(config) & {
             'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
             'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
-            'draw_labels', 'fixed_normalization_scheme', 'any3', 'cmap',
-            'role_order', 'smart', 'ann_score_thresh',
-            'alpha',
+            'draw_boxes', 'draw_labels', 'fixed_normalization_scheme', 'any3',
+            'cmap', 'role_order', 'smart', 'ann_score_thresh', 'alpha',
         }
 
         if config['zoom_to_tracks']:
@@ -905,7 +912,9 @@ def _write_ann_visualizations2(coco_dset,
                                any3=True, dset_idstr='',
                                skip_missing=False,
                                only_boxes=1,
+                               draw_boxes=True,
                                draw_labels=True,
+                               draw_segmentations=True,
                                cmap='viridis',
                                max_dim=None,
                                min_dim=None,
@@ -1157,9 +1166,9 @@ def _write_ann_visualizations2(coco_dset,
                 coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 delayed, chan_row, finalize_opts, verbose, skip_missing,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
-                valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_labels,
-                role_to_dets, valid_video_poly, stack, draw_header, stack_idx,
-                request_roles, ann_score_thresh, alpha)
+                valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_boxes,
+                draw_labels, draw_segmentations, role_to_dets, valid_video_poly, stack,
+                draw_header, stack_idx, request_roles, ann_score_thresh, alpha)
             if stack:
                 img_stack.append(stack_img_item)
                 ann_stack.append(stack_ann_item)
@@ -1249,9 +1258,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     delayed, chan_row, finalize_opts, verbose, skip_missing,
                     skip_aggressive, chan_to_normalizer, cmap, header_lines,
                     valid_image_poly, draw_imgs, draw_anns, only_boxes,
-                    draw_labels, role_to_dets, valid_video_poly, stack,
-                    draw_header, stack_idx, request_roles, ann_score_thresh,
-                    alpha):
+                    draw_boxes, draw_labels, draw_segmentations, role_to_dets,
+                    valid_video_poly, stack, draw_header, stack_idx,
+                    request_roles, ann_score_thresh, alpha):
     from watch.utils import util_kwimage
     import kwimage
     import kwarray
@@ -1506,9 +1515,16 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
         ONLY_BOXES = only_boxes
         if ONLY_BOXES:
+            ub.schedule_deprecation(
+                'watch', 'only_boxes', 'argument',
+                deprecate='now', error='1.0.0', remove='1.1.0',
+            )
             draw_on_kwargs = dict(sseg=False, labels=False)
         else:
             draw_on_kwargs = {}
+            draw_on_kwargs['labels'] = bool(draw_labels)
+            draw_on_kwargs['sseg'] = bool(draw_segmentations)
+            draw_on_kwargs['boxes'] = bool(draw_boxes)
 
         requested_role_to_dets = role_to_dets.intersection(request_roles)
 
@@ -1529,7 +1545,6 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
                 colors = [kwimage.Color.coerce(c).as01() for c in role_dets.data['colors']]
-                draw_on_kwargs['labels'] = draw_labels
                 if verbose > 100:
                     print('About to draw dets on a canvas')
 

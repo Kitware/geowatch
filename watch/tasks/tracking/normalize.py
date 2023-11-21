@@ -6,7 +6,7 @@ import ubelt as ub
 from typing import Dict, List, Any
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
-from watch.tasks.tracking.utils import TrackFunction
+from watch.tasks.tracking.abstract_classes import TrackFunction
 from watch.tasks.tracking.utils import check_only_bg
 try:
     from xdev import profile
@@ -34,7 +34,8 @@ def dedupe_annots(coco_dset):
             '''))
         aids_to_remove = list(annots.take(dup_idxs))
         coco_dset.remove_annotations(aids_to_remove, verbose=1)
-
+    else:
+        print('No duplicates detected')
     return coco_dset
 
 
@@ -132,7 +133,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
     gid_iter = ub.ProgIter(coco_dset.index.imgs.keys(),
                            total=coco_dset.n_images,
-                           desc='filter annotations')
+                           desc='filter small annotations')
     for gid in gid_iter:
         coco_img = coco_dset.coco_image(gid)
         annots = coco_dset.annots(gid=gid)
@@ -194,6 +195,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         print(f'{len(keep_annots)=}')
         removal_reasons = ub.dict_hist(remove_reason)
         print('removal_reasons = {}'.format(ub.urepr(removal_reasons, nl=1)))
+        print(f'coco_dset.n_annots={coco_dset.n_annots}')
 
     return coco_dset
 
@@ -331,6 +333,8 @@ def normalize_phases(coco_dset,
     from watch.tasks.tracking import phase
     from collections import Counter
 
+    print('Normalizing phases')
+
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)
     baseline_keys = set(baseline_keys)
@@ -357,7 +361,10 @@ def normalize_phases(coco_dset,
             # should have been consumed by track_fn, TODO more robust check
             [SITE_SUMMARY_CNAME])
         removed = coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
-        print('removed = {}'.format(ub.urepr(removed, nl=1)))
+        if removed:
+            print('Removing unknown categories')
+            print(f'cnames_to_remove={cnames_to_remove}')
+            print('removed = {}'.format(ub.urepr(removed, nl=1)))
 
     cnames_to_replace = (
         # 'positive'
@@ -503,6 +510,8 @@ def normalize_phases(coco_dset,
             if n_diff_annots > 0:
                 raise NotImplementedError
 
+    print(f'coco_dset.n_annots={coco_dset.n_annots}')
+    print('Finished normalizing phases')
     return coco_dset
 
 
@@ -641,6 +650,8 @@ def run_tracking_pipeline(
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     """
+    import rich
+    rich.print('[cyan]--- run_tracking_pipeline ---')
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
@@ -686,7 +697,6 @@ def run_tracking_pipeline(
     tracker: TrackFunction = track_fn(**track_kwargs)
     print('track_kwargs = {}'.format(ub.urepr(track_kwargs, nl=1)))
     # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
-    import rich
     rich.print(ub.urepr(tracker))
     # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
@@ -697,6 +707,7 @@ def run_tracking_pipeline(
     # normalize and add geo segmentations
     out_dset = _normalize_annots(out_dset)
     out_dset._build_index()
+
     print('After normalizing: track ids',
           set(out_dset.annots().get('track_id', None)))
 
@@ -728,22 +739,28 @@ def run_tracking_pipeline(
             k = {k}
         phase_kw['baseline_keys'] = k
 
+    print('Norm phases')
     out_dset = normalize_phases(out_dset, **phase_kw)
 
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
 
     from watch import heuristics
+    print('Norm sensors')
     out_dset = heuristics.normalize_sensors(
         out_dset, sensor_warnings=sensor_warnings, format='iarpa')
+
+    print(f'out_dset.n_annots={out_dset.n_annots}')
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
 
+    print('Dedup dates')
     out_dset = dedupe_dates(out_dset)
 
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
+    print(f'out_dset.n_annots={out_dset.n_annots}')
 
     # if viz_out_dir is not None:
     #     # visualize predicted sites with true sites

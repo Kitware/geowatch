@@ -61,7 +61,7 @@ except ImportError:
 
 # Bump this if the process for sampling the spacetime grid changes and old
 # caches are no longer valid.
-SPACETIME_CACHE_VERSION = 'spacetime_cache_v17'
+SPACETIME_CACHE_VERSION = 'spacetime_cache_v18'
 
 
 class SpacetimeGridBuilder:
@@ -403,8 +403,14 @@ def sample_video_spacetime_targets(dset,
             select_videos=select_videos,
             select_images=select_images,
         )
-        selected_vidid_per_gid = dset.images(selected_gids).lookup('video_id')
+        selected_vidid_per_gid = dset.images(selected_gids).lookup('video_id', default=None)
         selected_vidid_to_gids = ub.group_items(selected_gids, selected_vidid_per_gid)
+
+        loose_gids = selected_vidid_to_gids.pop(None, [])
+
+        # Hack: pretend loose images are videos of length 1
+        for gid in loose_gids:
+            selected_vidid_to_gids[f'fakevid_loose_{gid}'] = [gid]
 
         # Given an video
         all_vid_ids = sorted(set(selected_vidid_to_gids.keys()))
@@ -423,8 +429,9 @@ def sample_video_spacetime_targets(dset,
         for video_id in ub.ProgIter(all_vid_ids, desc='Submit sample video regions'):
             # Ensure the ordering of image ids is valid
             video_gids = selected_vidid_to_gids[video_id]
-            sortx = ub.argsort(dset.images(video_gids).lookup('frame_index'))
-            video_gids = list(ub.take(video_gids, sortx))
+            if len(video_gids) > 1:
+                sortx = ub.argsort(dset.images(video_gids).lookup('frame_index'))
+                video_gids = list(ub.take(video_gids, sortx))
 
             job = jobs.submit(
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
@@ -529,7 +536,18 @@ def _sample_single_video_spacetime_targets(
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
     keepbound = True
-    video_info = dset.index.videos[video_id]
+
+    try:
+        video_info = dset.index.videos[video_id]
+    except KeyError:
+        # Probably a fake video
+        assert len(video_gids) == 1
+        video_info = {
+            'name': video_id,
+            'width': dset.index.imgs[video_gids[0]]['width'],
+            'height': dset.index.imgs[video_gids[0]]['height'],
+        }
+
     video_name = video_info['name']
 
     # Create a box to represent the "window-space" extent, and determine how we
@@ -911,7 +929,7 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         # Consider the data in this frame only.
         img_info = coco_img.img
         gid = img_info['id']
-        frame_index = img_info['frame_index']
+        # frame_index = img_info['frame_index']
         annots = dset.annots(aids)
         tids = annots.lookup('track_id', None)
         cids = annots.lookup('category_id', None)
@@ -927,7 +945,7 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                     'gid': gid,
                     'cid': cid,
                     'tid': tid,
-                    'frame_index': frame_index,
+                    # 'frame_index': frame_index,
                     'cname': dset._resolve_to_cat(cid)['name'],
                     'aid': aid,
                 })

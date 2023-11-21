@@ -274,7 +274,7 @@ def ensure_false_color(canvas, method='ortho'):
             h, tau = np.linalg.qr(seedmat, mode='raw')
             false_colored = (canvas @ h)
             rgb_canvas = kwimage.normalize(false_colored)
-        elif method == 'PCA':
+        elif method.lower() == 'pca':
             import sklearn
             ndim = canvas.ndim
             dims = canvas.shape[0:2]
@@ -296,7 +296,8 @@ def ensure_false_color(canvas, method='ortho'):
     return rgb_canvas
 
 
-def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_color=None):
+def colorize_label_image(labels, with_legend=True, label_mapping=None,
+                         label_to_color=None, legend_dpi=200):
     """
     Rename to draw_label_image?
 
@@ -383,7 +384,8 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
             label_to_color = {str(k) if k not in label_mapping else str(k) + ': ' + str(label_mapping[k]): v
                               for k, v in label_to_color.items()}
 
-        legend = kwplot.make_legend_img(label_to_color)
+        print(f'legend_dpi={legend_dpi}')
+        legend = kwplot.make_legend_img(label_to_color, dpi=legend_dpi)
 
         h1, w1 = legend.shape[0:2]
         h2, w2 = colored_label_img.shape[0:2]

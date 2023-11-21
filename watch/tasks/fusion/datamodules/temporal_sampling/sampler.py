@@ -168,7 +168,10 @@ class CommonSamplerMixin:
         if gids is None:
             gids = dset.images(vidid=vidid).lookup('id')
         images = dset.images(gids)
-        name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
+        try:
+            name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
+        except KeyError:
+            name = '<no-name?>'
         datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
         unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
         sensors = images.lookup('sensor_coarse', None)

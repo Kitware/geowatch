@@ -4,10 +4,26 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.12.0 - Released 2023-12-xx
+## Version 0.12.1 - Released 2023-12-xx
 
+
+### Added
+
+* Initial support for ndsampler backends (version >0.7.6)
+
+* Support for v3 polygon extraction / merging to allow temporally disjoint polygons at the same location !540
+
+* Support WV and S2 landcover at AC time in smartflow
+
+* New polygon extraction algorithm based on volumetric connected components 
+
+* Ability to temporally pad BAS site start / end dates.
 
 ### Changed
+
+* Smartflow egress writes to its outbucket are now transactional.
+
+* Smartflow egress now cleans its output location before writing to it.
 
 * SMARTTrainer now writes helpful scripts to visualize batches as an independent process (works around ddp issue) 
 
@@ -15,9 +31,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Batch visualizations now have the option of showing summary text information
 
+* KWCocoVideoDataset now handles the case where datasets contain only images and no videos
+
 ### Fixed
 
-* Fixed handling of nans in `varied_values`
+* Fixed handling of nans in `result_analysis.varied_values`
 
 * confusion analysis now attempts to work around small errors and produce some sort of visualization for each case.
 

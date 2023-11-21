@@ -29,12 +29,14 @@ Currrently WIP, might not be totally right yet. Help wanted.
                 - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
 
             bas_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KR_R002/imgonly-KR_R002-rawbands.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KW_C001/imgonly-KW_C001-rawbands.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CO_C001/imgonly-CO_C001-rawbands.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CN_C000/imgonly-CN_C000-rawbands.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/NZ_R001/imgonly-NZ_R001-rawbands.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CH_R001/imgonly-CH_R001-rawbands.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KR_R001/imgonly-KR_R001-rawbands.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KR_R002/imgonly-KR_R002-rawbands.kwcoco.zip
+                # Uncomment to run on more regions
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KW_C001/imgonly-KW_C001-rawbands.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CO_C001/imgonly-CO_C001-rawbands.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CN_C000/imgonly-CN_C000-rawbands.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/NZ_R001/imgonly-NZ_R001-rawbands.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CH_R001/imgonly-CH_R001-rawbands.kwcoco.zip
 
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims: auto
@@ -57,35 +59,30 @@ Currrently WIP, might not be totally right yet. Help wanted.
             bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop7/region_models
             bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop7/site_models
             bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop7/region_models
-            bas_pxl.enabled: 1
-            bas_pxl_eval.enabled: 1
-            bas_poly.enabled: 1
-            bas_poly_eval.enabled: 1
-            bas_poly_viz.enabled: 0
 
             ######################
             ## SV Params Params ##
             ######################
-            sv_crop.enabled: 0
+            sv_crop.enabled: 1
             sv_crop.minimum_size: '256x256@2GSD'
             sv_crop.num_start_frames: 3
             sv_crop.num_end_frames: 3
             sv_crop.context_factor: 1.6
 
-            sv_dino_boxes.enabled: 0
+            sv_dino_boxes.enabled: 1
             sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
             sv_dino_boxes.window_dims: 256
             sv_dino_boxes.window_overlap: 0.5
             sv_dino_boxes.fixed_resolution: 3GSD
 
-            sv_dino_filter.enabled: 0
+            sv_dino_filter.enabled: 1
             sv_dino_filter.end_min_score:
                 - 0.15
             sv_dino_filter.start_max_score: 1.0
             sv_dino_filter.box_score_threshold: 0.01
             sv_dino_filter.box_isect_threshold: 0.1
 
-            sv_depth_score.enabled: 0
+            sv_depth_score.enabled: 1
             sv_depth_score.model_fpath:
                 - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
@@ -139,9 +136,12 @@ Currrently WIP, might not be totally right yet. Help wanted.
 
             sc_poly.thresh:
                 - 0.07
-            sc_poly.boundaries_as: polys
+            sc_poly.boundaries_as:
+                - polys
+                - bounds
             sc_poly.resolution: 8GSD
             sc_poly.min_area_square_meters: 7200
+            sc_poly.new_algo: crall
 
             #############################
             ## AC/SC POLY EVAL PARAMS  ##
@@ -153,16 +153,21 @@ Currrently WIP, might not be totally right yet. Help wanted.
             ##################################
             ## HIGH LEVEL PIPELINE CONTROLS ##
             ##################################
-            sc_crop.enabled: 0
-            sc_pxl.enabled: 1
-            sc_pxl_eval.enabled: 1
+            bas_poly.enabled: 1
+            bas_poly_eval.enabled: 1
+            bas_pxl.enabled: 1
+            bas_pxl_eval.enabled: 1
+            sc_crop.enabled: 1
             sc_poly.enabled: 1
             sc_poly_eval.enabled: 1
+            sc_pxl.enabled: 1
+            sc_pxl_eval.enabled: 1
             sc_poly_viz.enabled: 0
+            bas_poly_viz.enabled: 0
         " \
-        --root_dpath="$DVC_EXPT_DPATH/_baseline_full_pipeline" \
+        --root_dpath="$DVC_EXPT_DPATH/_baseline_2023-10-12_full_pipeline" \
         --devices="0," --tmux_workers=4 \
-        --backend=tmux --queue_name "_baseline_full_pipeline" \
+        --backend=tmux --queue_name "_baseline_2023-10-12_full_pipeline" \
         --skip_existing=1 \
         --run=0
 

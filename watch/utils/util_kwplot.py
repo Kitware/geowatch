@@ -1075,3 +1075,21 @@ def color_new_labels(label_to_color, labels):
     new_label_to_color = label_to_color.copy()
     new_label_to_color.update(dict(zip(missing, new_colors)))
     return new_label_to_color
+
+
+def autompl2():
+    """
+    New autompl with inline logic for notebooks
+    """
+    import kwplot
+    try:
+        import IPython
+        ipy = IPython.get_ipython()
+        ipy.config
+        # TODO: general test to see if we are in a notebook where
+        # we want to inline things.
+        if 'colab' in str(ipy.config['IPKernelApp']['kernel_class']):
+            ipy.run_line_magic('matplotlib', 'inline')
+    except NameError:
+        ...
+    kwplot.autompl()

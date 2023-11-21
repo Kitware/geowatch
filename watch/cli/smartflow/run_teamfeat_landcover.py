@@ -1,3 +1,6 @@
+"""
+TODO: rectify with run_teamfeat_acsc_landcover.py
+"""
 import ubelt as ub
 import scriptconfig as scfg
 from watch.cli.smartflow_ingress import smartflow_ingress
