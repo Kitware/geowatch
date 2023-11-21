@@ -129,7 +129,7 @@ when real watch models are trained.
 EXPERIMENT_NAME=ToyRGB_Heterogeneous_Demo_V001
 DATASET_CODE=ToyMSI
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
@@ -218,7 +218,7 @@ are stripped and ignored during prediction.
 
 
 # Predict 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
@@ -262,7 +262,7 @@ its arguments are:
 '
 
 # Evaluate 
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
     --true_dataset="$TEST_FPATH" \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \
     --eval_dpath="$DVC_EXPT_DPATH"/predictions/eval

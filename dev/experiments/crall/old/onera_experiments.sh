@@ -30,17 +30,17 @@ prep_validation_set(){
     # Split out a validation dataset from the training data
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     kwcoco stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
-    python -m watch stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
+    python -m geowatch stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
 
-    python -m watch.cli.coco_modify_channels --normalize=True \
+    python -m geowatch.cli.coco_modify_channels --normalize=True \
         --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
         --dst $DVC_DPATH/extern/onera_2018/onera_train_norm.kwcoco.json
 
-    python -m watch.cli.coco_modify_channels --normalize=True \
+    python -m geowatch.cli.coco_modify_channels --normalize=True \
         --src $DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
         --dst $DVC_DPATH/extern/onera_2018/onera_test_norm.kwcoco.json
 
-    python -m watch stats $DVC_DPATH/extern/onera_2018/onera_train_norm.kwcoco.json
+    python -m geowatch stats $DVC_DPATH/extern/onera_2018/onera_train_norm.kwcoco.json
 
     # Add ta2 features 
 
@@ -57,27 +57,27 @@ prep_validation_set(){
 
 
     # Predict with UKY Invariants (one model for S2 and L8)
-    python -m watch.tasks.invariants.predict \
+    python -m geowatch.tasks.invariants.predict \
         --sensor S2 \
         --input_kwcoco $DVC_DPATH/extern/onera_2018/onera_train_norm.kwcoco.json \
         --output_kwcoco $DVC_DPATH/extern/onera_2018/onera_train_uky_inv.kwcoco.json \
         --ckpt_path $UKY_S2_MODEL_FPATH
 
-    python -m watch.tasks.invariants.predict \
+    python -m geowatch.tasks.invariants.predict \
         --sensor S2 \
         --input_kwcoco $DVC_DPATH/extern/onera_2018/onera_test_norm.kwcoco.json \
         --output_kwcoco $DVC_DPATH/extern/onera_2018/onera_test_uky_inv.kwcoco.json \
         --ckpt_path $UKY_S2_MODEL_FPATH
 
     # Combine features
-    python -m watch.cli.coco_combine_features \
+    python -m geowatch.cli.coco_combine_features \
         --src \
             $DVC_DPATH/extern/onera_2018/onera_train_norm.kwcoco.json \
             $DVC_DPATH/extern/onera_2018/onera_train_uky_inv.kwcoco.json \
         --dst \
            $DVC_DPATH/extern/onera_2018/onera_train_combo.kwcoco.json 
 
-    python -m watch.cli.coco_combine_features \
+    python -m geowatch.cli.coco_combine_features \
         --src \
             $DVC_DPATH/extern/onera_2018/onera_test_norm.kwcoco.json \
             $DVC_DPATH/extern/onera_2018/onera_test_uky_inv.kwcoco.json \
@@ -101,7 +101,7 @@ prep_validation_set(){
         $DVC_DPATH/extern/onera_2018/onera_vali_combo.kwcoco.json \
         $DVC_DPATH/extern/onera_2018/onera_test_combo.kwcoco.json
 
-    python -m watch stats \
+    python -m geowatch stats \
         $DVC_DPATH/extern/onera_2018/onera_learn_combo.kwcoco.json 
     
 }
@@ -142,7 +142,7 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml
 kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=${ARCH} \
@@ -163,7 +163,7 @@ python -m watch.tasks.fusion.fit \
     --attention_impl=performer \
     --dump=$TRAIN_CONFIG_FPATH  
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --gpus=0 \
     --write_preds=True \
     --write_probs=False \
@@ -174,19 +174,19 @@ python -m watch.tasks.fusion.predict \
 # So the simple route is still available?
 
 # Execute train -> predict -> evaluate
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH && \
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH && \
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \
           --eval_dpath=$EVAL_DPATH

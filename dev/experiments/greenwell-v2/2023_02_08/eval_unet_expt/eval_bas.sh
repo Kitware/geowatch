@@ -32,7 +32,7 @@ DATA_DVC_DPATH=$DATA_DVC_DPATH
             #     - $EXPT_DVC_DPATH/Drop4_BAS_S2L8_NoDecoderHetModel/lightning_logs/version_2/checkpoints/epoch=454-step=11375.pt
 
 
-# python -m watch.mlops.schedule_evaluation \
+# python -m geowatch.mlops.schedule_evaluation \
 #     --params="
 #         matrix:
 #             bas_pxl.package_fpath:
@@ -99,7 +99,7 @@ DATA_DVC_DPATH=$DATA_DVC_DPATH
 #     --pipeline=bas \
 #     --run=1
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:

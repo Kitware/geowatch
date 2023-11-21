@@ -8,7 +8,7 @@ smartwatch stats "$BAS_HEATMAPS"
 
 jq .info "$BAS_HEATMAPS"
 
-python -m watch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.kwcoco_to_geojson \
     "$BAS_HEATMAPS" \
     --default_track_fn saliency_heatmaps \
     --clear_annots \
@@ -150,7 +150,7 @@ kwcoco validate "$SMALL_TEST_DATASET"
 
 
 PACKAGE_FPATH=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --test_dataset="$SMALL_TEST_DATASET" \
     --package_fpath="$PACKAGE_FPATH" \
     --pred_dataset="$PRED3_DATASET" \

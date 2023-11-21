@@ -10,13 +10,13 @@ IMAGE_EXPT_DPATH=/root/data/dvc-repos/smart_expt_dvc
 
 # Note: need to be careful to mount directories that symlinks reference
 # **exactly**.
-EXPT_CACHE_DIR=$(python -m watch.utils.simple_dvc cache_dir "$DVC_EXPT_DPATH")
-LORES_CACHE_DIR=$(python -m watch.utils.simple_dvc cache_dir "$DVC_LORES_DATA_DPATH")
-HIRES_CACHE_DIR=$(python -m watch.utils.simple_dvc cache_dir "$DVC_HIRES_DATA_DPATH")
+EXPT_CACHE_DIR=$(python -m geowatch.utils.simple_dvc cache_dir "$DVC_EXPT_DPATH")
+LORES_CACHE_DIR=$(python -m geowatch.utils.simple_dvc cache_dir "$DVC_LORES_DATA_DPATH")
+HIRES_CACHE_DIR=$(python -m geowatch.utils.simple_dvc cache_dir "$DVC_HIRES_DATA_DPATH")
 
 
 # Ensure models exist locally
-python -m watch.utils.simple_dvc request \
+python -m geowatch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
     "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt \
     "$DVC_EXPT_DPATH"/models/depth_pcd/basicModel2.h5 \
@@ -168,7 +168,7 @@ geowatch schedule --params="
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 #sudo chown -R "$USER":smart "$DVC_EXPT_DPATH"/_namek_sv_sweep
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_sv_sweep

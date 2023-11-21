@@ -102,13 +102,13 @@ def main():
 if __name__ == "__main__":
     r"""
     CommandLine:
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=MultimodalTransformer
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=SequenceAwareModel
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu --trainer.devices=0, \
             --trainer.precision=16  \
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
         # Note: setting fast_dev_run seems to disable directory output.
 
-        python -m watch.tasks.fusion.fit_lightning fit \
+        python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu \
             --trainer.devices=0, \

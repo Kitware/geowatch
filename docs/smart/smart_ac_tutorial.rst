@@ -72,7 +72,7 @@ hopefully it is).
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     BUNDLE_DPATH=$AC_DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath "$AC_DATA_DVC_DPATH"/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=1 \
@@ -133,7 +133,7 @@ that exist in the repo only reference raw bands).
     # TODO:
     # * Modify the suffix depending on the team feats
     # * Modify the base fpath to be correct.
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath "$AC_DATA_DVC_DPATHVC_DATA_DPATH"/Drop7-Cropped2GSD/*/imgannots-*.kwcoco.zip \
         --dst_dpath "$AC_DATA_DVC_DPATH"/Drop7-Cropped2GSD \
         --suffix=rawbands --run=1 --workers=2
@@ -155,7 +155,7 @@ Be sure to grab a pretrained model to start from:
 .. code:: bash
 
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-    python -m watch.utils.simple_dvc request \
+    python -m geowatch.utils.simple_dvc request \
         "$DVC_EXPT_DPATH"/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
 
 
@@ -177,7 +177,7 @@ Be sure to grab a pretrained model to start from:
     WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
     echo "WEIGHT_DECAY = $WEIGHT_DECAY"
     MAX_STEPS=80000
-    WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+    WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
     data:
         select_videos          : $SELECT_VIDEOS
         num_workers            : 5
@@ -289,7 +289,7 @@ packaged model in the grid and adjust parameters as desired.
 
 .. code:: bash
 
-    python -m watch.mlops.manager "list" --dataset_codes Drop7-Cropped2GSD
+    python -m geowatch.mlops.manager "list" --dataset_codes Drop7-Cropped2GSD
 
     HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
     TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
@@ -304,7 +304,7 @@ packaged model in the grid and adjust parameters as desired.
     geowatch stats $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
     geowatch stats $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/CH_R001/CH_R001.kwcoco.zip
 
-    python -m watch.mlops.schedule_evaluation --params="
+    python -m geowatch.mlops.schedule_evaluation --params="
         matrix:
             ########################
             ## AC/SC PIXEL PARAMS ##
@@ -386,7 +386,7 @@ aggregate to produce reports and gain insight.
 .. code:: bash
 
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=sc \
         --target "
             - $DVC_EXPT_DPATH/_demo_ac_eval

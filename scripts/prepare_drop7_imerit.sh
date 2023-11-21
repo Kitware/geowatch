@@ -47,7 +47,7 @@ simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 #rm -rf 	Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/ Drop6-MeanYear10GSD/ Drop6_Mean3Month10GSD/ Drop6_MeanYear/ Drop7-Cropped2GSD-V2/
 
 # Construct the TA2-ready dataset
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \
@@ -178,7 +178,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/*/imganns*-*_[RC]*.kwcoco.zip \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=6 \
@@ -195,7 +195,7 @@ kwcoco move \
     "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip
 
 
-python -m watch reproject \
+python -m geowatch reproject \
     --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/.kwcoco.zip \
     --dst "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/.kwcoco.zip \
     --status_to_catname="positive_excluded: positive" \
@@ -212,7 +212,7 @@ dvc add -vv -- */imganns-*.kwcoco.zip
 
 geowatch site_stats --regions /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/region_models/CN_C000.geojson
 
-python -m watch reproject \
+python -m geowatch reproject \
     --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imgonly-CN_C000-fielded.kwcoco.zip \
     --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip \
     --status_to_catname="positive_excluded: positive" \
@@ -226,7 +226,7 @@ python -m watch reproject \
 # PREEVAL 14 BAS+SV Grid
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.utils.simple_dvc request \
+python -m geowatch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
     "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
@@ -303,7 +303,7 @@ geowatch schedule --params="
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $TEST_DPATH
@@ -336,7 +336,7 @@ python -m watch.mlops.aggregate \
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
+python -m geowatch.mlops.confusor_analysis \
     --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
@@ -349,7 +349,7 @@ export CUDA_VISIBLE_DEVICES="0"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --src_kwcocos "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \

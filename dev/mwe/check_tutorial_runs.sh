@@ -15,12 +15,12 @@ export PIP_CACHE_DIR=/pip_cache
 pip install geowatch[headless,development,optional]
 
 # Finalize special dependencies
-# python -m watch.cli.special.finish_install
+# python -m geowatch.cli.special.finish_install
 pip install --prefer-binary GDAL>=3.4.1 --find-links https://girder.github.io/large_image_wheels
 
 
 # Sanity check
-EAGER_IMPORT=1 python -m watch --help
+EAGER_IMPORT=1 python -m geowatch --help
 
 
 ## Shell version

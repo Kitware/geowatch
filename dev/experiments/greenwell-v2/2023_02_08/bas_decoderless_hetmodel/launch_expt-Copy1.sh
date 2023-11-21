@@ -26,7 +26,7 @@ docker run \
     --mount type=bind,source="/data/connor.greenwell/cache",target="/.cache" \
     "feature/decoderless_heterogeneous_model" \
     conda run --no-capture-output -n watch \
-    python -m watch.tasks.fusion fit \
+    python -m geowatch.tasks.fusion fit \
         --config=/config_common.yaml \
         --model.init_args.name=$EXPERIMENT_NAME \
         --data.train_dataset="$TRAIN_FPATH" \

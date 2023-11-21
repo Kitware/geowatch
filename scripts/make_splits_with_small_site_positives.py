@@ -23,7 +23,7 @@ for imgonly_fpath in imgonly_fpaths:
     assert imgonly_fpath.exists()
     command = ub.codeblock(
         fr'''
-        python -m watch reproject_annotations \
+        python -m geowatch reproject_annotations \
             --src "{str(imgonly_fpath)}" \
             --dst "{str(imganns_fpath)}" \
             --propogate_strategy="SMART" \

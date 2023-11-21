@@ -52,7 +52,7 @@ BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_
 # evaluation on each region separately. We will likely want to adopt this
 # strategy for running evaluations so we can compare results at a more 
 # granular level.
-python -m watch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali.kwcoco.json
+python -m geowatch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali.kwcoco.json
 
 
 # The BAS-only evalution pipeline can be executed as follows.  The
@@ -61,7 +61,7 @@ python -m watch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali.kwcoco.js
 
 # NOTE: In this exmaple we have commented out KR_R002 and US_R007 to allow for
 # getting the results of the pipeline fairly quickly (~15 minutes). 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:

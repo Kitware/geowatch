@@ -11,7 +11,7 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \
@@ -286,7 +286,7 @@ dvc_add_(){
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/imganns-AE*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -341,7 +341,7 @@ export CUDA_VISIBLE_DEVICES="1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \
@@ -433,7 +433,7 @@ python -m cmd_queue show "reproject_queue"
 python -m cmd_queue run --workers=8 "reproject_queue"
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD/combo_imganns*-*_[RC]*_EI2LMSC.kwcoco.zip \
     --suffix=EI2LMSC \
     --backend=tmux --tmux_workers=6 \
@@ -524,7 +524,7 @@ geowatch visualize data_vali_EI2LMSC_split6.kwcoco.zip \
 
 
 #HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-#python -m watch.cli.cluster_sites \
+#python -m geowatch.cli.cluster_sites \
 #    --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
 #    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/clusters \
 #    --minimum_size="128x128@2GSD" \
@@ -534,7 +534,7 @@ geowatch visualize data_vali_EI2LMSC_split6.kwcoco.zip \
 
 
 ## Execute alignment / crop script
-#python -m watch.cli.coco_align \
+#python -m geowatch.cli.coco_align \
 #    --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
 #    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
 #    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/clusters/*.geojson" \
@@ -604,13 +604,13 @@ done
 for REGION_ID in "${REGION_IDS[@]}"; do
 
     cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
-        python -m watch.cli.cluster_sites \
+        python -m geowatch.cli.cluster_sites \
             --src "$TRUE_REGION_DPATH/$REGION_ID.geojson" \
             --dst_dpath "$DST_BUNDLE_DPATH/$REGION_ID/clusters" \
             --draw_clusters True
 
     python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- crop_for_sc_queue \
-        python -m watch.cli.coco_align \
+        python -m geowatch.cli.coco_align \
             --src "$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
             --dst "$DST_BUNDLE_DPATH/$REGION_ID/$REGION_ID.kwcoco.zip" \
             --regions "$DST_BUNDLE_DPATH/$REGION_ID/clusters/*.geojson" \
@@ -646,7 +646,7 @@ python -m cmd_queue run --workers=8 "crop_for_sc_queue"
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/imgannots-*.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
     --suffix=rawbands --run=1 --workers=2
@@ -675,7 +675,7 @@ geowatch_dvc add drop7_data_ssd --path=/media/joncrall/flash1/smart_drop7 --tags
 #    echo "REGION_ID = $REGION_ID"
 #done
 #for REGION_ID in "${REGION_IDS[@]}"; do
-#    python -m watch.cli.cluster_sites \
+#    python -m geowatch.cli.cluster_sites \
 #        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/"$REGION_ID".geojson \
 #        --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/"$REGION_ID"/clusters \
 #        --minimum_size="128x128@2GSD" \
@@ -683,7 +683,7 @@ geowatch_dvc add drop7_data_ssd --path=/media/joncrall/flash1/smart_drop7 --tags
 #        --context_factor=1.3 \
 #        --draw_clusters True
 
-#    python -m watch.cli.coco_align \
+#    python -m geowatch.cli.coco_align \
 #        --src "$HDD_DATA_DPATH/Aligned-Drop7/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
 #        --dst "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/$REGION_ID.kwcoco.zip" \
 #        --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters/*.geojson" \
@@ -741,14 +741,14 @@ geowatch reproject_annotations \
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-python -m watch.utils.simple_dvc request \
+python -m geowatch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/depth/weights_v1.pt
 
 # AC/SC Features on Clusters
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -767,7 +767,7 @@ python -m watch.cli.prepare_teamfeats \
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
 
-python -m watch.tasks.depth.predict \
+python -m geowatch.tasks.depth.predict \
     --dataset=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001.kwcoco.zip \
     --deployed=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/models/depth/weights_v1.pt \
     --output=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001_dzyne_depth.kwcoco.zip \
@@ -775,7 +775,7 @@ python -m watch.tasks.depth.predict \
     --window_size=1440
 
 
-python -m watch.tasks.rutgers_material_seg_v2.predict \
+python -m geowatch.tasks.rutgers_material_seg_v2.predict \
     --kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip \
     --model_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_model_05_25_2023.ckpt \
     --config_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_config_05_25_2023.yaml \
@@ -784,7 +784,7 @@ python -m watch.tasks.rutgers_material_seg_v2.predict \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_D.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
     --suffix=depth --run=1 --workers=2
@@ -822,7 +822,7 @@ geowatch reproject_annotations \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -842,7 +842,7 @@ python -m watch.cli.prepare_teamfeats \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_E.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
     --suffix=mae --run=1 --workers=2 \
@@ -968,7 +968,7 @@ dvc add -- */teamfeats/dzyne_depth */*_depth.kwcoco.zip */*_D.kwcoco.zip
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -1023,7 +1023,7 @@ python -m cmd_queue run --workers=8 "reproject_queue"
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features/*/combo_*_DE.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features \
     --suffix=DE --run=1 --workers=10
@@ -1033,7 +1033,7 @@ python -m watch.cli.prepare_splits \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 # FIXME: dst outpaths
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/*/imganns*-*_[RC]*.kwcoco.zip \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=6 \
@@ -1051,7 +1051,7 @@ kwcoco move \
     "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m watch reproject \
+python -m geowatch reproject \
     --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_train_rawbands_split6.kwcoco.zip \
     --inplace \
     --status_to_catname="positive_excluded: positive" \
@@ -1060,7 +1060,7 @@ python -m watch reproject \
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m watch reproject \
+python -m geowatch reproject \
     --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip \
     --inplace \
     --status_to_catname="positive_excluded: positive" \

@@ -1,7 +1,7 @@
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath="$DVC_DATA_DPATH/Drop6/imganns-*BH_R001.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -15,7 +15,7 @@ python -m watch.cli.prepare_teamfeats \
     --invariant_resolution="30GSD" \
     --gres=3, --workers=1 --backend=tmux --run=1
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -73,7 +73,7 @@ ls $DVC_DATA_DPATH/Drop6/combo_imganns-*_R001_I2.kwcoco.json
     # viz_dpath argument can be specified to visualize the algorithm details.
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch reproject_annotations \
+python -m geowatch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred_with_truth.kwcoco.zip \
     --workers=4 \
@@ -86,7 +86,7 @@ smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac
 # viz_dpath argument can be specified to visualize the algorithm details.
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch reproject_annotations \
+python -m geowatch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred_with_truth.kwcoco.zip \
     --workers=4 \
@@ -94,7 +94,7 @@ python -m watch reproject_annotations \
 
 smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred_with_truth.kwcoco.zip --smart
 
-#python -m watch.cli.run_tracker \
+#python -m geowatch.cli.run_tracker \
 #    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred.kwcoco.zip \
 #    --default_track_fn saliency_heatmaps \
 #    --track_kwargs '{"agg_fn": "probs", "thresh": 0.17, "polygon_simplify_tolerance": 1, "resolution": "auto", "moving_window_size": 100, "min_area_sqkm": 0.0072, "max_area_sqkm": 8}' \
@@ -133,7 +133,7 @@ cmd_queue run "my_spectra_queue" --backend=tmux --workers=8
 # viz_dpath argument can be specified to visualize the algorithm details.
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch reproject_annotations \
+python -m geowatch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred_with_truth_KR_R001.kwcoco.zip \
     --workers=4 \
@@ -225,7 +225,7 @@ source '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch
 # viz_dpath argument can be specified to visualize the algorithm details.
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch reproject_annotations \
+python -m geowatch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred_with_truth_KR_R001.kwcoco.zip \
     --workers=4 \
@@ -312,4 +312,4 @@ kwimage.imwrite('final.png', final)
 "
 
 
-python -m watch.tasks.invariants.predict --input_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001.kwcoco.zip --output_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001_uky_invariants.kwcoco.json --pretext_package_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt --pca_projection_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt --input_resolution=30GSD --window_resolution=30GSD --patch_size=256 --do_pca 0 --patch_overlap=0.3 --num_workers=2 --write_workers 0 --tasks before_after pretext
+python -m geowatch.tasks.invariants.predict --input_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001.kwcoco.zip --output_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001_uky_invariants.kwcoco.json --pretext_package_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt --pca_projection_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt --input_resolution=30GSD --window_resolution=30GSD --patch_size=256 --do_pca 0 --patch_overlap=0.3 --num_workers=2 --write_workers 0 --tasks before_after pretext

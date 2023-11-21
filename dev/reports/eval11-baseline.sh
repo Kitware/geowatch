@@ -2,7 +2,7 @@
 # Eval11 Baseline on Drop7-MedianNoWinter10GSD
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
@@ -70,7 +70,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_drop7_nowinter_baseline

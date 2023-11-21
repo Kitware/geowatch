@@ -15,7 +15,7 @@ CHANNELS="blue|green|red"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop4_BASELINE_Template
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -91,7 +91,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_INVAR_V30
 EXPERIMENT_NAME=Drop4_SC_RGB_frominvar30_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -130,7 +130,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_SC_RGB_scratch_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -172,7 +172,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_SC_V006
 EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -220,7 +220,7 @@ INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/j
 #INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_0/checkpoints/epoch=50-step=34221.ckpt
 EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -263,7 +263,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_2/checkpoints/epoch=96-step=65087.ckpt
 EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -307,7 +307,7 @@ INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/Crop
 CHANNELS="(S2,WV):blue|green|red"
 EXPERIMENT_NAME=Drop4_tune_V30_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -372,7 +372,7 @@ CHANNELS="(S2,WV):blue|green|red"
 INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
 EXPERIMENT_NAME=Drop4_tune_V30_V2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=1 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=1 WATCH_INIT_VERBOSE=100 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -434,7 +434,7 @@ CHANNELS="(S2,WV):blue|green|red"
 INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
 EXPERIMENT_NAME=Drop4_tune_V30_8GSD_V3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=2 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=2 WATCH_INIT_VERBOSE=100 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -496,7 +496,7 @@ CHANNELS="(S2,WV):blue|green|red"
 INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
 EXPERIMENT_NAME=Drop4_tune_V30_2GSD_V3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \

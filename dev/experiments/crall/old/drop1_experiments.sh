@@ -41,13 +41,13 @@ EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 
 # Write train and prediction configs
 CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -86,21 +86,21 @@ python -m watch.tasks.fusion.fit \
 # So the simple route is still available?
 
 # Execute train -> predict -> evaluate
-#python -m watch.tasks.fusion.fit \
+#python -m geowatch.tasks.fusion.fit \
 #           --config=$TRAIN_CONFIG_FPATH \
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
     --write_probs=False \
     --dump=$PRED_CONFIG_FPATH
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH && \
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \
           --eval_dpath=$EVAL_DPATH
@@ -117,7 +117,7 @@ python -m watch.tasks.fusion.evaluate \
 
 
 ## Ensure "Video Space" is 10 GSD
-#python -m watch.cli.coco_add_watch_fields \
+#python -m geowatch.cli.coco_add_watch_fields \
 #    --src $SUBDATA_PATH/data.kwcoco.json \
 #    --dst $SUBDATA_PATH/data_gsd10.kwcoco.json \
 #    --target_gsd 10
@@ -137,7 +137,7 @@ python -m watch.tasks.fusion.evaluate \
 #    $SUBDATA_PATH/train_gsd10.kwcoco.json \
 #    $SUBDATA_PATH/vali_gsd10.kwcoco.json 
 
-#python -m watch watch_coco_stats \
+#python -m geowatch watch_coco_stats \
 #    $SUBDATA_PATH/train_gsd10.kwcoco.json 
 
 ##### Training
@@ -168,7 +168,7 @@ python -m watch.tasks.fusion.evaluate \
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 ## Write train and prediction configs
-#python -m watch.tasks.fusion.fit \
+#python -m geowatch.tasks.fusion.fit \
 #    --channels=${CHANNELS} \
 #    --method="MultimodalTransformer" \
 #    --arch_name=$ARCH \
@@ -186,7 +186,7 @@ python -m watch.tasks.fusion.evaluate \
 #    --window_size=8 \
 #    --dump=$TRAIN_CONFIG_FPATH 
 
-#python -m watch.tasks.fusion.predict \
+#python -m geowatch.tasks.fusion.predict \
 #    --gpus=1 \
 #    --write_preds=True \
 #    --write_probs=False \
@@ -197,19 +197,19 @@ python -m watch.tasks.fusion.evaluate \
 ## So the simple route is still available?
 
 ## Execute train -> predict -> evaluate
-#python -m watch.tasks.fusion.fit \
+#python -m geowatch.tasks.fusion.fit \
 #           --config=$TRAIN_CONFIG_FPATH \
 #    --default_root_dir=$DEFAULT_ROOT_DIR \
 #       --package_fpath=$PACKAGE_FPATH \
 #        --train_dataset=$TRAIN_FPATH \
 #         --vali_dataset=$VALI_FPATH \
 #         --test_dataset=$TEST_FPATH && \
-#python -m watch.tasks.fusion.predict \
+#python -m geowatch.tasks.fusion.predict \
 #        --config=$PRED_CONFIG_FPATH \
 #        --test_dataset=$TEST_FPATH \
 #       --package_fpath=$PACKAGE_FPATH \
 #        --pred_dataset=$PRED_FPATH && \
-#python -m watch.tasks.fusion.evaluate \
+#python -m geowatch.tasks.fusion.evaluate \
 #        --true_dataset=$TEST_FPATH \
 #        --pred_dataset=$PRED_FPATH \
 #          --eval_dpath=$EVAL_DPATH

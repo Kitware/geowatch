@@ -40,7 +40,7 @@ EXPERIMENT_NAME=features_late_fusion_V001
 
 debug_notes(){
     # Print stats about train and validation datasets
-    python -m watch stats "$VALI_FPATH" "$TRAIN_FPATH"
+    python -m geowatch stats "$VALI_FPATH" "$TRAIN_FPATH"
     python -m kwcoco stats "$VALI_FPATH" "$TRAIN_FPATH"
 }
 
@@ -60,12 +60,12 @@ Key hyperparams to pay attention to are:
 * tokenizer - method for breaking up the input data-cube into tokens
 * normalize_inputs - number of dataset iterations to use to estimate mean/std for network normalization
 
-See `python -m watch.tasks.fusion.fit --help` for details on each
+See `python -m geowatch.tasks.fusion.fit --help` for details on each
 hyperparameter.  Note, some parameters exposed in this help no longer work or
 are not hooked up. Email Jon C if you have any questions.
 '
 
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -112,7 +112,7 @@ gather_checkpoint_notes(){
 
     # This method only works for the current fusion model
     # It would be better if the fit command was able to take care of this
-    python -m watch.tasks.fusion.repackage repackage "$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
+    python -m geowatch.tasks.fusion.repackage repackage "$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
 
     # To ensure the results of our experiments are maintained, we copy them to
     # the DVC directory.
@@ -145,7 +145,7 @@ predict_and_evaluate_checkpoints(){
         jobs to depend on other jobs, let me know.  If this doesnt exist I want
         to make it with multiprocessing, tmux, and slurm backends.
     '
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0," \
             --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -167,7 +167,7 @@ aggregate_multiple_evaluations(){
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/baseline/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/baseline" \
         --dset_group_key="Drop2-Aligned-TA1-2022-02-15_data_vali.kwcoco"

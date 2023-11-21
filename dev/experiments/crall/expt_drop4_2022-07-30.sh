@@ -16,7 +16,7 @@ gather-checkpoints-repackage(){
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
+    python -m geowatch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
@@ -56,28 +56,28 @@ schedule-prediction-and-evlauation(){
     # The gpus flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
     #TMUX_GPUS="1,"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*xfer*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*scratch*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     # Iarpa BAS metrics only on existing predictions
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -155,7 +155,7 @@ aggregate-results(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
@@ -175,7 +175,7 @@ aggregate-results(){
     PRED_DSET_PAT="*"
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
@@ -191,7 +191,7 @@ schedule-prediction-and-evaluate-team-models(){
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -208,7 +208,7 @@ recovery_eval(){
 
     #--model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
 
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
@@ -223,7 +223,7 @@ recovery_eval(){
             --draw_heatmaps=1 --draw_curves=1 \
             --skip_existing=1 --backend=tmux --run=0
 
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
@@ -252,7 +252,7 @@ recovery_eval(){
     #MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" 
 
     TMUX_GPUS="0,1,2,3,4,5,6"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
@@ -282,7 +282,7 @@ recovery_eval(){
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
     ls "$MEASURE_GLOBSTR"
 
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=0 \
@@ -292,7 +292,7 @@ recovery_eval(){
     # -----------
 
     TMUX_GPUS="0,"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
             --test_dataset="$VALI_FPATH" \
@@ -308,7 +308,7 @@ recovery_eval(){
 
 
     TMUX_GPUS="0,1,2,3,4,5,6,7,8"
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
@@ -361,7 +361,7 @@ singleton_commands(){
 
     #PRED_FPATH=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval4_candidates/pred/Drop3_bells_mlp_V305/pred_Drop3_bells_mlp_V305_epoch=5-step=3071-v1/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$MODEL_FPATH" \
             --test_dataset="$VALI_FPATH" \
@@ -397,7 +397,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop3_BASELINE_Template
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -468,7 +468,7 @@ CHANNELS="(S2,L8):blue|green|red|nir"
 EXPERIMENT_NAME=Drop4_BAS_30m_S2-L8_BGRN_scratch_v1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -519,7 +519,7 @@ CHANNELS="(S2,L8):blue|green|red"
 EXPERIMENT_NAME=Drop4_BAS_30m_RGB_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -573,7 +573,7 @@ CHANNELS="S2:blue|green|red|nir"
 EXPERIMENT_NAME=Drop4_BAS_30m_S2_RGBN_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_baseline_20220731.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -627,7 +627,7 @@ CHANNELS="(S2,L8):blue|green|red"
 EXPERIMENT_NAME=Drop4_BAS_30m_S2_L8_RGB_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_baseline_20220731.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \

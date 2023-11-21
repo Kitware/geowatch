@@ -73,7 +73,7 @@ with DAG(
                 TRAIN_FPATH=$DATA_ROOT/{{ params.dataset_name }}/data_train.kwcoco.json
                 VALI_FPATH=$DATA_ROOT/{{ params.dataset_name }}/data_vali.kwcoco.json
                 DEFAULT_ROOT_DIR=$WORKDIR/{{ params.dataset_name }}/runs/{{ params.experiment_name }}
-                python -m watch.tasks.fusion fit \
+                python -m geowatch.tasks.fusion fit \
                     --config="$CONFIG_FPATH" \
                     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
                     --data.train_dataset="$TRAIN_FPATH" \
@@ -117,7 +117,7 @@ with DAG(
 
                 TEST_FPATH=$DATA_ROOT/{{ params.dataset_name }}/data_vali.kwcoco.json
                 DEFAULT_ROOT_DIR=$WORKDIR/{{ params.dataset_name }}/runs/{{ params.experiment_name }}"
-                python -m watch.tasks.fusion.predict \
+                python -m geowatch.tasks.fusion.predict \
                     --test_dataset="$TEST_FPATH" \
                     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
                     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
@@ -155,7 +155,7 @@ with DAG(
 
                 TEST_FPATH=$DATA_ROOT/{{ params.dataset_name }}/data_vali.kwcoco.json
                 DEFAULT_ROOT_DIR=$WORKDIR/{{ params.dataset_name }}/runs/{{ params.experiment_name }}"
-                python -m watch.tasks.fusion.evaluate \
+                python -m geowatch.tasks.fusion.evaluate \
                     --true_dataset="$TEST_FPATH" \
                     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \
                     --eval_dpath="$DVC_EXPT_DPATH"/predictions/eval

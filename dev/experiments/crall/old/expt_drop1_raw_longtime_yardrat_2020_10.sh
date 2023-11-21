@@ -21,7 +21,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
-python -m watch stats $TRAIN_FPATH
+python -m geowatch stats $TRAIN_FPATH
 #CHANNELS="blue|green|red|nir|swir16|swir22"
 
 CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|matseg_20|matseg_21|matseg_22|matseg_23|matseg_24|matseg_25|matseg_26|matseg_27|matseg_28|matseg_29|matseg_30|matseg_31|matseg_32|matseg_33|matseg_34|matseg_35|matseg_36|matseg_37|matseg_38|matseg_39|blue|green|red|nir|swir16|swir22"
@@ -31,7 +31,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --method="MultimodalTransformer" \
@@ -79,7 +79,7 @@ EXPERIMENT_NAME=Saliency_${ARCH}_base_rutgers_s128_t5_v006
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --method="MultimodalTransformer" \

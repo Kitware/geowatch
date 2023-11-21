@@ -52,13 +52,13 @@ geowatch schedule --params="
     --run=1
 
 
-#python -m watch.mlops.aggregate \
+#python -m geowatch.mlops.aggregate \
 #    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/__bas_only_baseline_multi/aggregate/bas_poly_eval_toothbrush_00018_2023-10-10T133732-5.csv.zip \
 #    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/__bas_only_baseline_multi/aggregate/bas_poly_eval_namek_00012_2023-10-10T133729-5.csv.zip
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --export_tables=True \
     --target "

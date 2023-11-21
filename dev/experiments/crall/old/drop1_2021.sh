@@ -6,7 +6,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 
 
 # Ensure "Video Space" is 10 GSD
-#python -m watch.cli.coco_add_watch_fields \
+#python -m geowatch.cli.coco_add_watch_fields \
 #    --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
 #    --dst $KWCOCO_BUNDLE_DPATH/data_gsd10.kwcoco.json \
 #    --target_gsd 10
@@ -15,7 +15,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 basic_left_right_split(){
     # Optional: visualize the combo data before and after propogation
     KWCOCO_BUNDLE_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned
-    python -m watch.cli.coco_visualize_videos \
+    python -m geowatch.cli.coco_visualize_videos \
         --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json --space=video --num_workers=6 \
         --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_base_data \
         --channels "red|green|blue"
@@ -24,11 +24,11 @@ basic_left_right_split(){
     LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_left.kwcoco.json
     RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_right.kwcoco.json
 
-    python -m watch.cli.coco_spatial_crop \
+    python -m geowatch.cli.coco_spatial_crop \
             --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json --dst $LEFT_COCO_FPATH \
             --suffix=_left
 
-    python -m watch.cli.coco_spatial_crop \
+    python -m geowatch.cli.coco_spatial_crop \
             --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json --dst $RIGHT_COCO_FPATH \
             --suffix=_right
 
@@ -64,7 +64,7 @@ kwcoco stats \
     $TRAIN_FPATH \
     $VALI_FPATH 
 
-python -m watch watch_coco_stats \
+python -m geowatch watch_coco_stats \
     $TRAIN_FPATH
 
 __note__="
@@ -117,14 +117,14 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml
 
 kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
     --write_probs=False \
     --dump=$PRED_CONFIG_FPATH
 
 # Write train and prediction configs
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=${ARCH} \
     --channels=${CHANNELS} \
@@ -157,19 +157,19 @@ python -m watch.tasks.fusion.fit \
 # So the simple route is still available?
 
 # Execute train -> predict -> evaluate
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH && \
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH && \
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \
           --eval_dpath=$EVAL_DPATH
@@ -206,7 +206,7 @@ TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
 # Write train and prediction configs
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=${ARCH} \
     --channels=${CHANNELS} \
@@ -274,7 +274,7 @@ TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
 # Write train and prediction configs
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=${ARCH} \
     --channels=${CHANNELS} \
@@ -318,7 +318,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt
 PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
 EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 # Write train and prediction configs
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=${ARCH} \
     --channels=${CHANNELS} \

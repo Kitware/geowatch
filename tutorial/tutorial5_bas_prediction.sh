@@ -66,7 +66,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 # This is a cmd_queue CLI.  This will generate a DAG of bash commands and
 # optionally execute them. Set --run=0 to do a dry run to see what will try to
 # do before it does.
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --cloud_cover=5 \
     --stac_query_mode=auto \
@@ -132,7 +132,7 @@ geowatch visualize "$PREDICTION_DPATH/data_heatmaps.kwcoco.json" \
 
 
 # Convert Heatmaps to Polygons
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --in_file "$PREDICTION_DPATH/data_heatmaps.kwcoco.json" \
     --default_track_fn saliency_heatmaps \
     --track_kwargs '{
@@ -164,7 +164,7 @@ geowatch visualize "$PREDICTION_DPATH/poly.kwcoco.zip" \
     --channels="red|green|blue,salient" --smart
 
 #### Crop big images to the geojson regions
-##AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.coco_align \
+##AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m geowatch.cli.coco_align \
 ##    --src "$HOME/remote/Ooo/data/dvc-repos/smart_data_dvc-ssd/Tutorial5-Demo/Uncropped-Tutorial5-Demo/data_KR_R001_fielded.kwcoco.json" \
 ##    --dst "$HOME/remote/Ooo/data/dvc-repos/smart_data_dvc-ssd/Tutorial5-Demo/Aligned-Tutorial5-Demo/imgonly-KR_R001.kwcoco.json" \
 ##    --regions "$HOME/remote/Ooo/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/region_models/KR_R001.geojson" \

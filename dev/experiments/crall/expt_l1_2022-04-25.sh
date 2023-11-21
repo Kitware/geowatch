@@ -15,7 +15,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     DATASET_CODE=Aligned-Drop3-L1
     EXPT_GROUP_CODE=Aligned-Drop3-L1
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
+    python -m geowatch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
@@ -24,7 +24,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     # Note: this can take care of the gather checkpoint step for hard-coded paths
     # TODO: need to generalize a bit more
-    python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
+    python -m geowatch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
 
     #################################
     # 2. Pull new models (and existing evals) on eval machine
@@ -37,7 +37,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     dvc pull -r aws -R models/fusion/Aligned-Drop3-L1/eval
 
     # TODO: add pull packages capability
-    python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
+    python -m geowatch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
 
     #################################
     # 3. Run Prediction & Evaluation
@@ -50,7 +50,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_MODEL_GLOBNAME="*"
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -72,7 +72,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # TODO: Use new sycn machine state script
 
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
-    python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
+    python -m geowatch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
@@ -93,7 +93,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 5. Aggregate Results
     #################################
     # Pull all results onto the machine you want to eval on
-    python -m watch.tasks.fusion.dvc_sync_manager \
+    python -m geowatch.tasks.fusion.dvc_sync_manager \
         --push=False --pull=True --dvc_remote=aws \
         --with_packages=False --with_evals=True
     #####
@@ -111,7 +111,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     GROUP_KEY="*Drop3*s2_wv*"
     #GROUP_KEY="*Drop3*"
 
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="$GROUP_KEY" --show=True \
@@ -140,7 +140,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
 
 export CUDA_VISIBLE_DEVICES=0
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=L1_Template\
     --train_dataset="$TRAIN_FPATH" \
@@ -196,7 +196,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=L1_BASELINE_EXPERIMENT_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -220,7 +220,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=L1_BASELINE_EXPERIMENT_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -250,7 +250,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=L1_BASELINE_EXPERIMENT_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -278,7 +278,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=L1_BASELINE_EXPERIMENT_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \

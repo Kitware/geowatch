@@ -20,7 +20,7 @@ BAS_MODEL_FPATH = $BAS_MODEL_FPATH
 
 "
 mkdir -p $BUNDLE_DPATH/testing
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --trk_model_globstr="$BAS_MODEL_FPATH" \
     --act_model_globstr="$SC_MODEL_FPATH" \
     --model_globstr="$BAS_MODEL_FPATH" \
@@ -74,7 +74,7 @@ SC_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_sc.json
 DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
     - matrix:
         ###
@@ -120,7 +120,7 @@ python -m watch.mlops.schedule_evaluation \
 
 
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --write_probs=True \
     --write_preds=False \
     --with_class=auto \
@@ -149,7 +149,7 @@ python -m watch.tasks.fusion.predict \
     
 
 
-python -m watch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.kwcoco_to_geojson \
     /home/joncrall/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/testing/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco_cropped_kwcoco_for_bas/predcfg_41fd3894/pred.kwcoco.json \
     --default_track_fn saliency_heatmaps \
     --track_kwargs '{"thresh": 0.1, "morph_kernel": 3, "norm_ord": 1, "agg_fn": "probs", "thresh_hysteresis": null, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
@@ -175,7 +175,7 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
 mkdir -p $BUNDLE_DPATH/testing
-XDEV_PROFILE=1 python -m watch.cli.coco_align_geotiffs \
+XDEV_PROFILE=1 python -m geowatch.cli.coco_align_geotiffs \
     --visualize False \
     --src $BUNDLE_DPATH/kwcoco_for_sc.json \
     --dst $BUNDLE_DPATH/cropped_kwcoco_for_sc.json \

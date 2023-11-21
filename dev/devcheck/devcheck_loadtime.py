@@ -8,7 +8,7 @@ def setup_data_real():
         KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
         BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
         RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021-10-01-16:27:07.pth"
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -17,7 +17,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=RAW --blocksize=128
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -26,7 +26,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=RAW --blocksize=64
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -35,7 +35,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=DEFLATE --blocksize=128
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -44,7 +44,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=DEFLATE --blocksize=64
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -53,7 +53,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=LZW --blocksize=128
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -62,7 +62,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=LZW --blocksize=64
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -71,7 +71,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=RAW --blocksize=256
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
@@ -80,7 +80,7 @@ def setup_data_real():
             --batch_size=32 --gpus "0" \
             --compress=DEFLATE --blocksize=256
 
-        python -m watch.tasks.rutgers_material_seg.predict \
+        python -m geowatch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \

@@ -84,7 +84,7 @@ RUN <<EOF
 
 echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
-EAGER_IMPORT=1 python -m watch --help
+EAGER_IMPORT=1 python -m geowatch --help
 EOF
 
 # Copy over the rest of the repo

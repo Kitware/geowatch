@@ -5,10 +5,10 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
+python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -354,7 +354,7 @@ TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_v1
@@ -408,7 +408,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -502,7 +502,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 ### TEST NEW PARAMS
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --in_file "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_ac_static_small_baseline_v1/pred/flat/sc_pxl/sc_pxl_id_fc2b4d4e/pred.kwcoco.zip" \
     --default_track_fn class_heatmaps \
     --track_kwargs '{"boundaries_as": "polys", "thresh": 0.2, "min_area_square_meters": 7200, "resolution": "8GSD"}' \
@@ -518,7 +518,7 @@ python -m watch.cli.run_tracker \
     --boundary_region=None
 
 
-python -m watch.cli.run_metrics_framework \
+python -m geowatch.cli.run_metrics_framework \
     --merge=True \
     --name "todo-sc_poly_algo_id_7f666f77-sc_pxl_algo_id_5d3e8b55-todo" \
     --true_site_dpath "/media/joncrall/flash1/smart_drop7/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models" \
@@ -534,7 +534,7 @@ python -m watch.cli.run_metrics_framework \
 
 ##### BEFORE CHANGES BASELINE
 #
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --in_file "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_ac_static_small_baseline_v1/pred/flat/sc_pxl/sc_pxl_id_6189d572/pred.kwcoco.zip" \
     --default_track_fn class_heatmaps \
     --track_kwargs '{"boundaries_as": "polys", "thresh": 0.2, "min_area_square_meters": 7200, "resolution": "8GSD"}' \
@@ -549,7 +549,7 @@ python -m watch.cli.run_tracker \
 
 
 ### Command 4 / 4 - sc_poly_eval_id_62fab2ed
-python -m watch.cli.run_metrics_framework \
+python -m geowatch.cli.run_metrics_framework \
     --merge=True \
     --name "todo-sc_poly_algo_id_900574bb-sc_pxl_algo_id_ac244673-todo" \
     --true_site_dpath "/media/joncrall/flash1/smart_drop7/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models" \
@@ -562,7 +562,7 @@ python -m watch.cli.run_metrics_framework \
 
 
 ## REAL BASELINE?
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --in_file "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_ac_static_small_baseline_v1/pred/flat/sc_pxl/sc_pxl_id_fc2b4d4e/pred.kwcoco.zip" \
     --default_track_fn class_heatmaps \
     --track_kwargs '{"boundaries_as": "polys", "thresh": 0.2, "min_area_square_meters": 7200, "resolution": "8GSD"}' \
@@ -576,7 +576,7 @@ python -m watch.cli.run_tracker \
     --out_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_ac_static_small_baseline_v1/pred/flat/sc_poly/sc_poly_id_a0da6abb/poly.kwcoco.zip"
 
 
-python -m watch.cli.run_metrics_framework \
+python -m geowatch.cli.run_metrics_framework \
     --merge=True \
     --name "todo-sc_poly_algo_id_900574bb-sc_pxl_algo_id_5d3e8b55-todo" \
     --true_site_dpath "/media/joncrall/flash1/smart_drop7/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models" \
@@ -589,7 +589,7 @@ python -m watch.cli.run_metrics_framework \
 
 
 ## SHOULD REPRODUCE BASELINE
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --in_file "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_ac_static_small_baseline_v1/pred/flat/sc_pxl/sc_pxl_id_fc2b4d4e/pred.kwcoco.zip" \
     --default_track_fn class_heatmaps \
     --track_kwargs '{"boundaries_as": "polys", "thresh": 0.2, "min_area_square_meters": 7200, "resolution": "8GSD"}' \
@@ -604,7 +604,7 @@ python -m watch.cli.run_tracker \
     --site_summary=/media/joncrall/flash1/smart_drop7/Drop7-StaticACTestSet-2GSD/bas_small_output/region_models/KR_R002.geojson \
     --boundary_region=None
 
-python -m watch.cli.run_metrics_framework \
+python -m geowatch.cli.run_metrics_framework \
     --merge=True \
     --name "todo-sc_poly_algo_id_e5608e61-sc_pxl_algo_id_5d3e8b55-todo" \
     --true_site_dpath "/media/joncrall/flash1/smart_drop7/Drop7-StaticACTestSet-2GSD/bas_small_truth/site_models" \

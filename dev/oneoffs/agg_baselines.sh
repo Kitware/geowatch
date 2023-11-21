@@ -3,7 +3,7 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 
 # Export on namek
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1
@@ -25,7 +25,7 @@ python -m watch.mlops.aggregate \
     --stdout_report=0
 
 # Export on toothbrush
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_v1
@@ -57,7 +57,7 @@ python -m watch.mlops.aggregate \
     #--query="(df['param_hashid'] == 'fvlcyfgjmydd')"
 
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1
@@ -89,7 +89,7 @@ python -m watch.mlops.aggregate \
 
 # Aggregate all CSVs (including team csvs)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target="$DVC_EXPT_DPATH/aggregate_results/mlops-2023-10-30/*/*.csv.zip" \
     --output_dpath="$DVC_EXPT_DPATH/aggregate_results/mlops-2023-10-30-summary" \

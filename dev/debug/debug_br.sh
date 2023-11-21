@@ -24,7 +24,7 @@ PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Con
 
 TEST_DATASET="./cropped_kwcoco_for_bas.json"
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --devices 0 \
     --write_preds False --write_probs True --with_change False --with_saliency True --with_class False  \
     --test_dataset "$TEST_DATASET" \
@@ -53,7 +53,7 @@ PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Ret
 TMP_DPATH=$DATA_DVC_DPATH/_tmp
 mkdir -p "$OUT_DPATH"
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --devices 0 \
     --write_preds False --write_probs True --with_change False --with_saliency True --with_class False  \
     --test_dataset "$TEST_DATASET" \

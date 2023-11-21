@@ -15,7 +15,7 @@ CHANNELS="blue|green|red"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop4_BASELINE_Template
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit_lightning fit \
+python -m geowatch.tasks.fusion.fit_lightning fit \
     --data.batch_size=8 \
     --data.channels="$CHANNELS" \
     --data.chip_dims=64 \
@@ -99,7 +99,7 @@ python -m watch.tasks.fusion.fit_lightning fit \
 # INITIAL_STATE=$INITIAL_STATE_INVAR_V30
 # EXPERIMENT_NAME=Drop4_SC_RGB_frominvar30_V001
 # DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-# python -m watch.tasks.fusion.fit \
+# python -m geowatch.tasks.fusion.fit \
 #     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
 #     --default_root_dir="$DEFAULT_ROOT_DIR" \
 #     --name=$EXPERIMENT_NAME \
@@ -138,7 +138,7 @@ python -m watch.tasks.fusion.fit_lightning fit \
 # INITIAL_STATE=noop
 # EXPERIMENT_NAME=Drop4_SC_RGB_scratch_V002
 # DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-# python -m watch.tasks.fusion.fit \
+# python -m geowatch.tasks.fusion.fit \
 #     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
 #     --default_root_dir="$DEFAULT_ROOT_DIR" \
 #     --name=$EXPERIMENT_NAME \
@@ -180,7 +180,7 @@ python -m watch.tasks.fusion.fit_lightning fit \
 # INITIAL_STATE=$INITIAL_STATE_SC_V006
 # EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003
 # DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-# python -m watch.tasks.fusion.fit \
+# python -m geowatch.tasks.fusion.fit \
 #     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
 #     --default_root_dir="$DEFAULT_ROOT_DIR" \
 #     --name=$EXPERIMENT_NAME \
@@ -228,7 +228,7 @@ python -m watch.tasks.fusion.fit_lightning fit \
 # #INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_0/checkpoints/epoch=50-step=34221.ckpt
 # EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont
 # DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-# python -m watch.tasks.fusion.fit \
+# python -m geowatch.tasks.fusion.fit \
 #     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
 #     --default_root_dir="$DEFAULT_ROOT_DIR" \
 #     --name=$EXPERIMENT_NAME \
@@ -271,7 +271,7 @@ python -m watch.tasks.fusion.fit_lightning fit \
 # INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_2/checkpoints/epoch=96-step=65087.ckpt
 # EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont2
 # DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-# python -m watch.tasks.fusion.fit \
+# python -m geowatch.tasks.fusion.fit \
 #     --config="$WORKDIR/configs/drop4_SC_baseline_20220819.yaml" \
 #     --default_root_dir="$DEFAULT_ROOT_DIR" \
 #     --name=$EXPERIMENT_NAME \

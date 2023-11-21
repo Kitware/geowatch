@@ -15,7 +15,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 
 EXPERIMENT_NAME=Drop4_BAS_S2L8_NoDecoderHetModel
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --config=config_common.yaml \
     --ckpt_path=$WORKDIR/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_S2L8_NoDecoderHetModel/lightning_logs/version_2/checkpoints/epoch=472-step=11825.ckpt \
     --model.init_args.name=$EXPERIMENT_NAME \

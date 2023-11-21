@@ -58,7 +58,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=1000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
-python -m watch.tasks.fusion fit --config "
+python -m geowatch.tasks.fusion fit --config "
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -168,7 +168,7 @@ export CUDA_VISIBLE_DEVICES=0,1
 export DISABLE_TENSORBOARD_PLOTTER=1
 export DISABLE_BATCH_PLOTTER=1
 export DDP_WORKAROUND=0
-python -m watch.tasks.fusion fit --config "
+python -m geowatch.tasks.fusion fit --config "
 seed_everything: 8675309
 data:
     num_workers          : 2
@@ -259,7 +259,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=10000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
-DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m geowatch.tasks.fusion fit --config "
     seed_everything: 8675309
     data:
         num_workers          : 2
@@ -403,7 +403,7 @@ echo "
 
 # Train with the above config for at least 1 epoch (should be very short)
 # And then Ctrl+C to kill it
-python -m watch.tasks.fusion fit --config "$CONFIG_FPATH"
+python -m geowatch.tasks.fusion fit --config "$CONFIG_FPATH"
 
 # The following command should grab the most recent checkpoint
 CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
@@ -411,4 +411,4 @@ echo "CKPT_FPATH = $CKPT_FPATH"
 
 # Calling fit again, but passing in the checkpoint should restart training from
 # where it left off.
-python -m watch.tasks.fusion fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"
+python -m geowatch.tasks.fusion fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"

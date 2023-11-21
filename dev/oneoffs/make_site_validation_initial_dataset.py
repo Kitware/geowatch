@@ -93,7 +93,7 @@ def submit_crop_jobs(config, grouped_region_fpaths):
             dst_dpath = (status_dpath / region_fpath.stem).ensuredir()
             command = ub.codeblock(
                 rf'''
-                python -m watch.cli.coco_align \
+                python -m geowatch.cli.coco_align \
                     --src "{src_fpath}" \
                     --dst "{dst_dpath}" \
                     --regions "{region_fpath}" \

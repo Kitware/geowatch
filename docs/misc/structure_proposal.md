@@ -85,7 +85,7 @@ To train a model, we expect that the task-specific fit script will use
 a command line interface somewhat like this:
 
 ```bash
-python -m watch.tasks.<task_name>.fit --train_dataset=<path-to-kwcoco> --vali_dataset=<path-to-kwcoco> <additional hyperparam config>
+python -m geowatch.tasks.<task_name>.fit --train_dataset=<path-to-kwcoco> --vali_dataset=<path-to-kwcoco> <additional hyperparam config>
 ```
 
 The `<additional hyperparam config>` could be additional command line 
@@ -113,7 +113,7 @@ predict script. This should take model weights to predict with,
 and a kwcoco dataset to predict on.
 
 ```bash
-python -m watch.tasks.<task_name>.predict --deployed=<path-to-deploy-zipfile> --dataset=<path-to-kwcoco> <additional prediction config>
+python -m geowatch.tasks.<task_name>.predict --deployed=<path-to-deploy-zipfile> --dataset=<path-to-kwcoco> <additional prediction config>
 ```
 
 The output of this script should be a modified version of the input 
@@ -135,13 +135,13 @@ Example invocations of fit and predict scripts may look like this:
 
 
 ```bash
-    python -m watch.tasks.rutgers.fit --train_dataset=drop0-train.kwcoco.json --config=train_config_v1.yml
+    python -m geowatch.tasks.rutgers.fit --train_dataset=drop0-train.kwcoco.json --config=train_config_v1.yml
 
-    python -m watch.tasks.rutgers.predict --deployed=model_v1.zip --dataset=drop0-test.kwcoco.json
+    python -m geowatch.tasks.rutgers.predict --deployed=model_v1.zip --dataset=drop0-test.kwcoco.json
 
-    python -m watch.tasks.invariants.fit --train_dataset=drop0-train.kwcoco.json --vali_dataset=drop0-train.kwcoco.json --model=custom_arch_v1 --init=<path/to/pretrained/state.pt> --lr=1e-3 --workers=8 --workdir=$HOME/work/smart --name=myexpt_v1
-    python -m watch.tasks.invariants.predict --deployed=$HOME/work/smart/myexpt_v1/deployed.zip --dataset=drop0-test.kwcoco.json --output=drop0-test-predictions.kwcoco.json
+    python -m geowatch.tasks.invariants.fit --train_dataset=drop0-train.kwcoco.json --vali_dataset=drop0-train.kwcoco.json --model=custom_arch_v1 --init=<path/to/pretrained/state.pt> --lr=1e-3 --workers=8 --workdir=$HOME/work/smart --name=myexpt_v1
+    python -m geowatch.tasks.invariants.predict --deployed=$HOME/work/smart/myexpt_v1/deployed.zip --dataset=drop0-test.kwcoco.json --output=drop0-test-predictions.kwcoco.json
 
-    python -m watch.tasks.fusion.fit --config fusion_fit_config_v5.yml
-    python -m watch.tasks.fusion.predict --config fusion_predict_config_v5.yml
+    python -m geowatch.tasks.fusion.fit --config fusion_fit_config_v5.yml
+    python -m geowatch.tasks.fusion.predict --config fusion_predict_config_v5.yml
 ```

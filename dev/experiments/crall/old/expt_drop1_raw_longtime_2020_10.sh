@@ -21,7 +21,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --method="MultimodalTransformer" \
@@ -86,7 +86,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --method="MultimodalTransformer" \

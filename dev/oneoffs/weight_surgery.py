@@ -42,7 +42,7 @@ torch.save(state, new_fpath)
 # state_dict['heads.class.hidden.output.weight'][act_con]
 
 """
-HACK_SAVE_ANYWAY=1 python -m watch.mlops.repackager \
+HACK_SAVE_ANYWAY=1 python -m geowatch.mlops.repackager \
     /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt_weight_hacked.ckpt
 
         /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761.ckpt_weight_hacked.ckpt
