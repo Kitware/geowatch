@@ -15,6 +15,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Support WV and S2 landcover at AC time in smartflow
 
+* New polygon extraction algorithm based on volumetric connected components 
+
+* Ability to temporally pad BAS site start / end dates.
+
 ### Changed
 
 * Smartflow egress writes to its outbucket are now transactional.
@@ -27,9 +31,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Batch visualizations now have the option of showing summary text information
 
+* KWCocoVideoDataset now handles the case where datasets contain only images and no videos
+
 ### Fixed
 
-* Fixed handling of nans in `varied_values`
+* Fixed handling of nans in `result_analysis.varied_values`
 
 * confusion analysis now attempts to work around small errors and produce some sort of visualization for each case.
 
