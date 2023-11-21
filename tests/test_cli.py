@@ -3,7 +3,7 @@
 def test_cli_help_message():
     verbose = 3
     import ubelt as ub
-    exe = 'python -m watch'
+    exe = 'python -m geowatch'
 
     info = ub.cmd(f'{exe} --help', verbose=verbose)
     assert info['ret'] == 0

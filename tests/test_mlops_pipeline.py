@@ -4,8 +4,8 @@ def test_variable_inputs():
     """
     Test case where a node depends on a variable length set of inputs.
     """
-    from watch.mlops.pipeline_nodes import ProcessNode
-    from watch.mlops.pipeline_nodes import Pipeline
+    from geowatch.mlops.pipeline_nodes import ProcessNode
+    from geowatch.mlops.pipeline_nodes import Pipeline
 
     # A simple pipeline where we don't need to manage reconfiguration.
     node1 = ProcessNode(name='node1', executable='node1', out_paths={'key1': 'path1'}, node_dpath='.')

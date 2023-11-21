@@ -4,11 +4,11 @@ def test_tracker_time_split_thresh():
     import json
     import kwcoco
     import ubelt as ub
-    from watch.cli import kwcoco_to_geojson
+    from geowatch.cli import kwcoco_to_geojson
 
     coco_dset = build_recurring_sites_coco()
 
-    dpath = ub.Path.appdir('watch', 'test', 'tracking', 'recuring_sites').ensuredir()
+    dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'recuring_sites').ensuredir()
     dpath.delete().ensuredir()
 
     regions_dir = dpath / 'regions/'
@@ -54,14 +54,14 @@ def build_recurring_sites_coco():
     """
     Build a simple test case where the site blips in and out every year.
     """
-    import watch
+    import geowatch
     import ubelt as ub
     import kwarray
     import kwimage
     import numpy as np
     from kwutil import util_time
-    dpath = ub.Path.appdir('watch/tests/recurring_sites')
-    watch.coerce_kwcoco('watch-msi')
+    dpath = ub.Path.appdir('geowatch/tests/recurring_sites')
+    geowatch.coerce_kwcoco('geowatch-msi')
     asset_dpath = (dpath / 'assets').ensuredir()
 
     rng = kwarray.ensure_rng(0)
@@ -79,7 +79,7 @@ def build_recurring_sites_coco():
 
     blip_times = [4, 5, 6, 16, 17, 18, 40, 41, 42]
 
-    from watch.demo.smart_kwcoco_demodata import _random_utm_box
+    from geowatch.demo.smart_kwcoco_demodata import _random_utm_box
     utm_box, utm_crs_info = _random_utm_box()
     auth = utm_crs_info['auth']
     assert auth[0] == 'EPSG'
@@ -126,7 +126,7 @@ def build_recurring_sites_coco():
         )
         current_time += frame_rate
 
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     # Do a consistent transfer of the hacked seeded geodata to the other images
     kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
     kwcoco_extensions.coco_populate_geo_heuristics(coco_dset)

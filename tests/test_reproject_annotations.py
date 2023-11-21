@@ -1,7 +1,7 @@
 
 
 def test_reproject_annotations_positive_pending():
-    from watch.geoannots.geomodels import RegionModel, SiteModel
+    from geowatch.geoannots.geomodels import RegionModel, SiteModel
     import kwarray
 
     start_time = '2012-03-04'
@@ -83,9 +83,9 @@ def test_reproject_annotations_positive_pending():
     print(summaries_df[['site_id', 'start_date', 'end_date']])
 
     # Create a dummy kwcoco file that is georegistered to the random region
-    import watch
-    dset = watch.coerce_kwcoco(
-        'watch-msi', num_videos=1,
+    import geowatch
+    dset = geowatch.coerce_kwcoco(
+        'geowatch-msi', num_videos=1,
         geodata={'region_geom': region.geometry},
         dates={'start_time': start_time, 'end_time': end_time}
     )
@@ -94,13 +94,13 @@ def test_reproject_annotations_positive_pending():
     dset.images().lookup('date_captured')
 
     # print(f'dset.fpath={dset.fpath}')
-    # gdalinfo /home/joncrall/.cache/watch/demo_kwcoco_bundles/watch_vidshapes_a86db771/_assets/auxiliary/aux_B10_B11/img_00010.tif
-    # gdalinfo /home/joncrall/.cache/watch/demo_kwcoco_bundles/watch_vidshapes_5b7fdde0/_assets/auxiliary/aux_B10_B11/img_00010.tif
+    # gdalinfo /home/joncrall/.cache/geowatch/demo_kwcoco_bundles/watch_vidshapes_a86db771/_assets/auxiliary/aux_B10_B11/img_00010.tif
+    # gdalinfo /home/joncrall/.cache/geowatch/demo_kwcoco_bundles/watch_vidshapes_5b7fdde0/_assets/auxiliary/aux_B10_B11/img_00010.tif
 
-    from watch.cli import reproject_annotations
-    import watch
+    from geowatch.cli import reproject_annotations
+    import geowatch
     import ubelt as ub
-    viz_dpath = ub.Path.appdir('watch/tests/test_reproject/viz').ensuredir()
+    viz_dpath = ub.Path.appdir('geowatch/tests/test_reproject/viz').ensuredir()
     cmdline = False
     kwargs = {
         'src': dset,

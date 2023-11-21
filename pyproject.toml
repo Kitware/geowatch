@@ -6,8 +6,8 @@ ignore_missing_imports = true
 
 [tool.xcookie]
 tags = [ "gitlab", "purepy", "kitware", "cv2", "gdal",]
-mod_name = "watch"
-repo_name = "watch"
+mod_name = "geowatch"
+repo_name = "geowatch"
 rel_mod_parent_dpath = "."
 os = [ "linux",]
 min_python = 3.8
@@ -15,10 +15,10 @@ min_python = 3.8
 [tool.xcookie.entry_points]
 # the console_scripts entry point creates the xdoctest executable
 console_scripts = [
-    "smartwatch = watch.cli.__main__:main",
-    "smartwatch_dvc= watch.cli.find_dvc:_CLI.main",
-    "geowatch= watch.cli.__main__:main",
-    "geowatch_dvc= watch.cli.find_dvc:_CLI.main",
+    "smartwatch = geowatch.cli.__main__:main",
+    "smartwatch_dvc= geowatch.cli.find_dvc:_CLI.main",
+    "geowatch= geowatch.cli.__main__:main",
+    "geowatch_dvc= geowatch.cli.find_dvc:_CLI.main",
 ]
 
 [tool.pytest.ini_options]
@@ -59,10 +59,10 @@ filterwarnings = [
 [tool.coverage.run]
 branch = true
 omit = [
-    "watch/stac/_notebook.py",
-    "watch/mlops/_notebook.py",
-    "watch/tasks/fusion/datamodules/_notebook.py",
-    "watch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
+    "geowatch/stac/_notebook.py",
+    "geowatch/mlops/_notebook.py",
+    "geowatch/tasks/fusion/datamodules/_notebook.py",
+    "geowatch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
 ]
 
 [tool.coverage.report]

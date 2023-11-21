@@ -4,9 +4,9 @@ different processing levels to ensure we populate kwcoco metadata correctly.
 
 
 SeeAlso:
-    ../watch/stac/stac_search_builder.py
-    ../watch/cli/stac_search.py
-    ../watch/demo/demo_region.py
+    ../geowatch/stac/stac_search_builder.py
+    ../geowatch/cli/stac_search.py
+    ../geowatch/demo/demo_region.py
 """
 
 import pytest
@@ -16,19 +16,19 @@ def run_metadata_test():
     pytest.skip('unfinished')
 
     import ubelt as ub
-    from watch.demo import demo_region
-    from watch.utils import util_gis
+    from geowatch.demo import demo_region
+    from geowatch.utils import util_gis
     region_fpath = demo_region.demo_smart_region_fpath()
     region_gdf = list(util_gis.coerce_geojson_datas(region_fpath))[0]['data']
     region_row = region_gdf[region_gdf['type'] == 'region'].iloc[0]
 
-    demo_dpath = ub.Path.appdir('watch/demo/datasets/smart_test').ensuredir()
+    demo_dpath = ub.Path.appdir('geowatch/demo/datasets/smart_test').ensuredir()
     search_fpath = demo_dpath / 'stac_search.json'
 
     result_fpath = demo_dpath / (region_row['region_id'] + '.input')
 
-    import watch
-    repo_dpath = ub.Path(watch.__file__).parent.parent
+    import geowatch
+    repo_dpath = ub.Path(geowatch.__file__).parent.parent
     secrets_fpath = repo_dpath / 'secrets/secrets'
     if secrets_fpath.exists():
         # hack for environs
@@ -39,7 +39,7 @@ def run_metadata_test():
                 key = line.split('=')[1].strip()
                 os.environ['SMART_STAC_API_KEY'] = key
 
-    from watch.stac import stac_search_builder
+    from geowatch.stac import stac_search_builder
     stac_search_builder.main(cmdline=0, **{
         'start_date': region_row['start_date'],
         'end_date': region_row['end_date'],
@@ -51,7 +51,7 @@ def run_metadata_test():
         'out_fpath': search_fpath,
     })
 
-    from watch.cli import stac_search
+    from geowatch.cli import stac_search
     stac_search.main(cmdline=0, **{
         'region_file': region_fpath,
         'search_json': search_fpath,
@@ -60,7 +60,7 @@ def run_metadata_test():
         'outfile': result_fpath,
     })
 
-    from watch.cli import prepare_ta2_dataset
+    from geowatch.cli import prepare_ta2_dataset
     prepare_ta2_dataset.main(cmdline=0, **{
         'dataset_suffix': 'testing',
         's3_fpath': [result_fpath],
