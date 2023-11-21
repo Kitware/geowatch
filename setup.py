@@ -259,7 +259,6 @@ if __name__ == '__main__':
                 'geowatch= geowatch.cli.__main__:main',
                 'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
-                # 'geowatch_dvc= geowatch.cli.find_dvc:__config__.main',
             ],
         },
         install_requires=REQUIREMENTS,

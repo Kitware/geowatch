@@ -72,7 +72,7 @@ CommandLine:
         --dst="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
         --old_prefix="KR_R001" --new_prefix="../KR_R001"
 
-    smartwatch visualize \
+    geowatch visualize \
         "$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_cv|green_COLD_cv|blue_COLD_cv)" \
         --exclude_sensors="S2" \
@@ -113,8 +113,8 @@ CommandLine:
     geowatch stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
     kwcoco validate "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
-    smartwatch visualize \
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    geowatch visualize \
         "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \

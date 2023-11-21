@@ -25,7 +25,7 @@ CommandLine:
     geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
     kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
 
-    smartwatch visualize \
+    geowatch visualize \
         "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \
@@ -52,8 +52,8 @@ CommandLine:
     geowatch stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
     kwcoco validate "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
-    smartwatch visualize \
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    geowatch visualize \
         "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \

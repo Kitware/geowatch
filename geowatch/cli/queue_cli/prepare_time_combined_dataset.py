@@ -303,7 +303,7 @@ if __name__ == '__main__':
 
     CommandLine:
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python geowatch.cli.queue_cli.prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
@@ -334,7 +334,7 @@ if __name__ == '__main__':
             --backend=tmux --tmux_workers=6 \
             --run=1
 
-        smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip --smart
+        geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip --smart
 
         # Drop 6
         export CUDA_VISIBLE_DEVICES="0,1"
