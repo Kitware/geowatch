@@ -1,10 +1,10 @@
 #!/bin/bash
 # shellcheck disable=SC2016
 __doc__='
-Install watch development environment
+Install geowatch development environment
 
 CommandLine:
-    cd $HOME/code/watch
+    cd $HOME/code/geowatch
     ./run_developer_setup.sh
 
 JonSetup:
@@ -326,8 +326,8 @@ check_gpu_ops_work(){
 # Simple tests
 set -x
 echo "Start simple tests"
-EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
-EAGER_IMPORT=1 python -m watch --help
-#EAGER_IMPORT=1 python -m watch hello_world
+EAGER_IMPORT=1 python -c "import geowatch; print(geowatch.__version__)"
+EAGER_IMPORT=1 python -m geowatch --help
+#EAGER_IMPORT=1 python -m geowatch hello_world
 python -c "import torch; print(torch.cuda.is_available())"
 set +x

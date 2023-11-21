@@ -186,7 +186,7 @@ def parse_requirements(fname='requirements.txt', versions='loose'):
 #     return requirements
 
 
-VERSION = parse_version('watch/__init__.py')
+VERSION = parse_version('geowatch/__init__.py')
 
 try:
     README = parse_description()
@@ -254,12 +254,12 @@ if __name__ == '__main__':
         description="",
         entry_points={
             'console_scripts': [
-                'smartwatch= watch.cli.__main__:main',
-                'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
-                'geowatch= watch.cli.__main__:main',
-                'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
+                'smartwatch= geowatch.cli.__main__:main',
+                'smartwatch_dvc= geowatch.cli.find_dvc:_CLI.main',
+                'geowatch= geowatch.cli.__main__:main',
+                'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
-                # 'geowatch_dvc= watch.cli.find_dvc:__config__.main',
+                # 'geowatch_dvc= geowatch.cli.find_dvc:__config__.main',
             ],
         },
         install_requires=REQUIREMENTS,
@@ -268,7 +268,7 @@ if __name__ == '__main__':
         long_description=README,
         include_package_data=True,
         package_data={
-            'watch.tasks.depth': [
+            'geowatch.tasks.depth': [
                 'config.json'
             ],
             'watch.rc': [
