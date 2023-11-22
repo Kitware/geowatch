@@ -1108,10 +1108,11 @@ def _force_shape_agreement_by_cropping2d(data1, data2):
         dw = abs(w1 - w2)
 
         if dh > 10 or dw > 10:
-            raise AssertionError(
-                'This function is for hacking away off-by-one-errors, '
-                'but the difference in shapes was too large: '
-                f'data1.shape={data1.shape}, data1.shape={data2.shape}')
+            if 1:
+                raise AssertionError(
+                    'This function is for hacking away off-by-one-errors, '
+                    'but the difference in shapes was too large: '
+                    f'data1.shape={data1.shape}, data1.shape={data2.shape}')
         h3 = min(h1, h2)
         w3 = min(w1, w2)
         new_data1 = data1[0:h3, 0:w3]

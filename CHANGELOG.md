@@ -14,6 +14,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Fixed issue in dataloader where centered positives requested the top-right corners, and not the actual centers.
 
+* Fixed finish-install issue not working due to eager imports
+
 
 ## Version 0.12.1 - Released 2023-11-21
 
