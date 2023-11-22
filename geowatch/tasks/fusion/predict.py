@@ -1295,6 +1295,9 @@ def predict(cmdline=False, **kwargs):
 
 
 def main(cmdline=True, **kwargs):
+    if ub.argflag('--warntb'):
+        import xdev
+        xdev.make_warnings_print_tracebacks()
     predict(cmdline=cmdline, **kwargs)
 
 
@@ -1314,7 +1317,4 @@ if __name__ == '__main__':
         --devices=0, \
         --batch_size=1
     """
-    if ub.argflag('--warntb'):
-        import xdev
-        xdev.make_warnings_print_tracebacks()
     main()

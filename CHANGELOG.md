@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * The code has moved from the "watch" module to the "geowatch" module.
 
+### Fixed
+
+* Fixed issue in dataloader where centered positives requested the top-right corners, and not the actual centers.
+
 
 ## Version 0.12.1 - Released 2023-11-21
 
