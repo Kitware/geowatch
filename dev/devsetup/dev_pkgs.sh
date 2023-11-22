@@ -11,7 +11,7 @@ Requirements:
     curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh > erotemic_utils.sh
 
 Usage:
-    source ~/code/watch/dev/devsetup/dev_pkgs.sh
+    source ~/code/geowatch/dev/devsetup/dev_pkgs.sh
 "
 
 # Place where the source packages are located

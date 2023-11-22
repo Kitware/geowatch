@@ -415,7 +415,7 @@ def sample_video_spacetime_targets(dset,
         # Given an video
         all_vid_ids = sorted(set(selected_vidid_to_gids.keys()))
 
-        from geowatch.utils import util_parallel
+        from kwutil import util_parallel
         workers = util_parallel.coerce_num_workers(workers)
         workers = min(len(all_vid_ids), workers)
         if workers == 1:
@@ -789,7 +789,8 @@ def _build_targets_around_track(video_id, infos, video_gids,
         main_gid = info['gid']
         vidspace_ann_box = kwimage.Box.coerce(info['vidspace_box'], format='tlbr')
         vidspace_ann_box = vidspace_ann_box.quantize()
-        vidspace_ann_box = vidspace_ann_box.resize(width=window_width, height=window_height)
+        vidspace_ann_box = vidspace_ann_box.resize(
+            width=window_width, height=window_height, about='cxy')
         #  FIXME, this code is ugly
         # TODO: we could make frames where the phase transitions
         # more likely here.

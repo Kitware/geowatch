@@ -3395,7 +3395,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 vid_w = video['width']
                 vid_h = video['height']
                 item_summary['video_hw'] = (vid_h, vid_w)
-            except KeyError:
+            except (KeyError, AttributeError):
                 item_summary['video_hw'] = '?'
 
         if len(timestamps) > 1:
