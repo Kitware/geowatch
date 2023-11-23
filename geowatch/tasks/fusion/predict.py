@@ -1012,7 +1012,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
     stitched_video_histogram = ub.ddict(lambda: 0)
     stitched_video_patch_histogram = ub.ddict(lambda: 0)
     for _head_key, head_stitcher in stitch_managers.items():
-        _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id'))
+        _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id', None))
         print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
 
         for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
