@@ -464,14 +464,20 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             pixels (i.e. not clouds or other quality flags), it is
             marked for resampling as a "bad" frame.
             '''))
+
+    downweight_nan_regions = scfg.Value(True, group=FILTER_GROUP, help=ub.paragraph(
+            '''
+            if True, unobservable (i.e. nan) pixels are downweighted
+            '''))
+
+    # Sampling policies
+
+    failed_sample_policy = scfg.Value('ignore', help="What to do if sampling fails", choices=['ignore', 'reraise'])
+
     resample_invalid_frames = scfg.Value(3, alias=['resample_max_tries'], group=FILTER_GROUP, help=ub.paragraph(
             '''
             Number of attempts to resample any frame marked as invalid
             via quality or nodata checks.
-            '''))
-    downweight_nan_regions = scfg.Value(True, group=FILTER_GROUP, help=ub.paragraph(
-            '''
-            if True, unobservable (i.e. nan) pixels are downweighted
             '''))
 
     ######################
@@ -1541,7 +1547,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         try:
             return self.getitem(index)
         except FailedSample:
-            # raise
+            if self.config['failed_sample_policy'] == 'raise':
+                raise
             return None
 
     @profile
