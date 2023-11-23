@@ -743,7 +743,11 @@ def build_image_header_text(**kwargs):
     else:
         coco_dset = kwargs.get('coco_dset', None)
         if coco_dset is not None:
-            vidname = coco_dset.index.videos[img['video_id']]['name']
+            video_id = img.get('video_id', None)
+            if video_id is not None:
+                vidname = coco_dset.index.videos[video_id]['name']
+            else:
+                vidname = 'loose-images'
 
     image_id_parts = []
     image_id_parts.append(f'gid={gid}')

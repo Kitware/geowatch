@@ -369,8 +369,12 @@ def main(cmdline=True, **kwargs):
     #     coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
     #     desc='viz videos', verbose=3)
 
+    import itertools as it
+    # Add a fake video for loose images
+    video_items = it.chain(coco_dset.index.videos.items(), [(None, None)])
+
     prog = pman.progiter(
-        coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
+        video_items, total=len(coco_dset.index.videos) + 1,
         desc='viz videos', verbose=3)
 
     util_resources.request_nofile_limits()
@@ -413,9 +417,20 @@ def main(cmdline=True, **kwargs):
     video_names = []
     for vidid, video in prog:
 
-        sub_dpath = viz_dpath / video['name']
+        if video is None:
+            video = {
+                'name': 'loose-images',
+            }
 
-        gids = coco_dset.index.vidid_to_gids[vidid]
+        sub_dpath = viz_dpath / video['name']
+        if vidid is None:
+            loose_gids = [
+                gid for gid, v in coco_dset.images().lookup('video_id', None, keepid=1).items()
+                if v is None
+            ]
+            gids = loose_gids
+        else:
+            gids = coco_dset.index.vidid_to_gids[vidid]
         if selected_gids is not None:
             gids = list(ub.oset(gids) & set(selected_gids))
 
