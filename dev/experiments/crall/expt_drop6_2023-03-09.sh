@@ -8957,7 +8957,7 @@ data:
     quality_threshold      : 0.2
     weight_dilate          : 10
     use_centered_positives : True
-    use_grid_positives     : False
+    use_grid_positives     : True
     use_grid_negatives     : 'cleared'
     normalize_inputs       : 1024
     balance_areas          : True

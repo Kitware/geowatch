@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # if not sys.argv[1:]:
     if not ub.argflag('--customdirs'):
         # Default to these subdirs unless --custom-subdirs is specified
-        pytest_args += ['geowatch', 'tests', 'scripts']
+        pytest_args += ['geowatch', 'tests']
 
     pytest_args = pytest_args + sys.argv[1:]
     sys.exit(pytest.main(pytest_args))
