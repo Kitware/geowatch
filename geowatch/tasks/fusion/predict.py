@@ -1016,7 +1016,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
 
         for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
-            vidid = result_dataset.index.imgs[gid]['video_id']
+            vidid = result_dataset.index.imgs[gid].get('video_id', None)
             stitched_video_patch_histogram[vidid] += v
 
         for k, v in _histo.items():
