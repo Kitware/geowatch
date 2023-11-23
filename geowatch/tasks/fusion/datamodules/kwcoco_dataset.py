@@ -12,7 +12,7 @@ from needing to specify what the available options are in multiple places.
 
 
 For notes on Spaces, see
-    ~/code/watch/docs/coding_conventions.rst
+    ~/code/geowatch/docs/development/coding_conventions.rst
 
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
@@ -88,6 +88,7 @@ Known Issues
 
 """
 import einops
+import functools
 import kwarray
 import kwcoco
 import kwimage
@@ -99,8 +100,9 @@ import scriptconfig as scfg
 import torch
 import ubelt as ub
 import warnings
-import functools
+
 from os import getenv
+from kwutil import util_time
 from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
@@ -112,7 +114,6 @@ from geowatch.utils import util_bands
 from geowatch.utils import util_iter
 from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
-from kwutil import util_time
 from geowatch.tasks.fusion import utils
 from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
@@ -126,6 +127,7 @@ except Exception:
     profile = ub.identity
 
 
+# These are groups to to organize options in the KWCocoVideoDatasetConfig
 SPACE_GROUP = 'spacetime (space)'
 TIME_GROUP = 'spacetime (time)'
 SAMPLE_GROUP = 'sampling'
@@ -344,6 +346,11 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             quicker.
             '''))
 
+    failed_sample_policy = scfg.Value('ignore', choices=['ignore', 'raise', 'warn'], group=SAMPLE_GROUP, help=ub.paragraph(
+        '''
+        What to do if sampling fails, either ignore or raise an error
+        '''))
+
     ############################
     # DATA NORMALIZATION OPTIONS
     ############################
@@ -469,10 +476,6 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             '''
             if True, unobservable (i.e. nan) pixels are downweighted
             '''))
-
-    # Sampling policies
-
-    failed_sample_policy = scfg.Value('ignore', help="What to do if sampling fails", choices=['ignore', 'reraise'])
 
     resample_invalid_frames = scfg.Value(3, alias=['resample_max_tries'], group=FILTER_GROUP, help=ub.paragraph(
             '''
@@ -1144,8 +1147,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             max_per_vid = int(np.median(freqs))
         all_chunks = []
         for vidname, vid_pool in vidname_to_pool.items():
-            # print(len(vid_pool[0]))
-            # print(len(vid_pool[-1]))
             rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
             all_chunks.extend(rechunked_video_pool)
 
@@ -1194,7 +1195,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if hasattr(model, 'global_head_weight'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
             else:
-                import warnings
                 warnings.warn(ub.paragraph(
                     f'''
                     Model {model.__class__} does not have the structure needed
@@ -1546,10 +1546,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         try:
             return self.getitem(index)
-        except FailedSample:
+        except FailedSample as ex:
             if self.config['failed_sample_policy'] == 'raise':
                 raise
-            return None
+            elif self.config['failed_sample_policy'] == 'warn':
+                warnings.warn('FailedSample: ex = {}'.format(ub.urepr(ex, nl=1)))
+            elif self.config['failed_sample_policy'] == 'ignore':
+                return None
+            else:
+                raise AssertionError(self.config['failed_sample_policy'])
 
     @profile
     def getitem(self, index):
@@ -2147,7 +2152,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 new_gids = video_gids[new_idxs]
                 # print('new_gids = {!r}'.format(new_gids))
                 if not len(new_gids):
-                    # import warnings
                     # warnings.warn('exhausted resample possibilities')
                     _bad_reasons = repr({k: v for k, v in gid_to_isbad.items() if v})
                     vidspace_box_str = str(vidspace_box)
