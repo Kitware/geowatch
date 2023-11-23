@@ -1541,7 +1541,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         try:
             return self.getitem(index)
         except FailedSample:
-            raise
+            # raise
             return None
 
     @profile
