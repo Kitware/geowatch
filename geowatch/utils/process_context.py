@@ -94,6 +94,15 @@ class ProcessContext:
         >>> rich.print('full_telemetry = {}'.format(ub.urepr(obj1, nl=3)))
         >>> rich.print('some_telemetry = {}'.format(ub.urepr(obj2, nl=3)))
         >>> rich.print('no_telemetry = {}'.format(ub.urepr(obj3, nl=3)))
+
+    Example:
+        >>> from geowatch.utils.process_context import *
+        >>> # flush can measure intermediate progress
+        >>> self = ProcessContext(track_emissions='offline')
+        >>> self.add_disk_info('.')
+        >>> obj1 = self.start().flush()
+        >>> obj1_orig = obj1.copy()
+        >>> obj2 = self.stop()
     """
 
     def __init__(self, name=None, type='process', args=None, config=None,
@@ -128,6 +137,7 @@ class ProcessContext:
         self.track_emissions = track_emissions
         self.emissions_tracker = None
         self._emission_backend = 'auto'
+        self._started = False
 
         if PROCESS_CONTEXT_DISABLE_ALL_TELEMETRY:
             request_all_telemetry = 0
@@ -234,6 +244,7 @@ class ProcessContext:
         )
 
     def start(self):
+        self._started = True
         if not self.enable_all_telemetry:
             return self
         self.properties.update({
@@ -246,7 +257,24 @@ class ProcessContext:
 
         return self
 
+    def flush(self):
+        if not self._started:
+            raise Exception("Must start before you flush")
+        if self.enable_all_telemetry:
+            self.properties["stop_timestamp"] = self._timestamp()
+            start_time = ub.timeparse(self.properties["start_timestamp"])
+            stop_time = ub.timeparse(self.properties["stop_timestamp"])
+            self.properties["duration"] = str(stop_time - start_time)
+        if self.emissions_tracker is not None:
+            try:
+                self._flush_emissions_tracker()
+            except Exception as ex:
+                print(f'warning: issue with emissions ex={ex}')
+        return self.obj
+
     def stop(self):
+        if not self._started:
+            raise Exception("Must start before you stop")
         if self.enable_all_telemetry:
             self.properties["stop_timestamp"] = self._timestamp()
             start_time = ub.timeparse(self.properties["start_timestamp"])
@@ -299,9 +327,9 @@ class ProcessContext:
                 from codecarbon import OfflineEmissionsTracker
                 emissions_tracker = OfflineEmissionsTracker(
                     country_iso_code='USA',
-                    region='Virginia',
-                    cloud_provider='aws',
-                    cloud_region='us-east-1',
+                    # region='Virginia',
+                    # cloud_provider='aws',
+                    # cloud_region='us-east-1',
                     # country_2letter_iso_code='us'
                 )
                 emissions_tracker.start()
@@ -309,6 +337,46 @@ class ProcessContext:
                 print('Non-Critical Warning: Unable to track carbon emissions ex = {!r}'.format(ex))
 
         self.emissions_tracker = emissions_tracker
+
+    def _flush_emissions_tracker(self):
+        if self.emissions_tracker is None:
+            self.properties['emissions'] = None
+            return
+
+        self.emissions_tracker._measure_power_and_energy()
+        summary = emissions_data = self.emissions_tracker._prepare_emissions_data()
+        self.emissions_tracker._persist_data(emissions_data)
+
+        co2_kg = summary.emissions
+        total_kWH = summary.energy_consumed
+        # summary.cloud_provider
+        # summary.cloud_region
+        # summary.duration
+        # summary.emissions_rate
+        # summary.cpu_power
+        # summary.gpu_power
+        # summary.ram_power
+        # summary.cpu_energy
+        # summary.gpu_energy
+        # summary.ram_energy
+        emissions = {
+            'co2_kg': co2_kg,
+            'total_kWH': total_kWH,
+            'run_id': str(self.emissions_tracker.run_id),
+        }
+        try:
+            import pint
+        except Exception as ex:
+            print('Error stopping emissions tracker: ex = {!r}'.format(ex))
+        else:
+            reg = pint.UnitRegistry()
+            if co2_kg is None:
+                co2_kg = float('nan')
+            co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
+            dollar_per_ton = 15 / reg.metric_ton  # cotap rate
+            emissions['co2_ton'] = co2_ton.m
+            emissions['est_dollar_to_offset'] = (co2_ton * dollar_per_ton).m
+        self.properties['emissions'] = emissions
 
     def _stop_emissions_tracker(self):
         if self.emissions_tracker is None:
@@ -467,6 +535,24 @@ def main():
         self.add_device_info(device)
     self.stop()
     print('obj = {}'.format(ub.urepr(obj, nl=3)))
+
+
+def _codecarbon_mwe():
+    from codecarbon import OfflineEmissionsTracker
+    self = OfflineEmissionsTracker(
+        country_iso_code='USA',
+        # cloud_provider='gcp',
+        # region='us-east-1',
+        # country_2letter_iso_code='us'
+    )
+    self.start()
+    self.flush()
+    emissions_data = self._prepare_emissions_data()
+
+    cloud = self._get_cloud_metadata()
+    df = self._data_source.get_cloud_emissions_data()
+
+
 
 if __name__ == '__main__':
     """

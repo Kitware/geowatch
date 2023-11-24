@@ -238,6 +238,9 @@ class WeightInitializer(pl.callbacks.Callback):
             print('Finding keys to not initializer')
             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
 
+            # TODO: read the config of the model we initialize from and save it
+            # so we can remember the lineage.
+
             initializer.association = self.association
             info = initializer.forward(model)  # NOQA
             if info:
@@ -415,6 +418,7 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
+    from geowatch.utils.lightning_ext.callbacks.telemetry import LightningTelemetry
     default_callbacks = [
         pl.callbacks.RichProgressBar(),
         # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
@@ -435,6 +439,8 @@ def make_cli(config=None):
         #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(
         #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
+
+        LightningTelemetry()
     ]
 
     if not DDP_WORKAROUND:
