@@ -32,9 +32,14 @@ def disk_info_of_path(path):
 
     WIP - needs more work
 
+    CommandLine:
+        xdoctest -m geowatch.utils.util_hardware disk_info_of_path
+
     Example:
         >>> path = '.'
-        >>> disk_info_of_path(path)
+        >>> x = disk_info_of_path(path)
+        >>> import ubelt as ub
+        >>> print(ub.urepr(x))
 
     TODO:
         - [ ] Handle btrfs
@@ -57,6 +62,7 @@ def disk_info_of_path(path):
         https://stackoverflow.com/questions/38615464/how-to-get-device-name-on-which-a-file-is-located-from-its-path-in-c
     """
     import ubelt as ub
+    import os
     path = ub.Path(path)
     path = path.resolve()
     # Returns the lvm name: e.g.
@@ -71,6 +77,7 @@ def disk_info_of_path(path):
     source, filesystem = [p.strip() for p in parts]
 
     hwinfo = {
+        'path': os.fspath(path),
         'source': source,
         'filesystem': filesystem,
     }

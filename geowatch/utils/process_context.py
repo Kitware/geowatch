@@ -537,21 +537,19 @@ def main():
     print('obj = {}'.format(ub.urepr(obj, nl=3)))
 
 
-def _codecarbon_mwe():
-    from codecarbon import OfflineEmissionsTracker
-    self = OfflineEmissionsTracker(
-        country_iso_code='USA',
-        # cloud_provider='gcp',
-        # region='us-east-1',
-        # country_2letter_iso_code='us'
-    )
-    self.start()
-    self.flush()
-    emissions_data = self._prepare_emissions_data()
-
-    cloud = self._get_cloud_metadata()
-    df = self._data_source.get_cloud_emissions_data()
-
+# def _codecarbon_mwe():
+#     from codecarbon import OfflineEmissionsTracker
+#     self = OfflineEmissionsTracker(
+#         country_iso_code='USA',
+#         # cloud_provider='gcp',
+#         # region='us-east-1',
+#         # country_2letter_iso_code='us'
+#     )
+#     self.start()
+#     self.flush()
+#     emissions_data = self._prepare_emissions_data()
+#     cloud = self._get_cloud_metadata()
+#     df = self._data_source.get_cloud_emissions_data()
 
 
 if __name__ == '__main__':

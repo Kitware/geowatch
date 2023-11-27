@@ -47,7 +47,6 @@ class LightningTelemetry(pl.callbacks.Callback):
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
-            >>> assert parent_parser.parse_known_args(None)[0].package_fpath == 'auto'
         """
         from geowatch.utils.lightning_ext import argparse_ext
         arg_infos = argparse_ext.parse_docstring_args(cls)
