@@ -2,6 +2,7 @@
 
 stages:
 # TEMPLATES
+- lint
 - build
 - test
 - gpgsign
@@ -41,55 +42,6 @@ stages:
   <<: *common_template
   stage: test
   coverage: /TOTAL.+ ([0-9]{1,3}%)/
-.test_minimal-loose_template: &test_minimal-loose_template
-  <<: *common_test_template
-  before_script:
-  - |-
-    # Setup the correct version of python (which should be the same as this instance)
-    python --version  # Print out python version for debugging
-    export PYVER=$(python -c "import sys; print('{}{}'.format(*sys.version_info[0:2]))")
-    python -m pip install virtualenv
-    python -m virtualenv venv$PYVER
-    source venv$PYVER/bin/activate
-    pip install pip -U
-    pip install pip setuptools -U
-    pip install pygments
-    python --version  # Print out python version for debugging
-  script:
-  - export INSTALL_EXTRAS="tests,headless"
-  - echo "Finding the path to the wheel"
-  - ls dist || echo "dist does not exist"
-  - echo "Installing helpers"
-  - pip install setuptools>=0.8 setuptools_scm wheel build -U
-  - pip install tomli pkginfo
-  - export WHEEL_FPATH=$(python -c "import pathlib; 
-    print(str(sorted(pathlib.Path('dist').glob('geowatch*.whl'))[-1]).replace(chr(92),
-    chr(47)))")
-  - export MOD_VERSION=$(python -c "from pkginfo import Wheel; print(Wheel('$WHEEL_FPATH').version)")
-  - pip install -r requirements/gdal.txt
-  - pip install --prefer-binary "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
-  - echo "Install finished."
-  - echo "Creating test sandbox directory"
-  - export WORKSPACE_DNAME="sandbox"
-  - echo "WORKSPACE_DNAME=$WORKSPACE_DNAME"
-  - mkdir -p $WORKSPACE_DNAME
-  - echo "cd-ing into the workspace"
-  - cd $WORKSPACE_DNAME
-  - pwd
-  - ls -altr
-  - '# Get the path to the installed package and run the tests'
-  - export MOD_DPATH=$(python -c "import geowatch, os; print(os.path.dirname(geowatch.__file__))")
-  - |-
-    echo "
-    ---
-    MOD_DPATH = $MOD_DPATH
-    ---
-    running the pytest command inside the workspace
-    ---
-    "
-  - |-
-    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
-  - echo "pytest command finished, moving the coverage file to the repo root"
 .test_full-loose_template: &test_full-loose_template
   <<: *common_test_template
   before_script:
@@ -106,55 +58,6 @@ stages:
     python --version  # Print out python version for debugging
   script:
   - export INSTALL_EXTRAS="tests,optional,headless"
-  - echo "Finding the path to the wheel"
-  - ls dist || echo "dist does not exist"
-  - echo "Installing helpers"
-  - pip install setuptools>=0.8 setuptools_scm wheel build -U
-  - pip install tomli pkginfo
-  - export WHEEL_FPATH=$(python -c "import pathlib; 
-    print(str(sorted(pathlib.Path('dist').glob('geowatch*.whl'))[-1]).replace(chr(92),
-    chr(47)))")
-  - export MOD_VERSION=$(python -c "from pkginfo import Wheel; print(Wheel('$WHEEL_FPATH').version)")
-  - pip install -r requirements/gdal.txt
-  - pip install --prefer-binary "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
-  - echo "Install finished."
-  - echo "Creating test sandbox directory"
-  - export WORKSPACE_DNAME="sandbox"
-  - echo "WORKSPACE_DNAME=$WORKSPACE_DNAME"
-  - mkdir -p $WORKSPACE_DNAME
-  - echo "cd-ing into the workspace"
-  - cd $WORKSPACE_DNAME
-  - pwd
-  - ls -altr
-  - '# Get the path to the installed package and run the tests'
-  - export MOD_DPATH=$(python -c "import geowatch, os; print(os.path.dirname(geowatch.__file__))")
-  - |-
-    echo "
-    ---
-    MOD_DPATH = $MOD_DPATH
-    ---
-    running the pytest command inside the workspace
-    ---
-    "
-  - |-
-    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
-  - echo "pytest command finished, moving the coverage file to the repo root"
-.test_minimal-strict_template: &test_minimal-strict_template
-  <<: *common_test_template
-  before_script:
-  - |-
-    # Setup the correct version of python (which should be the same as this instance)
-    python --version  # Print out python version for debugging
-    export PYVER=$(python -c "import sys; print('{}{}'.format(*sys.version_info[0:2]))")
-    python -m pip install virtualenv
-    python -m virtualenv venv$PYVER
-    source venv$PYVER/bin/activate
-    pip install pip -U
-    pip install pip setuptools -U
-    pip install pygments
-    python --version  # Print out python version for debugging
-  script:
-  - export INSTALL_EXTRAS="tests-strict,runtime-strict,headless-strict"
   - echo "Finding the path to the wheel"
   - ls dist || echo "dist does not exist"
   - echo "Installing helpers"
@@ -240,18 +143,8 @@ stages:
 build/cp311-linux-x86_64:
   <<: *build_template
   image: python:3.11
-test/minimal-loose/cp311-linux-x86_64:
-  <<: *test_minimal-loose_template
-  image: python:3.11
-  needs:
-  - build/cp311-linux-x86_64
 test/full-loose/cp311-linux-x86_64:
   <<: *test_full-loose_template
-  image: python:3.11
-  needs:
-  - build/cp311-linux-x86_64
-test/minimal-strict/cp311-linux-x86_64:
-  <<: *test_minimal-strict_template
   image: python:3.11
   needs:
   - build/cp311-linux-x86_64
@@ -260,9 +153,17 @@ test/full-strict/cp311-linux-x86_64:
   image: python:3.11
   needs:
   - build/cp311-linux-x86_64
+lint:
+  <<: *common_template
+  image: python:3.11
+  stage: lint
+  script:
+  - pip install -r requirements/linting.txt
+  - ./run_linter.sh
+  allow_failure: true
 gpgsign/wheels:
   <<: *common_template
-  image: python:3.8
+  image: python:3.11
   stage: gpgsign
   artifacts:
     paths:
@@ -315,7 +216,7 @@ gpgsign/wheels:
   - ls dist
 deploy/wheels:
   <<: *common_template
-  image: python:3.8
+  image: python:3.11
   stage: deploy
   only:
     refs:
