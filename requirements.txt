@@ -1,6 +1,3 @@
-# Note: this really isn't "all", might want to change that.
-
--r requirements/development.txt
--r requirements/tests.txt
 -r requirements/runtime.txt
+-r requirements/tests.txt
 -r requirements/optional.txt

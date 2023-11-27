@@ -43,7 +43,7 @@ Notes:
 
         Click import project: (for github you can select, but gitlab you need to import manually)
             Set the Repository NAME: geowatch
-            Set the Repository URL: https://gitlab.kitware.com/smart/watch
+            Set the Repository URL: https://gitlab.kitware.com/computer-vision/geowatch
 
         For gitlab you also need to setup an integrations. Navigate to:
 
@@ -54,7 +54,7 @@ Notes:
 
         Then go to
 
-            https://gitlab.kitware.com/smart/watch/hooks
+            https://gitlab.kitware.com/computer-vision/geowatch/hooks
 
         and add the URL
 
@@ -110,8 +110,8 @@ def parse_version(fpath):
     return visitor.version
 
 project = 'geowatch'
-copyright = '2023, Jon Crall'
-author = 'Jon Crall'
+copyright = '2023, GEOWATCH developers'
+author = 'GEOWATCH developers'
 modname = 'geowatch'
 
 modpath = join(dirname(dirname(dirname(__file__))), 'geowatch', '__init__.py')
@@ -311,7 +311,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'geowatch.tex', 'geowatch Documentation',
-     'Jon Crall', 'manual'),
+     'GEOWATCH developers', 'manual'),
 ]
 
 

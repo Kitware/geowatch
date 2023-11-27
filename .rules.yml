@@ -9,9 +9,9 @@
           when: manual
         - if: '$CI_COMMIT_REF_PROTECTED == true'
           when: on_success
-        - if: '$CI_PROJECT_PATH == "smart/geowatch" && $CI_PIPELINE_SOURCE == "schedule"'
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch" && $CI_PIPELINE_SOURCE == "schedule"'
           when: on_success
-        - if: '$CI_PROJECT_PATH == "smart/geowatch"'
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch"'
           when: manual
         - when: never
 
@@ -19,9 +19,9 @@
     rules:
         - if: '$CI_MERGE_REQUEST_ID'
           when: on_success
-        - if: '$CI_PROJECT_PATH == "smart/geowatch" && $CI_PIPELINE_SOURCE == "schedule"'
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch" && $CI_PIPELINE_SOURCE == "schedule"'
           when: on_success
-        - if: '$CI_PROJECT_PATH == "smart/geowatch"'
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch"'
           when: delayed
           start_in: 5 minutes
         - when: never
@@ -30,6 +30,6 @@
     rules:
         - if: '$CI_MERGE_REQUEST_ID'
           when: on_success
-        - if: '$CI_PROJECT_PATH == "smart/geowatch"'
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch"'
           when: on_success
         - when: never

@@ -12,7 +12,8 @@ mod_name = "geowatch"
 repo_name = "geowatch"
 rel_mod_parent_dpath = "."
 os = [ "linux",]
-min_python = 3.9
+min_python = 3.10
+ci_cpython_versions = ['3.10', '3.11']
 url = 'https://gitlab.kitware.com/computer-vision/geowatch'
 
 [tool.xcookie.entry_points]

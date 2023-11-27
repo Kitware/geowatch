@@ -237,52 +237,6 @@ stages:
   - |-
     python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
   - echo "pytest command finished, moving the coverage file to the repo root"
-build/cp38-linux-x86_64:
-  <<: *build_template
-  image: python:3.8
-test/minimal-loose/cp38-linux-x86_64:
-  <<: *test_minimal-loose_template
-  image: python:3.8
-  needs:
-  - build/cp38-linux-x86_64
-test/full-loose/cp38-linux-x86_64:
-  <<: *test_full-loose_template
-  image: python:3.8
-  needs:
-  - build/cp38-linux-x86_64
-test/minimal-strict/cp38-linux-x86_64:
-  <<: *test_minimal-strict_template
-  image: python:3.8
-  needs:
-  - build/cp38-linux-x86_64
-test/full-strict/cp38-linux-x86_64:
-  <<: *test_full-strict_template
-  image: python:3.8
-  needs:
-  - build/cp38-linux-x86_64
-build/cp39-linux-x86_64:
-  <<: *build_template
-  image: python:3.9
-test/minimal-loose/cp39-linux-x86_64:
-  <<: *test_minimal-loose_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
-test/full-loose/cp39-linux-x86_64:
-  <<: *test_full-loose_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
-test/minimal-strict/cp39-linux-x86_64:
-  <<: *test_minimal-strict_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
-test/full-strict/cp39-linux-x86_64:
-  <<: *test_full-strict_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
 build/cp310-linux-x86_64:
   <<: *build_template
   image: python:3.10
@@ -329,29 +283,6 @@ test/full-strict/cp311-linux-x86_64:
   image: python:3.11
   needs:
   - build/cp311-linux-x86_64
-build/cp312-linux-x86_64:
-  <<: *build_template
-  image: python:3.12
-test/minimal-loose/cp312-linux-x86_64:
-  <<: *test_minimal-loose_template
-  image: python:3.12
-  needs:
-  - build/cp312-linux-x86_64
-test/full-loose/cp312-linux-x86_64:
-  <<: *test_full-loose_template
-  image: python:3.12
-  needs:
-  - build/cp312-linux-x86_64
-test/minimal-strict/cp312-linux-x86_64:
-  <<: *test_minimal-strict_template
-  image: python:3.12
-  needs:
-  - build/cp312-linux-x86_64
-test/full-strict/cp312-linux-x86_64:
-  <<: *test_full-strict_template
-  image: python:3.12
-  needs:
-  - build/cp312-linux-x86_64
 gpgsign/wheels:
   <<: *common_template
   image: python:3.8
@@ -369,15 +300,9 @@ gpgsign/wheels:
     - main
     - release
   needs:
-  - job: build/cp38-linux-x86_64
-    artifacts: true
-  - job: build/cp39-linux-x86_64
-    artifacts: true
   - job: build/cp310-linux-x86_64
     artifacts: true
   - job: build/cp311-linux-x86_64
-    artifacts: true
-  - job: build/cp312-linux-x86_64
     artifacts: true
   script:
   - ls dist
