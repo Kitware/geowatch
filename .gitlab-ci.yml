@@ -66,11 +66,16 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        #- aws
-        - smart
         - docker
         - linux-x86_64
         - build
+
+        # SMART CI Tags
+        #- aws
+        #- smart
+        
+        # POST-SMART CI Tags
+        - kitware-python-stack
 
 .test_pyenv_loose_template:
     &test_pyenv_loose_template
