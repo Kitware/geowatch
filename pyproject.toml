@@ -6,11 +6,14 @@ ignore_missing_imports = true
 
 [tool.xcookie]
 tags = [ "gitlab", "purepy", "kitware", "cv2", "gdal",]
+author = "GEOWATCH developers"
+author_email = "kitware@kitware.com"
 mod_name = "geowatch"
 repo_name = "geowatch"
 rel_mod_parent_dpath = "."
 os = [ "linux",]
-min_python = 3.8
+min_python = 3.9
+url = 'https://gitlab.kitware.com/computer-vision/geowatch'
 
 [tool.xcookie.entry_points]
 # the console_scripts entry point creates the xdoctest executable
