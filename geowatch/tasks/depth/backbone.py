@@ -2,8 +2,10 @@ import os
 
 import torch
 import torchvision
+import geowatch_tpl  # NOQA
+lydorn_utils = geowatch_tpl.import_submodule('lydorn_utils')
 
-from lydorn_utils import print_utils
+from lydorn_utils import print_utils  # NOQA
 
 
 def get_backbone(backbone_params):

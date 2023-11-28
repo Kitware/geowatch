@@ -270,7 +270,10 @@ if __name__ == '__main__':
             ],
             'geowatch.rc': [
                 'site-model.schema.json',
-                'region-model.schema.json'
+                'region-model.schema.json',
+                'job.schema.json',
+                # 'dem.xml' do we want to include this?
+                # 'egm96_15.gtx' do we want to include this?
             ],
         },
         packages=find_packages(include=[
