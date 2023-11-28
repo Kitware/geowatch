@@ -786,6 +786,7 @@ class PerceiverEncoder(nn.Module):
     https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:perceiver_pytorch)
         >>> from geowatch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
         >>> import torch
         >>> B, T, M, H, W, F = 1, 2, 3, 5, 8, 13
