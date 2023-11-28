@@ -27,9 +27,7 @@ space.
 The following table provides links to relevant resources for the SMART WATCH project:
 
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Public GEOWATCH Python Module                        | https://gitlab.kitware.com/computer-vision/geowatch/           |
-+----------------------------------------------------------+----------------------------------------------------------------+
-| The Internal SMART GEOWATCH Python Module                | https://gitlab.kitware.com/smart/watch/                        |
+| The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+

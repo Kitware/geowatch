@@ -236,6 +236,32 @@ for key in nameable_requirements:
 NAME = 'geowatch'
 
 if __name__ == '__main__':
+
+    # Hacks for finding tpl packages
+
+    included_tpl_dpaths = [
+        'geowatch_tpl/submodules_static/torchview',
+        'geowatch_tpl/submodules_static/segment-anything',
+        'geowatch_tpl/submodules_static/scale-mae',
+        'geowatch_tpl/submodules_static/loss-of-plasticity',
+        'geowatch_tpl/modules',
+    ]
+    tpl_packages = []
+    for tpl_dpath in included_tpl_dpaths:
+        result = find_packages(tpl_dpath)
+        tpl_packages.extend(
+            [tpl_dpath.replace('/', '.') + '.' + s for s in result]
+        )
+    packages = find_packages(include=[
+        'geowatch', 'geowatch.*',
+        # TPL
+        'geowatch_tpl',
+        'geowatch_tpl.*',
+        # Alias of the old module name to maintain backwards compatability
+        # while we transition.
+        'watch', 'watch.*',
+    ]) + tpl_packages
+
     setup(
         name=NAME,
         author="GEOWATCH developers",
@@ -276,13 +302,7 @@ if __name__ == '__main__':
                 # 'egm96_15.gtx' do we want to include this?
             ],
         },
-        packages=find_packages(include=[
-            'geowatch', 'geowatch.*',
-            'geowatch_tpl', 'geowatch_tpl.*',
-            # Alias of the old module name to maintain backwards compatability
-            # while we transition.
-            'watch', 'watch.*',
-        ]),
+        packages=packages,
         url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
         zip_safe=False,
