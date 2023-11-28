@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import albumentations as A
 import kwcoco
 import kwimage
 import kwarray
@@ -187,6 +186,7 @@ class GriddedDataset(torch.utils.data.Dataset):
                  input_space_scale='window',
                  output_space_scale='input',
                  include_debug_info=False):
+        import albumentations as A
         super().__init__()
 
         self.include_debug_info = include_debug_info

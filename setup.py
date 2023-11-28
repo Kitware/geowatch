@@ -268,7 +268,7 @@ if __name__ == '__main__':
             'geowatch.tasks.depth': [
                 'config.json'
             ],
-            'watch.rc': [
+            'geowatch.rc': [
                 'site-model.schema.json'
                 'region-model.schema.json'
             ],

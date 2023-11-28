@@ -89,11 +89,15 @@ class LightningTelemetry(pl.callbacks.Callback):
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         if trainer.global_rank != 0:
             return
-        if trainer.log_dir is None:
-            print('Trainer run without a log_dir, cannot save package')
-            return
         print('Training is complete, dumping telemetry')
         self._dump(trainer)
+
+    # Causes ddp hang
+    # def on_train_epoch_end(self, trainer, logs=None):
+    #     if trainer.global_rank != 0:
+    #         return
+    #     print('Training is complete, dumping telemetry')
+    #     self._dump(trainer)
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         if trainer.global_rank != 0:
@@ -103,6 +107,9 @@ class LightningTelemetry(pl.callbacks.Callback):
 
     def _dump(self, trainer):
         if trainer.global_rank != 0:
+            return
+        if trainer.log_dir is None:
+            print('Trainer run without a log_dir, cannot dump telemetry')
             return
         import json
         log_dpath = ub.Path(trainer.logger.log_dir)
