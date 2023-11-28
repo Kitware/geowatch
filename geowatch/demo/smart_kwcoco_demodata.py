@@ -537,7 +537,7 @@ def coerce_kwcoco(data='geowatch-msi', **kwargs):
         >>> coco_dset2 = geowatch.coerce_kwcoco(data='geowatch-msi-dates-geodata-gsize32')
         >>> assert 'date_captured' in coco_dset2.images().peek()
     """
-    if isinstance(data, str) and 'geowatch' in data.split('-') or 'watch' in data.split('-'):
+    if isinstance(data, str) and ('geowatch' in data.split('-') or 'watch' in data.split('-')):
         defaults = {
             'render': True,
             'num_videos': 4,

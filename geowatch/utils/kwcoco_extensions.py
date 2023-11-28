@@ -1746,9 +1746,11 @@ def transfer_geo_metadata(coco_dset, gid):
             if dst_ds is None:
                 raise exceptions.GeoMetadataNotFound('error handling gdal')
             ret = dst_ds.SetGeoTransform(aff_geo_transform)
-            assert ret == 0
+            if ret != 0:
+                raise AssertionError(f'failed to set SetGeoTransform on {fpath}')
             ret = dst_ds.SetSpatialRef(georef_crs)
-            assert ret == 0
+            if ret != 0:
+                raise AssertionError(f'failed to set SetSpatialRef on {fpath}')
             dst_ds.FlushCache()
             dst_ds = None
 
