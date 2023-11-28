@@ -269,7 +269,7 @@ if __name__ == '__main__':
                 'config.json'
             ],
             'geowatch.rc': [
-                'site-model.schema.json'
+                'site-model.schema.json',
                 'region-model.schema.json'
             ],
         },
