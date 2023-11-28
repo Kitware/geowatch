@@ -327,7 +327,9 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         >>> kwargs = {}
         >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=True)
     """
-    dpath = ub.Path.appdir('geowatch', 'demo_kwcoco_bundles').ensuredir()
+    dpath = kwargs.pop('dpath', None)
+    if dpath is None:
+        dpath = ub.Path.appdir('geowatch', 'demo_kwcoco_bundles').ensuredir()
 
     demo_kwargs = {
         'num_frames': num_frames,
