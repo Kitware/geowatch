@@ -60,28 +60,6 @@ class CocoSpectraConfig(scfg.DataConfig):
 
         'title': scfg.Value(None, help='Provide a title for the histogram figure'),
 
-        # Histogram modifiers
-        'kde': scfg.Value(True, help='if True compute a kernel density estimate to smooth the distribution'),
-        'cumulative': scfg.Value(False, help='If True, plot the cumulative counts as bins increase.'),
-
-        # 'bins': scfg.Value(256, help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
-        'bins': scfg.Value('auto', help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
-
-        'fill': scfg.Value(True, isflag=True, help='If True, fill in the space under the histogram.'),
-        'element': scfg.Value('step', help='Visual representation of the histogram statistic.', choices=['bars', 'step', 'poly']),
-        'multiple': scfg.Value('layer', choices=['layer', 'dodge', 'stack', 'fill']
-                               , help='Approach to resolving multiple elements when semantic mapping creates subsets.'),
-
-        'stat': scfg.Value('probability', choices={'count', 'frequency', 'density', 'probability'}, help=ub.paragraph(
-            '''
-            Aggregate statistic to compute in each bin.
-
-            - ``count`` shows the number of observations
-            - ``frequency`` shows the number of observations divided by the bin width
-            - ``density`` normalizes counts so that the area of the histogram is 1
-            - ``probability`` normalizes counts so that the sum of the bar heights is 1
-            ''')),
-
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
                 '''
@@ -122,6 +100,33 @@ class CocoSpectraConfig(scfg.DataConfig):
 
                 Requries the "jq" python library is installed.
                 ''')),
+
+
+        # Histogram modifiers
+        'kde': scfg.Value(True, group='histplot', help='if True compute a kernel density estimate to smooth the distribution'),
+        'cumulative': scfg.Value(False, group='histplot', help='If True, plot the cumulative counts as bins increase.'),
+
+        # 'bins': scfg.Value(256, help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
+        'bins': scfg.Value('auto', group='histplot', help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
+
+        'fill': scfg.Value(True, isflag=True, group='histplot', help='If True, fill in the space under the histogram.'),
+
+        'element': scfg.Value('step', help='Visual representation of the histogram statistic.', group='histplot', choices=['bars', 'step', 'poly']),
+
+        'multiple': scfg.Value('layer',
+                               choices=['layer', 'dodge', 'stack', 'fill'],
+                               group='histplot',
+                               help='Approach to resolving multiple elements when semantic mapping creates subsets.'),
+
+        'stat': scfg.Value('probability', choices={'count', 'frequency', 'density', 'probability'}, group='histplot', help=ub.paragraph(
+            '''
+            Aggregate statistic to compute in each bin.
+
+            - ``count`` shows the number of observations
+            - ``frequency`` shows the number of observations divided by the bin width
+            - ``density`` normalizes counts so that the area of the histogram is 1
+            - ``probability`` normalizes counts so that the sum of the bar heights is 1
+            ''')),
     }
 
 
@@ -611,6 +616,8 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)
     return intensity_stats
+
+
 
 
 @profile

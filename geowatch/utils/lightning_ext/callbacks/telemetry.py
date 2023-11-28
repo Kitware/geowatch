@@ -3,6 +3,7 @@ LightningTelemetry callback to interface with torch.package
 """
 import pytorch_lightning as pl
 import ubelt as ub
+# from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 
 class LightningTelemetry(pl.callbacks.Callback):
@@ -66,10 +67,11 @@ class LightningTelemetry(pl.callbacks.Callback):
         Returns:
             None
         """
-        self._after_initialization(trainer)
+        if trainer.is_global_zero:
+            self._after_initialization(trainer)
 
     def _after_initialization(self, trainer):
-        if trainer.global_rank == 0:
+        if trainer.is_global_zero:
             print('initialize process context')
             root_dir = ub.Path(trainer.default_root_dir)
             print('root_dir = {!r}'.format(root_dir))
@@ -81,15 +83,14 @@ class LightningTelemetry(pl.callbacks.Callback):
         TODO:
             - [ ] Write out the uninitialized topology
         """
-        if trainer.global_rank != 0:
+        if not trainer.is_global_zero:
             return
         self.context.start()
         self._dump(trainer)
 
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        if trainer.global_rank != 0:
+        if not trainer.is_global_zero:
             return
-        print('Training is complete, dumping telemetry')
         self._dump(trainer)
 
     # Causes ddp hang
@@ -106,7 +107,7 @@ class LightningTelemetry(pl.callbacks.Callback):
         self._dump(trainer)
 
     def _dump(self, trainer):
-        if trainer.global_rank != 0:
+        if not trainer.is_global_zero:
             return
         if trainer.log_dir is None:
             print('Trainer run without a log_dir, cannot dump telemetry')

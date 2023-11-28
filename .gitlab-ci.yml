@@ -31,6 +31,7 @@ stages:
   stage: build
   before_script:
   - 'python -V  # Print out python version for debugging'
+  - df -h
   script:
   - python -m pip install setuptools>=0.8 wheel build twine
   - python -m build --wheel --outdir dist
@@ -158,6 +159,7 @@ lint:
   image: python:3.11
   stage: lint
   script:
+  - df -h
   - pip install -r requirements/linting.txt
   - ./run_linter.sh
   allow_failure: true
