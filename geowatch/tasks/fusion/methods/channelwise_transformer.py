@@ -270,9 +270,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
         >>>                              dataset_stats=dataset_stats,
-        >>>                              classes=datamodule.classes, decoder='segmenter',
+        >>>                              classes=datamodule.classes,
+        >>>                              decoder='segmenter',
         >>>                              change_loss='dicefocal',
-        >>>                              attention_impl='performer')
+        >>>                              #attention_impl='performer'
+        >>>                              attention_impl='exact'
+        >>>                              )
         >>> device = nh.XPU.coerce('cpu').main_device
         >>> self = self.to(device)
         >>> # Run forward pass
