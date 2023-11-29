@@ -1045,6 +1045,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         Generic forward step used for test / train / validation
 
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.forward_step
+
         Example:
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from geowatch.tasks.fusion import methods
@@ -1052,7 +1055,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> import geowatch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-geowatch',
-            >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
+            >>>     num_workers=0, chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
             >>>     channels='auto',
             >>> )

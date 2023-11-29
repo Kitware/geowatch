@@ -12,7 +12,7 @@ def test_heterogeneous_with_split_attention_backbone():
     from geowatch.tasks.fusion import datamodules
     print('(STEP 0): SETUP THE DATA MODULE')
     datamodule = datamodules.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes-geowatch', num_workers=4, channels='auto')
+        train_dataset='special:vidshapes-geowatch', num_workers=0, channels='auto')
     datamodule.setup('fit')
     dataset = datamodule.torch_datasets['train']
     print('(STEP 1): ESTIMATE DATASET STATS')
