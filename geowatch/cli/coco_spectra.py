@@ -618,8 +618,6 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     return intensity_stats
 
 
-
-
 @profile
 def plot_intensity_histograms(full_df, config, ax=None):
     """
