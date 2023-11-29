@@ -148,11 +148,27 @@ class SmartTrainer(pl.Trainer):
                 --window_overlap 0 \
                 --clear_annots=False \
                 --test_with_annot_info=True \
-                --use_centered_positives=False
-                --use_grid_positives=True \
+                --use_centered_positives=True \
+                --use_grid_positives=False \
                 --use_grid_negatives=False \
                 --draw_batches=True \
-                --device cpu
+                --devices cpu
+
+            ### --- Train Batch Prediction --- ###
+
+            # Predict on the validation set
+            python -m geowatch.tasks.fusion.predict \
+                --package_fpath $PACKAGE_FPATH \
+                --test_dataset {train_coco_path} \
+                --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                --window_overlap 0 \
+                --clear_annots=False \
+                --test_with_annot_info=True \
+                --use_centered_positives=True \
+                --use_grid_positives=False \
+                --use_grid_negatives=False \
+                --draw_batches=True \
+                --devices cpu
 
             ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
 
@@ -163,7 +179,7 @@ class SmartTrainer(pl.Trainer):
                 --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                 --window_overlap 0 \
                 --clear_annots=False \
-                --device cpu
+                --devices cpu
 
             # Visualize vali predictions
             geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
@@ -177,7 +193,7 @@ class SmartTrainer(pl.Trainer):
                 --test_dataset {train_coco_path} \
                 --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                 --clear_annots=False \
-                --device cpu
+                --devices cpu
 
             # Visualize train predictions
             geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart

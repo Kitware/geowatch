@@ -730,6 +730,10 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
     pred_dpath = ub.Path(result_dataset.fpath).parent
     rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
 
+    DRAW_BATCHES = config.draw_batches
+    if DRAW_BATCHES:
+        viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
+
     config_resolved = _jsonify(config.asdict())
     traintime_params = _jsonify(config.traintime_params)
 
@@ -847,14 +851,11 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                     raise
                 continue
 
-            DRAW_BATCHES = config.draw_batches
             if DRAW_BATCHES:
-                viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
+                fpath = viz_batch_dpath / f'batch_{batch_idx:04d}.jpg'
                 canvas = datamodule.draw_batch(batch, stage='test',
                                                outputs=outputs,
                                                classes=model.classes)
-                fname = f'batch_{batch_idx:04d}.jpg'
-                fpath = viz_batch_dpath / fname
                 kwimage.imwrite(fpath, canvas)
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
