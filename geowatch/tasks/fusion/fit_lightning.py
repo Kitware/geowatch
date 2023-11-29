@@ -147,6 +147,10 @@ class SmartTrainer(pl.Trainer):
                 --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
                 --window_overlap 0 \
                 --clear_annots=False \
+                --test_with_annot_info=True \
+                --use_centered_positives=False
+                --use_grid_positives=True \
+                --use_grid_negatives=False \
                 --draw_batches=True \
                 --device cpu
 

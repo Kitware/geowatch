@@ -58,6 +58,8 @@ class DataModuleConfigMixin(scfg.DataConfig):
     # Handle hacky overloadable stuff
     # Set the default of all of thse to be "auto", but remember the original
     # value in a custom variable
+    # TODO: change name from overloadable to inferrable. The idea is that we
+    # can infer these from the given model.
     __DATAMODULE_DEFAULTS__ = {}
     __OVERLOADABLE_DATAMODULE_KEYS__ = [
         'channels',
@@ -109,6 +111,11 @@ class PredictConfig(DataModuleConfigMixin):
     draw_batches = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         if True, then draw batch visualizations as they are predicted.
+
+        In this case it is also a good idea to set --test_with_annot_info=True
+        which allows the datamodule to use annotations in validation sampling.
+        This is a workaround, and ideally we can come up with a way to avoid
+        requiring the user to know about this.
         '''))
 
     track_emissions = scfg.Value(True, isflag=True, help=ub.paragraph(

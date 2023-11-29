@@ -346,7 +346,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             quicker.
             '''))
 
-    failed_sample_policy = scfg.Value('ignore', choices=['ignore', 'raise', 'warn'], group=SAMPLE_GROUP, help=ub.paragraph(
+    failed_sample_policy = scfg.Value('warn', choices=['ignore', 'raise', 'warn'], group=SAMPLE_GROUP, help=ub.paragraph(
         '''
         What to do if sampling fails, either ignore or raise an error
         '''))
