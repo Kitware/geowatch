@@ -253,10 +253,10 @@ reproduce and distribute reprints for governmental purposes notwithstanding any
 copyright annotation therein
 
 
-.. |main-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/main/pipeline.svg
-   :target: https://gitlab.kitware.com/smart/watch/-/pipelines/main/latest
-.. |main-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
-   :target: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
+.. |main-pipeline| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/pipeline.svg
+   :target: https://gitlab.kitware.com/computer-vision/geowatch/-/pipelines/main/latest
+.. |main-coverage| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/coverage.svg
+   :target: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/coverage.svg
 .. |Pypi| image:: https://img.shields.io/pypi/v/geowatch.svg
    :target: https://pypi.python.org/pypi/geowatch
 .. |Downloads| image:: https://img.shields.io/pypi/dm/geowatch.svg
