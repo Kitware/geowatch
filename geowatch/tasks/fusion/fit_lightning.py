@@ -50,114 +50,7 @@ class SmartTrainer(pl.Trainer):
         # Is that so hard to do?
         print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
-            import rich
-            dpath = ub.Path(self.logger.log_dir)
-            rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
-
-            start_tensorboard_fpath = dpath / 'start_tensorboard.sh'
-            start_tensorboard_fpath.write_text(ub.codeblock(
-                f'''
-                tensorboard --logdir {dpath}
-                '''))
-            start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
-
-            draw_tensorboard = dpath / 'draw_tensorboard.sh'
-            draw_tensorboard.write_text(ub.codeblock(
-                fr'''
-                #!/bin/bash
-                WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
-                    {dpath}
-                '''
-            ))
-
-            predict_vali = dpath / 'predict_vali.sh'
-
-            try:
-                vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
-            except Exception:
-                vali_coco_fpath = None
-
-            try:
-                train_coco_path = self.datamodule.train_dataset.coco_dset.fpath
-            except Exception:
-                train_coco_path = None
-
-            predict_vali.write_text(ub.codeblock(
-                fr'''
-                #!/bin/bash
-                TRAIN_DPATH="{dpath}"
-                echo $TRAIN_DPATH
-
-                ### --- Choose Checkpoint --- ###
-
-                # Find a checkpoint to evaluate
-                CHECKPOINT_FPATH=$(python -c "if 1:
-                    import pathlib
-                    train_dpath = pathlib.Path('$TRAIN_DPATH')
-                    found = sorted((train_dpath / 'checkpoints').glob('*.ckpt'))
-                    found = [f for f in found if 'last.ckpt' not in str(f)]
-                    print(found[-1])
-                    ")
-                echo $CHECKPOINT_FPATH
-
-                ### --- Repackage Checkpoint --- ###
-
-                # Convert it into a package, then get the name of that
-                geowatch repackage $CHECKPOINT_FPATH
-
-                PACKAGE_FPATH=$(python -c "if 1:
-                    import pathlib
-                    p = pathlib.Path('$CHECKPOINT_FPATH')
-                    found = list(p.parent.glob(p.stem + '*.pt'))
-                    print(found[-1])
-                ")
-                echo $PACKAGE_FPATH
-
-                PACKAGE_NAME=$(python -c "if 1:
-                    import pathlib
-                    p = pathlib.Path('$PACKAGE_FPATH')
-                    print(p.stem.replace('.ckpt', ''))
-                ")
-                echo $PACKAGE_NAME
-
-                ### --- Validation Prediction --- ###
-
-                # Predict on the validation set
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
-                    --test_dataset {vali_coco_fpath} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                    --window_overlap 0 \
-                    --clear_annots=False \
-                    --draw_batches=True \
-                    --device cpu
-
-                # Visualize vali predictions
-                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
-
-                ### --- Training Prediction --- ###
-
-                # Predict on the training set
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
-                    --window_overlap 0 \
-                    --test_dataset {train_coco_path} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                    --clear_annots=False \
-                    --draw_batches=True \
-                    --device cpu
-
-                # Visualize train predictions
-                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
-                '''
-            ))
-
-            try:
-                new_chmod(start_tensorboard_fpath, 'u+x')
-                new_chmod(draw_tensorboard, 'u+x')
-                new_chmod(predict_vali, 'u+x')
-            except Exception as ex:
-                print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
+            self._write_inspect_helper_scripts()
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
@@ -166,6 +59,134 @@ class SmartTrainer(pl.Trainer):
             self.datamodule._notify_about_tasks(model=self.model)
 
         super()._run_stage(*args, **kwargs)
+
+    def _write_inspect_helper_scripts(self):
+        """
+        Write helper scripts to the main training log dir that the user can run
+        to inspect the status of training. This helps workaround the
+        ddp-workaround because we can run tasks that caused hangs indepenently
+        of the main train script.
+        """
+        import rich
+        dpath = ub.Path(self.logger.log_dir)
+        rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+
+        start_tensorboard_fpath = dpath / 'start_tensorboard.sh'
+        start_tensorboard_fpath.write_text(ub.codeblock(
+            f'''
+            tensorboard --logdir {dpath}
+            '''))
+        start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
+
+        draw_tensorboard = dpath / 'draw_tensorboard.sh'
+        draw_tensorboard.write_text(ub.codeblock(
+            fr'''
+            #!/bin/bash
+            WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+                {dpath}
+            '''
+        ))
+
+        predict_vali = dpath / 'predict_vali.sh'
+
+        try:
+            vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
+        except Exception:
+            vali_coco_fpath = None
+
+        try:
+            train_coco_path = self.datamodule.train_dataset.coco_dset.fpath
+        except Exception:
+            train_coco_path = None
+
+        predict_vali.write_text(ub.codeblock(
+            fr'''
+            #!/bin/bash
+            TRAIN_DPATH="{dpath}"
+            echo $TRAIN_DPATH
+
+            ### --- Choose Checkpoint --- ###
+
+            # Find a checkpoint to evaluate
+            # TODO: should add a geowatch helper for this
+            CHECKPOINT_FPATH=$(python -c "if 1:
+                import pathlib
+                train_dpath = pathlib.Path('$TRAIN_DPATH')
+                found = sorted((train_dpath / 'checkpoints').glob('*.ckpt'))
+                found = [f for f in found if 'last.ckpt' not in str(f)]
+                print(found[-1])
+                ")
+            echo $CHECKPOINT_FPATH
+
+            ### --- Repackage Checkpoint --- ###
+
+            # Convert it into a package, then get the name of that
+            geowatch repackage $CHECKPOINT_FPATH
+
+            PACKAGE_FPATH=$(python -c "if 1:
+                import pathlib
+                p = pathlib.Path('$CHECKPOINT_FPATH')
+                found = list(p.parent.glob(p.stem + '*.pt'))
+                print(found[-1])
+            ")
+            echo $PACKAGE_FPATH
+
+            PACKAGE_NAME=$(python -c "if 1:
+                import pathlib
+                p = pathlib.Path('$PACKAGE_FPATH')
+                print(p.stem.replace('.ckpt', ''))
+            ")
+            echo $PACKAGE_NAME
+
+            ### --- Validation Batch Prediction --- ###
+
+            # Predict on the validation set
+            python -m geowatch.tasks.fusion.predict \
+                --package_fpath $PACKAGE_FPATH \
+                --test_dataset {vali_coco_fpath} \
+                --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                --window_overlap 0 \
+                --clear_annots=False \
+                --draw_batches=True \
+                --device cpu
+
+            ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
+
+            # Predict on the validation set
+            python -m geowatch.tasks.fusion.predict \
+                --package_fpath $PACKAGE_FPATH \
+                --test_dataset {vali_coco_fpath} \
+                --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                --window_overlap 0 \
+                --clear_annots=False \
+                --device cpu
+
+            # Visualize vali predictions
+            geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+
+            ### --- Train Full-Image Prediction (best run on a GPU) --- ###
+
+            # Predict on the training set
+            python -m geowatch.tasks.fusion.predict \
+                --package_fpath $PACKAGE_FPATH \
+                --window_overlap 0 \
+                --test_dataset {train_coco_path} \
+                --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                --clear_annots=False \
+                --device cpu
+
+            # Visualize train predictions
+            geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+            '''
+        ))
+
+        try:
+            from geowatch.utils.util_chmod import new_chmod
+            new_chmod(start_tensorboard_fpath, 'u+x')
+            new_chmod(draw_tensorboard, 'u+x')
+            new_chmod(predict_vali, 'u+x')
+        except Exception as ex:
+            print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 
 
 class TorchGlobals(pl.callbacks.Callback):
@@ -595,90 +616,6 @@ def main(config=None):
     """
     cli = make_cli(config)
     return cli
-
-
-def parse_perms(code):
-    """
-    Ignore:
-        [ugoa…][-+=]perms…[,…]
-        from geowatch.tasks.fusion.fit_lightning import *  # NOQA
-        print(parse_perms('ugo+rw,+r,g=rwx'))
-        print(parse_perms('o+x'))
-        print(parse_perms('u-x'))
-        print(parse_perms('x'))
-    """
-    import re
-    pat = re.compile(r'([\+\-\=])')
-    parts = code.split(',')
-    actions = []
-    for part in parts:
-        ab = pat.split(part)
-        if len(ab) == 3:
-            targets, op, perms = ab
-        elif len(ab) == 2:
-            op, perms = ab
-            assert set('+-=') & set(op)
-            targets = 'a'
-        elif len(ab) == 1:
-            perms = ab[0]
-            op = '+'
-            targets = 'u'
-        else:
-            raise Exception
-        if targets == '' or targets == 'a':
-            targets = 'ugo'
-        actions.append((targets, op, perms))
-    return actions
-
-
-def new_chmod(path, code):
-    """
-    dpath = ub.Path.appdir('util/chmod/test').ensuredir()
-    path = (dpath / 'file').touch()
-    code = 'g+x,g+r'
-    new_chmod(path, code)
-    import stat
-    stat.filemode(path.stat().st_mode)
-    """
-    import stat
-    actions = parse_perms(code)
-    lut = {
-        # suid = stat.S_ISUID
-        # sgid = stat.S_ISGID
-        # sticky = stat.S_ISVTX
-        'ur' : stat.S_IRUSR,
-        'uw' : stat.S_IWUSR,
-        'ux' : stat.S_IXUSR,
-
-        'gr' : stat.S_IRGRP,
-        'gw' : stat.S_IWGRP,
-        'gx' : stat.S_IXGRP,
-
-        'or' : stat.S_IROTH,
-        'ow' : stat.S_IWOTH,
-        'ox' : stat.S_IXOTH,
-    }
-
-    def make_eq(new_val):
-        def _close(current):
-            return new_val
-        return _close
-
-    new_mode = path.stat().st_mode
-    for action in actions:
-        targets, op, perms = action
-        for target, perm in zip(targets, perms):
-            key = target + perm
-            val = lut[key]
-            if op == '+':
-                new_mode |= val
-            elif op == '-':
-                new_mode &= (~val)
-            elif op == '=':
-                raise NotImplementedError
-            else:
-                raise AssertionError
-    path.chmod(new_mode)
 
 
 if __name__ == "__main__":
