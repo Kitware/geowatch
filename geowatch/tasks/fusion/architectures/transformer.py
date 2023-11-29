@@ -86,6 +86,58 @@ class ResidualAttentionSequential(ResidualSequential):
         return x + h
 
 
+def assert_allclose(a, b):
+    """
+    TODO: integrate with :func:`kwcoco.coco_sql_dataset.assert_dsets_allclose`.
+
+    Add to kwarray
+
+    Ignore:
+        >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> import pytest
+        >>> a = np.random.rand(1, 2, 3)
+        >>> b = a + 0
+        >>> assert_allclose(a, b)
+        >>> b = np.random.rand(1, 2, 3)
+        >>> with pytest.raises(AssertionError):
+        >>>     assert_allclose(a, b)
+        >>> b = a.copy()
+        >>> b.ravel()[0] += 1
+        >>> with pytest.raises(AssertionError):
+        >>>     assert_allclose(a, b)
+    """
+    a_shape = a.shape
+    b_shape = b.shape
+    if len(b_shape) != len(a_shape):
+        raise AssertionError(f'len(a.shape:={a_shape}) != len(b.shape:={b.shape})')
+    if b_shape != a_shape:
+        raise AssertionError(f'a.shape:={a_shape} != b.shape:={b.shape}')
+    import kwarray
+    import numpy as np
+    a = kwarray.ArrayAPI.numpy(a)
+    b = kwarray.ArrayAPI.numpy(b)
+    flag = np.allclose(a, b)
+    if flag:
+        ...
+    else:
+        impl = kwarray.ArrayAPI.coerce(a)
+        flags = np.isclose(a, b)
+        num_close = flags.sum()
+        num_total = impl.numel(flags)
+        num_not_close = num_total - num_close
+        a_stats = kwarray.stats_dict(a)
+        b_stats = kwarray.stats_dict(b)
+        msg = ub.codeblock(
+            f'''
+            Failed closeness check
+
+            Found not close entries: {num_not_close} / {num_total}
+            a_stats = {ub.urepr(a_stats, nl=0, precision=4)}
+            b_stats = {ub.urepr(b_stats, nl=0, precision=4)}
+            ''')
+        raise AssertionError(msg)
+
+
 class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     """
     Inherits from :class:`torch.nn.MultiheadAttention`
@@ -103,6 +155,9 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         batch_first: If ``True``, then the input and output tensors are provided
             as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
 
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.architectures.transformer MultiheadSelfAttention
+
     Example:
         >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MultiheadSelfAttention(4, 1).eval()
@@ -113,9 +168,9 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         >>> y0 = self.forward(x[:, 0:1, :])
         >>> y1 = self.forward(x[:, 1:2, :])
         >>> y2 = self.forward(x[:, 2:3, :])
-        >>> assert torch.allclose(y[:, 0:1, :], y0)
-        >>> assert torch.allclose(y[:, 1:2, :], y1)
-        >>> assert torch.allclose(y[:, 2:3, :], y2)
+        >>> assert_allclose(y[:, 0:1, :], y0)
+        >>> assert_allclose(y[:, 1:2, :], y1)
+        >>> assert_allclose(y[:, 2:3, :], y2)
 
         >>> key_padding_mask = torch.rand(B, S) > 0.5
         >>> masked_result = self.forward(x, key_padding_mask=key_padding_mask)
