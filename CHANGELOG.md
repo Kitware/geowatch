@@ -6,15 +6,30 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.13.0 - Released 2023-12-xx
 
+
+### Added
+
+* Experimental Lightning Telemetry callback
+
+
 ### Changed
 
-* The code has moved from the "watch" module to the "geowatch" module.
+* The code has moved from the "watch" module to the "geowatch" module. This has
+  the potential to be a breaking change, but transition should be reasonably
+  smooth. A dummy "watch" model is still exposed, but will be removed in the
+  future.
+
+* Can now set dpath in demo data
+
+* Moved CI dashboard to public repo
 
 ### Fixed
 
 * Fixed issue in dataloader where centered positives requested the top-right corners, and not the actual centers.
 
 * Fixed finish-install issue not working due to eager imports
+
+* Fixed TPL packaging in the pypi wheel 
 
 
 ## Version 0.12.1 - Released 2023-11-21
