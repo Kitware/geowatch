@@ -8,7 +8,7 @@ Notes:
 
     pip install sphinx sphinx-autobuild sphinx_rtd_theme sphinxcontrib-napoleon
 
-    cd ~/code/watch
+    cd ~/code/geowatch
     mkdir -p docs
     cd docs
 
@@ -16,8 +16,8 @@ Notes:
 
     # need to edit the conf.py
 
-    cd ~/code/watch/docs
-    sphinx-apidoc --private -f -o ~/code/watch/docs/source ~/code/watch/geowatch --separate
+    cd ~/code/geowatch/docs
+    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source ~/code/geowatch/geowatch --separate
     make html
 
     git add source/*.rst
