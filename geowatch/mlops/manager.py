@@ -536,7 +536,7 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
-        from geowatch.utils import util_pattern
+        from kwutil import util_pattern
         default = {'ckpt_path': None, 'spkg_fpath': None}
         _id_to_row = ub.ddict(default.copy)
 

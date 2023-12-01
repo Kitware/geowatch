@@ -8,7 +8,7 @@ Notes:
 
     pip install sphinx sphinx-autobuild sphinx_rtd_theme sphinxcontrib-napoleon
 
-    cd ~/code/watch
+    cd ~/code/geowatch
     mkdir -p docs
     cd docs
 
@@ -16,8 +16,8 @@ Notes:
 
     # need to edit the conf.py
 
-    cd ~/code/watch/docs
-    sphinx-apidoc --private -f -o ~/code/watch/docs/source ~/code/watch/geowatch --separate
+    cd ~/code/geowatch/docs
+    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source ~/code/geowatch/geowatch --separate
     make html
 
     git add source/*.rst
@@ -110,8 +110,8 @@ def parse_version(fpath):
     return visitor.version
 
 project = 'geowatch'
-copyright = '2023, GEOWATCH developers'
-author = 'GEOWATCH developers'
+copyright = '2023, GEOWATCH developers Kitware Inc. Jon Crall'
+author = 'GEOWATCH developers Kitware Inc. Jon Crall'
 modname = 'geowatch'
 
 modpath = join(dirname(dirname(dirname(__file__))), 'geowatch', '__init__.py')
@@ -311,7 +311,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'geowatch.tex', 'geowatch Documentation',
-     'GEOWATCH developers', 'manual'),
+     'GEOWATCH developers Kitware Inc. Jon Crall', 'manual'),
 ]
 
 
@@ -560,7 +560,7 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 0
+        render_doc_images = 1
         if render_doc_images:
             # DEVELOPING
             if any('REQUIRES(--show)' in line for line in lines):

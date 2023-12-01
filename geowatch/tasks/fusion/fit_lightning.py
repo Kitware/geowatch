@@ -263,7 +263,7 @@ class WeightInitializer(pl.callbacks.Callback):
         self._did_once = True
         if self.init != 'noop':
             from geowatch.tasks.fusion.fit import coerce_initializer
-            from geowatch.utils import util_pattern
+            from kwutil import util_pattern
             initializer = coerce_initializer(self.init)
 
             model = pl_module

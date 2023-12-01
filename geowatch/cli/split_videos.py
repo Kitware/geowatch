@@ -47,7 +47,7 @@ def main(cmdline=1, **kwargs):
             str(data_dvc_dpath / 'Drop4-BAS/data_train.kwcoco.json'),
             str(data_dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'),
         ]
-        from geowatch.utils import util_pattern
+        from kwutil import util_pattern
         coco_fpaths = list(util_pattern.MultiPattern.coerce(list(map(str, src_fpath))) .paths())
         print(f'coco_fpaths={coco_fpaths}')
         cmdline = 0
@@ -55,8 +55,8 @@ def main(cmdline=1, **kwargs):
     """
     import kwcoco
     import ubelt as ub
-    from geowatch.utils import util_pattern
-    from geowatch.utils import util_parallel
+    from kwutil import util_pattern
+    from kwutil import util_parallel
     config = SplitVideoConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(config, nl=1)))
 

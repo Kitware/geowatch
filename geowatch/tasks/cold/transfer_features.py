@@ -117,7 +117,7 @@ def transfer_features_main(cmdline=1, **kwargs):
 
     from geowatch.cli.reproject_annotations import keyframe_interpolate
     from geowatch.utils import process_context
-    from geowatch.utils import util_json
+    from kwutil import util_json
 
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)

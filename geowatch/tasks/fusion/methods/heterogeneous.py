@@ -436,7 +436,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     )
 
                     from geowatch.tasks.fusion.fit import coerce_initializer
-                    from geowatch.utils import util_pattern
+                    from kwutil import util_pattern
                     initializer = coerce_initializer(str(ckpt_fpath))
                     initializer.forward(model)
 
@@ -475,7 +475,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     )
 
                     from geowatch.tasks.fusion.fit import coerce_initializer
-                    from geowatch.utils import util_pattern
+                    from kwutil import util_pattern
                     initializer = coerce_initializer(str(pretrained_fpath))
                     initializer.forward(model)
 

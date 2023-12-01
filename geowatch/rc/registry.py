@@ -215,3 +215,19 @@ def dem_path(cache_dir=None, overwrite=False):
                                                  str(cache_dir.absolute())))
 
     return cached_pth
+
+
+def requirement_path(fname):
+    """
+
+    CommandLine:
+        xdoctest -m geowatch.rc.registry requirement_path
+
+    Example:
+        >>> from geowatch.rc.registry import requirement_path
+        >>> fname = 'runtime.txt'
+        >>> requirement_path(fname)
+    """
+    with importlib_resources.path('geowatch.rc.requirements', f'{fname}') as p:
+        orig_pth = ub.Path(p)
+        return orig_pth

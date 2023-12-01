@@ -136,7 +136,7 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     from geowatch.utils import process_context
-    from geowatch.utils import util_json
+    from kwutil import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
 

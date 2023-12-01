@@ -300,7 +300,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
-        from geowatch.utils.util_json import debug_json_unserializable
+        from kwutil.util_json import debug_json_unserializable
         debug_json_unserializable(sub_dset.dataset)
 
     return sub_dset

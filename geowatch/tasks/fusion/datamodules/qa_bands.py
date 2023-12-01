@@ -9,7 +9,7 @@ import functools
 import operator
 import numpy as np
 import math
-from geowatch.utils import util_pattern
+from kwutil import util_pattern
 
 
 def _dump_qa_debug_vid():
