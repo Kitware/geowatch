@@ -122,7 +122,7 @@ class TrackFunction:
         import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
-            from geowatch.utils.util_json import debug_json_unserializable
+            from kwutil.util_json import debug_json_unserializable
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(coco_dset.dataset,

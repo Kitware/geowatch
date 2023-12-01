@@ -149,7 +149,7 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
         out_node_key = 'bas_poly_eval.eval_fpath'
     """
     import json
-    from geowatch.utils import util_json
+    from kwutil import util_json
     import safer
     fpath = ub.Path(fpath)
 
