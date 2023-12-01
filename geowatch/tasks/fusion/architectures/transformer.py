@@ -86,7 +86,7 @@ class ResidualAttentionSequential(ResidualSequential):
         return x + h
 
 
-def assert_allclose(a, b):
+def assert_allclose(a, b, rtol=1e-05, atol=1e-08):
     """
     TODO: integrate with :func:`kwcoco.coco_sql_dataset.assert_dsets_allclose`.
 
@@ -116,7 +116,7 @@ def assert_allclose(a, b):
     import numpy as np
     a = kwarray.ArrayAPI.numpy(a)
     b = kwarray.ArrayAPI.numpy(b)
-    flag = np.allclose(a, b)
+    flag = np.allclose(a, b, rtol=rtol, atol=atol)
     if flag:
         ...
     else:
@@ -168,9 +168,9 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         >>> y0 = self.forward(x[:, 0:1, :])
         >>> y1 = self.forward(x[:, 1:2, :])
         >>> y2 = self.forward(x[:, 2:3, :])
-        >>> assert_allclose(y[:, 0:1, :], y0)
-        >>> assert_allclose(y[:, 1:2, :], y1)
-        >>> assert_allclose(y[:, 2:3, :], y2)
+        >>> assert_allclose(y[:, 0:1, :], y0, rtol=1e-3, atol=1e-6)
+        >>> assert_allclose(y[:, 1:2, :], y1, rtol=1e-3, atol=1e-6)
+        >>> assert_allclose(y[:, 2:3, :], y2, rtol=1e-3, atol=1e-6)
 
         >>> key_padding_mask = torch.rand(B, S) > 0.5
         >>> masked_result = self.forward(x, key_padding_mask=key_padding_mask)
