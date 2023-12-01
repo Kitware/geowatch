@@ -550,7 +550,7 @@ def glob_templated_path(template):
         glob_templated_path(template)
     """
     import parse
-    from geowatch.utils import util_pattern
+    from kwutil import util_pattern
     parser = parse.Parser(str(template))
     patterns = {n: '*' for n in parser.named_fields}
     pat = os.fspath(template).format(**patterns)

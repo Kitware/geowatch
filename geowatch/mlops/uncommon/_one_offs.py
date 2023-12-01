@@ -19,7 +19,7 @@ def __oneoff():
     for src_t, dst_t in self.legacy_versioned_templates:
         src_p = src_t.format(**self.patterns)
         dst_t.format(**self.patterns)
-        from geowatch.utils import util_pattern
+        from kwutil import util_pattern
         src_paths = list(util_pattern.Pattern.coerce(src_p).paths())
         import parse
         for path in src_paths:

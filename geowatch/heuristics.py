@@ -933,9 +933,9 @@ def extract_region_id(fname):
         >>> fname = 'foobar_KR_R001_otherstuff'
         >>> extract_region_id(fname)
     """
-    import geowatch
+    import kwutil
     # Find a region pattern
-    pat = geowatch.utils.util_pattern.Pattern.coerce(r'([A-Z]+_[A-Z]\d+)', 'regex')
+    pat = kwutil.util_pattern.Pattern.coerce(r'([A-Z]+_[A-Z]\d+)', 'regex')
     found = pat.search(fname)
     name = found.groups()[0]
     return name

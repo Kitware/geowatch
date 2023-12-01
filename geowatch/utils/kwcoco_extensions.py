@@ -179,9 +179,9 @@ def populate_watch_fields(
     # Modify videos to include cleared status
     if 1:
         from geowatch import heuristics
-        import geowatch
+        from kwutil import util_pattern
         region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
-        pat = geowatch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
+        pat = util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
         for video in coco_dset.videos().objs:
             video_name = video['name']
             if pat.match(video_name):

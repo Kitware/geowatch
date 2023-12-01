@@ -14,7 +14,7 @@ import io
 import pandas as pd
 import re
 from kwutil import util_time
-from geowatch.utils import util_pattern
+from kwutil import util_pattern
 
 
 @ub.memoize
@@ -769,7 +769,7 @@ def find_pred_pxl_item(pred_info):
 
 
 def find_info_items(info, query_type, query_name=None):
-    from geowatch.utils import util_pattern
+    from kwutil import util_pattern
     if query_name is None:
         query_name = '*'
     query_name_pattern = util_pattern.MultiPattern.coerce(query_name)
