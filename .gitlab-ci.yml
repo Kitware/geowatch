@@ -141,19 +141,6 @@ stages:
   - |-
     python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
   - echo "pytest command finished, moving the coverage file to the repo root"
-build/cp39-linux-x86_64:
-  <<: *build_template
-  image: python:3.9
-test/full-loose/cp39-linux-x86_64:
-  <<: *test_full-loose_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
-test/full-strict/cp39-linux-x86_64:
-  <<: *test_full-strict_template
-  image: python:3.9
-  needs:
-  - build/cp39-linux-x86_64
 build/cp310-linux-x86_64:
   <<: *build_template
   image: python:3.10
@@ -207,8 +194,6 @@ gpgsign/wheels:
     - main
     - release
   needs:
-  - job: build/cp39-linux-x86_64
-    artifacts: true
   - job: build/cp310-linux-x86_64
     artifacts: true
   - job: build/cp311-linux-x86_64

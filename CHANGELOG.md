@@ -23,6 +23,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Moved CI dashboard to public repo
 
+* requirements files are now bundled with the module itself.
+
+* `geowatch finish_install` now correctly handles the `--strict` option and uses 
+
 ### Fixed
 
 * Fixed issue in dataloader where centered positives requested the top-right corners, and not the actual centers.
