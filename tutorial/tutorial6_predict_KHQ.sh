@@ -25,7 +25,7 @@ TIMECOMBO_DSET_DPATH=$DEMO_DPATH/TimeCombine-$DATASET_SUFFIX
 
 # Create a demo region file, and create vairables that point at relevant
 # paths, which are by default written in your ~/.cache folder
-python -m watch.demo.demo_region
+python -m geowatch.demo.demo_region
 
 REGION_FPATH="$HOME/.cache/watch/demo/annotations/${REGION_ID}.geojson"
 SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/${REGION_ID}_sites/*.geojson"
@@ -45,7 +45,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset.
 # This is a cmdqueue pipeline of simpler commands
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --cloud_cover=30 \
     --stac_query_mode=auto \
@@ -71,7 +71,7 @@ python -m watch.cli.prepare_ta2_dataset \
 
 # Create a low temporal resolution time-combined dataset
 # (We will use this for BAS)
-python -m watch.cli.coco_time_combine \
+python -m geowatch.cli.coco_time_combine \
     --kwcoco_fpath="$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
     --output_kwcoco_fpath="$TIMECOMBO_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
     --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
@@ -89,11 +89,11 @@ python -m watch.cli.coco_time_combine \
 # COLD FEATURES on original data
 #
 # Helper to generate the raw commands
-# python -m watch.cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+# python -m geowatch.cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
 #    --with_cold=1 --skip_existing=1 --gres=0,1 --tmux_workers=4 \
 #    --backend=tmux --run=0 --print-commands
 
-python -m watch.tasks.cold.predict \
+python -m geowatch.tasks.cold.predict \
     --coco_fpath="$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
     --mod_coco_fpath="$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}_cold.kwcoco.zip" \
     --out_dpath="$RAW_DSET_DPATH/${REGION_ID}" \
@@ -116,13 +116,13 @@ python -m watch.tasks.cold.predict \
 geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001_cold.kwcoco.zip --smart=1 \
     --channels="(L8,S2):(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)"
 
-python -m watch.cli.coco_combine_features \
+python -m geowatch.cli.coco_combine_features \
     --src \
         "$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
         "$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}_cold.kwcoco.zip" \
     --dst="$RAW_DSET_DPATH/${REGION_ID}/combo_imgonly-${REGION_ID}_C.kwcoco.zip"
 
-python -m watch.tasks.cold.transfer_features \
+python -m geowatch.tasks.cold.transfer_features \
         --coco_fpath "$RAW_DSET_DPATH/${REGION_ID}/combo_imgonly-${REGION_ID}_C.kwcoco.zip" \
         --combine_fpath "$TIMECOMBO_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
         --new_coco_fpath "$TIMECOMBO_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-C.kwcoco.zip"  \
@@ -157,7 +157,7 @@ test -f "$BAS_MODEL_FPATH" || echo "missing BAS model"
 test -f "$ACSC_MODEL_FPATH" || echo "missing ACSC model"
 
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --package_fpath="$BAS_MODEL_FPATH" \
     --test_dataset="$TIMECOMBO_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
     --pred_dataset="$PIPELINE_OUTPUT_DPATH"/bas_pxl/pred.kwcoco.zip \
@@ -175,7 +175,7 @@ python -m watch.tasks.fusion.predict \
     --batch_size=1
 
 
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --input_kwcoco "$PIPELINE_OUTPUT_DPATH"/bas_pxl/pred.kwcoco.zip \
     --default_track_fn saliency_heatmaps \
     --track_kwargs '{
@@ -201,7 +201,7 @@ python -m watch.cli.run_tracker \
     --site_summary=None
 
 
-python -m watch.cli.cluster_sites \
+python -m geowatch.cli.cluster_sites \
     --context_factor=1.0 \
     --minimum_size=128x128@2GSD \
     --maximum_size=256x256@2GSD \
@@ -213,7 +213,7 @@ python -m watch.cli.cluster_sites \
     --crop_time=True
 
 
-python -m watch.cli.coco_align \
+python -m geowatch.cli.coco_align \
     --src "$RAW_DSET_DPATH/${REGION_ID}/imgonly-${REGION_ID}-rawbands.kwcoco.zip" \
     --dst "$PIPELINE_OUTPUT_DPATH/ac_crops/sitecrop.kwcoco.zip" \
     --regions="$PIPELINE_OUTPUT_DPATH/ac_clusters/clustered.geojson" \
@@ -236,7 +236,7 @@ python -m watch.cli.coco_align \
     --rpc_align_method=orthorectify
 
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --package_fpath="$ACSC_MODEL_FPATH" \
     --test_dataset="$PIPELINE_OUTPUT_DPATH/ac_crops/sitecrop.kwcoco.zip"  \
     --pred_dataset="$PIPELINE_OUTPUT_DPATH/ac_pxl/ac_heatmaps.kwcoco.zip"  \
@@ -264,7 +264,7 @@ python -m watch.tasks.fusion.predict \
     --devices=0,
 
 
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     --input_kwcoco "$PIPELINE_OUTPUT_DPATH/ac_pxl/ac_heatmaps.kwcoco.zip" \
     --default_track_fn class_heatmaps \
     --track_kwargs '{"boundaries_as": "polys", "thresh": 0.07, "resolution": "8GSD", "min_area_square_meters": 7200}' \
@@ -279,7 +279,7 @@ python -m watch.cli.run_tracker \
 
 
 # A basic pipeline can be run as a schedule evaluation pipeline.
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: full
     matrix:
         ######################

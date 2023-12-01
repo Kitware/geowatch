@@ -2,29 +2,29 @@
 def test_small_predict_region():
     import pytest
     pytest.skip('TODO: switch to lightning')
-    from watch.tasks.fusion.fit import fit_model  # NOQA
+    from geowatch.tasks.fusion.fit import fit_model  # NOQA
     import ubelt as ub
-    from watch.tasks.fusion.predict import predict
-    import watch
+    from geowatch.tasks.fusion.predict import predict
+    import geowatch
 
     gpus = None
-    test_dpath = ub.Path.appdir('watch/test/fusion/')
+    test_dpath = ub.Path.appdir('geowatch/test/fusion/')
     results_path = (test_dpath / 'predict').ensuredir()
     ub.delete(results_path)
     ub.ensuredir(results_path)
     package_fpath = test_dpath / 'my_test_package.pt'
 
-    train_dset = watch.coerce_kwcoco(
-        'watch-msi', num_videos=3, num_frames=5, image_size=(128, 128),
+    train_dset = geowatch.coerce_kwcoco(
+        'geowatch-msi', num_videos=3, num_frames=5, image_size=(128, 128),
         rng=3213,
     )
 
     # Predict via that model on a smaller dataset
-    test_dset = watch.coerce_kwcoco(
-        'watch-msi', num_videos=1, num_frames=1, image_size=(32, 32),
+    test_dset = geowatch.coerce_kwcoco(
+        'geowatch-msi', num_videos=1, num_frames=1, image_size=(32, 32),
         rng=90312,
     )
-    from watch.utils import kwcoco_extensions  # NOQA
+    from geowatch.utils import kwcoco_extensions  # NOQA
     test_chans = kwcoco_extensions.coco_channel_stats(test_dset)
     train_chans = kwcoco_extensions.coco_channel_stats(train_dset)
     print('test_chans = {}'.format(ub.urepr(test_chans, nl=1)))
@@ -50,7 +50,7 @@ def test_small_predict_region():
 
     package_fpath = fit_model(**fit_kwargs)
 
-    from watch.cli import torch_model_stats
+    from geowatch.cli import torch_model_stats
     torch_model_stats.main(src=package_fpath)
 
     predict_kwargs = {
@@ -74,7 +74,7 @@ def test_small_predict_region():
     pred_chans = kwcoco_extensions.coco_channel_stats(result_dataset)
     print('pred_chans = {}'.format(ub.urepr(pred_chans, nl=1)))
 
-    from watch.cli import watch_coco_stats
+    from geowatch.cli import watch_coco_stats
     watch_coco_stats.WatchCocoStats.main(src=train_dset.fpath)
     watch_coco_stats.WatchCocoStats.main(src=train_dset.fpath)
     watch_coco_stats.WatchCocoStats.main(src=result_dataset.fpath)
@@ -97,6 +97,6 @@ def test_small_predict_region():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/tests/test_predict_small_region.py
+        python ~/code/geowatch/tests/test_predict_small_region.py
     """
     test_small_predict_region()

@@ -2,7 +2,7 @@
 
 PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
 cd "$PHASE2_DATA_DPATH_SSD/Drop6"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "combo_imganns-*_L.kwcoco.json" \
     --suffix=fixquant \
     --constructive_mode=True
@@ -22,7 +22,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V33
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 seed_everything: 1104562820
 data:
   batch_size              : 4
@@ -124,7 +124,7 @@ trainer:
 
 ### OMG I hope checkpoints work now!
 export CUDA_VISIBLE_DEVICES=1
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --config /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V33/lightning_logs/version_1/config.yaml \
     --ckpt_path /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V33/lightning_logs/version_1/checkpoints/epoch=647-step=40824.ckpt
 
@@ -147,7 +147,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_validation_10GSD_split2_V34
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-3
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 seed_everything: 1104562820
 data:
   batch_size              : 4
@@ -271,7 +271,7 @@ EXPERIMENT_NAME=Drop6_BAS_WUMAE_validation_3GSD_split1_V35
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : 4
   num_workers             : 4
@@ -373,7 +373,7 @@ EXPERIMENT_NAME=Drop6_BAS_WUMAE_validation_3GSD_split1_V37
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : 1
   num_workers             : 4
@@ -476,7 +476,7 @@ EXPERIMENT_NAME=Drop6_BAS_WUMAE_10GSD_split1_V36
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : 1
   num_workers             : 4
@@ -595,7 +595,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 4
@@ -692,7 +692,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 4
@@ -788,7 +788,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 4
@@ -885,7 +885,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -991,7 +991,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1076,7 +1076,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+geowatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 
 
 ## Yardrat long train run
@@ -1096,7 +1096,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1199,7 +1199,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -1302,7 +1302,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1385,7 +1385,7 @@ models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V4
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+geowatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"
 
 
@@ -1409,7 +1409,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1511,7 +1511,7 @@ TARGET_LR=5e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1609,7 +1609,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1708,7 +1708,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1810,7 +1810,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -1909,7 +1909,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -2009,7 +2009,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -2109,7 +2109,7 @@ TARGET_LR=5e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -2212,7 +2212,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -2314,7 +2314,7 @@ TARGET_LR=1e-3
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -2415,7 +2415,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -2520,7 +2520,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -2621,7 +2621,7 @@ TARGET_LR=7e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 7
@@ -2722,7 +2722,7 @@ TARGET_LR=7e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 7
@@ -2827,7 +2827,7 @@ TARGET_LR=3e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=40000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 7
@@ -2928,7 +2928,7 @@ TARGET_LR=1e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -3031,7 +3031,7 @@ TARGET_LR=1e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -3134,7 +3134,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=200000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -3237,7 +3237,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=200000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -3349,7 +3349,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3447,7 +3447,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3545,7 +3545,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3643,7 +3643,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3743,7 +3743,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3843,7 +3843,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -3951,7 +3951,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4057,7 +4057,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4163,7 +4163,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4268,7 +4268,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4375,7 +4375,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4481,7 +4481,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4588,7 +4588,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4694,7 +4694,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4800,7 +4800,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -4889,8 +4889,8 @@ initializer:
 "
 
 
-python -m watch.tasks.fusion fit --optimizer.help=torch.optim.AdamW
-python -m watch.tasks.fusion fit --lr_scheduler.help=torch.optim.lr_scheduler.OneCycleLR
+python -m geowatch.tasks.fusion fit --optimizer.help=torch.optim.AdamW
+python -m geowatch.tasks.fusion fit --lr_scheduler.help=torch.optim.lr_scheduler.OneCycleLR
 
 
 # On toothbrush - SC training - continued with shuffled hyperparams
@@ -4910,7 +4910,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5023,7 +5023,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5135,7 +5135,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5247,7 +5247,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5355,7 +5355,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5464,7 +5464,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5570,7 +5570,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 1
@@ -5679,7 +5679,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 1
@@ -5785,7 +5785,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -5894,7 +5894,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 1
@@ -6001,7 +6001,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6107,7 +6107,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6217,7 +6217,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6324,7 +6324,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6433,7 +6433,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6539,7 +6539,7 @@ TARGET_LR=1e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6645,7 +6645,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6751,7 +6751,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -6868,7 +6868,7 @@ kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH"
 echo "TRAIN_FPATH = $TRAIN_FPATH"
 #kwcoco stats "$TRAIN_FPATH"
 #kwcoco stats "$VALI_FPATH"
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
 select_videos          : $SELECT_VIDEOS
 num_workers            : 5
@@ -6982,7 +6982,7 @@ test -d "$KWCOCO_BUNDLE_DPATH" || echo "missing KWCOCO_BUNDLE_DPATH"
 #echo "TRAIN_FPATH = $TRAIN_FPATH"
 #kwcoco stats "$TRAIN_FPATH"
 #kwcoco stats "$VALI_FPATH"
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7097,7 +7097,7 @@ test -d "$KWCOCO_BUNDLE_DPATH" || echo "missing KWCOCO_BUNDLE_DPATH"
 #echo "TRAIN_FPATH = $TRAIN_FPATH"
 #kwcoco stats "$TRAIN_FPATH"
 #kwcoco stats "$VALI_FPATH"
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7205,7 +7205,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7314,7 +7314,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7423,7 +7423,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7533,7 +7533,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7640,7 +7640,7 @@ TARGET_LR=5e-5
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7752,7 +7752,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7856,7 +7856,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5
@@ -7973,7 +7973,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=1
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 0
@@ -8134,7 +8134,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8245,7 +8245,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8357,7 +8357,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8469,7 +8469,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8581,7 +8581,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8693,7 +8693,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 2
@@ -8809,7 +8809,7 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-DDP_WORKAROUND=0 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 6
@@ -8905,4 +8905,120 @@ torch_globals:
 
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78_epoch5_step96.pt
+"
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-Cropped2GSD-V2
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6-subset.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red|nir08,pan),(WV1):(pan)"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V93
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+DDP_WORKAROUND=0 python -m geowatch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 6
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 7
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1.0y,-0.5y,-0.25y,0.0y,0.25y,0.5y,1.0y)'
+    window_resolution     : 2.0GSD
+    input_resolution      : 2.0GSD
+    output_resolution     : 2.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 1
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|nir08|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout_rate  : 0.5
+    channel_dropout_rate   : 0.5
+    modality_dropout_rate  : 0.5
+    temporal_dropout       : 0.1
+    channel_dropout        : 0.1
+    modality_dropout       : 0.1
+    mask_low_quality       : True
+    mask_samecolor_method  : None
+    observable_threshold   : 0.2
+    quality_threshold      : 0.2
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+    sqlview                : sqlite
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights      : '1:1'
+        #class_weights         : auto
+        class_weights          : 'auto'
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_m24
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 8
+        change_head_hidden     : 6
+        class_head_hidden      : 8
+        global_change_weight   : 0.00
+        global_class_weight    : 1.00
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+        continual_learning     : true
+        perterb_scale          : 3e-7
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.95
+trainer:
+    accumulate_grad_batches: 64
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    #strategy            : ddp_find_unused_parameters_true
+    limit_val_batches    : 2048
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+    callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+              save_last: true
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop7-Cropped2GSD-V2/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V92/lightning_logs/version_4/checkpoints/last_weight_hacked.ckpt
 "

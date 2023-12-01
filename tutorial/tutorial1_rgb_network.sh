@@ -327,7 +327,7 @@ its arguments are:
 '
 
 # Evaluate
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
     --true_dataset="$TEST_FPATH" \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \
       --eval_dpath="$DVC_EXPT_DPATH"/predictions/eval

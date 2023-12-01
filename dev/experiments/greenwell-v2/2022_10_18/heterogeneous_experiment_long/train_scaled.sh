@@ -14,7 +14,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 
 EXPERIMENT_NAME=OSCD_HeterogeneousModel_native_scaled_1.0
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --config=config.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
     --model.ignore_scale=false \

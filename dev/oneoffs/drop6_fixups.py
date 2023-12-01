@@ -578,7 +578,7 @@ def check_missing_image_against_dmj():
             copy_job = queue.submit(f'''cp {task['dmj_fpath']} {task['imgonly_fpath']}''')
             queue.submit(ub.codeblock(
                 fr'''
-                python -m watch reproject \
+                python -m geowatch reproject \
                     --src "{task['imgonly_fpath']}" \
                     --dst "{task['imganns_fpath']}" \
                     --propogate_strategy="SMART" \
@@ -590,7 +590,7 @@ def check_missing_image_against_dmj():
 
     command = ub.codeblock(
         fr'''
-        python -m watch.cli.prepare_splits \
+        python -m geowatch.cli.prepare_splits \
             --base_fpath="{hdd_bundle_dpath}/imganns*.kwcoco.*" \
             --workers=5 \
             --constructive_mode=True --run=1
@@ -661,7 +661,7 @@ def reprocess_all_kwcoco_files():
         imgonly_fpath = row['imgonly_fpath']
         command = ub.codeblock(
             rf'''
-            python -m watch.cli.coco_add_watch_fields \
+            python -m geowatch.cli.coco_add_watch_fields \
                 --src {imgonly_fpath} \
                 --dst {imgonly_fpath} \
                 --target_gsd 10
@@ -680,7 +680,7 @@ def reprocess_all_kwcoco_files():
         assert imgonly_fpath.exists()
         command = ub.codeblock(
             fr'''
-            python -m watch reproject \
+            python -m geowatch reproject \
                 --src "{imgonly_fpath}" \
                 --dst "{imganns_fpath}" \
                 --propogate_strategy="SMART" \
@@ -694,7 +694,7 @@ def reprocess_all_kwcoco_files():
 
     command = ub.codeblock(
         fr'''
-        python -m watch.cli.prepare_splits \
+        python -m geowatch.cli.prepare_splits \
             --base_fpath="{HDD.hdd_bundle_dpath}/imganns*.kwcoco.zip" \
             --workers=5 \
             --constructive_mode=True --run=1

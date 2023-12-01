@@ -10,7 +10,7 @@ def request_dvc_path(fpath):
         dvc_fpath = fpath.augment(stem=fpath.name, ext='.dvc')
         if dvc_fpath.exists():
             remote = 'aws'  # parametarize
-            from watch.utils.simple_dvc import SimpleDVC
+            from geowatch.utils.simple_dvc import SimpleDVC
             dvc = SimpleDVC()
             dvc.pull(dvc_fpath, remote=remote)
         raise Exception('File {} not exist in a DVC directory'.format(dvc_fpath))
@@ -23,13 +23,13 @@ def test_predict_old_fusion_model():
     This tests requires program data as is not exepcted to run on CI in this
     state. We should have a test for our latest-and-greatest models though.
     """
-    import watch
+    import geowatch
     import kwcoco
     import pytest
-    # from watch.utils import kwcoco_extensions
+    # from geowatch.utils import kwcoco_extensions
 
     try:
-        dvc_dpath = watch.find_smart_dvc_dpath(tags='phase1_data')
+        dvc_dpath = geowatch.find_smart_dvc_dpath(tags='phase1_data')
     except Exception:
         pytest.skip('dvc path does not exist')
 
@@ -39,11 +39,11 @@ def test_predict_old_fusion_model():
     # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
     model_fpath = dvc_dpath / 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt'
 
-    from watch.utils.simple_dvc import SimpleDVC
+    from geowatch.utils.simple_dvc import SimpleDVC
     dvc = SimpleDVC()
     dvc.request(model_fpath)
 
-    # from watch.tasks.fusion import utils
+    # from geowatch.tasks.fusion import utils
     # method = utils.load_model_from_package(model_fpath)
 
     # coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
@@ -57,12 +57,12 @@ def test_predict_old_fusion_model():
 
     dset = kwcoco.CocoDataset(coco_fpath)
 
-    output_dpath = ub.Path.appdir('watch/tests/pred/oldmodel').ensuredir()
+    output_dpath = ub.Path.appdir('geowatch/tests/pred/oldmodel').ensuredir()
     pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
 
     subset = make_small_kwcoco_subset(dset, output_dpath)
 
-    from watch.tasks.fusion import predict
+    from geowatch.tasks.fusion import predict
     pred_kwargs = {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
@@ -77,20 +77,20 @@ def test_predict_old_fusion_model():
 
     """
     # For devs
-    cd $HOME/.cache/watch/tests/pred/oldmodel/
-    smartwatch visualize ./test_input.kwcoco.json --viz_dpath=./_viz_test_input
-    smartwatch visualize ./pred_bundle/pred.kwcoco.json --viz_dpath=./old_viz_check
+    cd $HOME/.cache/geowatch/tests/pred/oldmodel/
+    geowatch visualize ./test_input.kwcoco.json --viz_dpath=./_viz_test_input
+    geowatch visualize ./pred_bundle/pred.kwcoco.json --viz_dpath=./old_viz_check
 
-    smartwatch intensity_histograms ./pred_bundle/pred.kwcoco.json --dst=./intensity_histo.png --stat probability \
+    geowatch intensity_histograms ./pred_bundle/pred.kwcoco.json --dst=./intensity_histo.png --stat probability \
             --valid_range=0:1 --exclude_channels=cirrus
 
-    smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
+    geowatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
     """
 
 
 def make_small_kwcoco_subset(dset, output_dpath):
     import pytest
-    from watch.utils import kwcoco_extensions
+    from geowatch.utils import kwcoco_extensions
     vidid = dset.videos().peek()['id']
     gids = list(dset.images(vidid=vidid))[0:11]
     subset = dset.subset(gids)
@@ -119,6 +119,6 @@ def make_small_kwcoco_subset(dset, output_dpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/tests/test_predict_old_fusion_model.py
+        python ~/code/geowatch/tests/test_predict_old_fusion_model.py
     """
     test_predict_old_fusion_model()

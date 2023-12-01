@@ -186,7 +186,7 @@ def parse_requirements(fname='requirements.txt', versions='loose'):
 #     return requirements
 
 
-VERSION = parse_version('watch/__init__.py')
+VERSION = parse_version('geowatch/__init__.py')
 
 try:
     README = parse_description()
@@ -236,6 +236,32 @@ for key in nameable_requirements:
 NAME = 'geowatch'
 
 if __name__ == '__main__':
+
+    # Hacks for finding tpl packages
+
+    included_tpl_dpaths = [
+        'geowatch_tpl/submodules_static/torchview',
+        'geowatch_tpl/submodules_static/segment-anything',
+        'geowatch_tpl/submodules_static/scale-mae',
+        'geowatch_tpl/submodules_static/loss-of-plasticity',
+        'geowatch_tpl/modules',
+    ]
+    tpl_packages = []
+    for tpl_dpath in included_tpl_dpaths:
+        result = find_packages(tpl_dpath)
+        tpl_packages.extend(
+            [tpl_dpath.replace('/', '.') + '.' + s for s in result]
+        )
+    packages = find_packages(include=[
+        'geowatch', 'geowatch.*',
+        # TPL
+        'geowatch_tpl',
+        'geowatch_tpl.*',
+        # Alias of the old module name to maintain backwards compatability
+        # while we transition.
+        'watch', 'watch.*',
+    ]) + tpl_packages
+
     setup(
         name=NAME,
         author="GEOWATCH developers",
@@ -254,12 +280,9 @@ if __name__ == '__main__':
         description="",
         entry_points={
             'console_scripts': [
-                'smartwatch= watch.cli.__main__:main',
-                'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
-                'geowatch= watch.cli.__main__:main',
-                'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
+                'geowatch= geowatch.cli.__main__:main',
+                'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
-                # 'geowatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
         install_requires=REQUIREMENTS,
@@ -268,20 +291,18 @@ if __name__ == '__main__':
         long_description=README,
         include_package_data=True,
         package_data={
-            'watch.tasks.depth': [
+            'geowatch.tasks.depth': [
                 'config.json'
             ],
-            'watch.rc': [
-                'site-model.schema.json'
-                'region-model.schema.json'
+            'geowatch.rc': [
+                'site-model.schema.json',
+                'region-model.schema.json',
+                'job.schema.json',
+                # 'dem.xml' do we want to include this?
+                # 'egm96_15.gtx' do we want to include this?
             ],
         },
-        packages=find_packages(include=[
-            'watch', 'watch.*',
-            # Alias the module while we transition to a new name.
-            'geowatch', 'geowatch.*',
-            'geowatch_tpl', 'geowatch_tpl.*',
-        ]),
+        packages=packages,
         url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
         zip_safe=False,

@@ -13,7 +13,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
-#python -m watch stats $COMBO_COCO_FPATH
+#python -m geowatch stats $COMBO_COCO_FPATH
 
 #CHANNELS="blue|green|red|ASI|inv_shared.0:64"  TODO
 
@@ -25,7 +25,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 #PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
 #PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
-#SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
+#SUGGESTIONS="$(python -m geowatch.tasks.fusion.organize suggest_paths \
 #    --package_fpath=$PACKAGE_FPATH \
 #    --test_dataset=$TEST_DATASET)"
 #PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
@@ -33,7 +33,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="3"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \

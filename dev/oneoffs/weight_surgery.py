@@ -5,7 +5,8 @@
 
 import torch
 import ubelt as ub
-fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt.ckpt'
+# fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt.ckpt'
+fpath = '/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop7-Cropped2GSD-V2/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V92/lightning_logs/version_4/checkpoints/last.ckpt'
 
 fpath = '/home/joncrall/remote/namek/data/dvc-repos/xview2/training/namek/joncrall/xview2/runs/XView2Baseline_v2/lightning_logs/version_0/checkpoints/last.ckpt'
 
@@ -13,8 +14,11 @@ state = torch.load(fpath)
 state_dict = state['state_dict']
 
 bad_idxs = [
+    # state['hyper_parameters']['classes'].index('ignore'),
+    # state['hyper_parameters']['classes'].index('un-classified'),
+    state['hyper_parameters']['classes'].index('positive'),
     state['hyper_parameters']['classes'].index('ignore'),
-    state['hyper_parameters']['classes'].index('un-classified'),
+    state['hyper_parameters']['classes'].index('Unknown'),
 ]
 
 # pos_idx = state['hyper_parameters']['classes'].index('positive')
@@ -42,7 +46,7 @@ torch.save(state, new_fpath)
 # state_dict['heads.class.hidden.output.weight'][act_con]
 
 """
-HACK_SAVE_ANYWAY=1 python -m watch.mlops.repackager \
+HACK_SAVE_ANYWAY=1 python -m geowatch.mlops.repackager \
     /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_snp_sgd_split6_V86/lightning_logs/version_4/checkpoints/epoch=56-step=3648-val_loss=3.596.ckpt_weight_hacked.ckpt
 
         /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-Cropped2GSD/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/lightning_logs/version_1/checkpoints/epoch=44-step=3870-val_loss=5.761.ckpt_weight_hacked.ckpt

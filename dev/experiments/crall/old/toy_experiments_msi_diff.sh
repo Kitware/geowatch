@@ -21,12 +21,12 @@ kwcoco toydata vidshapes2-frames6-speed0.2-multispectral --bundle_dpath $DATA_DP
 
 # Print stats
 python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
-python -m watch watch_coco_stats $TRAIN_FPATH 
+python -m geowatch watch_coco_stats $TRAIN_FPATH 
 
 
 optional_visualize_step(){
 
-    python -m watch.cli.coco_visualize_videos \
+    python -m geowatch.cli.coco_visualize_videos \
         --src $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json \
         --channels="B1|B8|B11,B1" \
         --viz_dpath=$DATA_DPATH/vidshapes_msi_train/_viz
@@ -34,11 +34,11 @@ optional_visualize_step(){
     items=$(jq -r '.videos[] | .name' $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json)
     for item in ${items[@]}; do
         echo "item = $item"
-        python -m watch.cli.gifify --frames_per_second 1.0 \
+        python -m geowatch.cli.gifify --frames_per_second 1.0 \
             --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_anns/B1" \
             --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_ann.gif"
 
-        python -m watch.cli.gifify --frames_per_second 1.0 \
+        python -m geowatch.cli.gifify --frames_per_second 1.0 \
             --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_imgs/B1|B8|B11" \
             --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_img.gif"
     done
@@ -65,7 +65,7 @@ TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
 # Configure training hyperparameters
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels="$CHANNELS" \
     --method=MultimodalTransformer \
     --arch_name=$ARCH \
@@ -86,7 +86,7 @@ python -m watch.tasks.fusion.fit \
     --dump=$TRAIN_CONFIG_FPATH
 
 # Configure prediction hyperparams
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
     --write_probs=False \
@@ -94,7 +94,7 @@ python -m watch.tasks.fusion.predict \
 
 
 # Fit 
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
@@ -103,14 +103,14 @@ python -m watch.tasks.fusion.fit \
          --test_dataset=$TEST_FPATH
 
 # Predict 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH
 
 # Evaluate 
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \
           --eval_dpath=$EVAL_DPATH

@@ -102,7 +102,7 @@ rsync -avprR ooo:data/dvc-repos/smart_watch_dvc/models/fusion/./SC-20201117/ ~/d
 
 def main():
     """
-    python -m watch.cli.kwcoco_to_geojson \
+    python -m geowatch.cli.kwcoco_to_geojson \
         /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/pred_BAS_TA1_KOREA_v083_epoch=5-step=11189/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/pred.kwcoco.json/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/pred_BAS_TA1_KOREA_v083_epoch=4-step=9324/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/pred.kwcoco.json \
         --track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedBAS --track_kwargs '{"thresh": 0.1}' \
         --out_dir /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/pred_BAS_TA1_KOREA_v083_epoch=5-step=11189/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/pred.kwcoco.json/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/pred_BAS_TA1_KOREA_v083_epoch=4-step=9324/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/eval/tracked/iarpa-task-thresh=0.1/tracked_sites \
@@ -169,7 +169,7 @@ def main():
 
             command = ub.codeblock(
                 fr'''
-                python -m watch.cli.kwcoco_to_geojson \
+                python -m geowatch.cli.kwcoco_to_geojson \
                     "{pred_fpath}" \
                      {task_args} \
                     --out_dir "{IARPA_EVAL_DPATH}/tracked_sites" \
@@ -370,7 +370,7 @@ REGION_FILE=/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations/region_mod
 echo $PRED_DATASET
 echo $REGION_FILE
 
-python -m watch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.kwcoco_to_geojson \
     "$PRED_DATASET" \
     --track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
     --site_summary $REGION_FILE \
@@ -384,7 +384,7 @@ python -m watch.cli.kwcoco_to_geojson \
 nautilus $IARPA_EVAL_DPATH
 
 
-python -m watch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.kwcoco_to_geojson \
     "$PRED_DATASET" \
     --default_track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
     score  -- \

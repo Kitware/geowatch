@@ -35,7 +35,7 @@ for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
 
 
 
-    SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
+    SUGGESTIONS="$(python -m geowatch.tasks.fusion.organize suggest_paths \
         --package_fpath=$PACKAGE_FPATH \
         --test_dataset=$TEST_DATASET)"
     PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
@@ -48,7 +48,7 @@ for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
     "
 
 #CUDA_VISIBLE_DEVICES=1 \
-#    python -m watch.tasks.fusion.predict \
+#    python -m geowatch.tasks.fusion.predict \
 #    --gpus=0 \
 #    --write_preds=True \
 #    --write_probs=True \
@@ -72,7 +72,7 @@ for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
 #PACKAGE_FPATH=$DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_raw_v001/Saliency_smt_it_joint_p8_raw_v001_epoch=145-step=76941.pt
 #KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 #TEST_DATASET=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
-#SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
+#SUGGESTIONS="$(python -m geowatch.tasks.fusion.organize suggest_paths \
 #    --package_fpath=$PACKAGE_FPATH \
 #    --test_dataset=$TEST_DATASET)"
 #PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
@@ -82,7 +82,7 @@ for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
 
 
 CUDA_VISIBLE_DEVICES=0 \
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
     --gpus=0 \
     --write_preds=False \
     --write_probs=True \
@@ -97,7 +97,7 @@ CUDA_VISIBLE_DEVICES=0 \
 
 
 # Evaluate 
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_DATASET \
         --pred_dataset=$PRED_DATASET \
           --eval_dpath="$EVAL_DPATH"

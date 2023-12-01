@@ -19,7 +19,7 @@ STARTING_KWCOCO_FILE="${OUTPUT_DIR}/data.kwcoco.json"
 # WV filter
 FILTERED_KWCOCO_FILE="${OUTPUT_DIR}/data_filteredWV.kwcoco.json"
 if [ ! -f "$FILTERED_KWCOCO_FILE" ]; then
-    python -m watch.tasks.dzyne_misc.filter \
+    python -m geowatch.tasks.dzyne_misc.filter \
         --input=$STARTING_KWCOCO_FILE \
         --output=$FILTERED_KWCOCO_FILE \
         --create_gif=true

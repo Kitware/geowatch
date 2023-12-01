@@ -13,7 +13,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 
 EXPERIMENT_NAME=Drop4_BAS_Heterogeneous_RGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-CUDA_VISIBLE_DEVICES=0,1 python -m watch.tasks.fusion fit \
+CUDA_VISIBLE_DEVICES=0,1 python -m geowatch.tasks.fusion fit \
     --config=config.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
     --data.train_dataset="$TRAIN_FPATH" \

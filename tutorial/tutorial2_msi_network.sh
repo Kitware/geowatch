@@ -38,7 +38,7 @@ generate_data(){
 print_stats(){
     # Print stats
     kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
-    smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+    geowatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 }
 
 if [[ ! -e "$TRAIN_FPATH" ]]; then
@@ -58,13 +58,13 @@ Should look like
 
 demo_visualize_toydata(){
     kwcoco toydata --key=vidshapes1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
-    python -m watch.cli.coco_visualize_videos \
+    python -m geowatch.cli.coco_visualize_videos \
         --src "$(realpath ./tmp/data.kwcoco.json)" \
         --channels="B1|B8|b" \
         --viz_dpath="$(realpath ./tmp)/_viz" \
         --animate=True
 
-    python -m watch.cli.coco_visualize_videos \
+    python -m geowatch.cli.coco_visualize_videos \
         --src "$DVC_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json" \
         --channels="gauss|B11,r|g|b,B1|B8|B11" \
         --viz_dpath="$DVC_DATA_DPATH/vidshapes_msi_train100/_viz" --animate=True
@@ -91,7 +91,7 @@ EXPERIMENT_NAME=ToyDataMSI_Demo_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=80000
 TARGET_LR=3e-4
-DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m geowatch.tasks.fusion fit --config "
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -162,9 +162,9 @@ demo_force_repackage(){
     CHECKPOINT_FPATH=$(find "$DEFAULT_ROOT_DIR" -iname "*.ckpt" | tail -n 1)
     echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
     # Repackage a particular checkpoint as a torch.package .pt file.
-    python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH"
+    python -m geowatch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH"
     # Redefine package fpath variable to be that checkpoint
-    PACKAGE_FPATH=$(python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH" | tail -n 1)
+    PACKAGE_FPATH=$(python -m geowatch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH" | tail -n 1)
     echo "PACKAGE_FPATH = $PACKAGE_FPATH"
 }
 
@@ -176,7 +176,7 @@ PRED_FPATH=$DEFAULT_ROOT_DIR/predictions/pred.kwcoco.json
 EVAL_DPATH=$DEFAULT_ROOT_DIR/evaluation
 
 # Predict using one of the packaged models
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
        --package_fpath="$PACKAGE_FPATH" \
         --test_dataset="$TEST_FPATH" \
         --pred_dataset="$PRED_FPATH" \
@@ -184,13 +184,13 @@ python -m watch.tasks.fusion.predict \
 # Dump stats of truth vs prediction.
 # We should see soft segmentation masks in pred, but not in truth
 kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
-smartwatch stats "$TEST_FPATH" "$PRED_FPATH"
+geowatch stats "$TEST_FPATH" "$PRED_FPATH"
 
 # Visualize pixel predictions with a raw band, predicted saliency, and predicted class.
-smartwatch visualize "$PRED_FPATH" --channels='B11,salient,star|superstar|eff' --smart=True
+geowatch visualize "$PRED_FPATH" --channels='B11,salient,star|superstar|eff' --smart=True
 
 # Evaluate the predictions
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset="$TEST_FPATH" \
         --pred_dataset="$PRED_FPATH" \
           --eval_dpath="$EVAL_DPATH"

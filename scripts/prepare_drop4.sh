@@ -32,7 +32,7 @@ SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
 # Construct the TA2-ready dataset
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=30 \
@@ -68,7 +68,7 @@ build_drop4_BAS(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=20 \
@@ -108,7 +108,7 @@ build_drop4_v2_BAS(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -147,7 +147,7 @@ build_drop4_v2_SC(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -218,7 +218,7 @@ dvc_add_SC(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
     __hack__="
     import shutil
@@ -251,7 +251,7 @@ dvc_add_SC(){
 
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
-#python -m watch.cli.stac_search_build \
+#python -m geowatch.cli.stac_search_build \
 #    --start_date="$START_DATE" \
 #    --end_date="$END_DATE" \
 #    --cloud_cover=40 \
@@ -262,7 +262,7 @@ dvc_add_SC(){
 ## Delete this to prevent duplicates
 #rm -f "$RESULT_FPATH"
 ## Create the .input file
-#python -m watch.cli.stac_search \
+#python -m geowatch.cli.stac_search \
 #    --region_file "$REGION_FPATH" \
 #    --search_json "$SEARCH_FPATH" \
 #    --mode area \
@@ -293,7 +293,7 @@ rgb_medium_drop4_only(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=10 \
@@ -339,7 +339,7 @@ small_onesite(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=10 \
@@ -379,7 +379,7 @@ small_teregions(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
@@ -412,7 +412,7 @@ small_allsites(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
@@ -445,7 +445,7 @@ small_allsites(){
     #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -472,7 +472,7 @@ small_allsites(){
 
 
 _Debugging(){
-    AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER=requester python -m watch.cli.coco_align \
+    AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER=requester python -m geowatch.cli.coco_align \
         --src /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Uncropped-Drop4-2022-07-18-c10-TA1-S2-ACC/data_BR_R005_fielded.kwcoco.json \
         --dst /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop4-2022-07-18-c10-TA1-S2-ACC/imgonly-BR_R005.kwcoco.json \
         --regions /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/annotations/region_models/BR_R005.geojson \
@@ -490,7 +490,7 @@ dvc_add(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
     #--backend=serial
 
     mkdir -p viz512_anns
@@ -540,7 +540,7 @@ prepare_qfabric(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=80 \
@@ -583,7 +583,7 @@ prepare_qfabric_horologic(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=80 \
@@ -616,7 +616,7 @@ prepare_qfabric_horologic(){
 #### FIXUP
 fixup_nodata(){
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    smartwatch clean_geotiffs \
+    geowatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
         --prefilter_channels="red" \
@@ -628,7 +628,7 @@ fixup_nodata(){
 
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    smartwatch clean_geotiffs \
+    geowatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
         --prefilter_channels="red" \

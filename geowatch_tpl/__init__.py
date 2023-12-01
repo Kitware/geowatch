@@ -82,6 +82,7 @@ def import_submodule(submod_name):
 
     tpl_dpath = ub.Path(TPL_DPATH)
 
+    dev_mod_dpath = tpl_dpath / 'modules'
     dev_submod_dpath = tpl_dpath / 'submodules'
     static_submod_dpath = tpl_dpath / 'submodules_static'
 
@@ -90,20 +91,24 @@ def import_submodule(submod_name):
         rel_dpath = info['rel_dpath']
         cand1 = dev_submod_dpath / rel_dpath
         cand2 = static_submod_dpath / rel_dpath
+        if cand1.exists() and not FORCE_STATIC:
+            new_module_dpath = cand1
+        else:
+            assert cand2 is not None and cand2.exists()
+            new_module_dpath = cand2
     else:
         # Assume we have a submodule with the same repo name if
         # it is unregistered here.
         import warnings
-        warnings.warn('Warning: Unregistered submodule')
-        cand1 = dev_submod_dpath / submod_name / submod_name
-        assert cand1.exists()
-        cand2 = None
-
-    if cand1.exists() and not FORCE_STATIC:
-        new_module_dpath = cand1
-    else:
-        assert cand2 is not None and cand2.exists()
-        new_module_dpath = cand2
+        cand_old = dev_mod_dpath / submod_name
+        cand_new = dev_submod_dpath / submod_name / submod_name
+        if cand_old.exists():
+            warnings.warn('Warning: Unregistered submodule (old style)')
+            new_module_dpath = cand_old
+        else:
+            warnings.warn('Warning: Unregistered submodule (new style)')
+            new_module_dpath = cand_new
+        assert new_module_dpath.exists()
 
     new_sys_dpath = os.fspath(new_module_dpath.parent)
     sys.path.append(new_sys_dpath)

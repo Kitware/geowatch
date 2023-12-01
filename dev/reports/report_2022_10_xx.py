@@ -1,8 +1,8 @@
 """
 
-python -m watch mlops "status" --dataset_codes Drop4-SC
-python -m watch mlops "push packages" --dataset_codes Drop4-SC
-python -m watch mlops "pull packages" --dataset_codes Drop4-SC
+python -m geowatch mlops "status" --dataset_codes Drop4-SC
+python -m geowatch mlops "push packages" --dataset_codes Drop4-SC
+python -m geowatch mlops "pull packages" --dataset_codes Drop4-SC
 
 
 
@@ -20,7 +20,7 @@ KR_R002_0030_box  # negative
 US_R007_0045_box
 US_R007_0015_box
 
-python -m watch find_dvc   --hardware=auto --tags=phase2_expt
+python -m geowatch find_dvc   --hardware=auto --tags=phase2_expt
 
 DATASET_CODE=Drop4-SC
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
@@ -60,7 +60,7 @@ kwcoco subset \
 DATASET_CODE=Drop4-SC
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.package_fpath: unused
@@ -134,7 +134,7 @@ python -m watch.mlops.schedule_evaluation \
     --run=1
 
 
-python -m watch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/pred.kwcoco.json --default_track_fn class_heatmaps --track_kwargs '{"boundaries_as": "polys", "thresh": 0.1, "use_viterbi": 0}' --site_summary /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/foo/Drop4-SC_combo_US_R007_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_sites_fpath /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/site_activity_manifest.json --out_sites_dir /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/sites --out_kwcoco /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/activity_tracks.kwcoco.json
+python -m geowatch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/pred.kwcoco.json --default_track_fn class_heatmaps --track_kwargs '{"boundaries_as": "polys", "thresh": 0.1, "use_viterbi": 0}' --site_summary /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/foo/Drop4-SC_combo_US_R007_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_sites_fpath /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/site_activity_manifest.json --out_sites_dir /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/sites --out_kwcoco /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/activity_tracks.kwcoco.json
 
 
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
@@ -431,7 +431,7 @@ EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.package_fpath:
@@ -501,7 +501,7 @@ python -m watch.mlops.schedule_evaluation \
 DATASET_CODE=Drop4-BAS
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.package_fpath:
@@ -610,13 +610,13 @@ python -m watch.mlops.schedule_evaluation \
 
 #### BAS CHECKS
 
-python -m watch mlops "status" --dataset_codes Drop4-BAS
-python -m watch mlops "push packages" --dataset_codes Drop4-BAS
-python -m watch mlops "pull packages" --dataset_codes Drop4-BAS
+python -m geowatch mlops "status" --dataset_codes Drop4-BAS
+python -m geowatch mlops "push packages" --dataset_codes Drop4-BAS
+python -m geowatch mlops "pull packages" --dataset_codes Drop4-BAS
 
 
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --package_fpath=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt \
     --test_dataset=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop4-BAS/KR_R001.kwcoco.json \
     --pred_dataset=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/pred.kwcoco.json \
@@ -632,7 +632,7 @@ python -m watch.tasks.fusion.predict \
 
 
 
-python -m watch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
     "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/pred.kwcoco.json" \
     --default_track_fn saliency_heatmaps \
     --track_kwargs '{"thresh": 0.1, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
@@ -651,7 +651,7 @@ python -m watch.cli.run_tracker \
 DATASET_CODE=Drop4-BAS
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.package_fpath:
@@ -722,7 +722,7 @@ python -m watch.mlops.schedule_evaluation \
     --run=0
 
 
-    python -m watch.cli.run_tracker /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/pred.kwcoco.json --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1, "moving_window_size": null}' --clear_annots --out_sites_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/sites --out_site_summaries_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site-summaries --out_sites_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_tracks_manifest.json --out_site_summaries_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/tracks.kwcoco.json
+    python -m geowatch.cli.run_tracker /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/pred.kwcoco.json --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1, "moving_window_size": null}' --clear_annots --out_sites_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/sites --out_site_summaries_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site-summaries --out_sites_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_tracks_manifest.json --out_site_summaries_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/tracks.kwcoco.json
 
 
 """

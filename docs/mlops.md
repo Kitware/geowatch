@@ -16,12 +16,12 @@ MLOps is a wrapper around the cmd_queue library that provides a single entrypoin
 4. Score on IARPA metrics (again)
 5. Visualize SC
 
-You can invoke any one of these things through `python -m watch...` without MLOps, but it handles all the plumbing of feeding jobs' input/output to each other and spawning them to use all your available compute resources.
+You can invoke any one of these things through `python -m geowatch...` without MLOps, but it handles all the plumbing of feeding jobs' input/output to each other and spawning them to use all your available compute resources.
 
 
 ## using dvc and geowatch_dvc
 
-`geowatch_dvc` is an alias for `python -m watch.cli.find_dvc`.
+`geowatch_dvc` is an alias for `python -m geowatch.cli.find_dvc`.
 MLOps uses it to manage paths to your DVC repos.
 
 To get started:
@@ -65,19 +65,19 @@ dvc checkout
 
 ## using mlops to checkout a model
 
-`smartwatch mlops` is an alias for `python -m watch.cli.mlops_cli` or `python -m watch.mlops.expt_manager`. The entrypoint in code is `watch/mlops/expt_manager.py`.
+`geowatch mlops` is an alias for `python -m geowatch.cli.mlops_cli` or `python -m geowatch.mlops.expt_manager`. The entrypoint in code is `watch/mlops/expt_manager.py`.
 
 Let's choose a model and do stuff with it!
 ```bash
-smartwatch mlops --help
+geowatch mlops --help
 
 MODEL="Drop4_BAS_Retrain_V002"
 
-smartwatch mlops "pull packages" --model_pattern="${MODEL}*"
-smartwatch mlops "pull evals" --model_pattern="${MODEL}*"
-smartwatch mlops "status"
-python -m watch.mlops.expt_manager "list" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
-python -m watch.mlops.expt_manager "report" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
+geowatch mlops "pull packages" --model_pattern="${MODEL}*"
+geowatch mlops "pull evals" --model_pattern="${MODEL}*"
+geowatch mlops "status"
+python -m geowatch.mlops.expt_manager "list" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
+python -m geowatch.mlops.expt_manager "report" --model_pattern="${MODEL_OF_INTEREST}*"  # for more info
 ```
 The "volatile" table shows model predictions, which are not versioned for space reasons, but are an intermediate product of running pixel and polygon evaluations. The "versioned" table shows models and evaluations which should now exist in your local DVC repo.
 
@@ -98,7 +98,7 @@ evals on disk live in `$(geowatch_dvc --tags="phase2_expt")/models/fusion/${DATA
 
 ## using mlops to run an evaluation
 
-smartwatch mlops "evaluate" should work as an alias but doesn't right now
+geowatch mlops "evaluate" should work as an alias but doesn't right now
 
 if you haven't used this TEST_DATASET yet, remember to unzip its splits.zip first
 
@@ -107,7 +107,7 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
@@ -203,13 +203,13 @@ You can dig through the sourced scripts to piece together what a full GEOWATCH T
 
 ```bash
 # prediction (omitted)
-# python -m watch.tasks.fusion.predict ...
+# python -m geowatch.tasks.fusion.predict ...
 
 # tracking
 ROOT="/home/local/KHQ/matthew.bernstein/data/dvc-repos/smart_expt_dvc-ssd/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco"
 PXL_EXPT="${ROOT}/trk_pxl_b788335d"
 TRK_EXPT="trk_poly_ca4372e1"
- python -m watch.cli.run_tracker \
+ python -m geowatch.cli.run_tracker \
         "${TRK_ROOT}/pred.kwcoco.json" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{"thresh": 0.12, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
@@ -221,7 +221,7 @@ TRK_EXPT="trk_poly_ca4372e1"
         --out_kwcoco "${TRK_ROOT}/${TRK_EXPT}/tracks.kwcoco.json"
 
 # pxl eval
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=/home/local/KHQ/matthew.bernstein/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json \
         --pred_dataset="${TRK_ROOT}/pred.kwcoco.json" \
         --eval_dpath="${TRK_ROOT}"
@@ -232,7 +232,7 @@ python -m watch.tasks.fusion.evaluate \
         --workers=2
 
 # iarpa poly eval
-python -m watch.cli.run_metrics_framework \
+python -m geowatch.cli.run_metrics_framework \
         --merge=True \
         --name "Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt-trk_pxl_b788335d-${TRK_EXPT}" \
         --true_site_dpath "/home/local/KHQ/matthew.bernstein/data/dvc-repos/smart_data_dvc-ssd/annotations/site_models" \
@@ -243,7 +243,7 @@ python -m watch.cli.run_metrics_framework \
         --merge_fpath "${TRK_ROOT}/${TRK_EXPT}/merged/summary2.json" \
 
 # viz
-smartwatch visualize \
+geowatch visualize \
         "${TRK_ROOT}/${TRK_EXPT}/tracks.kwcoco.json" \
         --channels="red|green|blue,salient" \
         --stack=only \

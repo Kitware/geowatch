@@ -51,13 +51,13 @@ sdvc request "
 
 
 
-#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
-#python -m watch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD-V2
-#python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD-V2
+#python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+#python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD
+#python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-Cropped2GSD-V2
+#python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD-V2
 
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -211,7 +211,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1
@@ -326,7 +326,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_namek_v1

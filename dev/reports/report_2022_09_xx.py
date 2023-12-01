@@ -1,6 +1,6 @@
 r"""
 
-smartwatch mlops status
+geowatch mlops status
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -20,7 +20,7 @@ if [ ! -f "$VALI_DATASET_SUBSET" ]; then
     VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
     kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
     jq .videos[0] $VALI_DATASET_SUBSET
-    smartwatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
+    geowatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
     jq .videos[0] $VALI_DATASET_SUBSET
 fi
 
@@ -30,7 +30,7 @@ if [ ! -f "$VALI_DATASET_SUBSET" ]; then
     VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
     kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
     jq .videos[0] $VALI_DATASET_SUBSET
-    smartwatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
+    geowatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
     jq .videos[0] $VALI_DATASET_SUBSET
 fi
 
@@ -49,7 +49,7 @@ Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_10GSD_KR_R001.kwcoco.json
-python -m watch.mlops.expt_manager "evaluate" \
+python -m geowatch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$VALI_DATASET_SUBSET" \
     --enable_pred_trk=1 \
@@ -232,7 +232,7 @@ def main():
                 # TODO: allow specification of truth fpath as well?
                 viz_track_cmd = ub.codeblock(
                     fr'''
-                    smartwatch visualize \
+                    geowatch visualize \
                         "{pred_act_poly_kwcoco}" \
                         --channels="red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction" \
                         --viz_dpath={row_dpath}/_viz \
@@ -511,7 +511,7 @@ Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
 Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-python -m watch.mlops.expt_manager "evaluate" \
+python -m geowatch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
@@ -538,7 +538,7 @@ Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
 Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-python -m watch.mlops.expt_manager "evaluate" \
+python -m geowatch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
@@ -565,7 +565,7 @@ echo "
 Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-python -m watch.mlops.expt_manager "evaluate" \
+python -m geowatch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
@@ -596,7 +596,7 @@ NEWEST
 
 2022-09-28 EVAL RUN
 
-AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR geowatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
     --target_gsd=4 \
     --enable_video_stats=True \
     --enable_valid_region=True \
@@ -615,7 +615,7 @@ if [ ! -f "$TEST_DATASET" ]; then
 fi
 
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
@@ -692,7 +692,7 @@ ALT:
 
 
 
-AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR geowatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
     --target_gsd=4 \
     --enable_video_stats=True \
     --enable_valid_region=True \
@@ -711,7 +711,7 @@ if [ ! -f "$TEST_DATASET" ]; then
 fi
 
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
@@ -787,7 +787,7 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
@@ -848,7 +848,7 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
@@ -916,6 +916,6 @@ python -m watch.mlops.schedule_evaluation \
     --run=1
 
 
-    python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_4aa82814/crop_4ee34f2e/crop_id_e7ec2c85/crop.kwcoco.json --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_e7ec2c85_crop.kwcoco/act_pxl_f447d96a/pred.kwcoco.json --input_scale_space=10GSD --output_scale_space=10GSD --window_scale_space=10GSD --chip_dims=512,512 --time_steps=5 --num_workers=4 --devices=0, --accelerator=gpu --batch_size=1
+    python -m geowatch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_4aa82814/crop_4ee34f2e/crop_id_e7ec2c85/crop.kwcoco.json --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_e7ec2c85_crop.kwcoco/act_pxl_f447d96a/pred.kwcoco.json --input_scale_space=10GSD --output_scale_space=10GSD --window_scale_space=10GSD --chip_dims=512,512 --time_steps=5 --num_workers=4 --devices=0, --accelerator=gpu --batch_size=1
 
 """

@@ -9,14 +9,14 @@ def test_init_from_pretrained_state():
     import pytest
     pytest.skip('slow test: switch to lightning')
 
-    from watch.tasks.fusion.fit import fit_model  # NOQA
+    from geowatch.tasks.fusion.fit import fit_model  # NOQA
     # import xdev
     # xdev.make_warnings_print_tracebacks()
 
     # args = None
     # cmdline = False
     gpus = None
-    test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
+    test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
     results_path = ub.ensuredir((test_dpath, 'predict'))
     ub.delete(results_path)
     ub.ensuredir(results_path)
@@ -55,15 +55,15 @@ def test_init_from_pretrained_state():
 
 
 def test_init_from_phase1_models():
-    import watch
+    import geowatch
     import os
     try:
-        phase1_dvc_dpath = watch.find_dvc_dpath(tags='phase1')
+        phase1_dvc_dpath = geowatch.find_dvc_dpath(tags='phase1')
     except Exception:
         import pytest
         pytest.skip('dvc repo is not available')
 
-    from watch.tasks.fusion import production
+    from geowatch.tasks.fusion import production
     found = None
     for row in production.PRODUCTION_MODELS:
         if row['name'] == 'Drop3_SpotCheck_V323_epoch=18-step=12976.pt':
@@ -78,7 +78,7 @@ def test_init_from_phase1_models():
     init = model_fpath
 
     # First test it works by itself
-    from watch.tasks.fusion.fit import coerce_initializer
+    from geowatch.tasks.fusion.fit import coerce_initializer
     initializer = coerce_initializer(init)
     fpath = initializer._rectify_fpath()
     from torch_liberator.initializer import _torch_load
@@ -87,13 +87,13 @@ def test_init_from_phase1_models():
     assert state_dict
 
     # gpus = None
-    test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
+    test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
     results_path = ub.ensuredir((test_dpath, 'predict'))
     ub.delete(results_path)
     ub.ensuredir(results_path)
     package_fpath = test_dpath / 'my_test_package.pt'
     import kwcoco
-    from watch.tasks.fusion.fit import fit_model  # NOQA
+    from geowatch.tasks.fusion.fit import fit_model  # NOQA
     test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=3, gsize=(128, 128))
     fit_kwargs = {
          'train_dataset': test_dset.fpath,
@@ -117,6 +117,6 @@ def test_init_from_phase1_models():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/tests/test_init_from_pretrained.py
+        python ~/code/geowatch/tests/test_init_from_pretrained.py
     """
     test_init_from_pretrained_state()

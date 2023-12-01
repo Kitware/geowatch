@@ -3,7 +3,7 @@ def test_time_sampler_issue1():
     """
     Test an issue where our sampler was sampling the same frame multiple times.
     """
-    from watch.tasks.fusion.datamodules.temporal_sampling.sampler import TimeWindowSampler
+    from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import TimeWindowSampler
     import numpy as np
     nan = np.nan
 

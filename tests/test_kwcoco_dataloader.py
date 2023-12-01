@@ -4,17 +4,17 @@ Originally these were doctests in the dataloader, but were removed for space.
 TODO: These should be refactored into more descriptive tests that target
 specific parameters in the datamodule config
 """
-from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
 import ndsampler
 import kwcoco
-import watch
+import geowatch
 
 
 def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset():
     """
-    converted from /home/joncrall/code/watch/watch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset:1
+    converted from /home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset:1
     """
-    coco_dset = watch.coerce_kwcoco('watch')
+    coco_dset = geowatch.coerce_kwcoco('geowatch')
     print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
     print({c.channels.spec for c in coco_dset.images().coco_images})
     sampler = ndsampler.CocoSampler(coco_dset)
@@ -28,7 +28,7 @@ def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset()
 
 def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset___getitem__1():
     """
-    converted from /home/joncrall/code/watch/watch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset.__getitem__:1
+    converted from /home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset.__getitem__:1
     """
     coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
     sampler = ndsampler.CocoSampler(coco_dset)
@@ -43,7 +43,7 @@ def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset__
 
 def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset___getitem__2():
     """
-    converted from /home/joncrall/code/watch/watch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset.__getitem__:2
+    converted from /home/joncrall/code/watch/geowatch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset.__getitem__:2
     """
     coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
     sampler = ndsampler.CocoSampler(coco_dset)

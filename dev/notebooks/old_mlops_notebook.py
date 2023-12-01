@@ -348,7 +348,7 @@ def _sitevisit_2023_april_report():
 def _gather_namek_shortlist_results():
     """
 
-    smartwatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
+    geowatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
 
     """
     from watch.mlops.aggregate import AggregateEvluationConfig
@@ -606,7 +606,7 @@ def _namek_check_pipeline_status():
     # Generate code to run the missing experiments
     invocation = ub.codeblock(
         fr'''
-        python -m watch.mlops.schedule_evaluation \
+        python -m geowatch.mlops.schedule_evaluation \
             --params={fpath} \
             --root_dpath="{root_dpath}" \
             --devices="0,1" --queue_size=4 \
@@ -627,7 +627,7 @@ def _gather_all_results():
     r"""
     # On Namek
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=bas \
         --target "
             - $DVC_EXPT_DPATH/_timekernel_test_drop4
@@ -640,7 +640,7 @@ def _gather_all_results():
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     rsync -avprPR namek:data/dvc-repos/smart_expt_dvc/./namek_agg "$DVC_EXPT_DPATH"
 
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=bas \
         --target "
             - namek_agg/*.csv.zip
@@ -652,7 +652,7 @@ def _gather_all_results():
         --export_tables=True \
         --output_dpath="$DVC_EXPT_DPATH/all_agg_2022-02-24"
 
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=bas \
         --target "
             - all_agg_2022-02-24/*.csv.zip

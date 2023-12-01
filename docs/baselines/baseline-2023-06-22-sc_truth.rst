@@ -23,7 +23,7 @@ Use this code to get a feel for what parameters are available / required
     HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-    python -m watch.mlops.schedule_evaluation --params="
+    python -m geowatch.mlops.schedule_evaluation --params="
         matrix:
 
             ########################

@@ -53,7 +53,7 @@ them from.
 
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-    python -m watch.mlops.schedule_evaluation --params="
+    python -m geowatch.mlops.schedule_evaluation --params="
         matrix:
 
             ######################
@@ -255,7 +255,7 @@ To report your scores:
 
     # Pull out baseline tables
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.aggregate \
+    python -m geowatch.mlops.aggregate \
         --pipeline=joint_bas_sc \
         --target "
             - $DVC_EXPT_DPATH/_drop7_nowinter_baseline_joint_bas_sc

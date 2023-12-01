@@ -4,7 +4,35 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.12.1 - Released 2023-12-xx
+## Version 0.13.0 - Released 2023-12-xx
+
+
+### Added
+
+* Experimental Lightning Telemetry callback
+
+
+### Changed
+
+* The code has moved from the "watch" module to the "geowatch" module. This has
+  the potential to be a breaking change, but transition should be reasonably
+  smooth. A dummy "watch" model is still exposed, but will be removed in the
+  future.
+
+* Can now set dpath in demo data
+
+* Moved CI dashboard to public repo
+
+### Fixed
+
+* Fixed issue in dataloader where centered positives requested the top-right corners, and not the actual centers.
+
+* Fixed finish-install issue not working due to eager imports
+
+* Fixed TPL packaging in the pypi wheel 
+
+
+## Version 0.12.1 - Released 2023-11-21
 
 
 ### Added
@@ -267,7 +295,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * CI updated to `pyenv:3.11`
 * Cleanup `util_yaml`.
 * Lots of CLI improvements.
-* Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
+* Faster loading of multiple kwcoco files in geowatch stats, ensemble, combine.
 * Improvements to mlops.aggregate
 * Updated prepare-ta2-dataset with new cmd-queue and ACC-3 data
 * Users can now overwrite mlops output locations.
@@ -293,7 +321,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The kwcoco dataset now does extra work to randomize itself in training to bypass seed-everything issues. This can be disabled via the `reseed_fit_random_generators` parameter.
 * Prettier progress bars
 * `watch.cli.coco_add_watch_fields` how modifies image space to agree with the highest resolution asset.
-* Reworked the `smartwatch` CLI. Response time is much faster. Added autocomplete
+* Reworked the `geowatch` CLI. Response time is much faster. Added autocomplete
 * Refactored `save_package` to use common code between all models
 * Improve yaml utils, allow !include tag.
 * `watch.mlops.aggregate` CLI tool now has basic functionality.
@@ -329,7 +357,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.10 - Released 2023-02-28
 
 ### Added
-* `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
+* `geowatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
 * Add `submatrices` to MLOPs
@@ -380,11 +408,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.9 - Released 2023-01-31
 
 ### Added
-* Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
+* Add new CLI tool: `geowatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
 * New `util_prog.py` with experimental `ProgressManager` class to generalize ProgIter and rich.
-* Add `smartwatch visualize` option `--resolution` to specify the resolution to output the visualization at (e.g. "10GSD")
-* Add `smartwatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
-* Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
+* Add `geowatch visualize` option `--resolution` to specify the resolution to output the visualization at (e.g. "10GSD")
+* Add `geowatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
+* Experimental new logic in `geowatch project` for keyframe propagation / interpolation.
 * Added `polygon_simplify_tolerance` to tracking.
 * Add `--resolution` parameter to the tracker.
 * Add `--mask_samecolor_method` and default to `histogram`, will later change to False.
@@ -396,7 +424,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Changed
-* `smartwatch stats` now outputs a histogram over sensor / time range
+* `geowatch stats` now outputs a histogram over sensor / time range
 * In the spacetime grid builder `window_dims` now always corresponds to the spatial window dimensions and `time_dims` is given for time.
 * KWCocoDataloader exposes `window_resolution`, `input_resolution`, `output_resolution` as aliases for the `*_space_scale` arguments and will become the main ids in the future.
 
@@ -417,7 +445,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add uniform time sampling and better multi-sampler support
 * KWcocoVideoDataLoader now has initial support for a bounding box task.
 * Port code for generating random region / site models into `metrics_demo`.
-* Add new CLI tool: `smartwatch split_videos` to break a kwcoco file into one file per video.
+* Add new CLI tool: `geowatch split_videos` to break a kwcoco file into one file per video.
 * Add MultimodalTransformer option `multimodal_reduce=linear` for learned per-frame mode reductions.
 * Add KWcocoVideoDataLoader option `normalize_perframe` for robust per-batch-item normalization for specified channels.
 * Add KWcocoVideoDataLoader option `resample_invalid_frames` specifying the number of tries to resample bad frames.
@@ -435,9 +463,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Patch torchmetrics for old models
 * Fix corner-case crash in SC tracker.
 * Quality mask filtering was broken and is now using correct data.
-* The `smartwatch spectra` script now correctly dequantizes kwcoco images.
+* The `geowatch spectra` script now correctly dequantizes kwcoco images.
 * Issue in KWcocoVideoDataLoader where change labels were not computed correctly if the class task was not requested.
-* Fixed `smartwatch reproject_annotations` for new regions / sites from T&E
+* Fixed `geowatch reproject_annotations` for new regions / sites from T&E
 * Fix bugs in `util_kwimage.colorize_label_image`
 * Fix bugs in `util_kwimage.find_samecolor_region`
 
@@ -457,7 +485,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Documentation
-* More docs on `smartwatch find_dvc` in the docstring and `docs/using_geowatch_dvc.rst`
+* More docs on `geowatch find_dvc` in the docstring and `docs/using_geowatch_dvc.rst`
 * Added `examples/feature_fusion_tutorial.sh` describing how to train/evaluate
   a fusion model with team features.
 
@@ -475,7 +503,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Update requirements to support Python 3.11
-* Improved the reported information in `smartwatch stats` (i.e. `watch.cli.watch_coco_stats`)
+* Improved the reported information in `geowatch stats` (i.e. `watch.cli.watch_coco_stats`)
 * The invariants and fusion module now reuse the same stitching manager code.
 * The invariants can now use dynamic fixed GSDs.
 * Improved determinism in the time sampler.

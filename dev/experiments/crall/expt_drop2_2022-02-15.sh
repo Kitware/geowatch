@@ -9,7 +9,7 @@ prep_teamfeat_drop2(){
     DVC_DPATH=$(geowatch_dvc --hardware=hdd)
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres="0,1" \
         --with_landcover=1 \
@@ -19,7 +19,7 @@ prep_teamfeat_drop2(){
         --do_splits=1 \
         --depth_workers=0 \
         --cache=0 --run=1 --serial=1
-    #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+    #python -m geowatch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }
 
@@ -33,7 +33,7 @@ repackage_checkpoints_and_evaluate(){
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
+    python -m geowatch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
@@ -48,7 +48,7 @@ repackage_checkpoints_and_evaluate(){
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -63,7 +63,7 @@ repackage_checkpoints_and_evaluate(){
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -120,7 +120,7 @@ aggregate_multiple_evaluations(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*" --show=True \
@@ -140,7 +140,7 @@ EXPERIMENT_NAME=BaselineTemplate2022-03-03
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -202,19 +202,19 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v61
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -250,19 +250,19 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v62
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -299,19 +299,19 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_scratch_v63
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -346,19 +346,19 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 #CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
 CHANNELS="blue|green|red|nir|swir16|swir22"
-#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+#geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_scratch_v64
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -396,7 +396,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
@@ -406,7 +406,7 @@ EXPERIMENT_NAME=BAS_${ARCH}_TA1_xfer53_v65
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -443,7 +443,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -453,7 +453,7 @@ EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v66
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -490,7 +490,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -500,7 +500,7 @@ EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v67
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -537,7 +537,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -547,7 +547,7 @@ EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v68
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -586,7 +586,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -596,7 +596,7 @@ EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v69
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -633,7 +633,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -643,7 +643,7 @@ EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v70
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -684,10 +684,10 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 ARCH=smt_it_stm_p8
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 CHANNELS="blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config $WORKDIR/configs/common_20201117.yaml  \
     --channels=${CHANNELS} \
     --global_class_weight=0.0 \
@@ -721,7 +721,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
@@ -735,7 +735,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
@@ -749,7 +749,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="2"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
@@ -764,7 +764,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="3"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
@@ -781,7 +781,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="2"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
@@ -799,7 +799,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="3"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --global_class_weight=0.0 \
     --global_saliency_weight=1.00 \
@@ -828,7 +828,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -838,7 +838,7 @@ SC_PRETRAINED_MODEL_FPATH="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_
 EXPERIMENT_NAME=SC_TA1_ALL_REGIONS_c002_v077
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -876,7 +876,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
@@ -886,7 +886,7 @@ EXPERIMENT_NAME=SC_TA1_ALL_REGIONS_c002_v078
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
@@ -925,7 +925,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --tokenizer=linconv \
@@ -940,7 +940,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --tokenizer=linconv \
@@ -955,7 +955,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="2"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --tokenizer=linconv \
@@ -971,7 +971,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="3"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --name=$EXPERIMENT_NAME \
     --tokenizer=linconv \
@@ -996,7 +996,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --train_dataset=$TRAIN_FPATH \
     --vali_dataset=$VALI_FPATH \
@@ -1028,7 +1028,7 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --train_dataset=$TRAIN_FPATH \
     --vali_dataset=$VALI_FPATH \
@@ -1061,9 +1061,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="1"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1112,9 +1112,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="0"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1165,9 +1165,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="0"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1216,9 +1216,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="1"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1267,9 +1267,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="2"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1317,9 +1317,9 @@ DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 export CUDA_VISIBLE_DEVICES="3"
 __check__='
-smartwatch stats $VALI_FPATH $TRAIN_FPATH
+geowatch stats $VALI_FPATH $TRAIN_FPATH
 '
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,blue|green|red|nir|swir16|swir22" \
@@ -1371,7 +1371,7 @@ INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v5
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p1_v0100
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1423,7 +1423,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,i
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_v0101
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1475,7 +1475,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,i
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_v0102
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1530,7 +1530,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_raw_xfer_v0103
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1582,7 +1582,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_raw_scratch_v0104
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1634,7 +1634,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_raw_xfer_v2_v0105
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1686,7 +1686,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_raw_scratch_v2_v0106
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1740,7 +1740,7 @@ INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p1_scratch_v0107
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1792,7 +1792,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,i
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_scratch_v0108
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1847,7 +1847,7 @@ CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|invariants.0:8|forest|built_up|wat
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_p8_scratch_fused_norgb_v0109
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1900,7 +1900,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3|i
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BOTH_TA1_p8_scratch_2stream_v0110
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1953,7 +1953,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BASELINE_EXPERIMENT_V111
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2007,7 +2007,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BASELINE_EXPERIMENT_nowv_V111
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2066,7 +2066,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matearly_nowv_p2w_V112
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2118,7 +2118,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matlate_nowv_p8_V113
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2170,7 +2170,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matlate_nowv_p2w_V114
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2223,7 +2223,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matearly_nowv_p2w_V115
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2278,7 +2278,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matearly_nowv_p2w_V116
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2330,7 +2330,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matlate_nowv_p8_V117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2385,7 +2385,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matearly_nowv_p2w_V118
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2438,7 +2438,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matlate_nowv_p8_V119
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2494,7 +2494,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BASELINE_EXPERIMENT_V120
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2547,7 +2547,7 @@ CHANNELS="blue|green|red|nir|swir16"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=BASELINE_EXPERIMENT_V121
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2602,7 +2602,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matearly_nowv_p2w_V122
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2655,7 +2655,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_matlate_nowv_p8_V123
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2710,7 +2710,7 @@ EXPERIMENT_NAME=BaselineTemplate2022-03-01
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2770,7 +2770,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_M_late_nowv_p8_shorter_V124
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2802,7 +2802,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_M_late_nowv_p8_scratch_shorter_V125
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2834,7 +2834,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_M_late_nowv_p8_shorter_sgd_V126
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2866,7 +2866,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_M_late_nowv_p8_scratch_shorter_sgd_V127
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2902,7 +2902,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_late_nowv_p8_shorter_V128
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2935,7 +2935,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_late_nowv_p24_shorter_V129
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -2972,7 +2972,7 @@ CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_only_nowv_p8_V130
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3007,7 +3007,7 @@ CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_only_nowv_p12_V131
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220301.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3047,7 +3047,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_SC_DM_wv_p8_V132
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3101,7 +3101,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_SC_DM_wv_p8_V133
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3157,7 +3157,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_BOTH_DM_wv_p8_V134
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3211,7 +3211,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_BOTH_DM_wv_p8_V135
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3265,7 +3265,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_DM_wv_p8_V136
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3319,7 +3319,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_DM_wv_p8_V137
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -3376,7 +3376,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V138
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3414,7 +3414,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_SC_ML_V139
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3454,7 +3454,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V140
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3493,7 +3493,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V141
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3532,7 +3532,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V142
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3570,7 +3570,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V143
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3609,7 +3609,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V144
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3648,7 +3648,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V145
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3689,7 +3689,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V146
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3731,7 +3731,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V147
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3778,7 +3778,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V148
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3823,7 +3823,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V149
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3867,7 +3867,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V150
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3910,7 +3910,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V151
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3954,7 +3954,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V152
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -3999,7 +3999,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|mats
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V153
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4042,7 +4042,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|mats
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V154
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4093,7 +4093,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|mats
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V155
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4138,7 +4138,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|mats
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V146/FUSION_EXPERIMENT_ML_V146_epoch=67-step=17407.pt
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V156
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4193,7 +4193,7 @@ python -m watch.tasks.fusion.fit \
 #INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V156/FUSION_EXPERIMENT_ML_V156_epoch=39-step=10239.pt \
 #EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V156-cont1
 #DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-#python -m watch.tasks.fusion.fit \
+#python -m geowatch.tasks.fusion.fit \
 #    --config "$WORKDIR/configs/common_20220303.yaml" \
 #    --default_root_dir="$DEFAULT_ROOT_DIR" \
 #    --name=$EXPERIMENT_NAME \
@@ -4230,7 +4230,7 @@ python -m watch.tasks.fusion.fit \
 #DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 #EXPT_GROUP_CODE=eval3_candidates
 #KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-#python -m watch.tasks.fusion.repackage gather_checkpoints \
+#python -m geowatch.tasks.fusion.repackage gather_checkpoints \
 #    --dvc_dpath="$DVC_DPATH" \
 #    --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
 #    --train_dpath="$DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V156-cont1/lightning_logs/version_2/checkpoints/epoch=3-step=1023-v2.ckpt" \
@@ -4242,7 +4242,7 @@ python -m watch.tasks.fusion.fit \
 #EXPT_GROUP_CODE=eval3_candidates
 #KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 #ls $DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V155-cont1/lightning_logs/*/checkpoints
-#python -m watch.tasks.fusion.repackage gather_checkpoints \
+#python -m geowatch.tasks.fusion.repackage gather_checkpoints \
 #    --dvc_dpath="$DVC_DPATH" \
 #    --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
 #    --train_dpath="$DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V155-cont1/lightning_logs/version_2/checkpoints/epoch=3-step=1023-v2.ckpt" \
@@ -4261,7 +4261,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|mats
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V155/FUSION_EXPERIMENT_ML_V155_epoch=18-step=41628.pt \
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V155-cont1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4310,7 +4310,7 @@ INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIME
 #INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V157
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4360,7 +4360,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V158
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4407,7 +4407,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V159
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4454,7 +4454,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V160
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4501,7 +4501,7 @@ CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V161
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -4550,7 +4550,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,d
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V158
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \

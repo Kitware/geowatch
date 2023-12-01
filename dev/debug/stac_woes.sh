@@ -1,5 +1,5 @@
 
-python -m watch.cli.stac_search \
+python -m geowatch.cli.stac_search \
         --region_file "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations/region_models/US_C011.geojson" \
         --search_json "auto" \
         --cloud_cover "10" \
@@ -13,7 +13,7 @@ python -m watch.cli.stac_search \
 
 
 
-python -m watch.cli.baseline_framework_ingress \
+python -m geowatch.cli.baseline_framework_ingress \
         --aws_profile iarpa \
         --jobs avail \
         --virtual --requester_pays \
@@ -22,13 +22,13 @@ python -m watch.cli.baseline_framework_ingress \
         "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/_query/items/US_C011.input"
 
 
-AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.stac_to_kwcoco \
+AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m geowatch.cli.stac_to_kwcoco \
         "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/ingress/catalog_US_C011.json" \
         --outpath="/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/data_US_C011.kwcoco.json" \
         --ignore_duplicates \
         --jobs "8"
 
-AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.coco_add_watch_fields \
+AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m geowatch.cli.coco_add_watch_fields \
         --src "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/data_US_C011.kwcoco.json" \
         --dst "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/data_US_C011_fielded.kwcoco.json" \
         --enable_video_stats=False \
@@ -132,7 +132,7 @@ P001_ACC_B01.tif                                                                
 collect jobs 353/353... rate=3.30 Hz, eta=0:00:00, total=0:01:14
 Wrote: /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/Uncropped-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_BR_R005_0127_box.kwcoco.json
 ++ AWS_DEFAULT_PROFILE=iarpa
-++ python -m watch.cli.coco_add_watch_fields --src /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/Uncropped-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_BR_R005_0127_box.kwcoco.
+++ python -m geowatch.cli.coco_add_watch_fields --src /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/Uncropped-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_BR_R005_0127_box.kwcoco.
 json --dst /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/Uncropped-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_BR_R005_0127_box_fielded.kwcoco.json --enable_video_stats=False
 --overwrite=warp --target_gsd=4 --remove_broken=True --workers=20
 "
@@ -248,7 +248,7 @@ ERROR 4: `/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/23/K/LQ/2014/7/4/14JUL0413
 ed as a supported file format.
 ERROR 4: `/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/23/K/LQ/2014/7/4/14JUL04131637-P1BS-014900907010_01_P004_ACC/14JUL04131637-P1BS-014900907010_01_P004_ACC_B01.tif" not recogniz
 ed as a supported file format.
-++ python -m watch.cli.stac_search --region_file /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/subregions/AE_R001_0266_box.geojson --search_json auto --cloud_cover 40 --s
+++ python -m geowatch.cli.stac_search --region_file /home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc/subregions/AE_R001_0266_box.geojson --search_json auto --cloud_cover 40 --s
 '
 
 
@@ -261,7 +261,7 @@ aws s3 --profile=iarpa ls s3://smart-data-accenture/ta-1/ta1-wv-acc/23/K/LQ/2016
 cd "$HOME"/data/dvc-repos/smart_data_dvc/mwe
 cp "$HOME"/data/dvc-repos/smart_data_dvc/subregions/BR_R005_0127_box.geojson query_region_BR_R005_0127_box.geojson
 
-python -m watch.cli.stac_search \
+python -m geowatch.cli.stac_search \
     --region_file "query_region_BR_R005_0127_box.geojson" \
     --search_json "auto" \
     --cloud_cover "40" \
@@ -274,7 +274,7 @@ python -m watch.cli.stac_search \
 
 cat ./mwe_big.input | grep 16JUL01163115 > mwe.input
 
-python -m watch.cli.baseline_framework_ingress \
+python -m geowatch.cli.baseline_framework_ingress \
     --aws_profile iarpa \
     --jobs 0 \
     --virtual \
@@ -282,7 +282,7 @@ python -m watch.cli.baseline_framework_ingress \
     --catalog_fpath "./catalog_mwe.json" \
     "mwe.input"
 
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.stac_to_kwcoco \
+AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.stac_to_kwcoco \
     "./catalog_mwe.json" \
     --outpath="./mwe.kwcoco.json" \
     --from-collated --ignore_duplicates \
@@ -290,7 +290,7 @@ AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.stac_to_kwcoco \
 
 
 # PREPARE Uncropped datasets
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_add_watch_fields \
+AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_add_watch_fields \
     --src "./mwe.kwcoco.json" \
     --dst "./mwe_fielded.kwcoco.json" \
     --enable_video_stats=False \
@@ -300,7 +300,7 @@ AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_add_watch_fields \
     --workers="20"
 
 
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
+AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_align_geotiffs \
     --src "./mwe_fielded.kwcoco.json" \
     --dst "./mwe_aligned.kwcoco.json" \
     --regions "query_region_BR_R005_0127_box.geojson" \
@@ -326,7 +326,7 @@ AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
 #--region_file "$HOME/data/dvc-repos/smart_data_dvc/annotations/region_models/AE_R001.geojson"  \
 
 watch_env
-python -m watch.cli.stac_search \
+python -m geowatch.cli.stac_search \
     --region_file "$HOME/data/dvc-repos/smart_data_dvc/annotations/region_models/AE_R001.geojson"  \
     --search_json "auto"  \
     --cloud_cover "40" \

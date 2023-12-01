@@ -6,7 +6,7 @@
 # Need to precompute invariants
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-python -m watch.cli.split_videos \
+python -m geowatch.cli.split_videos \
     --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
           "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
     --io_workers=2 \
@@ -15,7 +15,7 @@ python -m watch.cli.split_videos \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.zip" \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.zip" \
@@ -41,7 +41,7 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
 BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --pipeline=joint_bas_sc_nocrop \
     --params="
         matrix:
@@ -73,7 +73,7 @@ python -m watch.mlops.schedule_evaluation \
 ## Assumes the ground truth is the BAS input
 #####################
 
-python -m watch.mlops.repackager \
+python -m geowatch.mlops.repackager \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/checkpoints/epoch=1-step=77702.ckpt \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/epoch=1-step=77702-v1.ckpt \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/epoch=5-step=233106.ckpt \
@@ -152,7 +152,7 @@ echo "
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -311,7 +311,7 @@ python -m watch.mlops.schedule_evaluation \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -381,7 +381,7 @@ python -m watch.mlops.schedule_evaluation \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -451,7 +451,7 @@ python -m watch.mlops.schedule_evaluation \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -529,8 +529,8 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 # ---------------
 if [ ! -f "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json ]; then
     # Split into a kwcoco file per site
-    python -m watch.cli.split_videos "$DVC_DATA_DPATH"/Drop4-SC/data_vali.kwcoco.json
-    python -m watch.cli.split_videos "$DVC_DATA_DPATH"/Drop4-SC/data_train.kwcoco.json
+    python -m geowatch.cli.split_videos "$DVC_DATA_DPATH"/Drop4-SC/data_vali.kwcoco.json
+    python -m geowatch.cli.split_videos "$DVC_DATA_DPATH"/Drop4-SC/data_train.kwcoco.json
     # Combine sites per region
     kwcoco union "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_*_box.kwcoco.json \
         --dst "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
@@ -549,7 +549,7 @@ fi
 
 
 
-python -m watch.mlops.repackager --force=True \
+python -m geowatch.mlops.repackager --force=True \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
@@ -563,7 +563,7 @@ python -m watch.mlops.repackager --force=True \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             sc_pxl.package_fpath:
@@ -627,7 +627,7 @@ python -m watch.mlops.schedule_evaluation \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:

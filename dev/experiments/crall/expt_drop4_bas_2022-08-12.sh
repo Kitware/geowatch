@@ -37,7 +37,7 @@ CHANNELS="blue|green|red"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop4_BASELINE_Template
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -113,7 +113,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_V323
 EXPERIMENT_NAME=Drop4_BAS_Retrain_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -153,7 +153,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_V323
 EXPERIMENT_NAME=Drop4_BAS_Retrain_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -195,7 +195,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/epoch=129-step=66560.ckpt
 EXPERIMENT_NAME=Drop4_BAS_Continue_10GSD_BGR_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -228,7 +228,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/epoch=129-step=66560.ckpt
 EXPERIMENT_NAME=Drop4_BAS_Continue_15GSD_BGR_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -265,7 +265,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V002/lightning_logs/version_0/checkpoints/epoch=73-step=37888.ckpt
 EXPERIMENT_NAME=Drop4_BAS_Continue_10GSD_BGRNSH_V005
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -301,7 +301,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/epoch=129-step=66560.ckpt
 EXPERIMENT_NAME=Drop4_BAS_Scratch_10GSD_BGR_V006
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -338,7 +338,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_Scratch_20GSD_BGRN_V007
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -377,7 +377,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_15GSD_multihead_perceiver_V008
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -428,7 +428,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_multihead_V009
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -476,7 +476,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_multihead_V009/lightning_logs/version_3/checkpoints/epoch=49-step=100600.ckpt
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_multihead_V009_cont
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -527,7 +527,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V010
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -580,7 +580,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop 
 EXPERIMENT_NAME=Drop4_BAS_15GSD_BGR_Scratch_V011
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -627,7 +627,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_V323
 EXPERIMENT_NAME=Drop4_BAS_Retrain_V012
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -676,7 +676,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=$INITIAL_STATE_V323
 EXPERIMENT_NAME=Drop4_BAS_Retrain_V013
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -721,7 +721,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V014
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -772,7 +772,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -822,7 +822,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015_continue_v2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -880,7 +880,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_invariants_30GSD_V016
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
@@ -898,7 +898,7 @@ python -m watch.tasks.fusion fit \
     --trainer.devices="0," \
     --data.channels="red|green|blue,invariants:17" 
 
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -984,7 +984,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_BGRNSH_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1044,7 +1044,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_30GSD_BGRNSH_V2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1104,7 +1104,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_10GSD_BGRNSH_V3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1167,7 +1167,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1250,7 +1250,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_15GSD_BGRN_V5
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1300,7 +1300,7 @@ python -m watch.tasks.fusion.fit \
     #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
     #--init
     
-smartwatch model_stats /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_0/package-interupt/package_epoch0_step38851.pt
+geowatch model_stats /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_0/package-interupt/package_epoch0_step38851.pt
 /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/package-interupt/package_epoch2_step98789.pt
 
     #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -1320,7 +1320,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_15GSD_BGRNSH_V5
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1380,7 +1380,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="(S2,L8):blue|green|red|nir"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_H_15GSD_BGRN_BGR_V6
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --model=HeterogeneousModel \
     --model.name=$EXPERIMENT_NAME \
@@ -1438,7 +1438,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/D
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.tasks.invariants.predict \
+python -m geowatch.tasks.invariants.predict \
     --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
     --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13_30GSD.kwcoco.json \
     --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
@@ -1451,7 +1451,7 @@ python -m watch.tasks.invariants.predict \
     --write_workers 1 \
     --tasks before_after pretext
 
-python -m watch.tasks.invariants.predict \
+python -m geowatch.tasks.invariants.predict \
     --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json \
     --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali_invar13_30GSD.kwcoco.json \
     --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
@@ -1466,7 +1466,7 @@ python -m watch.tasks.invariants.predict \
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-python -m watch.cli.split_videos \
+python -m geowatch.cli.split_videos \
     --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
           "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
     --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
@@ -1476,7 +1476,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 #data_train_PE_C001.kwcoco.json
 
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
         "$DVC_DATA_DPATH/Drop4-BAS/data_train_PE_C001.kwcoco.json" \
         "$DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json" \
@@ -1494,7 +1494,7 @@ python -m watch.cli.prepare_teamfeats \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
@@ -1541,7 +1541,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:17"
 EXPERIMENT_NAME=Drop4_BAS_BGRNSH_invar_V7_alt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1611,7 +1611,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="blue|green|red|nir,invariants.0:17"
 EXPERIMENT_NAME=Drop4_BAS_15GSD_BGRNSH_invar_V8
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1680,7 +1680,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="(S2,L8):(blue|green|red|nir,invariants.0:17)"
 EXPERIMENT_NAME=Drop4_BAS_15GSD_BGRN_invar_V9
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --model=HeterogeneousModel \
     --model.name=$EXPERIMENT_NAME \
@@ -1735,7 +1735,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:17"
 EXPERIMENT_NAME=Drop4_BAS_BGRNSH_invar_V10
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1805,7 +1805,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_10GSD_BGRN_V11
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1879,7 +1879,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="blue|green|red|nir,invariants.0:17"
 EXPERIMENT_NAME=Drop4_BAS_10GSD_BGRNSH_invar_V12
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1945,7 +1945,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 CHANNELS="blue|green|red|nir,invariants.0:17"
 EXPERIMENT_NAME=Drop4_BAS_10GSD_BGRNSH_invar_V12_cont
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2018,7 +2018,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.json
 CHANNELS="(L8,S2,PD,WV):(blue|green|red|nir)"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2083,7 +2083,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.json
 CHANNELS="(L8,S2,PD,WV):(blue|green|red|nir)"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2148,7 +2148,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="(L8,S2,PD,WV):(blue|green|red|nir)"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2213,7 +2213,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 CHANNELS="(L8,S2,PD,WV,WV1):(blue|green|red|nir)"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2278,7 +2278,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT5
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2344,7 +2344,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V12
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2411,7 +2411,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_BAS_only_tune_3GSD_at_10GSD_L8_S2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2548,7 +2548,7 @@ initializer:
     
     #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_tune_3GSD_allheads/lightning_logs/version_0/package-interupt/package_epoch29_step30029.pt
 " > ~/code/watch/watch/tasks/fusion/experiments/crall/config.yaml
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config ~/code/watch/watch/tasks/fusion/experiments/crall/config.yaml
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config ~/code/watch/watch/tasks/fusion/experiments/crall/config.yaml
 
 
 export CUDA_VISIBLE_DEVICES=1
@@ -2566,7 +2566,7 @@ EXPERIMENT_NAME=Drop6_BAS_only_tune_3GSD_at_10GSD_L8_S2_V3_singlehead
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 SELECT_VIDEOS='(.name | contains("_R"))'
 echo "SELECT_VIDEOS = $SELECT_VIDEOS"
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 4
@@ -2630,7 +2630,7 @@ initializer:
     init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_only_tune_3GSD_at_10GSD_L8_S2_V2/lightning_logs/version_0/package-interupt/package_epoch0_step277.pt
 "
 
-python -m watch.tasks.fusion fit --optimizer.help=AdamW
+python -m geowatch.tasks.fusion fit --optimizer.help=AdamW
 
     #num_draw=4 
     #draw_interval=5min 
@@ -2659,7 +2659,7 @@ python -m watch.tasks.fusion fit --optimizer.help=AdamW
     #--sqlview=sqlite \
     #--init="$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
 #--init="$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
-#smartwatch model_stats "$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
+#geowatch model_stats "$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
 
 
 
@@ -2677,7 +2677,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_JOINT_Split1_5GSD_V13
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2747,7 +2747,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_10GSD_split2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 SELECT_VIDEOS='(.name | contains("_R"))'
 echo "SELECT_VIDEOS = $SELECT_VIDEOS"
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 4
@@ -2818,7 +2818,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc-ssd/Drop6/./_assets "$PHASE2
 
 PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
 cd "$PHASE2_DATA_DPATH_SSD/Drop6"
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath "combo_imganns-*_L.kwcoco.json" \
     --suffix=fixquant \
     --constructive_mode=True
@@ -2839,7 +2839,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-3
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -2951,7 +2951,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V5
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3062,7 +3062,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V6
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=100000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3178,7 +3178,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-3
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3288,7 +3288,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
     num_workers            : 4
     balance_areas          : True
@@ -3395,7 +3395,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V8
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3508,7 +3508,7 @@ EXPERIMENT_NAME=Drop6_BAS_VITB16_1k_landcover_10GSD_split2_V8
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3612,7 +3612,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V9
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3724,7 +3724,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V10
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3862,7 +3862,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V11
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -3972,7 +3972,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V11_cont
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=100000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -4087,7 +4087,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V13
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-5
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -4199,7 +4199,7 @@ EXPERIMENT_NAME=Drop6_BAS_sits_landcover_10GSD_split2_V13
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-5
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -4303,7 +4303,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_big_landcover_10GSD_split2_V17
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -4413,7 +4413,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V18
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size: 2
   num_workers            : 4
@@ -4523,7 +4523,7 @@ EXPERIMENT_NAME=Drop6_BAS_sits_raw_10GSD_split2_V19
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=2e-4
 MAX_STEPS=500000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size: 32
   num_workers            : 6
@@ -4627,7 +4627,7 @@ EXPERIMENT_NAME=Drop6_BAS_sits_raw_eGSD_split2_V21
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=100000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=2 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size: 24
   num_workers            : 6
@@ -4732,7 +4732,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V22
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=200000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   train_dataset          : $TRAIN_FPATH
@@ -4842,7 +4842,7 @@ EXPERIMENT_NAME=Drop6_BAS_sits_raw_eGSD_split2_V23
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-3
 MAX_STEPS=100000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size: 8
   num_workers            : 5
@@ -4947,7 +4947,7 @@ EXPERIMENT_NAME=Drop6_BAS_sits_raw_eGSD_split2_V24
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-3
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size: 8
   num_workers            : 5
@@ -5055,7 +5055,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_nohidden_10GSD_split2_V31
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 seed_everything: 1104562820436
 data:
   batch_size              : 6
@@ -5168,7 +5168,7 @@ EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V24
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   num_workers            : 4
   batch_size: 2

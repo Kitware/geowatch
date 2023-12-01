@@ -16,7 +16,7 @@ TARGET_LR=1e-4
 MAX_STEPS=50000
 
 conda run --no-capture-output -n watch_py3.9 \
-    python -m watch.tasks.fusion fit --config "
+    python -m geowatch.tasks.fusion fit --config "
 data:
   train_dataset          : $TRAIN_FPATH
   vali_dataset           : $VALI_FPATH

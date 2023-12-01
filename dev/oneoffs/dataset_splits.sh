@@ -25,8 +25,8 @@ kwcoco subset --src $BASE_COCO_FPATH \
 kwcoco stats --src $BASE_COCO_FPATH $TRAIN_COCO_FPATH $VALI_COCO_FPATH
 
 # Show watch-specific kwcoco stats
-python -m watch stats $TRAIN_COCO_FPATH
-python -m watch stats $VALI_COCO_FPATH
+python -m geowatch stats $TRAIN_COCO_FPATH
+python -m geowatch stats $VALI_COCO_FPATH
 
 # Split out WV
 kwcoco subset --src $TRAIN_COCO_FPATH \

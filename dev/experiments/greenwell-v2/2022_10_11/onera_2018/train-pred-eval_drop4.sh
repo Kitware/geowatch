@@ -15,7 +15,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 EXPERIMENT_NAME=OSCD_HeterogeneousModel
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
+python -m geowatch.tasks.fusion fit \
     --config=config.yaml \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
@@ -27,18 +27,18 @@ python -m watch.tasks.fusion fit \
     --trainer.max_steps=20000
 
 # Predict 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 
 # Inspect the channels in the prediction file
-smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+geowatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 
 # Evaluate 
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
     --true_dataset="$TEST_FPATH" \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \
     --eval_dpath="$DVC_EXPT_DPATH"/predictions/eval

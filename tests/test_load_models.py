@@ -46,15 +46,15 @@ def test_load_uky_models():
         CHECKPOINT_FPATH=$DVC_DPATH/models/uky_invariants/sort_augment_overlap/LS_drop1-S2-L8-aligned-old.0.ckpt
         CHECKPOINT_FPATH=$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-aligned-old.0.ckpt
 
-        python -m watch stats $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
+        python -m geowatch stats $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
 
-        python -m watch.tasks.invariants.predict \
+        python -m geowatch.tasks.invariants.predict \
             --sensor S2 \
             --input_kwcoco $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json \
             --output_kwcoco $DVC_DPATH/drop1-S2-L8-aligned/_partial_uky_pred_S2.kwcoco.json \
             --ckpt_path $DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt
 
-        python -m watch.tasks.invariants.predict \
+        python -m geowatch.tasks.invariants.predict \
             --sensor L8 \
             --input_kwcoco $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json \
             --output_kwcoco $DVC_DPATH/drop1-S2-L8-aligned/_partial_uky_pred_L8.kwcoco.json \
@@ -63,18 +63,18 @@ def test_load_uky_models():
         cd $DVC_DPATH/drop1-S2-L8-aligned
         kwcoco union --src _partial_uky_pred_S2.kwcoco.json _partial_uky_pred_L8.kwcoco.json --dst uky_invariants.kwcoco.json
 
-        python ~/code/watch/watch/cli/coco_combine_features.py --src \
+        python ~/code/watch/geowatch/cli/coco_combine_features.py --src \
                 _partial_uky_pred_S2.kwcoco.json \
                 _partial_uky_pred_L8.kwcoco.json \
                 --dst uky_invariants.kwcoco.json
 
-        python -m watch stats _partial_uky_pred_S2.kwcoco.json
-        python -m watch stats _partial_uky_pred_L8.kwcoco.json
-        python -m watch stats uky_invariants.kwcoco.json
+        python -m geowatch stats _partial_uky_pred_S2.kwcoco.json
+        python -m geowatch stats _partial_uky_pred_L8.kwcoco.json
+        python -m geowatch stats uky_invariants.kwcoco.json
 
         cd $DVC_DPATH/drop1-S2-L8-aligned
         cd $DVC_DPATH/drop1-S2-L8-aligned
-        python ~/code/watch/watch/cli/coco_combine_features.py --src \
+        python ~/code/watch/geowatch/cli/coco_combine_features.py --src \
                 data.kwcoco.json \
                 landcover.kwcoco.json \
                 uky_invariants.kwcoco.json \

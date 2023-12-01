@@ -51,7 +51,7 @@ abidiff /home/joncrall/.pyenv/versions/3.8.6/envs/pyenv3.8.6/lib/python3.8/site-
 
 python -c "from osgeo import gdal; import pyproj"
 
-python -m watch
+python -m geowatch
 python -c "from osgeo import gdal; import pyproj"
 
 xdoctest -m watch.utils.util_gis

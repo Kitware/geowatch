@@ -1,0 +1,420 @@
+# Abuse YAML notation to make a heredoc. This will be ignored by the CI.
+.__doc__: &__doc__
+    - | 
+
+        Template for this files is (sort of) in
+        ~/misc/templates/PYPKG/.gitlab-ci.yml
+
+        # Note: expand yaml
+        yaml merge-expand .gitlab-ci.yml _expandyml && cat _expandyml
+         
+        # GITLAB LINTER
+        https://gitlab.kitware.com/smart/watch/-/ci/lint
+
+        * Make sure you add Runners to your project 
+        https://gitlab.org.com/smart/watch/-/settings/ci_cd 
+        in Runners-> Shared Runners
+        and Runners-> Available specific runners
+
+        * Ensure that you are auto-cancel redundant pipelines.
+        Navigate to https://gitlab.kitware.com/smart/watch/-/settings/ci_cd and ensure "Auto-cancel redundant pipelines" is checked.
+
+        More details are here https://docs.gitlab.com/ee/ci/pipelines/settings.html#auto-cancel-redundant-pipelines
+
+
+        TODO:
+
+            - [ ] Optimize caching and creation of the conda environments
+
+            - [X] Allow some network tests to run (and ensure we cache the
+                  $HOME/.cache/watch) directory to prevent large
+                  downloads.
+
+            - [ ] Create a minimal no-network test suite
+
+            - [ ] Ensure this script follows gitlab-CI best practices (its
+                  current state did whataver was necessary to make it work)
+
+
+# Abuse YAML notation to make a heredoc. This will be ignored by the CI.
+stages:
+    - lint
+    - build
+    - test
+    - docker
+
+
+### Conditionals ###
+
+.if-merge-request: &if-merge-request
+  if: >-
+    $CI_MERGE_REQUEST_IID
+
+.if-merged-into-default: &if-merged-into-default
+  if: >-
+    $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+
+### TEMPLATES ###
+# Define common templates using YAML anchors
+
+.common_template:
+    &common_template
+    variables:
+        PIP_CACHE_DIR:
+            "$CI_PROJECT_DIR/.cache/pip"
+        XDG_CACHE_HOME:
+            "$CI_PROJECT_DIR/.cache/xdg_cache"
+    tags:
+        - docker
+        - linux-x86_64
+        - build
+
+        # SMART CI Tags
+        #- aws
+        #- smart
+        
+        # POST-SMART CI Tags
+        - kitware-python-stack
+
+.test_pyenv_loose_template:
+    &test_pyenv_loose_template
+    <<:
+        *common_template
+    stage:
+        test
+
+    before_script:
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+        - pyenv global 3.11
+        - which python || true
+        - python --version || true
+        - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
+        - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
+        - pip install --prefer-binary -e .[headless,development,tests]
+
+    script:
+        - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
+        - ./run_tests.py --network watch tests --verbose
+
+    after_script:
+        - du -sh .cache/* || true
+        - du -sh .cache/xdg_cache/* || true
+        - du -sh .cache/pip/* || true
+
+    # Coverage is a regex that will parse the coverage from the test stdout
+    coverage:
+        '/TOTAL.+ ([0-9]{1,3}%)/'
+
+    cache:
+        key:
+            loose-cache-v02
+        paths:
+            #- .cache/conda/envs/loose-watch-env  # better with or without this?
+            - .cache/pip
+            #- .cache/xdg_cache
+            
+
+.test_pyenv_strict_template:
+    &test_pyenv_strict_template
+    <<:
+        *common_template
+    stage:
+        test
+
+    before_script:
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+        - pyenv global 3.11
+        - which python || true
+        - python --version || true
+        - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
+        - ./dev/make_strict_req.sh
+        - pip install --prefer-binary -r requirements-strict/gdal.txt  # gdal is special
+        - pip install --prefer-binary -e .[runtime-strict,headless-strict,development-strict,tests-strict]
+        # Test with IARPA metrics
+        # - pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
+
+    script:
+        - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
+        - ./run_tests.py --network watch tests --verbose
+
+    after_script:
+        - du -sh .cache/* || true
+        - du -sh .cache/xdg_cache/* || true
+        - du -sh .cache/pip/* || true
+
+    # Coverage is a regex that will parse the coverage from the test stdout
+    coverage:
+        '/TOTAL.+ ([0-9]{1,3}%)/'
+
+    cache:
+        key:
+            strict-cache-v02
+        paths:
+            - .cache/pip
+
+
+#### JOBS ###
+
+run_linter:
+    <<:
+        *common_template
+    stage:
+        lint
+
+    rules:
+        - <<: *if-merge-request
+        - <<: *if-merged-into-default
+
+    before_script:
+        # FIXME: we really shouldn't need to do this.
+        # But gitlab does nots seem to source the bashrc.
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+        - pyenv global 3.11
+        - which python || true
+        - python --version || true
+        - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
+        - ls -al
+        - python -m pip install -r requirements/linting.txt 
+
+    script:
+        - ./run_linter.sh
+
+    # We should eventually enforce linting
+    allow_failure: true
+
+    cache:
+        key:
+            linter-cache-v02
+        paths:
+            - .cache/pip
+
+    image:
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+    needs: []
+
+
+test_full_loose/pyenv-linux:
+    <<:
+        *test_pyenv_loose_template
+    rules:
+        - <<: *if-merge-request
+        - <<: *if-merged-into-default
+    image:
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+    needs: []
+
+test_full_strict/pyenv-linux:
+    <<:
+        *test_pyenv_strict_template
+    rules:
+        - <<: *if-merge-request
+        - <<: *if-merged-into-default
+    image:
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+    needs: []
+
+#.test_strict_template:
+#    &test_strict_template
+#    <<:
+#        *common_template
+#    stage:
+#        test
+
+#    before_script:
+#        - conda init bash
+#        - source ~/.bashrc
+#        - ls -al
+#        - ./dev/make_strict_req.sh
+#        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
+#        - conda activate ".cache/conda/envs/strict-watch-env"
+#        - pip install -e .
+#        # Test with IARPA metrics
+#        # - pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
+#    script:
+#        # Run a few quick checks first
+#        # 
+#        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
+#        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
+#        - ./run_tests.py --network watch tests --verbose
+
+#    after_script:
+#        - du -sh .cache/*
+#        - du -sh .cache/xdg_cache/*
+#        - du -sh .cache/conda/*
+#        - du -sh .cache/pip/*
+
+#    # Coverage is a regex that will parse the coverage from the test stdout
+#    coverage:
+#        '/TOTAL.+ ([0-9]{1,3}%)/'
+
+#    cache:
+#        key:
+#            strict-cache-v02
+#        paths:
+            
+#            #- .cache/conda/envs/strict-watch-env  # better with or without this?
+#            - .cache/conda/pkgs
+#            - .cache/pip
+#            #- .cache/xdg_cache
+
+
+#test_full_strict/conda-linux:
+#    <<:
+#        *test_strict_template
+#    rules:
+#        - <<: *if-merge-request
+#        - <<: *if-merged-into-default
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+#        # TODO: gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+#    needs: []
+
+
+#.common_template_docker:
+#  &common_template_docker
+#  tags:
+#    #- aws
+#    - smart
+#    - docker
+#    - linux-x86_64
+#    #- linux
+#    #- linux-3.17
+#    - build
+#  before_script:
+#    - docker info
+#    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+# Failing on main, and hasn't been used in awhile (as of 2022-01-13), just
+# disable it.
+#build_docker_and_upload_strict:
+#  <<:
+#    *common_template_docker
+#  rules:
+#    - <<: *if-merged-into-default
+#  stage:
+#    docker
+#  script:
+#    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+#    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
+#    # Pushing container only if merging into default branch (i.e. "master")
+#    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+#    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+#  image:
+#    docker:19.03.12
+#  variables:
+#    IMAGE_TAG: latest
+#  needs: []
+
+
+.__local_docker_heredoc__:
+        - | 
+
+            #GITLAB_TOKEN=$(git_token_for https://gitlab.kitware.com)
+            #docker login gitlab.kitware.com:4567 --username jon.crall --password "$GITLAB_TOKEN"
+
+            IMAGE=gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+            docker pull $IMAGE
+            
+            # Commands to help developers debug pipelines on their local
+            # machine Grab the base docker image, mount your local code
+            # directory, clone a fresh copy from that in the container, create
+            # the environment, and run the tests. 
+
+            cd $HOME/watch
+            docker run -v $PWD:/io:ro -v $HOME/.cache/pip:/pip_cache -it $IMAGE bash
+
+            # Will need to chmod things afterwords
+            export PIP_CACHE_DIR=/pip_cache
+            echo $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R g+rw $PIP_CACHE_DIR
+            USER=$(whoami)
+            chown -R $USER $PIP_CACHE_DIR
+            cd $HOME
+            git clone /io ./watch
+
+            cd $HOME/watch
+
+            # NEW PYENV STRICT CI VARIANT
+            pip install wheel build
+            ./dev/make_strict_req.sh
+            pip install --prefer-binary -r requirements-strict/gdal.txt  # gdal is special
+            pip install --prefer-binary -e .[runtime-strict,headless-strict,development-strict,tests-strict]
+            EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
+            python -c "import torch; print(torch.cuda.is_available())"
+            ./run_tests.py --network -v watch/tasks/fusion/predict.py
+            xdoctest watch/tasks/fusion/predict.py
+
+            # NEW PYENV STRICT DEVELOPER VARIANT
+            WATCH_STRICT=1 ./run_developer_setup.sh
+
+            # Running CI locally
+            # References: 
+            # https://stackoverflow.com/questions/32933174/use-gitlab-ci-to-run-tests-locally
+            cd $HOME/watch
+
+            docker run -d \
+              --name gitlab-runner \
+              --restart always \
+              -v $PWD:$PWD \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              gitlab/gitlab-runner:latest
+
+            docker exec -it -w $PWD gitlab-runner gitlab-runner exec docker test_full_loose/conda-linux
+
+            # Also
+            # # https://docs.gitlab.com/runner/install/
+            # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
+            arch=$(dpkg-architecture -q DEB_BUILD_ARCH)
+            echo $arch
+            curl -LJO "https://gitlab-runner-downloads.s3.amazonaws.com/latest/deb/gitlab-runner_${arch}.deb"
+            sudo dpkg -i "gitlab-runner_${arch}.deb"
+
+            safe_symlink .gitlab-ci-kitware.yml .gitlab-ci.yml
+            safe_symlink .gitlab-ci-smart.yml .gitlab-ci.yml
+
+
+            gitlab-runner exec docker test_full_loose/conda-linux  \
+                --docker-volumes "$HOME/.ssh:/root/.ssh:ro"
+
+            python -c "from osgeo import gdal; from pyproj import CRS; print(CRS.from_user_input('epsg:4236'))"
+            python -c "from pyproj import CRS; from osgeo import gdal; print(CRS.from_user_input('epsg:4236'))"
+
+
+            docker build --build-arg BUILD_STRICT=1 -t foo .
+            docker run -it foo /bin/bash 
+
+
+            source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch 
+            
+            xdoctest watch/cli/coco_merge_features.py
+            python run_tests.py watch tests scripts

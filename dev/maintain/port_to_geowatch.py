@@ -53,6 +53,7 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
 
         # Work on a non-installed copy of the repo
         cd $HOME/temp/port
+        rm -rf $HOME/temp/port/watch
         git clone $HOME/code/watch/.git ./watch
 
         cd $HOME/temp/port/watch
@@ -62,7 +63,7 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
 
         cd $HOME/temp/port/watch
         git fetch
-        git reset --hard origin/main
+        git reset --hard origin/dev/0.13.0
 
     """
     import ubelt as ub
@@ -72,7 +73,7 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
     repo_dpath = module_dpath.parent
 
     # Reset to last working state
-    ub.cmd('git reset --hard origin/main', cwd=repo_dpath, verbose=3)
+    ub.cmd('git reset --hard origin/dev/0.13.0', cwd=repo_dpath, verbose=3)
 
     # Delete the old geowatch mirror
     (module_dpath).delete()

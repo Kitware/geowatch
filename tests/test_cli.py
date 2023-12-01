@@ -1,45 +1,54 @@
 
 
 def test_cli_help_message():
-    verbose = 3
     import ubelt as ub
-    exe = 'python -m watch'
+    import os
+    verbose = 0
+    exe = 'python -m geowatch'
 
-    info = ub.cmd(f'{exe} --help', verbose=verbose)
+    env = dict(os.environ)
+    env['WATCH_PREIMPORT'] = '0'
+
+    kwargs = {
+        'verbose': verbose,
+        'env': env,
+    }
+
+    info = ub.cmd(f'{exe} --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} align --help', verbose=verbose)
+    info = ub.cmd(f'{exe} align --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} dvcdir --help', verbose=verbose)
+    info = ub.cmd(f'{exe} dvcdir --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} find_dvc --help', verbose=verbose)
+    info = ub.cmd(f'{exe} find_dvc --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} stats --help', verbose=verbose)
+    info = ub.cmd(f'{exe} stats --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} add_fields --help', verbose=verbose)
+    info = ub.cmd(f'{exe} add_fields --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} model_stats --help', verbose=verbose)
+    info = ub.cmd(f'{exe} model_stats --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} reproject --help', verbose=verbose)
+    info = ub.cmd(f'{exe} reproject --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} average_features --help', verbose=verbose)
+    info = ub.cmd(f'{exe} average_features --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} time_combine --help', verbose=verbose)
+    info = ub.cmd(f'{exe} time_combine --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} iarpa_eval --help', verbose=verbose)
+    info = ub.cmd(f'{exe} iarpa_eval --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} spectra --help', verbose=verbose)
+    info = ub.cmd(f'{exe} spectra --help', **kwargs)
     assert info['ret'] == 0
 
-    info = ub.cmd(f'{exe} visualize --help', verbose=verbose)
+    info = ub.cmd(f'{exe} visualize --help', **kwargs)
     assert info['ret'] == 0

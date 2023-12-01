@@ -39,21 +39,21 @@ aws s3 --profile iarpa cp $S3_FPATH "$UNCROPPED_QUERY_DPATH"
 ls -al "$UNCROPPED_QUERY_DPATH"
 
 #cat "$UNCROPPED_QUERY_FPATH" | sort -u > "$UNCROPPED_QUERY_FPATH.unique"
-python -m watch.cli.baseline_framework_ingress \
+python -m geowatch.cli.baseline_framework_ingress \
     --aws_profile iarpa \
     --jobs 4 \
     --virtual \
     --outdir "$UNCROPPED_INGRESS_DPATH" \
     "$UNCROPPED_QUERY_FPATH"
 
-python -m watch.cli.stac_to_kwcoco \
+python -m geowatch.cli.stac_to_kwcoco \
     "$UNCROPPED_CATALOG_FPATH" \
     --outpath="$UNCROPPED_KWCOCO_FPATH" \
     --populate-watch-fields \
     --from-collated \
     --jobs avail
 
-python -m watch.cli.coco_align_geotiffs \
+python -m geowatch.cli.coco_align_geotiffs \
     --src "$UNCROPPED_KWCOCO_FPATH" \
     --dst "$ALIGNED_KWCOCO_FPATH" \
     --regions "$REGION_MODELS" \
@@ -66,7 +66,7 @@ python -m watch.cli.coco_align_geotiffs \
 
 
 #DVC_DPATH=$(geowatch_dvc)
-#python -m watch.cli.prepare_teamfeats \
+#python -m geowatch.cli.prepare_teamfeats \
 #    --base_fpath="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
 #    --gres="0," \
 #    --with_depth=True \
@@ -81,7 +81,7 @@ python -m watch.cli.coco_align_geotiffs \
 #DEPTH_MODEL_FPATH=$DVC_DPATH/$DEPTH_MODEL_SUFFIX
 #[[ -f "$DEPTH_MODEL_FPATH" ]] || (cd "$DVC_DPATH" && dvc pull $DEPTH_MODEL_SUFFIX)
 #export CUDA_VISIBLE_DEVICES=1
-#python -m watch.tasks.depth.predict \
+#python -m geowatch.tasks.depth.predict \
 #    --dataset="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
 #    --output="$ALIGNED_KWCOCO_BUNDLE/dzyne_depth.kwcoco.json" \
 #    --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
@@ -93,14 +93,14 @@ LANDCOVER_MODEL_SUFFIX=models/landcover/visnav_remap_s2_subset.pt
 LANDCOVER_MODEL_FPATH=$DVC_DPATH/$LANDCOVER_MODEL_SUFFIX
 [[ -f "$LANDCOVER_MODEL_FPATH" ]] || (cd "$DVC_DPATH" && dvc pull $LANDCOVER_MODEL_SUFFIX)
 export CUDA_VISIBLE_DEVICES=1
-python -m watch.tasks.landcover.predict \
+python -m geowatch.tasks.landcover.predict \
     --dataset="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
     --deployed="$LANDCOVER_MODEL_FPATH" \
     --output="$ALIGNED_KWCOCO_BUNDLE/dzyne_landcover.kwcoco.json" \
     --num_workers="avail/4" \
     --device=0
 
-python -m watch.cli.coco_combine_features \
+python -m geowatch.cli.coco_combine_features \
     --src "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
           "$ALIGNED_KWCOCO_BUNDLE/dzyne_landcover.kwcoco.json" \
     --dst "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json"
@@ -118,13 +118,13 @@ BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_e
 BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
 [[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$BAS_MODEL_SUFFIX")
 SUGGESTIONS=$(
-    python -m watch.tasks.fusion.organize suggest_paths  \
+    python -m geowatch.tasks.fusion.organize suggest_paths  \
         --package_fpath="$BAS_MODEL_PATH"  \
         --test_dataset="$INPUT_DATASET")
 OUTPUT_BAS_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 
 export CUDA_VISIBLE_DEVICES=1
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
        --write_preds False \
        --write_probs True \
        --with_change False \
@@ -137,7 +137,7 @@ python -m watch.tasks.fusion.predict \
        --gpus 1 
 
 _debug(){
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$OUTPUT_BAS_DATASET" --channels="salient" \
         --extra_header="$(basename "$BAS_MODEL_PATH")" \
         --draw_anns=False --animate=True --workers=4 
@@ -149,13 +149,13 @@ SC_MODEL_SUFFIX=models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt
 SC_MODEL_PATH=$DVC_DPATH/$SC_MODEL_SUFFIX
 [[ -f "$SC_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$SC_MODEL_PATH")
 SUGGESTIONS=$(
-    python -m watch.tasks.fusion.organize suggest_paths  \
+    python -m geowatch.tasks.fusion.organize suggest_paths  \
         --package_fpath="$SC_MODEL_PATH"  \
         --test_dataset="$INPUT_DATASET")
 OUTPUT_SC_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 
 export CUDA_VISIBLE_DEVICES=1
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
        --write_preds False \
        --write_probs True \
        --with_change False \
@@ -168,7 +168,7 @@ python -m watch.tasks.fusion.predict \
        --batch_size 32 \
        --gpus 1
 _debug(){
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$OUTPUT_SC_DATASET" --channels="No Activity|Active Construction|Site Preparation" \
         --extra_header="$(basename "$SC_MODEL_PATH")" \
         --draw_anns=False --animate=True --workers=4 
@@ -206,7 +206,7 @@ field': 593,
     #        --dst "$ALIGNED_KWCOCO_BUNDLE/combo_L_s2.kwcoco.json" \
     #        --select_images '.sensor_coarse == "S2"'
 
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$OUTPUT_BAS_DATASET" \
         --space="video" \
         --num_workers=2 \
@@ -217,9 +217,9 @@ field': 593,
         --any3=False 
 
 
-    smartwatch stats "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json"
+    geowatch stats "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json"
 
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json" \
         --space="video" \
         --num_workers=avail \
@@ -230,7 +230,7 @@ field': 593,
         --workers=4 \
         --any3=False 
 
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json" \
         --space="video" \
         --num_workers=avail \
@@ -241,14 +241,14 @@ field': 593,
         --workers=4 \
         --any3=False 
 
-    python -m watch intensity_histograms \
+    python -m geowatch intensity_histograms \
         --src "$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json" \
         --dst="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_combo_L/intensity.png" \
         --exclude_channels="cloudmask|cirrus|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
         --valid_range="1:6000" \
         --workers="0" 
 
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
         --space="video" \
         --num_workers=avail \
@@ -258,7 +258,7 @@ field': 593,
         --animate=True \
         --any3=False 
 
-    python -m watch intensity_histograms \
+    python -m geowatch intensity_histograms \
         --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
         --dst="$ALIGNED_KWCOCO_BUNDLE/_viz_combo_L/intensity.png" \
         --exclude_channels="cirrus|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
@@ -270,7 +270,7 @@ field': 593,
     BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
     BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
     BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
            --write_preds False \
            --write_probs True \
            --with_change False \
@@ -283,28 +283,28 @@ field': 593,
            --gpus 1
             
 
-    python -m kwcoco stats "$INPUT_DATASET" python -m watch stats "$INPUT_DATASET"
-    python -m watch.cli.torch_model_stats "$BAS_MODEL_PATH"
+    python -m kwcoco stats "$INPUT_DATASET" python -m geowatch stats "$INPUT_DATASET"
+    python -m geowatch.cli.torch_model_stats "$BAS_MODEL_PATH"
 
     
     #--test_dataset="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json" \
     #--test_dataset="$DVC_DPATH/Aligned-TA1_FULL_SEQ_KR_S001/combo_L.kwcoco.json" \
-    python -m watch.cli.torch_model_stats "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v080/BAS_TA1_c001_v080_epoch=54-step=112639.pt"
-    python -m watch.cli.torch_model_stats "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt"
+    python -m geowatch.cli.torch_model_stats "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v080/BAS_TA1_c001_v080_epoch=54-step=112639.pt"
+    python -m geowatch.cli.torch_model_stats "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt"
 
-    python -m watch.cli.torch_model_stats ~/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=3-step=34611.pt
+    python -m geowatch.cli.torch_model_stats ~/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=3-step=34611.pt
 
-    python -m watch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt"
-    python -m watch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=3-step=34611.pt"
-    python -m watch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=2-step=5594.pt"
+    python -m geowatch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt"
+    python -m geowatch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=3-step=34611.pt"
+    python -m geowatch.cli.torch_model_stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=2-step=5594.pt"
 
     #--package_fpath="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v080/BAS_TA1_c001_v080_epoch=54-step=112639.pt" \
     #--package_fpath="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt" \
 
-    python -m watch stats "$DVC_DPATH/Aligned-TA1_FULL_SEQ_KR_S001/combo_L.kwcoco.json"
+    python -m geowatch stats "$DVC_DPATH/Aligned-TA1_FULL_SEQ_KR_S001/combo_L.kwcoco.json"
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
         --write_probs=True \
         --write_preds=False \
         --with_class=auto \
@@ -322,7 +322,7 @@ field': 593,
 
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
-    python -m watch visualize \
+    python -m geowatch visualize \
         "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/pred_BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/pred.kwcoco.json" \
         --workers=4 \
         --channels="salient" \
@@ -331,7 +331,7 @@ field': 593,
         --extra_header="pred_BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917"
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
-    python -m watch visualize \
+    python -m geowatch visualize \
         "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v076/pred_BAS_TA1_c001_v076_epoch=90-step=186367/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
         --workers=4 \
         --channels="salient" \
@@ -340,7 +340,7 @@ field': 593,
         --extra_header="BAS_TA1_c001_v076_epoch=90-step=186367.pt"
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
-    python -m watch visualize \
+    python -m geowatch visualize \
         "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v082/pred_BAS_TA1_c001_v082_epoch=42-step=88063/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
         --workers=4 \
         --channels="salient" \
@@ -348,12 +348,12 @@ field': 593,
         --animate=True \
         --extra_header="BAS_TA1_c001_v082_epoch=42-step=88063.pt"
 
-    smartwatch visualize \
+    geowatch visualize \
         "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-TA1_FULL_SEQ_KR_S001_CLOUD_LT_10/dzyne_landcover.kwcoco.json" \
         --channels="red|green|blue,bare_ground|forest|wetland" --animate=True --with_anns=False
 
-        smartwatch stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" 
-    smartwatch visualize \
+        geowatch stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" 
+    geowatch visualize \
         "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
         --channels="No Activity|Active Construction|Site Preparation" --animate=True 
 }

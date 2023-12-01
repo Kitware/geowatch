@@ -34,12 +34,12 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
 CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -95,9 +95,9 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch.tasks.fusion.fit --help | grep arch | grep joint
+#python -m geowatch.tasks.fusion.fit --help | grep arch | grep joint
 
-CUDA_VISIBLE_DEVICES="0" python -m watch.tasks.fusion.fit \
+CUDA_VISIBLE_DEVICES="0" python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -133,7 +133,7 @@ CUDA_VISIBLE_DEVICES="0" python -m watch.tasks.fusion.fit \
          --num_sanity_val_steps=0  
 
 
-CUDA_VISIBLE_DEVICES="0" python -m watch.tasks.fusion.fit \
+CUDA_VISIBLE_DEVICES="0" python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -212,10 +212,10 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch.tasks.fusion.fit --help | grep arch | grep joint
+#python -m geowatch.tasks.fusion.fit --help | grep arch | grep joint
 
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -281,12 +281,12 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -345,12 +345,12 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -427,12 +427,12 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
 CUDA_VISIBLE_DEVICES="0"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -497,12 +497,12 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-#python -m watch stats $TRAIN_FPATH 
+#python -m geowatch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \

@@ -6,9 +6,9 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 1. Repackage and commit new models
     #################################
 
-    python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
-    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
-    python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
+    python -m geowatch.tasks.fusion.dvc_sync_manager "push packages evals"
+    python -m geowatch.tasks.fusion.dvc_sync_manager "pull evals"
+    python -m geowatch.tasks.fusion.dvc_sync_manager "pull packages"
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
@@ -18,7 +18,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
+    python -m geowatch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
@@ -63,7 +63,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
         VALI_FPATH=$SSD_VALI_FPATH
     fi
     #tmux_spawn \
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -76,7 +76,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --skip_existing=1 --backend=tmux --run=0
 
 
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt" \
             --test_dataset="$VALI_FPATH" \
@@ -94,7 +94,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
-    python -m watch.tasks.fusion.dvc_sync_manager "push evals" --dvc_remote=aws
+    python -m geowatch.tasks.fusion.dvc_sync_manager "push evals" --dvc_remote=aws
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
@@ -141,7 +141,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     GROUP_KEY="*Drop3*s2_wv*"
     #GROUP_KEY="*Drop3*"
 
-    python -m watch.tasks.fusion.aggregate_results \
+    python -m geowatch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="$GROUP_KEY" --show=True \
@@ -154,7 +154,7 @@ special_evaluation(){
     DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     source "$HOME"/local/init/utils.sh
-    #smartwatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
+    #geowatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
 
 
     #models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
@@ -188,7 +188,7 @@ special_evaluation(){
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+    python -m geowatch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3,4,5,6,7,8" \
             --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
@@ -215,7 +215,7 @@ prep_features(){
 
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
         --gres="0,1" \
@@ -292,7 +292,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -339,7 +339,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -384,7 +384,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -431,7 +431,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -475,7 +475,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
 CHANNELS="red|green|blue|near-ir1|near-ir2|red-edge|yellow"
 EXPERIMENT_NAME=CropDrop3_SC_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -516,7 +516,7 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-python -m watch.cli.prepare_splits \
+python -m geowatch.cli.prepare_splits \
     --base_fpath="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
     --run=0 --backend=serial
 
@@ -533,7 +533,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V005
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -579,7 +579,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_vali.kwcoco.json
 CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_V006
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -634,7 +634,7 @@ CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_xver1_V007
 INIT_STATE_V001=$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=90-step=186367-v1.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -681,7 +681,7 @@ CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_xver1_V008
 INIT_STATE_V001=$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=90-step=186367-v1.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -733,7 +733,7 @@ CHANNELS="red|green|blue|depth"
 EXPERIMENT_NAME=CropDrop3_SC_wvonly_D_V009
 INIT_STATE_V003=$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V003/CropDrop3_SC_V003_epoch=30-step=63487.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -776,13 +776,13 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="red|green|blue|depth,red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_wvonly_D_V010
 INIT_STATE_V003=$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V003/CropDrop3_SC_V003_epoch=30-step=63487.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -825,12 +825,12 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="red|green|blue|near-ir1|near-ir2|depth,red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_wvonly_D_V011
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -877,13 +877,13 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver7_V012
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -926,13 +926,13 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver7_V013
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -982,7 +982,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver11_V013
 INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1025,12 +1025,12 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver11_V014
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1078,12 +1078,12 @@ ls "$KWCOCO_BUNDLE_DPATH"
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver11_V015
 INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1127,12 +1127,12 @@ ls "$KWCOCO_BUNDLE_DPATH"
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
-smartwatch stats "$VALI_FPATH"
+geowatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver7_V016
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1184,7 +1184,7 @@ CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver12_V018
 INIT_STATE_V012="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_raw_xver7_V012/CropDrop3_SC_s2wv_raw_xver7_V012_epoch=19-step=40959-v1.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1234,7 +1234,7 @@ CHANNELS="red|green|blue"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_rgb_xver6_V019
 INIT_STATE_V006="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1286,7 +1286,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V020
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1335,7 +1335,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V021
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1386,7 +1386,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V022
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1435,7 +1435,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V023
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1486,7 +1486,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont_V024
 INIT_STATE_V020="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_scratch_V021/CropDrop3_SC_s2wv_tf_scratch_V021_epoch=10-step=2815.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1536,7 +1536,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont_V025
 INIT_STATE_V021="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_scratch_V020/CropDrop3_SC_s2wv_tf_scratch_V020_epoch=5-step=1535.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1588,7 +1588,7 @@ CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont2_V026
 INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont_V024/CropDrop3_SC_s2wv_tf_cont_V024_epoch=4-step=1279.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1639,7 +1639,7 @@ INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V027
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1688,7 +1688,7 @@ INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V028
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1737,7 +1737,7 @@ INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V029
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1788,10 +1788,10 @@ CHANNELS="blue|green|red,invariants:0:16"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 #true || \
-#    smartwatch stats "$VALI_FPATH"
+#    geowatch stats "$VALI_FPATH"
 #true || \
 #    kwcoco validate "$VALI_FPATH" --require_relative=True
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1840,7 +1840,7 @@ INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont28_V031
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1889,7 +1889,7 @@ INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_dm_cont28_V032
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+python -m geowatch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \

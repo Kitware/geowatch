@@ -15,13 +15,13 @@ from watch.mlops import schedule_evaluation
 def check_crop():
     """
 
-    smartwatch stats kwcoco_for_bas.json
+    geowatch stats kwcoco_for_bas.json
 
     source $HOME/code/watch/secrets/secrets
     DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/nov-one/debug13_KIT_TA2_20221121_KR_R001/bas-fusion
 
     # Execute alignment / crop script
-    python -m watch.cli.coco_align_geotiffs \
+    python -m geowatch.cli.coco_align_geotiffs \
         --src $DPATH/kwcoco_for_bas.json \
         --dst $DPATH/test-recrop/kwcoco_cropped_bas2.json \
         --regions $DPATH/region_models/KR_R001.geojson \

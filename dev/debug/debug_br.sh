@@ -24,7 +24,7 @@ PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Con
 
 TEST_DATASET="./cropped_kwcoco_for_bas.json"
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --devices 0 \
     --write_preds False --write_probs True --with_change False --with_saliency True --with_class False  \
     --test_dataset "$TEST_DATASET" \
@@ -53,7 +53,7 @@ PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Ret
 TMP_DPATH=$DATA_DVC_DPATH/_tmp
 mkdir -p "$OUT_DPATH"
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --devices 0 \
     --write_preds False --write_probs True --with_change False --with_saliency True --with_class False  \
     --test_dataset "$TEST_DATASET" \
@@ -69,10 +69,10 @@ python -m watch.tasks.fusion.predict \
     --clear_annots=False 
 
 
-#smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
-smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
+#geowatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
+geowatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
     --channels='red|green|blue,salient' --workers=12 --draw_anns --stack --skip_missing=False --only_boxes=True --animate
 
-smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
+geowatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
     --channels='red|green|blue,salient' --workers=12 --draw_anns --stack --skip_missing=False --only_boxes=True --animate \
     --space='image' --min_dim=None

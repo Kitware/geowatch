@@ -100,7 +100,7 @@ And using this as a reference you might construct a set of command that look lik
 .. code:: bash
 
     # I copied the pixel predict step twice  and put in some custom paths
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
         --package_fpath=MY_MODEL1.pt \
         --test_dataset=MY_DATASET.kwcoco.zip \
         --pred_dataset=./_reference/pred/flat/bas_pxl/model1_preds/pred.kwcoco.zip \
@@ -116,7 +116,7 @@ And using this as a reference you might construct a set of command that look lik
         --with_class=False \
         --with_change=False
 
-    python -m watch.tasks.fusion.predict \
+    python -m geowatch.tasks.fusion.predict \
         --package_fpath=MY_MODEL2.pt \
         --test_dataset=MY_DATASET.kwcoco.zip \
         --pred_dataset=./_reference/pred/flat/bas_pxl/model2_preds/pred.kwcoco.zip \
@@ -144,7 +144,7 @@ And using this as a reference you might construct a set of command that look lik
 
     # The rest of the tracking + eval part of the pipeline is unchanged.
 
-    python -m watch.cli.run_tracker \
+    python -m geowatch.cli.run_tracker \
         --in_file "./_reference/pred/flat/bas_ensemble/bas_ensemble_custom/pred.kwcoco.zip" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{"agg_fn": "probs", "thresh": 0.4, "inner_window_size": "1y", "inner_agg_fn": "mean", "norm_ord": "inf", "polygon_simplify_tolerance": 1, "time_thresh": 0.8, "resolution": "10GSD", "moving_window_size": null, "poly_merge_method": "v2", "min_area_square_meters": 7200, "max_area_square_meters": 8000000}' \
@@ -157,7 +157,7 @@ And using this as a reference you might construct a set of command that look lik
         --out_sites_dir "./_reference/pred/flat/bas_poly/bas_poly_id_custom/sites" \
         --out_kwcoco "./_reference/pred/flat/bas_poly/bas_poly_id_custom/poly.kwcoco.zip"
     #
-    python -m watch.cli.run_metrics_framework \
+    python -m geowatch.cli.run_metrics_framework \
         --merge=True \
         --name "some-name" \
         --true_site_dpath "./annotations/drop6/site_models" \

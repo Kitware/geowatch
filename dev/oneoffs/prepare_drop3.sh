@@ -10,7 +10,7 @@ DVC_DPATH=$(geowatch_dvc)-hdd
 cd $DVC_DPATH
 
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part2.unique.input \
@@ -33,7 +33,7 @@ python -m watch.cli.prepare_ta2_dataset \
 # s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
 
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
@@ -54,7 +54,7 @@ python -m watch.cli.prepare_ta2_dataset \
 
 DVC_DPATH=$(geowatch_dvc)
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part1.unique.input \
@@ -81,7 +81,7 @@ extra_debuging(){
             /vsis3/smart-data-kitware/ta-1/ta1-ls-kit/40/R/BN/2018/02/06/LC08_L1TP_160043_20180206_20200902_02_T1_40RBN_KIT/LC08_L1TP_160043_20180206_20200902_02_T1_40RBN_KIT_B06.tif \
             /tmp/tmpglvmdhdq.tif
 
-    AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_add_watch_fields \
+    AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_add_watch_fields \
         --src "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json" \
         --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json" \
         --workers="min(avail,max(all/2,8))" \
@@ -90,12 +90,12 @@ extra_debuging(){
         --enable_valid_region=True \
         --target_gsd=10
 
-    python -m watch visualize \
+    python -m geowatch visualize \
         --src "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         "--channels=red|green|blue" \
         --draw_anns=False --workers=avail
 
-    AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
+    AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_align_geotiffs \
         --src "$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop3-TA1-2022-03-10/data_prepped.kwcoco.json" \
         --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --regions "$HOME/data/dvc-repos/smart_watch_dvc/annotations/region_models/*.geojson" \
@@ -158,7 +158,7 @@ hack_fix_empty_imges(){
     7z 
 
     DVC_DPATH=$(geowatch_dvc)
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --run=1 --serial=True
 
@@ -169,7 +169,7 @@ hack_fix_empty_imges(){
     # s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
 
     DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath \
             s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
@@ -179,7 +179,7 @@ hack_fix_empty_imges(){
             s3://ki
     
 
-    python -m watch.cli.coco_combine_features \
+    python -m geowatch.cli.coco_combine_features \
         --src /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
                   /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/dzyne_landcover.kwcoco.json \
                   /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/rutgers_material_seg_v3.kwcoco.json \
@@ -187,7 +187,7 @@ hack_fix_empty_imges(){
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --run=1 --backend=tmux 
 
@@ -197,21 +197,21 @@ hack_fix_empty_imges(){
     dvc pull splits_v2.zip.dvc -r aws
     7z x splits_v2.zip
         
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="matseg_0|matseg_1|matseg_2" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
         --skip_missing=True \
         --select_videos='.name | startswith("AE_C003")'
 
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="bare_ground|forest|water" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
         --skip_missing=True \
         --select_videos='.name | startswith("AE_C003")'
 
-    smartwatch visualize combo_LM_nowv.kwcoco.json \
+    geowatch visualize combo_LM_nowv.kwcoco.json \
         --channels="red|green|blue" \
         --select_images'.sensor_coarse != "WV"' \
         --animate=True --workers=4 \
@@ -259,7 +259,7 @@ prepare_l1_version_of_drop3(){
     echo "DVC_DPATH = $DVC_DPATH"
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
     DATASET_SUFFIX=Drop3-L1
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix="$DATASET_SUFFIX" \
         --s3_fpath="$S3_FPATH" \
         --dvc_dpath="$DVC_DPATH" \
@@ -284,7 +284,7 @@ prepare_wv_crop_from_sites(){
     cd "$DVC_DPATH"
 
     DATASET_SUFFIX=Drop3-TA1-SiteCropsWV-2022-03-30 
-    python -m watch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath \
             s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \
@@ -307,7 +307,7 @@ prepare_cropped_from_tracks(){
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
-    python -m watch.cli.coco_bad_empty_images \
+    python -m geowatch.cli.coco_bad_empty_images \
         --src="$IMGONLY_FPATH" \
         --dst="$IMGONLY_FPATH.tmp" \
         --workers=8 \
@@ -319,13 +319,13 @@ prepare_cropped_from_tracks(){
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m watch reproject_annotations \
+    python -m geowatch reproject_annotations \
         --src "$IMGONLY_FPATH" \
         --dst "$BASE_DPATH" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath="$BASE_DPATH" \
         --run=0 --backend=serial
 
@@ -339,7 +339,7 @@ prepare_cropped_from_tracks(){
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
         --gres=",0" \
@@ -353,7 +353,7 @@ prepare_cropped_from_tracks(){
 
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
-    python -m watch.cli.prepare_splits \
+    python -m geowatch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/combo_DLM.kwcoco.json" \
         --run=0
 
@@ -366,12 +366,12 @@ cropped_with_more_context(){
     echo "$DVC_DPATH"
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
     NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
-    #smartwatch stats "$INPUT_FPATH"
+    #geowatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
 
     # This takes forever and a half (i.e. 7-12 hours)
-    python -m watch.cli.coco_crop_tracks \
+    python -m geowatch.cli.coco_crop_tracks \
         --src="$INPUT_FPATH" \
         --dst="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
@@ -380,14 +380,14 @@ cropped_with_more_context(){
         --channels="$CHANNELS" \
         --context_factor=1.8
 
-    python -m watch reproject_annotations \
+    python -m geowatch reproject_annotations \
         --src "$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --dst "$NEW_KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
     export CUDA_VISIBLE_DEVICES=1
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/.kwcoco.json" \
         --dvc_dpath="$DVC_DPATH" \
         --gres="0,1" \
@@ -427,8 +427,8 @@ _relocate_preds_to_hdd()
     rsync --dry-run -arpRP "$SSD_DPATH"/./pred "$HDD_DPATH"
 
 
-    SSD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=ssd)
-    HDD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=hdd)
+    SSD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m geowatch.cli.find_dvc --hardware=ssd)
+    HDD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m geowatch.cli.find_dvc --hardware=hdd)
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     SRC_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
     DST_BUNDLE_DPATH=$HDD_DVC_DPATH/$DATASET_CODE

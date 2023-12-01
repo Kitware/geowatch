@@ -67,7 +67,7 @@ compute_features(){
     # A bash function that runs invariant prediction on a kwcoco file.
     SRC_KWCOCO_FPATH=$1
     DST_KWCOCO_FPATH=$1
-    python -m watch.tasks.invariants.predict \
+    python -m geowatch.tasks.invariants.predict \
         --input_kwcoco="$SRC_KWCOCO_FPATH" \
         --output_kwcoco="$DST_KWCOCO_FPATH" \
         --pretext_package_path="$EXPT_DVC_DPATH"/models/uky/uky_invariants_2022_12_05/TA1_pretext_model/pretext_package.pt \
@@ -91,9 +91,9 @@ compute_features \
     "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
 
 # After your model predicts the outputs, you should be able to use the
-# smartwatch visualize tool to inspect your features. The specific channels you
+# geowatch visualize tool to inspect your features. The specific channels you
 # select will depend on the output of your predict script.
-python -m watch visualize "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json \
+python -m geowatch visualize "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json \
     --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
     --draw_anns=False
 
@@ -108,7 +108,7 @@ individually.
 
 .. code:: bash
 
-    python -m watch.cli.split_videos \
+    python -m geowatch.cli.split_videos \
         --src "$DATA_DVC_DPATH/Drop4-BAS/data_train.kwcoco.json" \
               "$DATA_DVC_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
         --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
@@ -120,7 +120,7 @@ individually. You can specify a pattern as the input to this tool.
 
 .. code:: bash
 
-    python -m watch.cli.prepare_teamfeats \
+    python -m geowatch.cli.prepare_teamfeats \
         --base_fpath \
             "$DATA_DVC_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
             "$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
@@ -189,7 +189,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_invariants.kwcoco.json
 PRETRAINED_STATE="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 # You can use the model_stats command to inspect details about any fusion model.
-smartwatch model_stats "$PRETRAINED_STATE"
+geowatch model_stats "$PRETRAINED_STATE"
 
 # shellcheck disable=SC2016
 __doc_channel_conf__='
@@ -226,7 +226,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
 MAX_STEPS=10000
 TARGET_LR=5e-5
-python -m watch.tasks.fusion fit --config "
+python -m geowatch.tasks.fusion fit --config "
     data:
         num_workers             : 3
         train_dataset           : $TRAIN_FPATH
@@ -310,7 +310,7 @@ echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
 
 # repackage it as such: (This command may change in the future to make this
 # easier / more robust, but it should work in this context)
-python -m watch.mlops.repackager "$CHECKPOINT_FPATH"
+python -m geowatch.mlops.repackager "$CHECKPOINT_FPATH"
 
 # That should have written a .pt package with a similar name.  To make this
 # bash script work, we will just glob for a package and assume its the one we
@@ -332,16 +332,16 @@ DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-smartwatch model_stats "$BASELINE_PACKAGE_FPATH"
+geowatch model_stats "$BASELINE_PACKAGE_FPATH"
 
 # NOTE:
 # The schedule evaluation script originally ran on a single coco file that
 # contains all of the validation regions. A more stable way to run the system
 # involves splitting the larger validation dataset into a single kwcoco file
 # per region, and then running it on all regions separately.
-python -m watch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
+python -m geowatch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
 
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:

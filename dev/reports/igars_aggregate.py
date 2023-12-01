@@ -30,7 +30,7 @@ mlops_cmd = ub.codeblock(
     #!/bin/bash
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-    python -m watch.mlops.schedule_evaluation \
+    python -m geowatch.mlops.schedule_evaluation \
         --params="
             matrix:
                 bas_pxl.package_fpath:

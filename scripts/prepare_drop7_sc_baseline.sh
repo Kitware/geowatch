@@ -61,7 +61,7 @@ geowatch schedule --params="
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_for_scac_vali_dataset
@@ -162,14 +162,14 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
     if ! test -f "$DST_KWCOCO_FPATH"; then
         cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_test_queue \
-            python -m watch.cli.cluster_sites \
+            python -m geowatch.cli.cluster_sites \
                 --src "$REGION_GEOJSON_FPATH" \
                 --minimum_size "256x256@2GSD" \
                 --dst_dpath "$REGION_CLUSTER_DPATH" \
                 --draw_clusters True
 
         python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- crop_for_sc_test_queue \
-            python -m watch.cli.coco_align \
+            python -m geowatch.cli.coco_align \
                 --src "$SRC_KWCOCO_FPATH" \
                 --dst "$DST_KWCOCO_FPATH" \
                 --regions "$REGION_CLUSTER_DPATH/*.geojson" \
@@ -203,7 +203,7 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     KWCOCO_FPATH2=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands-filtered.kwcoco.zip
     cmd_queue submit --jobname="filter-imgs-$REGION_ID" --depends="None" -- filter_bad_queue \
         # FIXME
-        #python -m watch.cli.cluster_sites \
+        #python -m geowatch.cli.cluster_sites \
         #    --src "$KWCOCO_FPATH1" \
         #    --dst "$KWCOCO_FPATH2" \
         #    --delete_assets=False \
@@ -273,7 +273,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -361,7 +361,7 @@ TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_v1
@@ -398,7 +398,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -494,7 +494,7 @@ TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_small_baseline_v1
@@ -533,7 +533,7 @@ TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     pipeline: sc
 
     matrix:
@@ -636,7 +636,7 @@ TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 BUNDLE_DPATH=$HIRES_DVC_DATA_DPATH/Drop7-StaticACTestSet-2GSD
 
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_ac_static_baseline

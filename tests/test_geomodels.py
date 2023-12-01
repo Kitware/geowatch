@@ -1,6 +1,6 @@
 import pytest
-from watch.geoannots.geomodels import RegionModel
-from watch.geoannots.geomodels import RegionHeader
+from geowatch.geoannots.geomodels import RegionModel
+from geowatch.geoannots.geomodels import RegionHeader
 
 
 def test_infer_region_header():

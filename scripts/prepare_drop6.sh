@@ -11,7 +11,7 @@ SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=30 \
@@ -76,7 +76,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #    cd "$DATA_DVC_DPATH"
 #    git add Drop6
 #    cd "$DATA_DVC_DPATH/Drop6"
-#    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+#    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 #    7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
 #    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push
 #}
@@ -88,7 +88,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
-smartwatch clean_geotiffs \
+geowatch clean_geotiffs \
     --src "$COCO_FPATH" \
     --channels="red|green|blue|nir|swir16|swir22" \
     --prefilter_channels="red" \
@@ -112,7 +112,7 @@ SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6/site_models/*.geojson"
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset
-python -m watch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=5 \
@@ -168,7 +168,7 @@ poc_util_grab_array(){
 }
 
 dvc_add(){
-    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
     7z a splits2.zip data*.kwcoco.json img*.kwcoco.json -mx9
 
@@ -247,7 +247,7 @@ queue_dmj_reproject(){
     DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
 
     cmd_queue submit "$QUEUE_NAME" -- \
-        python -m watch reproject_annotations \
+        python -m geowatch reproject_annotations \
             --src "$IMGONLY_FPATH" \
             --dst "$IMGANNS_FPATH" \
             --propogate_strategy="SMART" \
@@ -328,7 +328,7 @@ update_from_dmj_constructions(){
     # On horologic
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
-    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    #geowatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
     ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
 

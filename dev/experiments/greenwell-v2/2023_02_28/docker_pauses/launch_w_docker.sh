@@ -29,7 +29,7 @@ docker run -it \
     --mount type=bind,source="/data/connor.greenwell/config",target="/.config" \
     "watch/feature-decoderless_heterogeneous_model:latest" \
     conda run --no-capture-output -n watch \
-    python -m watch.tasks.fusion fit --config "
+    python -m geowatch.tasks.fusion fit --config "
 data:
   train_dataset          : $TRAIN_FPATH
   vali_dataset           : $VALI_FPATH

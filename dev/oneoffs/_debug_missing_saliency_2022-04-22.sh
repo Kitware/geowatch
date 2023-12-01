@@ -4,11 +4,11 @@
 DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 BAS_HEATMAPS=$DVC_DPATH/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
-smartwatch stats "$BAS_HEATMAPS"
+geowatch stats "$BAS_HEATMAPS"
 
 jq .info "$BAS_HEATMAPS"
 
-python -m watch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.kwcoco_to_geojson \
     "$BAS_HEATMAPS" \
     --default_track_fn saliency_heatmaps \
     --clear_annots \
@@ -20,7 +20,7 @@ python -m watch.cli.kwcoco_to_geojson \
 TEST_DATASET=$HOME/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json
 PACKAGE_FPATH=$HOME/data/dvc-repos/smart_watch_dvc-hdd/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 
-smartwatch visualize "$BAS_HEATMAPS" --channels="cloudmask" --animate=True --workers=8
+geowatch visualize "$BAS_HEATMAPS" --channels="cloudmask" --animate=True --workers=8
 
 
 pyblock "
@@ -150,7 +150,7 @@ kwcoco validate "$SMALL_TEST_DATASET"
 
 
 PACKAGE_FPATH=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --test_dataset="$SMALL_TEST_DATASET" \
     --package_fpath="$PACKAGE_FPATH" \
     --pred_dataset="$PRED3_DATASET" \
@@ -161,7 +161,7 @@ python -m watch.tasks.fusion.predict \
     --gpus=0 
 
 kwcoco stats "$TEST_DATASET" "$SMALL_TEST_DATASET" "$PRED2_DATASET" "$PRED3_DATASET"
-smartwatch stats "$TEST_DATASET" "$SMALL_TEST_DATASET" "$PRED1_DATASET" "$PRED2_DATASET" "$PRED3_DATASET"
+geowatch stats "$TEST_DATASET" "$SMALL_TEST_DATASET" "$PRED1_DATASET" "$PRED2_DATASET" "$PRED3_DATASET"
 
 echo "
 

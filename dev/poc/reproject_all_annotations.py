@@ -94,14 +94,14 @@ def main(cmdline=1, **kwargs):
 
         code = ub.codeblock(
             fr'''
-            python -m watch add_fields \
+            python -m geowatch add_fields \
                 --src {fpath} \
                 --dst {fpath}
             ''')
         field_job = queue.submit(code, depends=[], name=f'add-fields-{fpath.name}')
         code = ub.codeblock(
             fr'''
-            python -m watch reproject \
+            python -m geowatch reproject \
                 --src {fpath} \
                 --dst {fpath} \
                 --region_models='{region_fpath}' \
@@ -112,14 +112,14 @@ def main(cmdline=1, **kwargs):
     for fpath in multi_region_fpaths:
         code = ub.codeblock(
             fr'''
-            python -m watch add_fields \
+            python -m geowatch add_fields \
                 --src {fpath} \
                 --dst {fpath}
             ''')
         field_job = queue.submit(code, depends=[], name=f'add-fields-{fpath.name}')
         code = ub.codeblock(
             fr'''
-            python -m watch reproject \
+            python -m geowatch reproject \
                 --src {fpath} \
                 --dst {fpath} \
                 --region_models='{config.true_region_dpath}' \

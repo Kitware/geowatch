@@ -85,7 +85,7 @@ __notes__ = """
 # One of the models that was packaged incorrectly
 FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903.pt
 
-python -m watch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
     --write_probs=True \
     --write_preds=False \
     --with_class=auto \
@@ -100,13 +100,13 @@ python -m watch.tasks.fusion.predict \
     --batch_size=1
 
 
-smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json --channels="Site Preparation|Active Construction|Post Construction"
+geowatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json --channels="Site Preparation|Active Construction|Post Construction"
 
 
-smartwatch intensity_histograms /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+geowatch intensity_histograms /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
 
-python -m watch.tasks.fusion.evaluate \
+python -m geowatch.tasks.fusion.evaluate \
     --true_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
     --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json \
       --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/eval/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/eval \
@@ -128,7 +128,7 @@ finalize image move 626/626... rate=1671.25 Hz, eta=0:00:00, total=0:00:00
 ++ let _QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1                                                                                                                                    
 ++ set +x                                                                                                                                                                           
 {"status": "run", "finished": 4, "errored": 0, "total": 9, "name": "queue_quantize-jobs_0", "rootid": "2022-03-16T181559+5_bfdaaf61"}                                               
-++ python -m watch.cli.coco_reformat_channels --src=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIM
+++ python -m geowatch.cli.coco_reformat_channels --src=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIM
 ENT_V001_epoch=11-step=62759-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json '--quantize=not_salient|salient,Site Preparation|Active C
 onstruction|Post Construction|No Activity' '--remove=not_salient,negative,ignore,negative,positive,background|Unknown' --workers=0                                                  
 config = {                                                                                                                                                                          

@@ -47,7 +47,7 @@ geowatch schedule_evaluation --params="
 #### Eval9 Models (Namek)
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.cli.split_videos \
+python -m geowatch.cli.split_videos \
     --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
           "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
     --io_workers=4 \
@@ -56,7 +56,7 @@ python -m watch.cli.split_videos \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.zip" \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.zip" \
@@ -119,7 +119,7 @@ echo "
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -262,7 +262,7 @@ python -m watch.mlops.schedule_evaluation --params="
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -420,7 +420,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -529,7 +529,7 @@ python -m watch.mlops.schedule_evaluation \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -574,7 +574,7 @@ python -m watch.mlops.schedule_evaluation \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation \
+python -m geowatch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -693,7 +693,7 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
 
 #"$DVC_DATA_DPATH/Drop6/imganns-KR*.kwcoco.zip" \
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop6/imganns-AE_R001.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
@@ -714,20 +714,20 @@ python -m watch.cli.prepare_teamfeats \
 
 #### QUICK BAS CHECKS
 
-python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
+python -m geowatch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
 
 ####
 # SPLIT 1 SMALL TEST
 ####
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-python -m watch.cli.cluster_sites \
+python -m geowatch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson" \
         --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson \
         --draw_clusters True
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-python -m watch.cli.coco_align \
+python -m geowatch.cli.coco_align \
     --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
     --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
     --regions "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
@@ -743,7 +743,7 @@ python -m watch.cli.coco_align \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
@@ -759,12 +759,12 @@ python -m watch.cli.prepare_teamfeats \
     --skip_existing=0 \
     --gres='0,' --workers=2 --backend=tmux --run=1
 
-python -m watch.mlops.manager "list" --dataset_codes Drop6  | grep -v split2
+python -m geowatch.mlops.manager "list" --dataset_codes Drop6  | grep -v split2
 
 # SPLIT 1
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $HOME/code/watch/dev/reports/split1_all_models.yaml
@@ -797,7 +797,7 @@ python -m watch.mlops.schedule_evaluation --params="
 # SPLIT 1 - filter1 analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $HOME/code/watch/dev/reports/split1_models_filter1.pt
@@ -855,13 +855,13 @@ python -m watch.mlops.schedule_evaluation --params="
 # ###################
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-python -m watch.cli.cluster_sites \
+python -m geowatch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/NZ_R001.geojson" \
         --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/NZ_R001 \
         --draw_clusters True
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-python -m watch.cli.coco_align \
+python -m geowatch.cli.coco_align \
     --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-NZ_R001_L.kwcoco.json \
     --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip \
     --regions "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/NZ_R001/SUB_NZ_R001_n031_swnykmah.geojson \
@@ -877,7 +877,7 @@ python -m watch.cli.coco_align \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.cli.prepare_teamfeats \
+python -m geowatch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
@@ -894,13 +894,13 @@ python -m watch.cli.prepare_teamfeats \
     --gres='0,' --workers=2 --backend=tmux --run=1
 
 
-python -m watch.mlops.manager "list" --dataset_codes Drop6  | grep split2
+python -m geowatch.mlops.manager "list" --dataset_codes Drop6  | grep split2
 
 /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V5/Drop6_BAS_scratch_landcover_10GSD_split2_V5_epoch18_step15200.pt
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $HOME/code/watch/dev/reports/split2_all_models.yaml
@@ -946,7 +946,7 @@ python -m watch.mlops.schedule_evaluation --params="
 # SPLIT 6 - Time Model Checks
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch31_step8192.pt
@@ -1003,7 +1003,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --stdout_report=True \
     --target \
@@ -1017,11 +1017,11 @@ python -m watch.mlops.aggregate \
 # SeeAlso:
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
-python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
+python -m geowatch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             #- /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch27_step7168.pt
@@ -1101,7 +1101,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_split6_toothbrush_meanyear
@@ -1228,7 +1228,7 @@ geowatch manager "list packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 # SITE VISIT 2022-04 SPLIT 1 Analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             #- $HOME/code/watch/dev/reports/split1_all_models.yaml
@@ -1360,7 +1360,7 @@ agg = eval_type_to_aggregator['bas_poly_eval']
 # OOO Variant Analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/model_candidates/split2_mixed_ooo.yaml
@@ -1483,7 +1483,7 @@ geowatch aggregate \
 # OOO Variant Analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/model_candidates/split2_mixed_ooo.yaml
@@ -1546,7 +1546,7 @@ python -m watch.mlops.schedule_evaluation --params="
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
@@ -1680,7 +1680,7 @@ python -m watch.mlops.schedule_evaluation --params="
 ### Evaluate promissing landcover models on toothbrush
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
@@ -1898,7 +1898,7 @@ python -c "if 1:
 # SITE VISIT 2022-04 SPLIT 1 Analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             #- $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
@@ -2038,7 +2038,7 @@ geowatch aggregate \
 # Initial eval over Drop7
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=hdd)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/model_candidates/toothbrush_split1_shortlist_v4_top.yaml
@@ -2150,13 +2150,13 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
-python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
-python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+python -m geowatch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
 
 # New model eval over Drop7
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
@@ -2251,7 +2251,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
@@ -2277,7 +2277,7 @@ python -m watch.mlops.aggregate \
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
@@ -2321,7 +2321,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.utils.simple_dvc request \
+python -m geowatch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
     "$DVC_EXPT_DPATH"/models/depth_pcd/basicModel2.h5 \
     "$DVC_EXPT_DPATH"/models/depth_pcd/model3.h5
@@ -2433,7 +2433,7 @@ geowatch schedule --params="
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_horologic_sv_sweep
@@ -2489,7 +2489,7 @@ HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         #####################
         ## SC PIXEL PARAMS ##
@@ -2554,7 +2554,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 # Dzyne agg
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T131639-5.csv.zip
@@ -2590,7 +2590,7 @@ python -m watch.mlops.aggregate \
 
 
 # Change the "pipeline" to the one you ran MLOPs with.
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR
@@ -2606,7 +2606,7 @@ python -m watch.mlops.aggregate \
 # Pre Agg
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_mlops_eval10_baseline
@@ -2621,7 +2621,7 @@ python -m watch.mlops.aggregate \
     --export_tables=True
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_sv_sweep
@@ -2639,7 +2639,7 @@ python -m watch.mlops.aggregate \
     --export_tables=True
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_horologic_sv_sweep
@@ -2649,7 +2649,7 @@ python -m watch.mlops.aggregate \
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2
@@ -2660,7 +2660,7 @@ python -m watch.mlops.aggregate \
 
 # Big aggregation
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T131639-5.csv.zip
@@ -2720,7 +2720,7 @@ python -m watch.mlops.aggregate \
 
 # Big aggregation
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         /home/joncrall/quicklinks/toothbrush_smart_expt_dvc/aggregate_results/wu/
@@ -2759,7 +2759,7 @@ python -m watch.mlops.aggregate \
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 # Change the "pipeline" to the one you ran MLOPs with.
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR
@@ -2773,7 +2773,7 @@ python -m watch.mlops.aggregate \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.utils.simple_dvc request \
+python -m geowatch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
     "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
@@ -2886,7 +2886,7 @@ geowatch schedule --params="
     --run=1
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_eval13_sweep
@@ -2926,7 +2926,7 @@ python -m watch.mlops.aggregate \
     #--rois="PE_R001"
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_eval13_sweep_old_metrics
@@ -2963,13 +2963,13 @@ python -m watch.mlops.aggregate \
 
 # PREEVAL 14 AC Grid
 
-python -m watch.mlops.manager "list" --dataset_codes Drop7-Cropped2GSD
+python -m geowatch.mlops.manager "list" --dataset_codes Drop7-Cropped2GSD
 
 HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
 TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.mlops.schedule_evaluation --params="
+python -m geowatch.mlops.schedule_evaluation --params="
     matrix:
         ########################
         ## AC/SC PIXEL PARAMS ##
@@ -3097,7 +3097,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --cache=1 --skip_existing=1 --run=1
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=sc \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval_v2
@@ -3134,9 +3134,9 @@ python -m watch.mlops.aggregate \
 
 # EVAL 15 BAS GRID
 #
-python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
-python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD Drop7-MedianNoWinter10GSD-NoMask --yes
+python -m geowatch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
+python -m geowatch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD Drop7-MedianNoWinter10GSD-NoMask --yes
 
 geowatch manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 geowatch manager "list packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
@@ -3423,7 +3423,7 @@ geowatch schedule --params="
 # NO MASK
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_eval15_bas_nomask
@@ -3460,7 +3460,7 @@ python -m watch.mlops.aggregate \
 
 # VS MASKED
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_eval15_bas_yesmask
@@ -3497,7 +3497,7 @@ python -m watch.mlops.aggregate \
 
 # Both
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_namek_eval15_bas_nomask
@@ -3712,7 +3712,7 @@ geowatch schedule --params="
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=full \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask
@@ -3827,7 +3827,7 @@ geowatch schedule --params="
     --run=1
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.aggregate \
+python -m geowatch.mlops.aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_yardrat_bas_test
