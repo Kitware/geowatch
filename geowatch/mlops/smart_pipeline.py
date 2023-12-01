@@ -1263,7 +1263,7 @@ def make_smart_pipeline(name):
         dag.print_graphs()
         dag.inspect_configurables()
         # Make a graphviz illustration of the DAG
-        from geowatch.utils import util_yaml
+        from kwutil import util_yaml
         # Change the labels a bit
 
         proc_graph = dag.proc_graph.copy()
