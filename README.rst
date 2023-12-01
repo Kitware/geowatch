@@ -10,7 +10,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 .. .. image:: https://ipfs.io/ipfs/bafybeia3xfmrj2mzgg5jwlxvhpoi6vuyftyphbdezppbpjgn4uqvqtxlcu/smart_watch.svg
 
 .. image:: https://i.imgur.com/0HESHf7.png
-   :height: 100px
+   :height: 50px
    :align: left
 
 |main-pipeline| |main-coverage| |Pypi| |Downloads|
