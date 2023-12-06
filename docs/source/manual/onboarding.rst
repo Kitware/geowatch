@@ -43,30 +43,30 @@ recommend the following directory structure:
 
 
 For details on installing the geowatch system in development mode see
-`installing geowatch for development guide <../docs/environment/installing_geowatch.rst>`_.
+`installing geowatch for development guide <environment/installing_geowatch.rst>`_.
 
 For more detailed instructions on setting up the DVC repos see:
-`accessing dvc repos <../docs/data/access_dvc_repos.rst>`_.
+`accessing dvc repos <data/access_dvc_repos.rst>`_.
 
 
 This onboarding document is a work in progress. While things are are still
 being organized, here is a list of current documentation files:
 
 
-For quick reference, review the list of current documentation files in the `README <../README.rst>`_
+For quick reference, review the list of current documentation files in the `README <../../README.rst>`_
 
 
 Please ensure you review :
 
-  + `Contribution Instructions <../docs/development/contribution_instructions.rst>`_
+  + `Contribution Instructions <development/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <../docs/development/rebasing_procedure.rst>`_
+  + `Rebasing Procedure <development/rebasing_procedure.rst>`_
 
-  + `Testing Practices <../docs/testing/testing_practices.rst>`_
+  + `Testing Practices <testing/testing_practices.rst>`_
 
-  + `Coding Conventions <../docs/development/coding_conventions.rst>`_
+  + `Coding Conventions <development/coding_conventions.rst>`_
 
-  + `Supporting Projects <../docs/misc/supporting_projects.rst>`_
+  + `Supporting Projects <misc/supporting_projects.rst>`_
 
 
 TODO: Point to the FAQ examples in kwcoco and other projects with them
@@ -78,11 +78,11 @@ Tutorials
 The following tutorials detail how to train simple fusion models
 
 
-* Tutorial 1: `Toy RGB Tutorial <../tutorial/tutorial1_rgb_network.sh>`_
+* Tutorial 1: `Toy RGB Tutorial <../../../tutorial/tutorial1_rgb_network.sh>`_
 
-* Tutorial 2: `Toy MSI Tutorial <../tutorial/tutorial2_msi_network.sh>`_
+* Tutorial 2: `Toy MSI Tutorial <../../../tutorial/tutorial2_msi_network.sh>`_
 
-* Tutorial 3: `Feature Fusion Tutorial <../tutorial/tutorial3_feature_fusion.sh>`_
+* Tutorial 3: `Feature Fusion Tutorial <../../../tutorial/tutorial3_feature_fusion.sh>`_
 
 * Tutorial 4: TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
 

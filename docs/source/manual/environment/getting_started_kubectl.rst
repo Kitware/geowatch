@@ -44,4 +44,4 @@ Test that the install worked:
 Next Steps
 ----------
 
-* `get started with smartflow <../../docs/smartflow/getting_started_smartflow.rst>`
+* `get started with smartflow <../smartflow/getting_started_smartflow.rst>`

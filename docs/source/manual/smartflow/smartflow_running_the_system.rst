@@ -58,9 +58,9 @@ In this section we will go over how to build the docker image used in a submissi
 
 
 There are two images that need to be build, first the
-`pyenv dockerfile <../../dockerfiles/pyenv.Dockerfile>`_.
+`pyenv dockerfile <../../../../dockerfiles/pyenv.Dockerfile>`_.
 And then the watch dockerfile that builds on top of it
-`watch dockerfile <../../dockerfiles/watch.Dockerfile>`_.
+`watch dockerfile <../../../../dockerfiles/watch.Dockerfile>`_.
 The heredocs in these files provide futher instructions.
 We will also need to add models to the image
 
@@ -404,7 +404,7 @@ Building / Modifying a DAG
 
 Our smartflow DAGs are built as sequences of smartflow CLI commands that wrap
 our local CLI commands. These smartflow CLI commands live in
-`watch/cli/smartflow <../../watch/cli/smartflow>`_.
+`geowatch/cli/smartflow <../../../../geowatch/cli/smartflow>`_.
 
 Each of these uses ffsspec to grab manifests of available assets from an s3
 bucket, which then points to the data the task could use. It is the scripts job

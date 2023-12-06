@@ -20,9 +20,9 @@ less commercial restrictions, but requires a compiler certain system libraries
 (e.g. openssl, sqlite3, readline, ffi, curses, bz2, etc..) to compile Python.
 If you are able to compile Python We recommend using pyenv.
 
-To install pyenv, see the `pyenv installation instructions <../../docs/environment/install_python_pyenv.rst>`_.
+To install pyenv, see the `pyenv installation instructions <install_python_pyenv.rst>`_.
 
-To install conda, see the `conda installation instructions <../../docs/environment/install_python_conda.rst>`_.
+To install conda, see the `conda installation instructions <install_python_conda.rst>`_.
 
 NOTE: If using conda, do NOT use ``conda install`` to install Python packages,
 we only use conda to install the Python binaries. We exclusively use pip to

@@ -36,14 +36,14 @@ If you do not have permission please contact someone at Kitware to gain access a
 Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`, ensure that you
 have ssh keys setup and registered with gitlab. More details on generating ssh
 keys and registering them with gitlab can be found in the
-`ssh setup instructions <../../docs/environment/getting_started_ssh_keys.rst>`_.
+`ssh setup instructions <../environment/getting_started_ssh_keys.rst>`_.
 
 To access the internal DVC remotes you must have AWS credentials.
-For details see `the aws getting started docs <../../docs/environment/getting_started_aws.rst>`_.
+For details see `the aws getting started docs <../environment/getting_started_aws.rst>`_.
 
 
 You should also have DVC installed.
-See `getting started with dvc <../../docs/environment/getting_started_dvc.rst>`_
+See `getting started with dvc <../environment/getting_started_dvc.rst>`_
 if you are unfamiliar with the concepts of DVC.
 
 
@@ -215,4 +215,4 @@ After this downloads, any of the kwcoco files in the directory can be used.
 
 
 We recommend using ``geowatch_dvc`` tool to register the path you cloned
-these repos to as illustrated in ../../docs/environment/getting_started_dvc.rst
+these repos to as illustrated in ../environment/getting_started_dvc.rst
