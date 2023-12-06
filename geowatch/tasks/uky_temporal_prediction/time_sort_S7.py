@@ -9,7 +9,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 from .utils import setup_python_logging
 from .models import UNet, UNet_blur
-from .spacenet.datasets import S7_sort
 
 
 class space7_sort(pl.LightningModule):
@@ -89,6 +88,7 @@ class space7_sort(pl.LightningModule):
         return output
 
     def train_dataloader(self):
+        from geowatch.tasks.uky_temporal_prediction.spacenet.datasets import S7_sort
         return torch.utils.data.DataLoader(
             S7_sort(train=True,
                     normalize=self.hparams.normalize,
@@ -98,6 +98,7 @@ class space7_sort(pl.LightningModule):
         )
 
     def val_dataloader(self):
+        from geowatch.tasks.uky_temporal_prediction.spacenet.datasets import S7_sort
         return torch.utils.data.DataLoader(
             S7_sort(train=False, normalize=self.hparams.normalize,
                     crop_size=[self.hparams.crop_size, self.hparams.crop_size]),

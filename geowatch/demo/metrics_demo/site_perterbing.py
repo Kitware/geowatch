@@ -347,7 +347,7 @@ def perterb_single_site_model(site, noise=0.0, warp_noise=1.0,
         >>> import kwplot
         >>> kwplot.autompl()
         >>> # Draw our true and perterbed site model
-        >>> orig_site_gdf = gpd.GeVDataFrame.from_features(site)
+        >>> orig_site_gdf = gpd.GeoDataFrame.from_features(site)
         >>> pred_site_gdf = gpd.GeoDataFrame.from_features(pred_site)
         >>> fig = kwplot.figure(doclf=True, fnum=2)
         >>> ax = fig.gca()

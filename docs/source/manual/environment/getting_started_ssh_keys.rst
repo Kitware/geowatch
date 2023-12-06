@@ -144,7 +144,7 @@ with this remote on your local machine.  Append the appropriate lines to your
 ``$HOME/.ssh/config`` file:
 
 
-.. code:: config
+.. code::
 
     Host $REMOTE_NICKNAME $REMOTE_URI
         HostName $REMOTE_URI
@@ -186,7 +186,7 @@ code to ensure it exists programatically:
 
 For the working example variables it may look like this:
 
-.. code:: config
+.. code::
 
     Host horologic horologic.kitware.com
         HostName horologic.kitware.com

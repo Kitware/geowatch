@@ -59,6 +59,9 @@ else:
 
 # Should try to patch into upstream
 class LightningCLI_Extension(LightningCLI):
+    """
+    Our customized :class:`LightningCLI` extension.
+    """
     ...
 
     def init_parser(self, **kwargs):

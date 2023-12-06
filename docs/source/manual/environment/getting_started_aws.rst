@@ -202,7 +202,7 @@ Using Credentials
 In the credentials file (``$HOME/.aws/credentials``) append the following text
 to create credentials associated with the "iarpa" AWS_PROFILE.
 
-.. code:: config
+.. code:: ini
 
     [iarpa]
     aws_access_key_id = <YOUR_ACCESS_KEY>
@@ -212,7 +212,7 @@ to create credentials associated with the "iarpa" AWS_PROFILE.
 For the config file (``$HOME/.aws/config``), it is important to specify the
 region for the iarpa profile. Set output to either text or json.
 
-.. code:: config
+.. code:: ini
 
     [profile iarpa]
     region=us-west-2

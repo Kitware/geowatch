@@ -150,6 +150,13 @@ napoleon_use_ivar = True
 
 autodoc_inherit_docstrings = False
 
+autosummary_mock_imports = [
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_24_and_lt_4_xx',
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_22_and_lt_4_24',
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22',
+    'geowatch.tasks.fusion.datamodules.temporal_sampling.affinity_sampling',
+]
+
 autodoc_member_order = 'bysource'
 autoclass_content = 'both'
 # autodoc_mock_imports = ['torch', 'torchvision', 'visdom']
@@ -339,39 +346,8 @@ texinfo_documents = [
 
 # -- Extension configuration -------------------------------------------------
 from sphinx.domains.python import PythonDomain  # NOQA
-from sphinx.transforms.post_transforms import SphinxPostTransform  # NOQA
 # from sphinx.application import Sphinx  # NOQA
 from typing import Any, List  # NOQA
-
-
-class HyperlinkCollector(SphinxPostTransform):
-    builders = ('linkcheck',)
-    default_priority = 800
-
-    def run(self, **kwargs: Any) -> None:
-        import xdev
-        xdev.embed()
-        # builder = cast(CheckExternalLinksBuilder, self.app.builder)
-        # hyperlinks = builder.hyperlinks
-        # docname = self.env.docname
-
-        # # reference nodes
-        # for refnode in self.document.findall(nodes.reference):
-        #     if 'refuri' in refnode:
-        #         uri = refnode['refuri']
-        #         _add_uri(self.app, uri, refnode, hyperlinks, docname)
-
-        # # image nodes
-        # for imgnode in self.document.findall(nodes.image):
-        #     uri = imgnode['candidates'].get('?')
-        #     if uri and '://' in uri:
-        #         _add_uri(self.app, uri, imgnode, hyperlinks, docname)
-
-        # # raw nodes
-        # for rawnode in self.document.findall(nodes.raw):
-        #     uri = rawnode.get('source')
-        #     if uri and '://' in uri:
-        #         _add_uri(self.app, uri, rawnode, hyperlinks, docname)
 
 
 class PatchedPythonDomain(PythonDomain):
@@ -380,7 +356,7 @@ class PatchedPythonDomain(PythonDomain):
         https://github.com/sphinx-doc/sphinx/issues/3866
     """
     def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
-        if 1:
+        if 0:
             import ubelt as ub
             print('----')
             print('contnode = {}'.format(ub.urepr(contnode, nl=1)))
@@ -943,8 +919,6 @@ def setup(app):
     import sphinx
     app : sphinx.application.Sphinx = app
     app.add_domain(PatchedPythonDomain, override=True)
-
-    # app.add_post_transform(HyperlinkCollector)
     app.connect("doctree-resolved", postprocess_hyperlinks)
 
     docstring_processor = GoogleStyleDocstringProcessor()
