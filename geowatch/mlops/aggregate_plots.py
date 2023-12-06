@@ -242,7 +242,12 @@ class ParamPlotter:
             roi_to_color = util_kwplot.Palette.coerce(unique_rois)
         snskw['palette'] = roi_to_color
 
-        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=roi_attr, legend=False, **snskw)
+        s = plotter.plot_config.get('scatter.markersize', None)
+        scatterkw = snskw.copy()
+        if s is not None:
+            scatterkw['s'] = s
+        ax = sns.scatterplot(data=single_table, x=x, y=y, hue=roi_attr,
+                             legend=False, **scatterkw)
 
         if plotter.plot_config.get('compare_sv_hack', False):
             # Hack to compare before/after SV
@@ -328,7 +333,14 @@ class ParamPlotter:
         palette = {
             macro_region_id: kwimage.Color('kitware_darkgray').as01()
         }
-        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=roi_attr, ax=ax, palette=palette)
+
+        s = plotter.plot_config.get('scatter.markersize', None)
+        snskw = {}
+        scatterkw = snskw.copy()
+        if s is not None:
+            scatterkw['s'] = s
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=roi_attr, ax=ax,
+                             palette=palette, **snskw)
         if plotter.plot_config.get('compare_sv_hack', False):
             # Hack to compare before/after SV
             if 'sv_poly_eval' in x.split('.'):
@@ -474,6 +486,11 @@ class ParamPlotter:
                 if param_name in param_to_palette:
                     snskw['palette'] = param_to_palette[param_name]
 
+                s = plotter.plot_config.get('scatter.markersize', None)
+                scatterkw = snskw.copy()
+                if s is not None:
+                    scatterkw['s'] = s
+
                 try:
                     macro_table = macro_table.sort_values(param_name)
                 except Exception as ex:
@@ -516,7 +533,7 @@ class ParamPlotter:
 
                 param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
 
-                # Mapper for the scatterplot legend
+                # Mapper for the legend
                 if had_value_remap:
                     freq_mapper_scatter = util_kwplot.LabelModifier({
                         param_value: f'{param_value}\n{param_valname_map[param_value]} (n={num})'
@@ -542,7 +559,8 @@ class ParamPlotter:
                 fig = kwplot.figure(fnum=4, doclf=True)
 
                 # Scatter with legend
-                ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
+                ax = sns.scatterplot(data=sub_macro_table, x=x, y=y,
+                                     hue=param_name, legend=True, **scatterkw)
                 ax.set_title(header_text)
                 if 'is_star' in sub_macro_table:
                     scatterplot_highlight(data=sub_macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)

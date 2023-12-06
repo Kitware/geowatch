@@ -87,7 +87,7 @@ class SmartTrainer(pl.Trainer):
             '''
         ))
 
-        predict_vali = dpath / 'predict_vali.sh'
+        draw_batches_fpath = dpath / 'draw_batches.sh'
 
         try:
             vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
@@ -99,7 +99,7 @@ class SmartTrainer(pl.Trainer):
         except Exception:
             train_coco_path = None
 
-        predict_vali.write_text(ub.codeblock(
+        draw_batches_fpath.write_text(ub.codeblock(
             fr'''
             #!/bin/bash
             TRAIN_DPATH="{dpath}"
@@ -204,7 +204,7 @@ class SmartTrainer(pl.Trainer):
             from geowatch.utils.util_chmod import new_chmod
             new_chmod(start_tensorboard_fpath, 'u+x')
             new_chmod(draw_tensorboard, 'u+x')
-            new_chmod(predict_vali, 'u+x')
+            new_chmod(draw_batches_fpath, 'u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 

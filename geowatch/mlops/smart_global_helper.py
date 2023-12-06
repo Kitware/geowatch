@@ -784,6 +784,30 @@ class SmartGlobalHelper:
                 sc_poly.thresh: 0.1
                 sc_poly.site_score_thresh: 0.35
                 sc_crop.sensor_to_time_window: S2: 1month
+                '''),
+
+            Yaml.loads(
+                '''
+                delivery: Eval18
+                dag: KIT_TA2_PREEVAL18_BATCH_V136.py
+
+                bas_pxl.package_fpath: models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
+                bas_poly.thresh: 0.3875
+                bas_poly.time_thresh: 0.8
+                sv_dino_filter.end_min_score: 0.15
+                sv_depth_score.model_fpath: models/depth_pcd/model4.h5
+                sv_depth_filter.threshold: 0.1
+
+                sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+
+                sc_poly.thresh: 0.3
+                sc_poly.site_score_thresh: 0.3
+                sc_poly.smoothing: 0.0
+                sc_poly.boundaries_as: bounds
+                sc_poly.new_algo: crall
+                sc_poly.polygon_simplify_tolerance: 1
+
+                sc_crop.sensor_to_time_window: S2: 1month
                 ''')
         ]
 
