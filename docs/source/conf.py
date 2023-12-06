@@ -17,7 +17,7 @@ Notes:
     # need to edit the conf.py
 
     cd ~/code/geowatch/docs
-    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source ~/code/geowatch/geowatch --separate
+    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch --separate
     make html
 
     git add source/*.rst

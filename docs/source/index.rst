@@ -19,6 +19,21 @@ Welcome to geowatch's documentation!
    geowatch
 
 
+See Also:
+
+  + `Onboarding <manual/onboarding.rst>`_
+
+  + `Contribution Instructions <manual/development/contribution_instructions.rst>`_
+
+  + `Rebasing Procedure <manual/development/rebasing_procedure.rst>`_
+
+  + `Testing Practices <manual/testing/testing_practices.rst>`_
+
+  + `Coding Conventions <manual/development/coding_conventions.rst>`_
+
+  + `Supporting Projects <manual/misc/supporting_projects.rst>`_
+
+
 Indices and tables
 ==================
 
