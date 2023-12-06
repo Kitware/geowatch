@@ -29,10 +29,20 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
+| Pypi                                                     | https://pypi.org/project/geowatch/                             |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Read the docs                                            | https://geowatch.readthedocs.io                                |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Slides                                                   | `_Software Overview Slides`_  and `_KQH Demo Slides`_          |
++----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
+
+.. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
+
+.. _KQH Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
 
 
 Purpose & Features
