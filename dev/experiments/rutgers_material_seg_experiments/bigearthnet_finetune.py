@@ -1,50 +1,43 @@
 # flake8: noqa
-
-import comet_ml
 import time
-from geowatch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
-from skimage.filters import threshold_otsu as otsu
 from fast_pytorch_kmeans import KMeans
-from geowatch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss, SoftCE
-from geowatch.tasks.rutgers_material_seg.models.supcon import SupConResNet
 from geowatch.tasks.rutgers_material_seg.datasets import build_dataset
 from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 from geowatch.tasks.rutgers_material_seg.models import build_model
 import geowatch.tasks.rutgers_material_seg.utils.visualization as visualization
-import geowatch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import geowatch.tasks.rutgers_material_seg.utils.utils as utils
 from pytorch_metric_learning.distances import SNRDistance
 from pytorch_metric_learning import losses
-import torchvision.transforms.functional as FT
 from torchvision import transforms
 from tqdm import tqdm
 from torch import nn
-from scipy import ndimage
+# from scipy import ndimage
 import torch.nn.functional as F
 import torch.optim as optim
 import ubelt as ub
 import numpy as np
 import matplotlib.pyplot as plt
 import ndsampler
-import kwimage
+# import kwimage
 import kwcoco
 import random
-import math
+# import math
 import yaml
-import warnings
+# import warnings
 import datetime
 import torch
-import cv2
+# import cv2
 import gc
 import matplotlib
-matplotlib.use('Agg')
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import average_precision_score
-import sys
+# matplotlib.use('Agg')
+# from sklearn.metrics import accuracy_score
+# from sklearn.metrics import average_precision_score
+# import sys
 import os
-debug_mode = True
-if debug_mode:
-    from pympler import muppy, summary
+
+# debug_mode = True
+# if debug_mode:
+#     from pympler import muppy, summary
 current_path = os.getcwd().split("/")
 
 torch.backends.cudnn.enabled = False
@@ -604,6 +597,7 @@ class Trainer(object):
         return train_losses, val_losses, mean_ious_val
 
 
+# def main():
 if __name__ == "__main__":
     project_root = '/'.join(current_path[:-1])
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
@@ -623,6 +617,7 @@ if __name__ == "__main__":
     # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
+    import comet_ml
     experiment = comet_ml.Experiment(api_key=config['cometml']['api_key'],
                                      project_name=project_name,
                                      workspace=config['cometml']['workspace'],
@@ -740,7 +735,7 @@ if __name__ == "__main__":
 
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60,80])
 
-    if config['training']['resume'] != False:
+    if not config['training']['resume']:
 
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
