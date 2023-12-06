@@ -8,7 +8,6 @@ Subpackages
    :maxdepth: 4
 
    geowatch.tasks.rutgers_material_seg.datasets
-   geowatch.tasks.rutgers_material_seg.experiments
    geowatch.tasks.rutgers_material_seg.models
    geowatch.tasks.rutgers_material_seg.scripts
    geowatch.tasks.rutgers_material_seg.utils

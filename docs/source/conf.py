@@ -1,7 +1,7 @@
 """
 Notes:
     Based on template code in:
-        ~/code/xcookie/xcookie/builders/docs_conf.py
+        ~/code/xcookie/xcookie/builders/docs.py
         ~/code/xcookie/xcookie/rc/conf_ext.py
 
     http://docs.readthedocs.io/en/latest/getting_started.html
@@ -20,7 +20,7 @@ Notes:
     sphinx-apidoc --private -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch --separate
     make html
 
-    git add source/*.rst
+    git add source/auto/*.rst
 
     Also:
         To turn on PR checks
