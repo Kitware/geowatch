@@ -8,12 +8,12 @@ The GEOWATCH module
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Read the docs                                            | https://geowatch.readthedocs.io                                |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| Slides                                                   | `Software Overview Slides`_  and `KQH Demo Slides`_            |
+| Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
 +----------------------------------------------------------+----------------------------------------------------------------+
 
 .. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
 
-.. _KQH Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
+.. _KHQ Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
 
 
 Main modules of interest are:

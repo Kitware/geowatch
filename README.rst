@@ -33,7 +33,7 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Read the docs                                            | https://geowatch.readthedocs.io                                |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| Slides                                                   | `Software Overview Slides`_  and `KQH Demo Slides`_            |
+| Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
@@ -42,7 +42,7 @@ The following table provides links to relevant resources for the SMART WATCH pro
 
 .. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
 
-.. _KQH Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
+.. _KHQ Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
 
 
 Purpose & Features
@@ -74,11 +74,9 @@ benefits. Images can be arbitrarily large or small, and can be used in-situ
 formats (e.g. COGs) will be more efficient than others.
 
 
-Slides:
-
-* `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
-
-* `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
+.. .. Slides:
+.. .. * `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
+.. .. * `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
 
 Use Case: Heavy Construction
 ----------------------------
