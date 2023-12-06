@@ -155,6 +155,8 @@ autosummary_mock_imports = [
     'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_22_and_lt_4_24',
     'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22',
     'geowatch.tasks.fusion.datamodules.temporal_sampling.affinity_sampling',
+    'geowatch.tasks.depth_pcd.model',
+    'geowatch.tasks.cold.export_change_map',
 ]
 
 autodoc_member_order = 'bysource'
@@ -745,11 +747,11 @@ def create_doctest_figure(app, obj, name, lines):
     # HACK: write to the srcdir
     doc_outdir = pathlib.Path(app.outdir)
     doc_srcdir = pathlib.Path(app.srcdir)
-    doc_static_outdir = doc_outdir / 'auto/_static'
-    doc_static_srcdir = doc_srcdir / 'auto/_static'
+    doc_static_srcdir = doc_srcdir / '_static'
+    doc_static_outdir = doc_outdir / '_static'
     src_fig_dpath = (doc_static_srcdir / 'images')
-    src_fig_dpath.mkdir(exist_ok=True, parents=True)
     out_fig_dpath = (doc_static_outdir / 'images')
+    src_fig_dpath.mkdir(exist_ok=True, parents=True)
     out_fig_dpath.mkdir(exist_ok=True, parents=True)
 
     # fig_dpath = (doc_outdir / 'autofigs' / name).mkdir(exist_ok=True)
@@ -890,7 +892,8 @@ def create_doctest_figure(app, obj, name, lines):
             insert_index = end_index
         else:
             raise KeyError(INSERT_AT)
-        lines.insert(insert_index, '.. image:: {}'.format(rel_to_root_fpath))
+        lines.insert(insert_index, '.. image:: {}'.format('..' / rel_to_root_fpath))
+        # lines.insert(insert_index, '.. image:: {}'.format(rel_to_root_fpath))
         # lines.insert(insert_index, '.. image:: {}'.format(rel_to_static_fpath))
         lines.insert(insert_index, '')
 
