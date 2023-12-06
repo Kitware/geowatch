@@ -603,7 +603,7 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 0
+        render_doc_images = 1
         if render_doc_images:
             # DEVELOPING
             if any('REQUIRES(--show)' in line for line in lines):
