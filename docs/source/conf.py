@@ -339,8 +339,39 @@ texinfo_documents = [
 
 # -- Extension configuration -------------------------------------------------
 from sphinx.domains.python import PythonDomain  # NOQA
+from sphinx.transforms.post_transforms import SphinxPostTransform  # NOQA
 # from sphinx.application import Sphinx  # NOQA
 from typing import Any, List  # NOQA
+
+
+class HyperlinkCollector(SphinxPostTransform):
+    builders = ('linkcheck',)
+    default_priority = 800
+
+    def run(self, **kwargs: Any) -> None:
+        import xdev
+        xdev.embed()
+        # builder = cast(CheckExternalLinksBuilder, self.app.builder)
+        # hyperlinks = builder.hyperlinks
+        # docname = self.env.docname
+
+        # # reference nodes
+        # for refnode in self.document.findall(nodes.reference):
+        #     if 'refuri' in refnode:
+        #         uri = refnode['refuri']
+        #         _add_uri(self.app, uri, refnode, hyperlinks, docname)
+
+        # # image nodes
+        # for imgnode in self.document.findall(nodes.image):
+        #     uri = imgnode['candidates'].get('?')
+        #     if uri and '://' in uri:
+        #         _add_uri(self.app, uri, imgnode, hyperlinks, docname)
+
+        # # raw nodes
+        # for rawnode in self.document.findall(nodes.raw):
+        #     uri = rawnode.get('source')
+        #     if uri and '://' in uri:
+        #         _add_uri(self.app, uri, rawnode, hyperlinks, docname)
 
 
 class PatchedPythonDomain(PythonDomain):
@@ -572,7 +603,7 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 1
+        render_doc_images = 0
         if render_doc_images:
             # DEVELOPING
             if any('REQUIRES(--show)' in line for line in lines):
@@ -888,10 +919,34 @@ def create_doctest_figure(app, obj, name, lines):
         lines.insert(insert_index, '')
 
 
+def postprocess_hyperlinks(app, doctree, docname):
+    # Your hyperlink postprocessing logic here
+    from docutils import nodes
+    import ubelt as ub
+    for node in doctree.traverse(nodes.reference):
+        if 'refuri' in node.attributes:
+            refuri = node.attributes['refuri']
+            if '.rst' in refuri:
+                if 'source' in node.document:
+                    fpath = ub.Path(node.document['source'])
+                    parent_dpath = fpath.parent
+                    if (parent_dpath / refuri).exists():
+                        node.attributes['refuri'] = refuri.replace('.rst', '.html')
+                else:
+                    raise AssertionError
+        # if 'http' in node['refuri']:
+        #     # Modify the hyperlink attributes or perform other actions
+        #     node['class'] = 'custom-link'
+
+
 def setup(app):
     import sphinx
     app : sphinx.application.Sphinx = app
     app.add_domain(PatchedPythonDomain, override=True)
+
+    # app.add_post_transform(HyperlinkCollector)
+    app.connect("doctree-resolved", postprocess_hyperlinks)
+
     docstring_processor = GoogleStyleDocstringProcessor()
     # https://stackoverflow.com/questions/26534184/can-sphinx-ignore-certain-tags-in-python-docstrings
     app.connect('autodoc-process-docstring', docstring_processor.process_docstring_callback)
