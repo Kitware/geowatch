@@ -351,6 +351,10 @@ from sphinx.domains.python import PythonDomain  # NOQA
 # from sphinx.application import Sphinx  # NOQA
 from typing import Any, List  # NOQA
 
+import ubelt  # NOQA
+TIMER = ubelt.Timer()
+TIMER.tic()
+
 
 class PatchedPythonDomain(PythonDomain):
     """
@@ -581,7 +585,12 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 1
+        render_doc_images = 1  # FIXME too slow on RTD
+        # HACK TO PREVENT EXCESSIVE TIME.
+        # TODO: FIXME FOR REAL
+        if TIMER.toc() > 60 * 5:
+            render_doc_images = 0  # FIXME too slow on RTD
+
         if render_doc_images:
             # DEVELOPING
             if any('REQUIRES(--show)' in line for line in lines):

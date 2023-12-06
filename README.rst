@@ -13,7 +13,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
    :height: 50px
    :align: left
 
-|main-pipeline| |main-coverage| |Pypi| |Downloads|
+|main-pipeline| |main-coverage| |Pypi| |Downloads| |ReadTheDocs|
 
 
 This repository addresses the algorithmic challenges of the
