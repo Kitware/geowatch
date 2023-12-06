@@ -1,14 +1,89 @@
 """
 The GEOWATCH module
 
-Useful environs:
++----------------------------------------------------------+----------------------------------------------------------------+
+| The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Pypi                                                     | https://pypi.org/project/geowatch/                             |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Read the docs                                            | https://geowatch.readthedocs.io                                |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
++----------------------------------------------------------+----------------------------------------------------------------+
+
+.. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
+
+.. _KHQ Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
+
+
+Main modules of interest are:
+
+    * :mod:`geowatch.cli`
+
+    * :mod:`geowatch.mlops`
+
+    * :mod:`geowatch.tasks`
+
+Main Tasks:
+
+    * :mod:`geowatch.tasks.fusion`
+
+    * :mod:`geowatch.tasks.tracking`
+
+Supported Feature Tasks:
+
+    * :mod:`geowatch.tasks.cold`
+
+    * :mod:`geowatch.tasks.depth`
+
+    * :mod:`geowatch.tasks.depth_pcd`
+
+    * :mod:`geowatch.tasks.dino_detector`
+
+    * :mod:`geowatch.tasks.invariants`
+
+    * :mod:`geowatch.tasks.landcover`
+
+    * :mod:`geowatch.tasks.mae`
+
+    * :mod:`geowatch.tasks.rutgers_material_seg_v2`
+
+    * :mod:`geowatch.tasks.sam`
+
+Also see:
+
+    * :mod:`geowatch.gis`
+
+    * :mod:`geowatch.geoannots`
+
+    * :mod:`geowatch.demo`
+
+    * :mod:`geowatch.stac`
+
+    * :mod:`geowatch.utils`
+
+    * :mod:`geowatch.utils.lightning_ext`
+
+    * :mod:`geowatch.utils.lightning_ext.callbacks`
+
+You probably wont need:
+
+    * :mod:`geowatch.rc`
+
+    * :mod:`geowatch.monkey`
+
+
+.. code::
+
+    # Useful environs
+
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     HIGHRES_DVC_EXPT_DPATH=$(geowatch_dvc --tags='smart_drop7' --hardware=auto)
     DATA_DVC_DPATH=$DVC_DATA_DPATH
     EXPT_DVC_DPATH=$DVC_EXPT_DPATH
 
-    To get the above make sure you have run:
+    # To get the above make sure you have run:
     geowatch_dvc add my_phase2_data_repo --path=<path-to-your-phase2-data-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_data
     geowatch_dvc add my_phase2_expt_repo --path=<path-to-your-phase2-expt-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_expt
 
@@ -19,7 +94,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.13.1'
+__version__ = '0.13.2'
 
 
 # ../dev/maintain/generate_authors.py

@@ -161,7 +161,8 @@ class ManagerConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
-    from geowatch.mlops.manager import *  # NOQA
+    Ignore:
+        from geowatch.mlops.manager import *  # NOQA
     """
     config = ManagerConfig.cli(cmdline=cmdline, data=kwargs)
     print('ManagerConfig config = {}'.format(ub.urepr(dict(config), nl=1)))
@@ -235,18 +236,20 @@ class DVCExptManager(ub.NiceRepr):
         - [ ] If we can somehow generate the output paths based on the
         pipeline, then we will be in a very good position.
 
-    <expt_dvc_dpath>
-        * training
-            * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
+    Notes:
 
-        * models
-            * <task>
-            * fusion/<dataset_code>/packages/<expt_name>/<model_name.pt>
-            * fusion/<dataset_code>/pred/<expt_name>/<model_name.pt>/***
-            * fusion/<dataset_code>/eval/<expt_name>/<model_name.pt>/***
+        <expt_dvc_dpath>
+            * training
+                * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
 
-    A breakdown of the packages dir is:
-        packages/<expt_name>/<model_name.pt>
+            * models
+                * <task>
+                * fusion/<dataset_code>/packages/<expt_name>/<model_name.pt>
+                * fusion/<dataset_code>/pred/<expt_name>/<model_name.pt>/***
+                * fusion/<dataset_code>/eval/<expt_name>/<model_name.pt>/***
+
+        A breakdown of the packages dir is:
+            packages/<expt_name>/<model_name.pt>
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
@@ -261,7 +264,6 @@ class DVCExptManager(ub.NiceRepr):
         self = manager.stats[0]
         self.list()
         util_pandas.pandas_truncate_items(self.staging_table(), paths=0, max_length=32)[0]
-
 
     Ignore:
         broke = df[df['is_broken']]
@@ -281,8 +283,6 @@ class DVCExptManager(ub.NiceRepr):
         manager._build_states()
 
     def summarize(manager):
-        # for state in manager.states:
-        #     state.summarize()
         for state in manager.states:
             state.summarize()
 

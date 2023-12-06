@@ -1,7 +1,7 @@
 """
 Notes:
     Based on template code in:
-        ~/code/xcookie/xcookie/builders/docs_conf.py
+        ~/code/xcookie/xcookie/builders/docs.py
         ~/code/xcookie/xcookie/rc/conf_ext.py
 
     http://docs.readthedocs.io/en/latest/getting_started.html
@@ -17,10 +17,10 @@ Notes:
     # need to edit the conf.py
 
     cd ~/code/geowatch/docs
-    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source ~/code/geowatch/geowatch --separate
+    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch --separate
     make html
 
-    git add source/*.rst
+    git add source/auto/*.rst
 
     Also:
         To turn on PR checks
@@ -149,6 +149,15 @@ napoleon_use_param = False
 napoleon_use_ivar = True
 
 autodoc_inherit_docstrings = False
+
+autosummary_mock_imports = [
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_24_and_lt_4_xx',
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_22_and_lt_4_24',
+    'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22',
+    'geowatch.tasks.fusion.datamodules.temporal_sampling.affinity_sampling',
+    'geowatch.tasks.depth_pcd.model',
+    'geowatch.tasks.cold.export_change_map',
+]
 
 autodoc_member_order = 'bysource'
 autoclass_content = 'both'
@@ -342,6 +351,10 @@ from sphinx.domains.python import PythonDomain  # NOQA
 # from sphinx.application import Sphinx  # NOQA
 from typing import Any, List  # NOQA
 
+import ubelt  # NOQA
+TIMER = ubelt.Timer()
+TIMER.tic()
+
 
 class PatchedPythonDomain(PythonDomain):
     """
@@ -349,6 +362,18 @@ class PatchedPythonDomain(PythonDomain):
         https://github.com/sphinx-doc/sphinx/issues/3866
     """
     def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
+        if 0:
+            import ubelt as ub
+            print('----')
+            print('contnode = {}'.format(ub.urepr(contnode, nl=1)))
+            print('node = {}'.format(ub.urepr(node, nl=1)))
+            print('target = {}'.format(ub.urepr(target, nl=1)))
+            print('typ = {}'.format(ub.urepr(typ, nl=1)))
+            # print('builder = {}'.format(ub.urepr(builder, nl=1)))
+            print('fromdocname = {}'.format(ub.urepr(fromdocname, nl=1)))
+            # print('env = {}'.format(ub.urepr(env, nl=1)))
+            print('----')
+
         # TODO: can use this to resolve references nicely
         if target.startswith('ub.'):
             target = 'ubelt.' + target[3]
@@ -560,7 +585,12 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 1
+        render_doc_images = 1  # FIXME too slow on RTD
+        # HACK TO PREVENT EXCESSIVE TIME.
+        # TODO: FIXME FOR REAL
+        if TIMER.toc() > 60 * 5:
+            render_doc_images = 0  # FIXME too slow on RTD
+
         if render_doc_images:
             # DEVELOPING
             if any('REQUIRES(--show)' in line for line in lines):
@@ -726,11 +756,11 @@ def create_doctest_figure(app, obj, name, lines):
     # HACK: write to the srcdir
     doc_outdir = pathlib.Path(app.outdir)
     doc_srcdir = pathlib.Path(app.srcdir)
-    doc_static_outdir = doc_outdir / '_static'
     doc_static_srcdir = doc_srcdir / '_static'
+    doc_static_outdir = doc_outdir / '_static'
     src_fig_dpath = (doc_static_srcdir / 'images')
-    src_fig_dpath.mkdir(exist_ok=True, parents=True)
     out_fig_dpath = (doc_static_outdir / 'images')
+    src_fig_dpath.mkdir(exist_ok=True, parents=True)
     out_fig_dpath.mkdir(exist_ok=True, parents=True)
 
     # fig_dpath = (doc_outdir / 'autofigs' / name).mkdir(exist_ok=True)
@@ -871,15 +901,38 @@ def create_doctest_figure(app, obj, name, lines):
             insert_index = end_index
         else:
             raise KeyError(INSERT_AT)
-        lines.insert(insert_index, '.. image:: {}'.format(rel_to_root_fpath))
+        lines.insert(insert_index, '.. image:: {}'.format('..' / rel_to_root_fpath))
+        # lines.insert(insert_index, '.. image:: {}'.format(rel_to_root_fpath))
         # lines.insert(insert_index, '.. image:: {}'.format(rel_to_static_fpath))
         lines.insert(insert_index, '')
+
+
+def postprocess_hyperlinks(app, doctree, docname):
+    # Your hyperlink postprocessing logic here
+    from docutils import nodes
+    import ubelt as ub
+    for node in doctree.traverse(nodes.reference):
+        if 'refuri' in node.attributes:
+            refuri = node.attributes['refuri']
+            if '.rst' in refuri:
+                if 'source' in node.document:
+                    fpath = ub.Path(node.document['source'])
+                    parent_dpath = fpath.parent
+                    if (parent_dpath / refuri).exists():
+                        node.attributes['refuri'] = refuri.replace('.rst', '.html')
+                else:
+                    raise AssertionError
+        # if 'http' in node['refuri']:
+        #     # Modify the hyperlink attributes or perform other actions
+        #     node['class'] = 'custom-link'
 
 
 def setup(app):
     import sphinx
     app : sphinx.application.Sphinx = app
     app.add_domain(PatchedPythonDomain, override=True)
+    app.connect("doctree-resolved", postprocess_hyperlinks)
+
     docstring_processor = GoogleStyleDocstringProcessor()
     # https://stackoverflow.com/questions/26534184/can-sphinx-ignore-certain-tags-in-python-docstrings
     app.connect('autodoc-process-docstring', docstring_processor.process_docstring_callback)

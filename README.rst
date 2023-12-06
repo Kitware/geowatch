@@ -13,7 +13,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
    :height: 50px
    :align: left
 
-|main-pipeline| |main-coverage| |Pypi| |Downloads|
+|main-pipeline| |main-coverage| |Pypi| |Downloads| |ReadTheDocs|
 
 
 This repository addresses the algorithmic challenges of the
@@ -29,10 +29,20 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
+| Pypi                                                     | https://pypi.org/project/geowatch/                             |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Read the docs                                            | https://geowatch.readthedocs.io                                |
++----------------------------------------------------------+----------------------------------------------------------------+
+| Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
++----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GEOWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
+
+.. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
+
+.. _KHQ Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
 
 
 Purpose & Features
@@ -64,11 +74,9 @@ benefits. Images can be arbitrarily large or small, and can be used in-situ
 formats (e.g. COGs) will be more efficient than others.
 
 
-Slides:
-
-* `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
-
-* `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
+.. .. Slides:
+.. .. * `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
+.. .. * `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
 
 Use Case: Heavy Construction
 ----------------------------
@@ -103,7 +111,7 @@ trained on this region.
 Getting Started
 ---------------
 
-To quickly get started locally, assuming you have `Python installed <docs/environment/install_python.rst>`_,
+To quickly get started locally, assuming you have `Python installed <docs/source/manual/environment/install_python.rst>`_,
 you can install geowatch with pip.
 
 
@@ -141,15 +149,15 @@ doctests:
     xdoctest watch
 
 
-For more details see the `installing GEOWATCH for development guide <docs/environment/installing_geowatch.rst>`_.
+For more details see the `installing GEOWATCH for development guide <docs/source/manual/environment/installing_geowatch.rst>`_.
 
-We also have limited windows support, see `installing GEOWATCH on Windows  <docs/environment/windows.rst>`_.
+We also have limited windows support, see `installing GEOWATCH on Windows  <docs/source/manual/environment/windows.rst>`_.
 
 
 Tutorials
 ---------
 
-We have a set of `tutorials <./tutorials>`_ related to training models and predicting with the
+We have a set of `tutorials <./tutorial>`_ related to training models and predicting with the
 system.
 
 * Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
@@ -170,56 +178,56 @@ Documentation
 
 For quick reference, a list of current documentation files is:
 
-* `Onboarding Docs <docs/onboarding.rst>`_
+* `Onboarding Docs <docs/source/manual/onboarding.rst>`_
 
-* `Internal Resources <docs/data/internal_resources.rst>`_
+* `Internal Resources <docs/source/manual/data/internal_resources.rst>`_
 
-* `The GEOWATCH CLI <docs/watch_cli.rst>`_
+* `The GEOWATCH CLI <docs/source/manual/watch_cli.rst>`_
 
 * Contribution:
 
-  + `Contribution Instructions <docs/development/contribution_instructions.rst>`_
+  + `Contribution Instructions <docs/source/manual/development/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <docs/development/rebasing_procedure.rst>`_
+  + `Rebasing Procedure <docs/source/manual/development/rebasing_procedure.rst>`_
 
-  + `Testing Practices <docs/testing/testing_practices.rst>`_
+  + `Testing Practices <docs/source/manual/testing/testing_practices.rst>`_
 
-  + `Supporting Projects <docs/misc/supporting_projects.rst>`_
+  + `Supporting Projects <docs/source/manual/misc/supporting_projects.rst>`_
 
-  + `Coding Conventions <docs/development/coding_conventions.rst>`_
+  + `Coding Conventions <docs/source/manual/development/coding_conventions.rst>`_
 
 * Installing:
 
-  + `Installing GEOWATCH <docs/environment/installing_geowatch.rst>`_
+  + `Installing GEOWATCH <docs/source/manual/environment/installing_geowatch.rst>`_
 
-  + `Installing GEOWATCH on Windows <docs/environment/windows.rst>`_
+  + `Installing GEOWATCH on Windows <docs/source/manual/environment/windows.rst>`_
 
-  + `Installing Python via Conda <docs/environment/install_python_conda.rst>`_
+  + `Installing Python via Conda <docs/source/manual/environment/install_python_conda.rst>`_
 
-  + `Installing Python via PyEnv <docs/environment/install_python_pyenv.rst>`_
+  + `Installing Python via PyEnv <docs/source/manual/environment/install_python_pyenv.rst>`_
 
 * Fusion Related Docs:
 
-  + `TA2 Fusion Overview <docs/algorithms/fusion_overview.rst>`_
+  + `TA2 Fusion Overview <docs/source/manual/algorithms/fusion_overview.rst>`_
 
-  + `TA2 Deep Dive Info <docs/algorithms/ta2_deep_dive_info.md>`_
+  + `TA2 Deep Dive Info <docs/source/manual/algorithms/ta2_deep_dive_info.md>`_
 
-  + `TA2 Feature Integration <docs/development/ta2_feature_integration.md>`_
+  + `TA2 Feature Integration <docs/source/manual/development/ta2_feature_integration.md>`_
 
 * Older Design Docs:
 
-  + `Structure Proposal <docs/misc/structure_proposal.md>`_
+  + `Structure Proposal <docs/source/manual/misc/structure_proposal.md>`_
 
 
 Development
 -----------
 
-For new collaborators, please refer to the `onboarding docs <docs/onboarding.rst>`_
+For new collaborators, please refer to the `onboarding docs <docs/source/manual/onboarding.rst>`_
 
-For internal collaborators, please refer to the `internal docs <docs/data/internal_resources.rst>`_
+For internal collaborators, please refer to the `internal docs <docs/source/manual/data/internal_resources.rst>`_
 
 For more details about the GEOWATCH CLI and other CLI tools included in this package see:
-`the GEOWATCH CLI docs <docs/watch_cli.rst>`_
+`the GEOWATCH CLI docs <docs/source/manual/watch_cli.rst>`_
 
 
 Related Work

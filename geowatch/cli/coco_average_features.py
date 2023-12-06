@@ -598,7 +598,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 def main(cmdline=True, **kw):
     """
     Main function for merge_kwcoco_channels.
-    See :class:``CocoAverageFeaturesConfig` for details
+    See :class:`CocoAverageFeaturesConfig` for details
 
     TODO: Add examples
 

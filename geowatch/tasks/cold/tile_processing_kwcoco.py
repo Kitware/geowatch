@@ -1,38 +1,39 @@
 """
 This is step 2/4 in predict.py and the step that runs pycold
 
+SeeAlso
 
-SeeAlso:
+* predict.py
 
-    predict.py
+* prepare_kwcoco.py
 
-    prepare_kwcoco.py
+* tile_processing_kwcoco.py
 
-    tile_processing_kwcoco.py *
+* export_cold_result_kwcoco.py
 
-    export_cold_result_kwcoco.py
-
-    assemble_cold_result_kwcoco.py
+* assemble_cold_result_kwcoco.py
 
 This script is for running COLD algorithm with kwcoco dataset.
 See original code: ~/code/pycold/src/python/pycold/imagetool/tile_processing.py
 """
 
-import os
-import time
 import json
-import pandas as pd
 import numpy as np
+import os
+import pandas as pd
+import scriptconfig as scfg
+import time
+
+import pycold  # NOQA
+
 from datetime import datetime as datetime_cls
+from pathlib import Path
 from pytz import timezone
 from scipy.stats import chi2
-import ubelt as ub  # NOQA
-import pycold  # NOQA
+
 from pycold import cold_detect
-from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 from pycold.ob_analyst import ObjectAnalystHPC
-import scriptconfig as scfg
-from pathlib import Path
+from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 
 try:
     from xdev import profile
@@ -73,22 +74,23 @@ def tile_process_main(cmdline=1, **kwargs):
         TEST_COLD=1 xdoctest -m geowatch.tasks.cold.tile_processing_kwcoco tile_process_main
 
     Example:
-    >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from geowatch.tasks.cold.tile_processing_kwcoco import tile_process_main
-    >>> from geowatch.tasks.cold.tile_processing_kwcoco import *
-    >>> kwargs= dict(
-    >>>    rank = 1,
-    >>>    n_cores = 1,
-    >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'),
-    >>>    reccg_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001'),
-    >>>    method = 'COLD',
-    >>>    b_c2 = True,
-    >>>    prob = 0.99,
-    >>>    conse = 6,
-    >>>    cm_interval = 60,
-    >>> )
-    >>> cmdline=0
-    >>> tile_process_main(cmdline, **kwargs)
+        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
+        >>> from geowatch.tasks.cold.tile_processing_kwcoco import tile_process_main
+        >>> from geowatch.tasks.cold.tile_processing_kwcoco import *
+        >>> import ubelt as ub
+        >>> kwargs= dict(
+        >>>    rank = 1,
+        >>>    n_cores = 1,
+        >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'),
+        >>>    reccg_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001'),
+        >>>    method = 'COLD',
+        >>>    b_c2 = True,
+        >>>    prob = 0.99,
+        >>>    conse = 6,
+        >>>    cm_interval = 60,
+        >>> )
+        >>> cmdline=0
+        >>> tile_process_main(cmdline, **kwargs)
     """
     # Hacky way to pass in progress manager
     pman = kwargs.pop('pman', None)
@@ -457,14 +459,13 @@ def read_json_metadata(stacked_path):
 def is_finished_cold_blockfinished(reccg_path, nblocks):
     """
     check if the COLD algorithm finishes all blocks
-    Parameters
-    ----------
-    reccg_path: the path that save COLD results
-    nblocks: the block number
 
-    Returns: boolean
-    -------
-        True -> all block finished
+    Args:
+        reccg_path (str): the path that save COLD results
+        nblocks (int): the block number
+
+    Returns:
+        bool: True if all block finished
     """
     for n in range(nblocks):
         fpath = reccg_path / f'COLD_block{n + 1}_finished.txt'
@@ -476,12 +477,15 @@ def is_finished_cold_blockfinished(reccg_path, nblocks):
 @profile
 def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound=0, nband=8):
     """
-    :param block_x: block id at x axis
-    :param block_y: block id at y axis
-    :param stack_path: stack path
-    :param year_lowbound: ordinal data of low bounds of selection date range
-    :param year_highbound: ordinal data of upper bounds of selection date range
-    :return:
+    Args:
+        block_x: block id at x axis
+        block_y: block id at y axis
+        stack_path: stack path
+        year_lowbound: ordinal data of low bounds of selection date range
+        year_highbound: ordinal data of upper bounds of selection date range
+
+    Returns:
+        Tuple:
         img_tstack, img_dates_sorted
         img_tstack - 3-d array (block_width * block_height, nband, nimage)
     """
@@ -532,14 +536,12 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
 @profile
 def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_interval):
     """
-    Parameters
-    ----------
-    stack_path: string
-        stack_path for saving starting_last_dates.txt
-    cm_interval: interval
-        day interval for outputting change magnitudes
-    Returns
-    -------
+    Args:
+        stack_path (str): stack_path for saving starting_last_dates.txt
+        cm_interval (interval): day interval for outputting change magnitudes
+
+    Returns:
+        Tuple:
         (starting_date, n_cm_maps)
         starting_date - starting date is the first date of the whole dataset,
         n_cm_maps - the number of change magnitudes to be outputted per pixel per band
@@ -578,15 +580,14 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
 @profile
 def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
     """
-    Parameters
-    ----------
-    cmmap_path: the path for saving change magnitude maps
-    n_cm: the number of change magnitudes outputted per pixel
-    starting_date: the starting date of the whole dataset
-    cm_interval: the day interval for outputting change magnitudes
-    Returns: boolean
-    -------
-    True -> assemble finished
+    Args:
+        cmmap_path: the path for saving change magnitude maps
+        n_cm: the number of change magnitudes outputted per pixel
+        starting_date: the starting date of the whole dataset
+        cm_interval: the day interval for outputting change magnitudes
+
+    Returns:
+        bool: True -> assemble finished
     """
     for count in range(n_cm):
         ordinal_date = starting_date + count * cm_interval

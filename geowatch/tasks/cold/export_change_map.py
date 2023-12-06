@@ -1,16 +1,18 @@
 # Author: Su Ye
 # generating yearly, recent and first-disturbance maps from change records
-import os
-import numpy as np
-import pandas as pd
-from osgeo import gdal
 import click
 import datetime as datetime
-from mpi4py import MPI
-from osgeo import gdal_array
+import numpy as np
+import os
+import pandas as pd
 import pickle
 import yaml
+
 from collections import namedtuple
+from osgeo import gdal
+from osgeo import gdal_array
+
+from mpi4py import MPI
 
 PACK_ITEM = 6
 SccdOutput = namedtuple("SccdOutput", "position rec_cg min_rmse nrt_mode nrt_model nrt_queue")

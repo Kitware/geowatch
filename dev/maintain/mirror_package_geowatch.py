@@ -13,10 +13,10 @@ import ubelt as ub
 
 def main():
 
-    old_name = 'watch'
-    mirror_name = 'geowatch'
+    main_name = 'geowatch'
+    mirror_name = 'watch'
 
-    module = ub.import_module_from_name(old_name)
+    module = ub.import_module_from_name(main_name)
     module_dpath = ub.Path(module.__file__).parent
     do_mirror(module_dpath, mirror_name)
 
@@ -168,7 +168,7 @@ def do_mirror(module_dpath, mirror_name):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/dev/maintain/mirror_package_geowatch.py
+        python ~/code/geowatch/dev/maintain/mirror_package_geowatch.py
 
     python -c "import geowatch; print('geowatch.__version__ = ' + str(geowatch.__version__))"
     python -c "import geowatch; print('geowatch.__name__ = ' + str(geowatch.__name__))"
