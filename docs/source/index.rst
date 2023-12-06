@@ -88,7 +88,7 @@ Manual Docs:
 
 * `environment/installing_geowatch <manual/environment/installing_geowatch.rst>`_
 
-* `environment/und <manual/environment/und.rst>`_
+* `environment/understanding_editable_installs <manual/environment/understanding_editable_installs.rst>`_
 
 * `environment/windows <manual/environment/windows.rst>`_
 
