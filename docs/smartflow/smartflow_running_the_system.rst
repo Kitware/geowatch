@@ -24,9 +24,9 @@ Prerequisites
 
 Be sure you have
 
-* `Setup the AWS CLI <../../docs/environment/getting_started_aws.rst>`_
+* `Setup the AWS CLI <../environment/getting_started_aws.rst>`_
 
-* `Setup the kubectl CLI <../../docs/environment/getting_started_kubectl.rst>`_
+* `Setup the kubectl CLI <../environment/getting_started_kubectl.rst>`_
 
 * `Setup smartflow <getting_started_smartflow.rst>`_
 

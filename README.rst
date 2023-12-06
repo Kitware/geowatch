@@ -149,7 +149,7 @@ We also have limited windows support, see `installing GEOWATCH on Windows  <docs
 Tutorials
 ---------
 
-We have a set of `tutorials <./tutorials>`_ related to training models and predicting with the
+We have a set of `tutorials <./tutorial>`_ related to training models and predicting with the
 system.
 
 * Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
