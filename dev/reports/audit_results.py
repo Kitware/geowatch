@@ -4,7 +4,7 @@ import json
 import kwcoco
 from watch.utils import kwcoco_extensions
 from watch.mlops import smart_result_parser
-from watch.cli import coco_intensity_histograms
+from watch.cli import coco_spectra
 import rich
 from kwutil import util_time
 from watch.tasks.fusion.datamodules import kwcoco_datamodule
@@ -151,16 +151,16 @@ def audit():
     queue.rprint()
     queue.run()
 
-    from watch.cli import coco_intensity_histograms
+    from watch.cli import coco_spectra
     # Check input histograms
 
-    dev_input_results = coco_intensity_histograms.main(**({
+    dev_input_results = coco_spectra.main(**({
         'src': dev_input_dset_fpath,
         'dst': bas_bundle / 'dev_input_hist.png',
         'workers': 4,
     }))
 
-    pro_input_results = coco_intensity_histograms.main(**({
+    pro_input_results = coco_spectra.main(**({
         'src': pro_input_dset.fpath,
         'dst': bas_bundle / 'pro_input_hist.png',
         'workers': 4,
@@ -175,18 +175,18 @@ def audit():
         'include_channels': 'salient',
         'workers': 4,
     })
-    dev_results = coco_intensity_histograms.main(**(spectra_defaults | {
+    dev_results = coco_spectra.main(**(spectra_defaults | {
         'src': dev_dset,
         'dst': bas_bundle / 'dev_hist.png'
     }))
-    pro_results = coco_intensity_histograms.main(**(spectra_defaults | {
+    pro_results = coco_spectra.main(**(spectra_defaults | {
         'src': pro_tracked_dset,
         'dst': bas_bundle / 'pro_hist.png'
     }))
 
     redev_results = []
     for idx, pred_fpath in enumerate(redev_audit_fpath_list, start=1):
-        redev_result = coco_intensity_histograms.main(**(spectra_defaults | {
+        redev_result = coco_spectra.main(**(spectra_defaults | {
             'src': pred_fpath,
             'dst': bas_bundle / f'redev_v{idx}_hist.png'
         }))
@@ -194,7 +194,7 @@ def audit():
 
     repro_results = []
     for idx, pred_fpath in enumerate(repro_audit_fpath_list, start=1):
-        repro_result = coco_intensity_histograms.main(**(spectra_defaults | {
+        repro_result = coco_spectra.main(**(spectra_defaults | {
             'src': pred_fpath,
             'dst': bas_bundle / f'repro_v{idx}_hist.png'
         }))
@@ -411,7 +411,7 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     })
     redev_results = []
     for idx, pred_fpath in enumerate(clean_redev_audit_fpath_list, start=1):
-        redev_result = coco_intensity_histograms.main(**(spectra_defaults | {
+        redev_result = coco_spectra.main(**(spectra_defaults | {
             'src': pred_fpath,
             # 'dst': bas_bundle / f'redev_v{idx}_hist.png'
         }))
@@ -419,7 +419,7 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
 
     repro_results = []
     for idx, pred_fpath in enumerate(clean_repro_audit_fpath_list, start=1):
-        repro_result = coco_intensity_histograms.main(**(spectra_defaults | {
+        repro_result = coco_spectra.main(**(spectra_defaults | {
             'src': pred_fpath,
             # 'dst': bas_bundle / f'repro_v{idx}_hist.png'
         }))

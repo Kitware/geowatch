@@ -17,7 +17,7 @@ The following is a list of the primary CLI commands:
 
 * ``geowatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
 
-* ``geowatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors.
+* ``geowatch coco_spectra --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors.
 
 * ``geowatch coco_visualize_videos --help`` - Visualize a video sequence with and without annotations. This can also create an animation of arbitrary feature channels.
 
@@ -61,7 +61,7 @@ Using ``--help`` shows the top level modal CLI:
                             Projects annotations from geospace onto a kwcoco dataset and optionally
         visualize (coco_visualize_videos)
                             Visualizes annotations on kwcoco video frames on each band
-        spectra (intensity_histograms, coco_spectra)
+        spectra (coco_spectra)
                             Updates image transforms in a kwcoco json file to align all videos to a
         dvcdir (find_dvc)   Command line helper to find the path to the watch DVC repo
         run_tracker (kwcoco_to_geojson)
@@ -153,7 +153,7 @@ coco_visualize_videos - Very useful. Renders bands and annotations to images or 
 
 torch_model_stats - Very useful. Human readable metadata report for a trained torch package. (i.e. what bands / sensors / datasets was it trained on).
 
-coco_intensity_histograms - Reasonably useful. Makes histograms to visualize and compare channel intensity across sensors / videos.
+coco_spectra - Reasonably useful. Makes histograms to visualize and compare channel intensity across sensors / videos.
 
 find_dvc - This is "geowatch_dvc". This helps register / recall paths to DVC repos based on tags to help allow scripts to be written in a magic agnostic way.
 
