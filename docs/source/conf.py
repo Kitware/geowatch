@@ -745,8 +745,8 @@ def create_doctest_figure(app, obj, name, lines):
     # HACK: write to the srcdir
     doc_outdir = pathlib.Path(app.outdir)
     doc_srcdir = pathlib.Path(app.srcdir)
-    doc_static_outdir = doc_outdir / '_static'
-    doc_static_srcdir = doc_srcdir / '_static'
+    doc_static_outdir = doc_outdir / 'auto/_static'
+    doc_static_srcdir = doc_srcdir / 'auto/_static'
     src_fig_dpath = (doc_static_srcdir / 'images')
     src_fig_dpath.mkdir(exist_ok=True, parents=True)
     out_fig_dpath = (doc_static_outdir / 'images')
