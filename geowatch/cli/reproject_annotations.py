@@ -1719,6 +1719,8 @@ def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
 
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id, ax=None):
     """
+    See [HandleDates]_
+
     References:
         .. [HandleDates] https://stackoverflow.com/questions/44642966/how-to-plot-multi-color-line-if-x-axis-is-date-time-index-of-pandas
     """

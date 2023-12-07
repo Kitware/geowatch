@@ -25,6 +25,8 @@ class BatchPlotter(pl.callbacks.Callback):
     To be used, the trainer datamodule must have a `draw_batch` method that
     returns an ndarray to draw a batch.
 
+    See [LightningCallbacks]_.
+
     Args:
         num_draw (int):
             number of batches to draw at the start of each epoch

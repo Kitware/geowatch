@@ -220,6 +220,8 @@ def utm_epsg_from_latlon(lat, lon):
     distances in meters. If the region of interest is very large, this may not
     be valid.
 
+    See [SE190198]_ and [SE365584]_.
+
     Args:
         lat (float): degrees in latitude
         lon (float): degrees in longitude

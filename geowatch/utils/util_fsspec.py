@@ -247,7 +247,7 @@ class FSPath(str):
         If dst ends with a "/", it will be assumed to be a directory, and
         target files will go within.
 
-        Unlike fsspec, this attempts to be idempotent.
+        Unlike fsspec, this attempts to be idempotent. See [FSSpecCopy]_.
 
         Args:
             dst (FSPath): location to copy to
@@ -280,7 +280,7 @@ class FSPath(str):
             remote->remote (copy), local->remote (put), or remote->local (get)
 
         References:
-            https://filesystem-spec.readthedocs.io/en/latest/copying.html
+            .. [FSSpecCopy] https://filesystem-spec.readthedocs.io/en/latest/copying.html
 
         Example:
             >>> from geowatch.utils import util_fsspec
@@ -625,6 +625,8 @@ class S3Path(RemotePath):
         self.ls()
 
     To work with different S3 filesystems,
+
+    See [S3FS_Docs]_.
 
     Requirements:
         s3fs>=2023.6.0

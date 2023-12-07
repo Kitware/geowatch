@@ -28,10 +28,12 @@ aws eks --profile iarpa --region $AWS_REGION update-kubeconfig \
 
 ## `rsync` and kubernetes
 
-Copying files to a kubernetes pod is tricky, below is a script which makes this less painful. [Source](https://serverfault.com/a/887402)
+Copying files to a kubernetes pod is tricky, below is a script which makes this less painful.
+ [Source](https://serverfault.com/a/887402)
 
-`krsync.sh`:
-```
+`krsync.sh`
+
+```bash
 #!/bin/bash
 
 if [ -z "$KRSYNC_STARTED" ]; then

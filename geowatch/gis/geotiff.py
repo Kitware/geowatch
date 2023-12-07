@@ -629,13 +629,15 @@ def geotiff_filepath_info(gpath, fast=True):
         * Landsat-8
         * WorldView3
 
+    See [S2_Name_2016]_ and [S3_Name]_.
+
     Args:
         gpath (str): a path to an image that uses a standard naming convention
             (may include subdirectories that contain relevant information) .
 
-        fast (bool, default=True):
+        fast (bool):
             if True stops when a hueristic matches well enough, otherwise tries
-            multiple hueristics.
+            multiple hueristics. Defaults to True.
 
     SeeAlso:
         * parse_landsat_product_id - specific to the landsat spec
@@ -1040,6 +1042,9 @@ def parse_sentinel2_product_id(parts):
 def parse_landsat_product_id(product_id):
     """
     Extract information from a landsat produt id
+
+    See [LanSatName]_, [LS_578]_, [ExampleLandSat]_, [LandSatSuffixFormat]_,
+    [LandsatProcLevels]_, [LandsatL2Names]_, and [LandSatARDDocs]_.
 
     Args:
         product_id (str): this is typically the filename (without extension!)

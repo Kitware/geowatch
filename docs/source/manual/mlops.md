@@ -19,7 +19,10 @@ MLOps is a wrapper around the cmd_queue library that provides a single entrypoin
 You can invoke any one of these things through `python -m geowatch...` without MLOps, but it handles all the plumbing of feeding jobs' input/output to each other and spawning them to use all your available compute resources.
 
 
-## using dvc and geowatch_dvc
+## using DVC and geowatch_dvc
+
+
+(Note: `geowatch_dvc` will be replaced by `sdvc` from the `simple_dvc` package.)
 
 `geowatch_dvc` is an alias for `python -m geowatch.cli.find_dvc`.
 MLOps uses it to manage paths to your DVC repos.
@@ -55,7 +58,7 @@ cd doesn't work when the terminal is too narrow for 1 line, because it'll pretty
 
 ### sidebar: setting up a shared DVC cache on a shared machine
 
-multiple users can share a DVC cache so they don't have to duplicate the data!
+Multiple users can share a DVC cache so they don't have to duplicate the data!
 ```bash
 dvc config cache.shared group
 dvc config cache.type symlink
@@ -65,7 +68,8 @@ dvc checkout
 
 ## using mlops to checkout a model
 
-`geowatch mlops` is an alias for `python -m geowatch.cli.mlops_cli` or `python -m geowatch.mlops.expt_manager`. The entrypoint in code is `watch/mlops/expt_manager.py`.
+`geowatch mlops` is an alias for `python -m geowatch.cli.mlops_cli` or `python -m geowatch.mlops.expt_manager`. 
+The entrypoint in code is `watch/mlops/expt_manager.py`.
 
 Let's choose a model and do stuff with it!
 ```bash
@@ -175,7 +179,9 @@ The params are namespaced for convenience
   - act.pxl - SC predict and pixel evaluate
   - act.poly - SC tracking and IARPA poly evaluate
 
-First, dry-run with run=0, and if it looks ok, set run=1. --backend=tmux is also highly recommended instead of serial, it makes the running queue much easier to debug (backend="slurm" is also available if your machine supports it). --virtualenv_cmd="conda activate watch" or something to that effect is also needed if your bashrc does not automatically drop you into the watch virtualenv.
+First, dry-run with run=0, and if it looks ok, set run=1. --backend=tmux is also highly recommended instead of serial, it makes the running queue much easier to debug (backend="slurm" is also available if your machine supports it). 
+`--virtualenv_cmd="conda activate watch"`
+or something to that effect is also needed if your bashrc does not automatically drop you into the watch virtualenv.
 
 ## debugging/examining a running mlops invocation
 
@@ -209,7 +215,7 @@ You can dig through the sourced scripts to piece together what a full GEOWATCH T
 ROOT="/home/local/KHQ/matthew.bernstein/data/dvc-repos/smart_expt_dvc-ssd/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco"
 PXL_EXPT="${ROOT}/trk_pxl_b788335d"
 TRK_EXPT="trk_poly_ca4372e1"
- python -m geowatch.cli.run_tracker \
+python -m geowatch.cli.run_tracker \
         "${TRK_ROOT}/pred.kwcoco.json" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{"thresh": 0.12, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
