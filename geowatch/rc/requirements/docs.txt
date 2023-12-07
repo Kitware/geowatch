@@ -8,5 +8,5 @@ myst_parser>=0.18.0
 sphinx-reredirects>=0.0.1
 xdoctest>=1.1.2
 
-simplejson
-pycold
+simplejson>=3.19.2
+pycold>=0.1.2

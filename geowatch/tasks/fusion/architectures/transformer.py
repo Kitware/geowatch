@@ -813,13 +813,14 @@ class DeiTEncoder(nn.Module):
         >>> in_features = 7
         >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
         >>> inputs = torch.rand(*input_shape)
-        >>> self = DeiTEncoder(in_features)
+        >>> self = DeiTEncoder(in_features, pretrained=False)
         >>> outputs = self.forward(inputs)
     """
 
-    def __init__(self, in_features):
+    def __init__(self, in_features, pretrained=True):
         super().__init__()
-        deit = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+        deit = torch.hub.load('facebookresearch/deit:main',
+                              'deit_base_patch16_224', pretrained=pretrained)
         blocks = deit.blocks
         block_in_features = blocks[0].norm1.weight.shape[0]
         self.first = nn.Linear(in_features, out_features=block_in_features)
