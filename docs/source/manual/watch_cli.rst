@@ -1,5 +1,5 @@
 Important GEOWATCH Scripts
------------------------
+--------------------------
 
 The GEOWATCH module comes with a command line interface (CLI). This can be
 invoked via ``geowatch --help`` (note: alternatively you can invoke the module
@@ -138,7 +138,7 @@ repository maintenence.
 
 
 Summary of GEOWATCH Scripts
-------------------------
+---------------------------
 
 
 The following document summarizes some of the scripts in the geowatch CLI.
@@ -220,7 +220,7 @@ merge_region_models - merges a multiple geojson file into a single one. Probably
 
 
 The "geowatch_dvc" command
-----------------------------
+--------------------------
 
 We provide a utility to help manage data paths called "geowatch_dvc".  It
 comes preconfigured with common paths for core-developer machines You can see
