@@ -52,3 +52,50 @@ def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset__
                               channels=channels, neg_to_pos_ratio=0.1)
     item = self[-1]
     canvas = self.draw_item(item)  # NOQA
+
+
+def test_oob_target():
+    import ubelt as ub
+    coco_dset = geowatch.coerce_kwcoco('vidshapes8')
+    sampler = ndsampler.CocoSampler(coco_dset)
+    self = KWCocoVideoDataset(sampler, time_dims=1, window_dims=(128, 128),
+                              channels=None)
+    target = {
+        'main_idx': 0,
+        'gids': [2],
+        'space_slice':  (
+            # slice(-155.0, 357.0, None),
+            # slice(-256.0, 256.0, None)
+            # slice(20.0, 350, None),
+            # slice(20.0, 130, None)
+            slice(-200.0, 350, None),
+            slice(-200.0, 350, None)
+        ),
+        'allow_augment': False,
+    }
+    index = target
+    item = self[index]
+    summary = self.summarize_item(item)
+    print(f'summary = {ub.urepr(summary, nl=-1)}')
+
+    s1 = h1, w1, c1 = item['frames'][0]['class_ohe'].shape
+    s2 = c2, h2, w2 = item['frames'][0]['modes']['r|g|b'].shape
+    s3 = h3, w3 = item['frames'][0]['saliency'].shape
+    print(s1)
+    print(s2)
+    print(s3)
+    assert h1 == h2
+    assert w1 == w2
+
+    if 1:
+        import numpy as np
+        import kwplot
+        kwplot.autompl()
+        canvas = self.draw_item(item)  # NOQA
+        kwplot.imshow(canvas, pnum=(1, 3, 1), fnum=1)
+
+        canvas = self.sampler.dset.coco_image(target['gids'][0]).imdelay().finalize()
+        kwplot.imshow(canvas, pnum=(1, 3, 2), fnum=1)
+
+        canvas = item['frames'][0]['modes']['r|g|b'].numpy().transpose(1, 2, 0).astype(np.uint8)
+        kwplot.imshow(canvas, pnum=(1, 3, 3), fnum=1)

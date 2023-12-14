@@ -35,6 +35,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Fixed TPL packaging in the pypi wheel 
 
+* Issue in dataloader where truth masks were drawn incorrectly for partially out of bounds samples. 
+
 
 ## Version 0.12.1 - Released 2023-11-21
 

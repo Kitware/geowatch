@@ -932,13 +932,28 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                         # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
                         output_weights = frame_info.get('output_weights', None)
 
-                        head_stitcher.accumulate_image(
-                            gid, output_space_slice, probs,
-                            dsize=output_image_dsize,
-                            scale=scale_outspace_from_vid,
-                            weights=output_weights,
-                            downweight_edges=downweight_edges,
-                        )
+                        try:
+                            head_stitcher.accumulate_image(
+                                gid, output_space_slice, probs,
+                                dsize=output_image_dsize,
+                                scale=scale_outspace_from_vid,
+                                weights=output_weights,
+                                downweight_edges=downweight_edges,
+                            )
+                        except Exception:
+                            rich.print('[red]ERROR IN PREDICT! PRINT ITEM DEBUG INFO')
+                            rich.print('[red]ERROR IN PREDICT! PRINT ITEM DEBUG INFO')
+                            rich.print('[red]ERROR IN PREDICT! PRINT ITEM DEBUG INFO')
+                            space_slice_xywh = kwimage.Box.from_slice(output_space_slice).to_xywh()
+                            rich.print(f'output_space_slice      = {ub.urepr(output_space_slice, nl=1)}')
+                            rich.print(f'space_slice_xywh        = {ub.urepr(space_slice_xywh, nl=1)}')
+                            rich.print(f'probs.shape             = {probs.shape}')
+                            rich.print(f'output_weights.shape    = {output_weights.shape}')
+                            rich.print(f'output_image_dsize      = {output_image_dsize}')
+                            rich.print(f'scale_outspace_from_vid = {scale_outspace_from_vid}')
+                            item_summary = test_dataloader.dataset.summarize_item(item)
+                            print(f'item_summary = {ub.urepr(item_summary, nl=-1)}')
+                            raise
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():

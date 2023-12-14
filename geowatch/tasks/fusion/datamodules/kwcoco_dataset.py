@@ -611,10 +611,621 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 self['quality_threshold'] = 0
 
 
-class GetItemMixin:
+class TruthMixin:
+    """
+    Methods related to drawing truth rasters / training objectives
+    """
+
+    def _prepare_truth_info(self, final_gids, gid_to_sample, num_frames, target, target_):
+        """
+        Helper used to construct information about the truth before we start
+        constructing the frames. This handles contextual relabeling of classes
+        (i.e. if all frames show post construction relabel it as background).
+        """
+        # build up info about the tracks
+        dset = self.sampler.dset
+        gid_to_dets: Dict[int, kwimage.Detections] = {}
+        tid_to_aids = ub.ddict(list)
+        tid_to_cids = ub.ddict(list)
+        # tid_to_catnames = ub.ddict(list)
+        for gid in final_gids:
+            stream_sample = gid_to_sample[gid]
+            frame_dets = None
+            for mode_sample in stream_sample.values():
+                if 'annots' in mode_sample:
+                    frame_dets: kwimage.Detections = mode_sample['annots']['frame_dets'][0]
+                    break
+            if frame_dets is None:
+                raise AssertionError(ub.paragraph(
+                    f'''
+                    Did not sample correctly.
+                    Please send this info to jon.crall@kitware.com:
+                    {dset=!r}
+                    {gid=!r}
+                    {target=!r}
+                    {target_=!r}
+                    '''
+                ))
+            # The returne detections will live in the "input/data" space
+            gid_to_dets[gid] = frame_dets
+
+        for gid, frame_dets in gid_to_dets.items():
+            aids = frame_dets.data['aids']
+            cids = frame_dets.data['cids']
+            frame_annots = dset.annots(aids)
+            tids = frame_annots.lookup('track_id', None)
+            frame_dets.data['tids'] = tids
+            frame_dets.data['weights'] = frame_annots.lookup('weight', 1.0)
+
+            for tid, aid, cid in zip(tids, aids, cids):
+                tid_to_aids[tid].append(aid)
+                tid_to_cids[tid].append(cid)
+
+        tid_to_frame_cids = ub.ddict(list)
+        for gid, frame_dets in gid_to_dets.items():
+            cids = frame_dets.data['cids']
+            tids = frame_dets.data['tids']
+            frame_tid_to_cid = ub.dzip(tids, cids)
+            for tid in tid_to_aids.keys():
+                cid = frame_tid_to_cid.get(tid, None)
+                tid_to_frame_cids[tid].append(cid)
+
+        # TODO: be more efficient at this
+        tid_to_frame_cnames = ub.map_vals(
+            lambda cids: list(ub.take(self.classes.id_to_node, cids, None)),
+            tid_to_frame_cids
+        )
+
+        task_tid_to_cnames = {
+            'saliency': {},
+            'class': {},
+        }
+        for tid, cnames in tid_to_frame_cnames.items():
+            task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
+            task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
+
+        if self.upweight_centers or self.upweight_time is not None:
+            if self.upweight_time is None:
+                upweight_time = 0.5
+            else:
+                upweight_time = self.upweight_time
+
+            # Learn more from the center of the space-time patch
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
+
+            time_weights = time_weights / time_weights.max()
+            time_weights = time_weights.clip(0, 1)
+            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+
+        truth_info = {
+            'task_tid_to_cnames': task_tid_to_cnames,
+            'gid_to_dets': gid_to_dets,
+            'time_weights': time_weights,
+        }
+        return truth_info
+
+    @profile
+    def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
+                               mode_to_invalid_mask, resolution_info, truth_info, meta_info):
+        """
+        Enrich a ``frame_item`` with rasterized truth-labels.
+
+        No return value ``frame_item`` is modified inplace.
+
+        Helper function to populate truth labels for a frame in a video
+        sequence. This was factored out of the original getitem, and
+        could use work to reduce the number of input params.
+        """
+
+        common_input_scale = resolution_info['common_input_scale']
+        common_output_scale = resolution_info['common_output_scale']
+
+        # The frame detections will be in a scaled videos space the
+        # constant scale case.
+        # TODO: will need special handling for "native" resolutions on
+        # a per-mode / frame basis, we will need the concept of an
+        # annotation window (where ndsampler lets us assume the corners
+        # of each window are in correspondence)
+
+        task_tid_to_cnames = truth_info['task_tid_to_cnames']
+        gid_to_dets = truth_info['gid_to_dets']
+
+        input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
+        output_is_native = (isinstance(common_output_scale, str) and common_output_scale == 'native')
+
+        frame_dets = gid_to_dets[gid]
+        if frame_dets is None:
+            raise AssertionError('frame_dets = {!r}'.format(frame_dets))
+
+        # As of ndsampler >= 0.7.1 the dets are sampled in the input space
+        if input_is_native:
+            if output_is_native:
+                # Both scales are native, use detections as-is.
+                dets = frame_dets.copy()
+            else:
+                # Input scale is native, but output scale is given,
+                # Need to resize. We enriched the dets with metadata
+                # to do this earlier.
+                annot_input_dsize = frame_dets.meta['input_dims'][::-1]
+                dets_scale = output_dsize / annot_input_dsize
+                dets = frame_dets.scale(dets_scale)
+        else:
+            if output_is_native:
+                raise NotImplementedError(
+                    'input scale is constant and output scale is native. '
+                    'no logic for this case yet.'
+                )
+            else:
+                # Simple case where input/output scales are constant
+                dets_scale = common_output_scale / common_input_scale
+                dets = frame_dets.scale(dets_scale)
+
+        # Create truth masks
+        bg_idx = self.bg_idx
+        frame_target_shape = output_dsize[::-1]
+        space_shape = frame_target_shape
+        frame_cidxs = np.full(space_shape, dtype=np.int32,
+                              fill_value=bg_idx)
+
+        # A "Salient" class is anything that is a foreground class
+        task_target_ohe = {}
+        task_target_ignore = {}
+        task_target_weight = {}
+
+        # Rasterize frame targets into semantic segmentation masks
+        ann_polys   = dets.data['segmentations'].to_polygon_list()
+        ann_aids    = dets.data['aids']
+        ann_cids    = dets.data['cids']
+        ann_tids    = dets.data['tids']
+        ann_weights = dets.data['weights']
+        ann_ltrb    = dets.data['boxes'].to_ltrb().data
+
+        # Associate weights with polygons
+        for poly, weight in zip(ann_polys, ann_weights):
+            if weight is None:
+                weight = 1.0
+            poly.meta['weight'] = weight
+
+        # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
+        # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
+
+        wants_saliency = self.requested_tasks['saliency']
+        wants_class = self.requested_tasks['class']
+        wants_change = self.requested_tasks['change']
+        wants_boxes = self.requested_tasks['boxes']
+
+        wants_class_sseg = wants_class or wants_change
+        wants_saliency_sseg = wants_saliency
+
+        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
+        frame_box = frame_box.to_shapely()
+
+        # catname_to_weight = getattr(self, 'catname_to_weight', None)
+
+        # Note: it is important to respect class indexes, ids, and
+        # name mappings
+        if wants_boxes:
+            box_labels = {
+                'box_ltrb': [],
+                # 'box_tids': [],
+                'box_cidxs': [],
+                'box_class_weights': [],
+                'box_saliency_weights': [],
+            }
+            # Do we want saliency boxes and class boxes?
+            for ltrb, cid, tid in zip(ann_ltrb, ann_cids, ann_tids):
+                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                box_labels['box_ltrb'].append(ltrb)
+                # box_labels['box_tids'].append(-1 if tid is None else tid)
+                box_labels['box_cidxs'].append(new_class_cidx)
+                box_labels['box_saliency_weights'].append(
+                    float(new_salient_catname in self.salient_classes))
+                box_labels['box_class_weights'].append(
+                    float(new_class_catname in self.class_foreground_classes))
+            box_labels['box_ltrb'] = np.array(box_labels['box_ltrb']).astype(np.float32)
+            # box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
+            box_labels['box_cidxs'] = np.array(box_labels['box_cidxs']).astype(np.int64)
+            box_labels['box_class_weights'] = np.array(box_labels['box_class_weights']).astype(np.float32)
+            box_labels['box_saliency_weights'] = np.array(box_labels['box_saliency_weights']).astype(np.float32)
+            frame_item.update(box_labels)
+
+        if wants_saliency:
+            ### Build single frame SALIENCY target labels and weights
+            task_target_ohe['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_ignore['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['saliency'] = np.empty(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the saliency task
+            saliency_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+            }
+            for poly, tid in zip(ann_polys, ann_tids):
+                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                if new_salient_catname in self.salient_classes:
+                    saliency_sseg_groups['foreground'].append(poly)
+                elif new_salient_catname in self.salient_ignore_classes:
+                    saliency_sseg_groups['ignore'].append(poly)
+                elif new_salient_catname in self.non_salient_classes:
+                    saliency_sseg_groups['background'].append(poly)
+                else:
+                    raise AssertionError
+
+            if self.config['balance_areas']:
+                # num_fg_polys = len(saliency_sseg_groups['foreground'])
+                big_poly_fg = unary_union([p.to_shapely() for p in saliency_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in saliency_sseg_groups['ignore']])
+                big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
+                #unit_area_share = fg_polys.area / len(fg_polys)
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['saliency'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['saliency'][:] = 1
+
+            for poly in saliency_sseg_groups['background']:
+                weight = poly.meta['weight']
+                if self.config['balance_areas']:
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+            for poly in saliency_sseg_groups['foreground']:
+                task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
+                if self.config['balance_areas']:
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
+
+            for poly in saliency_sseg_groups['ignore']:
+                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
+
+            if not self.config.absolute_weighting:
+                max_weight = task_target_weight['saliency'].max()
+                if max_weight > 0:
+                    task_target_weight['saliency'] /= max_weight
+
+        if wants_class_sseg:
+            ### Build single frame CLASS target labels and weights
+
+            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
+            task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the class task
+            class_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+                'undistinguished': [],
+            }
+            for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
+                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                orig_cidx = self.classes.id_to_idx[cid]
+                poly.meta['new_class_cidx'] = new_class_cidx
+                poly.meta['orig_cidx'] = orig_cidx
+                if new_class_catname in self.ignore_classes:
+                    class_sseg_groups['ignore'].append(poly)
+                elif new_class_catname in self.class_foreground_classes:
+                    class_sseg_groups['foreground'].append(poly)
+                elif new_class_catname in self.background_classes:
+                    class_sseg_groups['background'].append(poly)
+                elif new_class_catname in self.undistinguished_classes:
+                    class_sseg_groups['undistinguished'].append(poly)
+
+            if self.config['balance_areas']:
+                big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in class_sseg_groups['ignore']])
+                big_poly_undistinguished = unary_union([p.to_shapely() for p in class_sseg_groups['undistinguished']])
+                big_poly_bg = ((frame_box - big_poly_fg) - big_poly_ignore) - big_poly_undistinguished
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['class'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['class'][:] = 1
+
+            for poly in class_sseg_groups['ignore']:
+                poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+
+            for poly in class_sseg_groups['background']:
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+
+            for poly in class_sseg_groups['undistinguished']:
+                task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+
+            for poly in class_sseg_groups['foreground']:
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
+
+                if self.config['balance_areas']:
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+
+                if weight != 1:
+                    poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['class'] = task_target_weight['class'] * weight_mask
+
+            if not self.config.absolute_weighting:
+                max_weight = task_target_weight['class'].max()
+                if max_weight > 0:
+                    task_target_weight['class'] /= max_weight
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        generic_frame_weight = self._build_generic_frame_weights(output_dsize,
+                                                                 mode_to_invalid_mask,
+                                                                 meta_info,
+                                                                 time_idx)
+
+        # Dilate ignore masks (dont care about the surrounding area # either)
+        # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
+        if self.ignore_dilate > 0:
+            for k, v in task_target_ignore.items():
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
+
+        if self.weight_dilate > 0:
+            for k, v in task_target_weight.items():
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
+
+        frame_item['ann_aids'] = ann_aids
+        if wants_class_sseg:
+            # Postprocess (Dilate?) the truth map
+            for cidx, class_map in enumerate(task_target_ohe['class']):
+                # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
+                frame_cidxs[class_map > 0] = cidx
+            task_frame_weight = (
+                (1 - task_target_ignore['class']) *
+                task_target_weight['class'] *
+                generic_frame_weight
+            )
+            # TODO: no need to pass class-cidxs if class-ohe is present.
+            # TODO: add metadata to the frame item to indicate the channel
+            # ordering of each dimension (or used xarray / named tensors when
+            # they become supported)
+            frame_item['class_idxs'] = frame_cidxs
+            frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
+            frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
+        if wants_saliency_sseg:
+            task_frame_weight = (
+                (1 - task_target_ignore['saliency']) *
+                task_target_weight['saliency'] *
+                generic_frame_weight
+            )
+            frame_item['saliency'] = task_target_ohe['saliency']
+            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
+
+        wants_outputs = self.requested_tasks['outputs']
+        if wants_outputs:
+            frame_item['output_weights'] = generic_frame_weight
+
+
+class GetItemMixin(TruthMixin):
     """
     This mixin defines what is needed for the getitem method.
     """
+
+    def _prepare_meta_info(self, num_frames):
+        if self.upweight_centers or self.upweight_time is not None:
+            if self.upweight_time is None:
+                upweight_time = 0.5
+            else:
+                upweight_time = self.upweight_time
+
+            # Learn more from the center of the space-time patch
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
+
+            time_weights = time_weights / time_weights.max()
+            time_weights = time_weights.clip(0, 1)
+            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+        meta_info = {
+            'time_weights': time_weights,
+        }
+        return meta_info
+
+    @profile
+    def _build_frame_items(self, final_gids, gid_to_sample,
+                           truth_info, meta_info, resolution_info):
+        """
+        Returns:
+            List[Dict]:
+                A dictionary for each frame containing metadata, input tensors,
+                and (optionally) truth tensors for the frame.
+        """
+
+        common_outspace_box = resolution_info['common_outspace_box']
+        vidspace_dsize = resolution_info['vidspace_dsize']
+        vidspace_box = resolution_info['vidspace_box']
+        video_dsize = resolution_info['video_dsize']
+
+        coco_dset = self.sampler.dset
+        # TODO: handle all augmentation before we construct any labels
+        frame_items = []
+        for time_idx, gid in enumerate(final_gids):
+            img = coco_dset.index.imgs[gid]
+
+            stream_sample = gid_to_sample[gid]
+            assert len(stream_sample) > 0
+
+            # Collect image data from all modes within this frame
+            mode_to_imdata = {}
+            mode_to_invalid_mask = {}
+            mode_to_dsize = {}
+            for mode_key, mode_sample in stream_sample.items():
+
+                mode_imdata = mode_sample['im'][0]
+                mode_invalid_mask = mode_sample.get('invalid_mask', None)
+                if mode_invalid_mask is not None:
+                    mode_invalid_mask = mode_invalid_mask[0]
+
+                mode_imdata = np.asarray(mode_imdata, dtype=np.float32)
+                # ensure channel dim is not squeezed
+                mode_hwc = kwarray.atleast_nd(mode_imdata, 3)
+                # rearrange image axes for pytorch
+                mode_chw = einops.rearrange(mode_hwc, 'h w c -> c h w')
+                mode_to_imdata[mode_key] = mode_chw
+                mode_to_invalid_mask[mode_key] = mode_invalid_mask
+                h, w = mode_hwc.shape[0:2]
+                mode_to_dsize[mode_key] = (w, h)
+
+            # For each frame we need to choose a resolution for the truth.
+            # Using the maximum resolution mode should be decent choise.
+            # We could choose this to be arbitrary or independent of the input
+            # dimensions, but it makes sense to pin it to the input data
+            # in most cases.
+            if common_outspace_box is None:
+                # In the native case, we use the size of the largest mode for
+                # each frame.
+                max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
+                # Compute the scale factor for this frame wrt video space
+                scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
+                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
+            else:
+                frame_outspace_box = common_outspace_box
+
+            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
+            scale_outspace_from_vid = output_dsize / vidspace_dsize
+            output_dims = output_dsize[::-1]  # the size we want to predict
+
+            dt_captured = img.get('date_captured', None)
+            if dt_captured:
+                dt_captured = util_time.coerce_datetime(dt_captured)
+                timestamp = dt_captured.timestamp()
+            else:
+                timestamp = np.nan
+
+            sensor = img.get('sensor_coarse', '*')
+
+            # The size of the larger image this output is expected to be
+            # embedded in.
+            outimg_dsize = video_dsize * scale_outspace_from_vid
+            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
+
+            frame_item = {
+                'gid': gid,
+                'date_captured': img.get('date_captured', ''),
+                'timestamp': timestamp,
+                'time_index': time_idx,
+                'sensor': sensor,
+                'modes': mode_to_imdata,
+                'change': None,
+                'class_idxs': None,
+                'class_ohe': None,
+                'saliency': None,
+                'change_weights': None,
+                'class_weights': None,
+                'saliency_weights': None,
+                # Could group these into head and input/head specific dictionaries?
+                # info for how to construct the output.
+                'change_output_dims': None if time_idx == 0 else output_dims,
+                'class_output_dims': output_dims,
+                'saliency_output_dims': output_dims,
+                #
+                'output_dims': output_dims,
+                'output_space_slice': frame_outspace_box.to_slice(),
+                'output_image_dsize': outimg_box.dsize,
+                'scale_outspace_from_vid': scale_outspace_from_vid,
+                'ann_aids': None,
+            }
+
+            if not self.inference_only:
+                # Build single-frame truth
+                self._populate_frame_labels(
+                    frame_item, gid, output_dsize, time_idx,
+                    mode_to_invalid_mask, resolution_info, truth_info,
+                    meta_info)
+
+                VALIDATE_SHAPES = 1 or __debug__
+                if VALIDATE_SHAPES:
+                    output_dsize
+
+                    key0 = list(mode_to_imdata.keys())[0]
+                    val0 = mode_to_imdata[key0]
+                    _, h2, w2 = val0.shape
+                    h1, w1 = frame_item['saliency'].shape
+                    assert h2 == h1
+                    ...
+
+            wants_outputs = self.requested_tasks['outputs']
+            if wants_outputs and 'output_weights' not in frame_item:
+                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+                frame_item['output_weights'] = output_weights
+
+            frame_items.append(frame_item)
+        return frame_items
+
+    def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
+        time_weights = meta_info['time_weights']
+
+        frame_target_shape = output_dsize[::-1]
+        space_shape = frame_target_shape
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        if self.upweight_centers:
+            space_weights = _space_weights(space_shape)
+            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+            spacetime_weights = space_weights * time_weights[time_idx]
+        else:
+            spacetime_weights = 1
+
+        # Note: ensure this is resampled into target output space
+        # Module the pixelwise weights by the 1 - the fraction of modes
+        # that have nodata.
+        if self.config['downweight_nan_regions']:
+            nodata_total = 0.0
+            for mask in mode_to_invalid_mask.values():
+                if mask is not None:
+                    if len(mask.shape) == 3:
+                        mask_ = mask.mean(axis=2)
+                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
+                    else:
+                        mask_ = mask.astype(float)
+                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
+                    nodata_total += mask_
+            total_bands = len(mode_to_invalid_mask)
+            nodata_frac = nodata_total / total_bands
+            nodata_weight = 1 - nodata_frac
+        else:
+            nodata_weight = 1
+            # frame_weights = frame_weights * nodata_weight
+
+        generic_frame_weight = nodata_weight * spacetime_weights
+        return generic_frame_weight
 
     def _populate_positional_information(self, frame_items):
         """
@@ -1351,7 +1962,8 @@ class GetItemMixin:
         target_['scale'] = common_input_scale
 
         # Put the target slice in video space.
-        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'])
+        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'],
+                                                   clip=False, wrap=False)
         vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
 
         # Size of the video the target is embedded in.
@@ -1432,600 +2044,6 @@ class GetItemMixin:
                     self._sample_one_frame(gid, sampler, coco_dset, target_,
                                            with_annots, gid_to_isbad,
                                            gid_to_sample)
-
-    def _prepare_truth_info(self, final_gids, gid_to_sample, num_frames, target, target_):
-        """
-        Helper used to construct information about the truth before we start
-        constructing the frames. This handles contextual relabeling of classes
-        (i.e. if all frames show post construction relabel it as background).
-        """
-        # build up info about the tracks
-        dset = self.sampler.dset
-        gid_to_dets: Dict[int, kwimage.Detections] = {}
-        tid_to_aids = ub.ddict(list)
-        tid_to_cids = ub.ddict(list)
-        # tid_to_catnames = ub.ddict(list)
-        for gid in final_gids:
-            stream_sample = gid_to_sample[gid]
-            frame_dets = None
-            for mode_sample in stream_sample.values():
-                if 'annots' in mode_sample:
-                    frame_dets: kwimage.Detections = mode_sample['annots']['frame_dets'][0]
-                    break
-            if frame_dets is None:
-                raise AssertionError(ub.paragraph(
-                    f'''
-                    Did not sample correctly.
-                    Please send this info to jon.crall@kitware.com:
-                    {dset=!r}
-                    {gid=!r}
-                    {target=!r}
-                    {target_=!r}
-                    '''
-                ))
-            # The returne detections will live in the "input/data" space
-            gid_to_dets[gid] = frame_dets
-
-        for gid, frame_dets in gid_to_dets.items():
-            aids = frame_dets.data['aids']
-            cids = frame_dets.data['cids']
-            frame_annots = dset.annots(aids)
-            tids = frame_annots.lookup('track_id', None)
-            frame_dets.data['tids'] = tids
-            frame_dets.data['weights'] = frame_annots.lookup('weight', 1.0)
-
-            for tid, aid, cid in zip(tids, aids, cids):
-                tid_to_aids[tid].append(aid)
-                tid_to_cids[tid].append(cid)
-
-        tid_to_frame_cids = ub.ddict(list)
-        for gid, frame_dets in gid_to_dets.items():
-            cids = frame_dets.data['cids']
-            tids = frame_dets.data['tids']
-            frame_tid_to_cid = ub.dzip(tids, cids)
-            for tid in tid_to_aids.keys():
-                cid = frame_tid_to_cid.get(tid, None)
-                tid_to_frame_cids[tid].append(cid)
-
-        # TODO: be more efficient at this
-        tid_to_frame_cnames = ub.map_vals(
-            lambda cids: list(ub.take(self.classes.id_to_node, cids, None)),
-            tid_to_frame_cids
-        )
-
-        task_tid_to_cnames = {
-            'saliency': {},
-            'class': {},
-        }
-        for tid, cnames in tid_to_frame_cnames.items():
-            task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
-            task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
-
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
-                upweight_time = 0.5
-            else:
-                upweight_time = self.upweight_time
-
-            # Learn more from the center of the space-time patch
-            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
-
-            time_weights = time_weights / time_weights.max()
-            time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
-
-        truth_info = {
-            'task_tid_to_cnames': task_tid_to_cnames,
-            'gid_to_dets': gid_to_dets,
-            'time_weights': time_weights,
-        }
-        return truth_info
-
-    def _prepare_meta_info(self, num_frames):
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
-                upweight_time = 0.5
-            else:
-                upweight_time = self.upweight_time
-
-            # Learn more from the center of the space-time patch
-            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
-
-            time_weights = time_weights / time_weights.max()
-            time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
-        meta_info = {
-            'time_weights': time_weights,
-        }
-        return meta_info
-
-    @profile
-    def _build_frame_items(self, final_gids, gid_to_sample,
-                           truth_info, meta_info, resolution_info):
-        """
-        Returns:
-            List[Dict]:
-                A dictionary for each frame containing metadata, input tensors,
-                and (optionally) truth tensors for the frame.
-        """
-
-        common_outspace_box = resolution_info['common_outspace_box']
-        vidspace_dsize = resolution_info['vidspace_dsize']
-        vidspace_box = resolution_info['vidspace_box']
-        video_dsize = resolution_info['video_dsize']
-
-        coco_dset = self.sampler.dset
-        # TODO: handle all augmentation before we construct any labels
-        frame_items = []
-        for time_idx, gid in enumerate(final_gids):
-            img = coco_dset.index.imgs[gid]
-
-            stream_sample = gid_to_sample[gid]
-            assert len(stream_sample) > 0
-
-            # Collect image data from all modes within this frame
-            mode_to_imdata = {}
-            mode_to_invalid_mask = {}
-            mode_to_dsize = {}
-            for mode_key, mode_sample in stream_sample.items():
-
-                mode_imdata = mode_sample['im'][0]
-                mode_invalid_mask = mode_sample.get('invalid_mask', None)
-                if mode_invalid_mask is not None:
-                    mode_invalid_mask = mode_invalid_mask[0]
-
-                mode_imdata = np.asarray(mode_imdata, dtype=np.float32)
-                # ensure channel dim is not squeezed
-                mode_hwc = kwarray.atleast_nd(mode_imdata, 3)
-                # rearrange image axes for pytorch
-                mode_chw = einops.rearrange(mode_hwc, 'h w c -> c h w')
-                mode_to_imdata[mode_key] = mode_chw
-                mode_to_invalid_mask[mode_key] = mode_invalid_mask
-                h, w = mode_hwc.shape[0:2]
-                mode_to_dsize[mode_key] = (w, h)
-
-            # For each frame we need to choose a resolution for the truth.
-            # Using the maximum resolution mode should be decent choise.
-            # We could choose this to be arbitrary or independent of the input
-            # dimensions, but it makes sense to pin it to the input data
-            # in most cases.
-            if common_outspace_box is None:
-                # In the native case, we use the size of the largest mode for
-                # each frame.
-                max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
-                # Compute the scale factor for this frame wrt video space
-                scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
-                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
-            else:
-                frame_outspace_box = common_outspace_box
-
-            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
-            scale_outspace_from_vid = output_dsize / vidspace_dsize
-            output_dims = output_dsize[::-1]  # the size we want to predict
-
-            dt_captured = img.get('date_captured', None)
-            if dt_captured:
-                dt_captured = util_time.coerce_datetime(dt_captured)
-                timestamp = dt_captured.timestamp()
-            else:
-                timestamp = np.nan
-
-            sensor = img.get('sensor_coarse', '*')
-
-            # The size of the larger image this output is expected to be
-            # embedded in.
-            outimg_dsize = video_dsize * scale_outspace_from_vid
-            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
-
-            frame_item = {
-                'gid': gid,
-                'date_captured': img.get('date_captured', ''),
-                'timestamp': timestamp,
-                'time_index': time_idx,
-                'sensor': sensor,
-                'modes': mode_to_imdata,
-                'change': None,
-                'class_idxs': None,
-                'class_ohe': None,
-                'saliency': None,
-                'change_weights': None,
-                'class_weights': None,
-                'saliency_weights': None,
-                # Could group these into head and input/head specific dictionaries?
-                # info for how to construct the output.
-                'change_output_dims': None if time_idx == 0 else output_dims,
-                'class_output_dims': output_dims,
-                'saliency_output_dims': output_dims,
-                #
-                'output_dims': output_dims,
-                'output_space_slice': frame_outspace_box.to_slice(),
-                'output_image_dsize': outimg_box.dsize,
-                'scale_outspace_from_vid': scale_outspace_from_vid,
-                'ann_aids': None,
-            }
-
-            if not self.inference_only:
-                # Build single-frame truth
-                self._populate_frame_labels(
-                    frame_item, gid, output_dsize, time_idx,
-                    mode_to_invalid_mask, resolution_info, truth_info,
-                    meta_info)
-
-            wants_outputs = self.requested_tasks['outputs']
-            if wants_outputs and 'output_weights' not in frame_item:
-                output_weights = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
-                frame_item['output_weights'] = output_weights
-
-            frame_items.append(frame_item)
-        return frame_items
-
-    def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
-        time_weights = meta_info['time_weights']
-
-        frame_target_shape = output_dsize[::-1]
-        space_shape = frame_target_shape
-
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-        if self.upweight_centers:
-            space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
-            spacetime_weights = space_weights * time_weights[time_idx]
-        else:
-            spacetime_weights = 1
-
-        # Note: ensure this is resampled into target output space
-        # Module the pixelwise weights by the 1 - the fraction of modes
-        # that have nodata.
-        if self.config['downweight_nan_regions']:
-            nodata_total = 0.0
-            for mask in mode_to_invalid_mask.values():
-                if mask is not None:
-                    if len(mask.shape) == 3:
-                        mask_ = mask.mean(axis=2)
-                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
-                    else:
-                        mask_ = mask.astype(float)
-                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
-                    nodata_total += mask_
-            total_bands = len(mode_to_invalid_mask)
-            nodata_frac = nodata_total / total_bands
-            nodata_weight = 1 - nodata_frac
-        else:
-            nodata_weight = 1
-            # frame_weights = frame_weights * nodata_weight
-
-        generic_frame_weight = nodata_weight * spacetime_weights
-        return generic_frame_weight
-
-    @profile
-    def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
-                               mode_to_invalid_mask, resolution_info, truth_info, meta_info):
-        """
-        Enrich a ``frame_item`` with rasterized truth-labels.
-
-        No return value ``frame_item`` is modified inplace.
-
-        Helper function to populate truth labels for a frame in a video
-        sequence. This was factored out of the original getitem, and
-        could use work to reduce the number of input params.
-        """
-
-        common_input_scale = resolution_info['common_input_scale']
-        common_output_scale = resolution_info['common_output_scale']
-
-        # The frame detections will be in a scaled videos space the
-        # constant scale case.
-        # TODO: will need special handling for "native" resolutions on
-        # a per-mode / frame basis, we will need the concept of an
-        # annotation window (where ndsampler lets us assume the corners
-        # of each window are in correspondence)
-
-        task_tid_to_cnames = truth_info['task_tid_to_cnames']
-        gid_to_dets = truth_info['gid_to_dets']
-
-        input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
-        output_is_native = (isinstance(common_output_scale, str) and common_output_scale == 'native')
-
-        frame_dets = gid_to_dets[gid]
-        if frame_dets is None:
-            raise AssertionError('frame_dets = {!r}'.format(frame_dets))
-
-        # As of ndsampler >= 0.7.1 the dets are sampled in the input space
-        if input_is_native:
-            if output_is_native:
-                # Both scales are native, use detections as-is.
-                dets = frame_dets.copy()
-            else:
-                # Input scale is native, but output scale is given,
-                # Need to resize. We enriched the dets with metadata
-                # to do this earlier.
-                annot_input_dsize = frame_dets.meta['input_dims'][::-1]
-                dets_scale = output_dsize / annot_input_dsize
-                dets = frame_dets.scale(dets_scale)
-        else:
-            if output_is_native:
-                raise NotImplementedError(
-                    'input scale is constant and output scale is native. '
-                    'no logic for this case yet.'
-                )
-            else:
-                # Simple case where input/output scales are constant
-                dets_scale = common_output_scale / common_input_scale
-                dets = frame_dets.scale(dets_scale)
-
-        # Create truth masks
-        bg_idx = self.bg_idx
-        frame_target_shape = output_dsize[::-1]
-        space_shape = frame_target_shape
-        frame_cidxs = np.full(space_shape, dtype=np.int32,
-                              fill_value=bg_idx)
-
-        # A "Salient" class is anything that is a foreground class
-        task_target_ohe = {}
-        task_target_ignore = {}
-        task_target_weight = {}
-
-        # Rasterize frame targets into semantic segmentation masks
-        ann_polys   = dets.data['segmentations'].to_polygon_list()
-        ann_aids    = dets.data['aids']
-        ann_cids    = dets.data['cids']
-        ann_tids    = dets.data['tids']
-        ann_weights = dets.data['weights']
-        ann_ltrb    = dets.data['boxes'].to_ltrb().data
-
-        # Associate weights with polygons
-        for poly, weight in zip(ann_polys, ann_weights):
-            if weight is None:
-                weight = 1.0
-            poly.meta['weight'] = weight
-
-        # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
-        # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
-
-        wants_saliency = self.requested_tasks['saliency']
-        wants_class = self.requested_tasks['class']
-        wants_change = self.requested_tasks['change']
-        wants_boxes = self.requested_tasks['boxes']
-
-        wants_class_sseg = wants_class or wants_change
-        wants_saliency_sseg = wants_saliency
-
-        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
-        frame_box = frame_box.to_shapely()
-
-        # catname_to_weight = getattr(self, 'catname_to_weight', None)
-
-        # Note: it is important to respect class indexes, ids, and
-        # name mappings
-        if wants_boxes:
-            box_labels = {
-                'box_ltrb': [],
-                # 'box_tids': [],
-                'box_cidxs': [],
-                'box_class_weights': [],
-                'box_saliency_weights': [],
-            }
-            # Do we want saliency boxes and class boxes?
-            for ltrb, cid, tid in zip(ann_ltrb, ann_cids, ann_tids):
-                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
-                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
-                new_class_cidx = self.classes.node_to_idx[new_class_catname]
-                box_labels['box_ltrb'].append(ltrb)
-                # box_labels['box_tids'].append(-1 if tid is None else tid)
-                box_labels['box_cidxs'].append(new_class_cidx)
-                box_labels['box_saliency_weights'].append(
-                    float(new_salient_catname in self.salient_classes))
-                box_labels['box_class_weights'].append(
-                    float(new_class_catname in self.class_foreground_classes))
-            box_labels['box_ltrb'] = np.array(box_labels['box_ltrb']).astype(np.float32)
-            # box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
-            box_labels['box_cidxs'] = np.array(box_labels['box_cidxs']).astype(np.int64)
-            box_labels['box_class_weights'] = np.array(box_labels['box_class_weights']).astype(np.float32)
-            box_labels['box_saliency_weights'] = np.array(box_labels['box_saliency_weights']).astype(np.float32)
-            frame_item.update(box_labels)
-
-        if wants_saliency:
-            ### Build single frame SALIENCY target labels and weights
-            task_target_ohe['saliency'] = np.zeros(space_shape, dtype=np.uint8)
-            task_target_ignore['saliency'] = np.zeros(space_shape, dtype=np.uint8)
-            task_target_weight['saliency'] = np.empty(space_shape, dtype=np.float32)
-
-            # Group polygons into foreground / background for the saliency task
-            saliency_sseg_groups = {
-                'foreground': [],
-                'background': [],
-                'ignore': [],
-            }
-            for poly, tid in zip(ann_polys, ann_tids):
-                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
-                if new_salient_catname in self.salient_classes:
-                    saliency_sseg_groups['foreground'].append(poly)
-                elif new_salient_catname in self.salient_ignore_classes:
-                    saliency_sseg_groups['ignore'].append(poly)
-                elif new_salient_catname in self.non_salient_classes:
-                    saliency_sseg_groups['background'].append(poly)
-                else:
-                    raise AssertionError
-
-            if self.config['balance_areas']:
-                # num_fg_polys = len(saliency_sseg_groups['foreground'])
-                big_poly_fg = unary_union([p.to_shapely() for p in saliency_sseg_groups['foreground']])
-                big_poly_ignore = unary_union([p.to_shapely() for p in saliency_sseg_groups['ignore']])
-                big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
-                #unit_area_share = fg_polys.area / len(fg_polys)
-                total_area = frame_box.area
-                bg_cover_frac = big_poly_bg.area / (total_area + 1)
-                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
-                bg_weight_share = (1 - bg_cover_frac)
-                task_target_weight['saliency'][:] = bg_weight_share ** 0.5
-            else:
-                task_target_weight['saliency'][:] = 1
-
-            for poly in saliency_sseg_groups['background']:
-                weight = poly.meta['weight']
-                if self.config['balance_areas']:
-                    area_weight = (1 - (poly.area / (total_area + 1)))
-                    weight = weight * area_weight
-                if weight != 1:
-                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
-
-            for poly in saliency_sseg_groups['foreground']:
-                task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
-                weight = poly.meta['weight']
-                if self.config['balance_areas']:
-                    area_weight = (1 - (poly.area / (total_area + 1)))
-                    weight = weight * area_weight
-                if weight != 1:
-                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
-
-                if self.dist_weights:
-                    # New feature where we encode that we care much more about
-                    # segmenting the inside of the object than the outside.
-                    # Effectively boundaries become uncertain.
-                    dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape)
-                    max_dist = dist.max()
-                    if max_dist > 0:
-                        dist_weight = dist / max_dist
-                        weight_mask = dist_weight + (1 - poly_mask)
-                        task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
-
-            for poly in saliency_sseg_groups['ignore']:
-                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
-                poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
-
-            if not self.config.absolute_weighting:
-                max_weight = task_target_weight['saliency'].max()
-                if max_weight > 0:
-                    task_target_weight['saliency'] /= max_weight
-
-        if wants_class_sseg:
-            ### Build single frame CLASS target labels and weights
-
-            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
-            task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
-            task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
-
-            # Group polygons into foreground / background for the class task
-            class_sseg_groups = {
-                'foreground': [],
-                'background': [],
-                'ignore': [],
-                'undistinguished': [],
-            }
-            for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
-                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
-                new_class_cidx = self.classes.node_to_idx[new_class_catname]
-                orig_cidx = self.classes.id_to_idx[cid]
-                poly.meta['new_class_cidx'] = new_class_cidx
-                poly.meta['orig_cidx'] = orig_cidx
-                if new_class_catname in self.ignore_classes:
-                    class_sseg_groups['ignore'].append(poly)
-                elif new_class_catname in self.class_foreground_classes:
-                    class_sseg_groups['foreground'].append(poly)
-                elif new_class_catname in self.background_classes:
-                    class_sseg_groups['background'].append(poly)
-                elif new_class_catname in self.undistinguished_classes:
-                    class_sseg_groups['undistinguished'].append(poly)
-
-            if self.config['balance_areas']:
-                big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
-                big_poly_ignore = unary_union([p.to_shapely() for p in class_sseg_groups['ignore']])
-                big_poly_undistinguished = unary_union([p.to_shapely() for p in class_sseg_groups['undistinguished']])
-                big_poly_bg = ((frame_box - big_poly_fg) - big_poly_ignore) - big_poly_undistinguished
-                total_area = frame_box.area
-                bg_cover_frac = big_poly_bg.area / (total_area + 1)
-                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
-                bg_weight_share = (1 - bg_cover_frac)
-                task_target_weight['class'][:] = bg_weight_share ** 0.5
-            else:
-                task_target_weight['class'][:] = 1
-
-            for poly in class_sseg_groups['ignore']:
-                poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
-
-            for poly in class_sseg_groups['background']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
-
-            for poly in class_sseg_groups['undistinguished']:
-                task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
-
-            for poly in class_sseg_groups['foreground']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
-                weight = poly.meta['weight']
-
-                if self.config['balance_areas']:
-                    area_weight = (1 - (poly.area / (total_area + 1)))
-                    weight = weight * area_weight
-
-                if weight != 1:
-                    poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
-
-                if self.dist_weights:
-                    # New feature where we encode that we care much more about
-                    # segmenting the inside of the object than the outside.
-                    # Effectively boundaries become uncertain.
-                    dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape)
-                    max_dist = dist.max()
-                    if max_dist > 0:
-                        dist_weight = dist / max_dist
-                        weight_mask = dist_weight + (1 - poly_mask)
-                        task_target_weight['class'] = task_target_weight['class'] * weight_mask
-
-            if not self.config.absolute_weighting:
-                max_weight = task_target_weight['class'].max()
-                if max_weight > 0:
-                    task_target_weight['class'] /= max_weight
-
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-        generic_frame_weight = self._build_generic_frame_weights(output_dsize,
-                                                                 mode_to_invalid_mask,
-                                                                 meta_info,
-                                                                 time_idx)
-
-        # Dilate ignore masks (dont care about the surrounding area # either)
-        # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-        if self.ignore_dilate > 0:
-            for k, v in task_target_ignore.items():
-                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
-
-        if self.weight_dilate > 0:
-            for k, v in task_target_weight.items():
-                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
-
-        frame_item['ann_aids'] = ann_aids
-        if wants_class_sseg:
-            # Postprocess (Dilate?) the truth map
-            for cidx, class_map in enumerate(task_target_ohe['class']):
-                # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
-                frame_cidxs[class_map > 0] = cidx
-            task_frame_weight = (
-                (1 - task_target_ignore['class']) *
-                task_target_weight['class'] *
-                generic_frame_weight
-            )
-            # TODO: no need to pass class-cidxs if class-ohe is present.
-            # TODO: add metadata to the frame item to indicate the channel
-            # ordering of each dimension (or used xarray / named tensors when
-            # they become supported)
-            frame_item['class_idxs'] = frame_cidxs
-            frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
-            frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
-        if wants_saliency_sseg:
-            task_frame_weight = (
-                (1 - task_target_ignore['saliency']) *
-                task_target_weight['saliency'] *
-                generic_frame_weight
-            )
-            frame_item['saliency'] = task_target_ohe['saliency']
-            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
-
-        wants_outputs = self.requested_tasks['outputs']
-        if wants_outputs:
-            frame_item['output_weights'] = generic_frame_weight
 
 
 class IntrospectMixin:
