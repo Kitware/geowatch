@@ -611,600 +611,127 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 self['quality_threshold'] = 0
 
 
-class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
+class GetItemMixin:
     """
-    Accepted keyword arguments are specified in
-    :class:`KWCocoVideoDatasetConfig`
-
-    Example:
-        >>> # Native Data Sampling
-        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import ndsampler
-        >>> import kwcoco
-        >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-multisensor-msi', geodata=True)
-        >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
-        >>> print({c.channels.spec for c in coco_dset.images().coco_images})
-        >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(100, 200),
-        >>>                           input_space_scale='native',
-        >>>                           window_space_scale='0.05GSD',
-        >>>                           output_space_scale='native',
-        >>>                           channels='auto',
-        >>> )
-        >>> self.disable_augmenter = True
-        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-        >>> item = self[target]
-        >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas)
-        >>> kwplot.show_if_requested()
-
-    Example:
-        >>> # Target GSD Data Sampling
-        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import ndsampler
-        >>> import kwcoco
-        >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('geowatch', geodata=True)
-        >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
-        >>> print({c.channels.spec for c in coco_dset.images().coco_images})
-        >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> self = KWCocoVideoDataset(sampler, window_dims=(100, 100), time_dims=5,
-        >>>                           input_space_scale='0.35GSD',
-        >>>                           window_space_scale='0.7GSD',
-        >>>                           output_space_scale='0.2GSD',
-        >>>                           channels='auto',
-        >>> )
-        >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-        >>> Box = util_kwimage.Box
-        >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
-        >>> item = self[index]
-        >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-        >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0, max_channels=3)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas)
-        >>> kwplot.show_if_requested()
+    This mixin defines what is needed for the getitem method.
     """
 
-    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
+    def _populate_positional_information(self, frame_items):
         """
+        Enrich each frame with information the model can use to build its
+        positional encodings. It currently returns these, but it shouldn't
+
         Args:
-            sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
-            mode (str): fit or predict
-            **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+            frame_items (List[Dict]):
+
+        NOTE:
+            There is a part of this where we actually compute a sinusoidal
+            positional encoding, but that should be part of the model, not the
+            dataset.
+
+            The dataset can provide metadata to tell the model what it can use
+            to build positional encodings, but it should never tell it how to
+            use them!
         """
-        config = KWCocoVideoDatasetConfig(**kwargs)
-
-        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
-        if config.sampler_backend is None:
-            sampler = ndsampler.CocoSampler.coerce(sampler)
-        else:
-            from geowatch.utils import util_parallel
-            sampler = ndsampler.CocoSampler.coerce(
-                sampler,
-                workdir=config.sampler_workdir,
-                backend=config.sampler_backend)
-            workers = util_parallel.coerce_num_workers(config.sampler_workers)
-            sampler.frames.prepare(workers=workers)
-
-        chip_dims = config['chip_dims']
-        if isinstance(chip_dims, str):
-            window_dims = chip_dims
-        else:
-            if not ub.iterable(chip_dims):
-                chip_dims = (chip_dims, chip_dims)
-            chip_h, chip_w = chip_dims
-            window_dims = (chip_h, chip_w)
-        time_dims = config['time_steps']
-        window_overlap = config['chip_overlap']
-
-        self.config = config
-        import rich
-        rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
-        # TODO: maintain instance variables xor items in the config, not both.
-        self.__dict__.update(self.config.to_dict())
-        self.sampler = sampler
-
-        # Add extra categories if we need to and construct a new classes object
-        graph = self.sampler.classes.graph
-
-        # Update with heuristics
-        # HACK: Overwrite kwcoco data
-        for _catinfo in heuristics.CATEGORIES:
-            name = _catinfo['name']
-            exists_flag = name in graph.nodes
-            if not exists_flag and _catinfo.get('required'):
-                graph.add_node(name, **_catinfo)
-            if exists_flag:
-                graph.nodes[name].update(**_catinfo)
-
-        # from kwutil import util_yaml
-        # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
-
-        self.classes = kwcoco.CategoryTree(graph)
-        self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
-        self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
-        self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
-        self.undistinguished_classes = set(heuristics.UNDISTINGUISHED_CLASSES) & set(graph.nodes)
-
-        # construct composite classes
-        # the idea is that these specific definitions will be configurable in the future
-        self.non_salient_classes = self.background_classes | self.negative_classes
-        self.salient_ignore_classes = self.ignore_classes
-        # should we remove the ignore classes from salient_classes in the future?
-        self.salient_classes = set(self.classes) - self.non_salient_classes
-
-        # define foreground classes for the class activity head
-        self.class_foreground_classes = set(self.classes) - (
-            self.background_classes |
-            self.ignore_classes |
-            self.undistinguished_classes)
-
-        channels = config['channels']
-        max_epoch_length = config['max_epoch_length']
-
-        self.disable_augmenter = False
-        self.augment_rng = kwarray.ensure_rng(None)
-
-        import os
-        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
-        common_grid_kw = dict(
-            time_dims=time_dims,
-            window_dims=window_dims,
-            window_overlap=window_overlap,
-            exclude_sensors=config['exclude_sensors'],
-            include_sensors=config['include_sensors'],
-            select_images=config['select_images'],
-            select_videos=config['select_videos'],
-            time_sampling=config['time_sampling'],
-            time_span=config['time_span'],
-            time_kernel=config['time_kernel'],
-            window_space_scale=self.config['window_space_scale'],
-            set_cover_algo=config['set_cover_algo'],
-            workers=grid_workers,  # could configure this
-            use_cache=self.config['use_grid_cache'],
-            respect_valid_regions=self.config['use_grid_valid_regions'],
-        )
-        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
-
-        grid_kw = common_grid_kw.copy()
-
-        negative_classes = (
-            self.ignore_classes | self.background_classes | self.negative_classes)
-
-        annot_helper_kws = dict(
-            negative_classes=negative_classes,
-            keepbound=False,
-            use_annot_info=True,
-            use_centered_positives=config['use_centered_positives'],
-            use_grid_positives=config['use_grid_positives'],
-            use_grid_negatives=config['use_grid_negatives'],
-        )
-
-        if mode == 'custom':
-            new_sample_grid = None
-            self.length = 1
-        elif mode == 'test':
-            # FIXME: something is wrong with the cache when using an sqlview.
-            # In test mode we have to sample everything for BAS
-            # (TODO: for activity clf, we should only focus on candidate regions)
-
-            if test_with_annot_info:
-                grid_kw.update(annot_helper_kws)
-            else:
-                grid_kw.update(dict(
-                    keepbound=True,
-                    use_annot_info=False,
-                ))
-
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-            self.length = len(new_sample_grid['targets'])
-        else:
-            grid_kw.update(annot_helper_kws)
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-
-            if 1:
-                self._init_balance(new_sample_grid)
-
-            self.length = len(self.nested_pool)
-
-            if max_epoch_length is not None:
-                self.length = min(self.length, max_epoch_length)
-
-        # x = list(ub.flatten(ub.flatten(all_chunks)))
-        # import networkx as nx
-        # def nested_tree(tree, nested, name='root'):
-        #     tree.add_node(name)
-        #     for idx, child in enumerate(nested):
-        #         key = f'{name}.{idx}'
-        #         if ub.iterable(child):
-        #             child = nested_tree(tree, child, key)
-        #         else:
-        #             tree.add_node(key)
-        #         tree.add_edge(name, key)
-        # nested = self.nested_pool
-        # tree = nx.DiGraph()
-        # xdev.fix_embed_globals()
-        # node = nested_tree(tree, nested)
-        # ub.dict_hist(list(map(len, nested)))
-
-        self.new_sample_grid = new_sample_grid
-
-        bg_catname = ub.peek(sorted(self.background_classes))
-        self.bg_idx = self.classes.node_to_idx[bg_catname]
-
-        utils.category_tree_ensure_color(self.classes)
-
-        self.special_inputs = {}
-
-        if channels is None or channels == 'auto':
-            # Find reasonable channel defaults if channels is not specified.
-            # Use dataset stats to determine something sensible.
-            sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
-            parts = []
-            for sensor, chan_hist in sensorchan_hist.items():
-                for c in chan_hist.keys():
-                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
-                    parts.append(f'{sensor}:{chancode}')
-            sensorchans = ','.join(sorted(parts))
-            sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
-            if len(sensorchan_hist) > 0 and channels is None:
-                # Only warn if not explicitly in auto mode
-                warnings.warn(
-                    'Channels are unspecified, but the dataset has a complex '
-                    'set of channels with multiple sensors. '
-                    'Passing an explicit sensorchan spec (via the `channels` '
-                    'argument would be better.')
-        else:
-            # hack
-            sensorchan_hist = None
-            sensorchans = channels
-        self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
-
-        # handle generic * sensors, the idea is that we find matches
-        # in the dataset that can support the requested channels.
-        if '*' in [s.sensor.spec for s in self.sensorchan.streams()]:
-            # handle * sensor in a way that works with previous models
-            # This code is a little messy and should be cleaned up
-            if sensorchan_hist is None:
-                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
-                sensorchan_hist = sensorchan_stats['sensorchan_hist']
-
-            expanded_input_sensorchan_streams = []
-            for fused_sensorchan in self.sensorchan.streams():
-                sensor = fused_sensorchan.sensor
-                chans = fused_sensorchan.chans
-                if sensor.spec == '*':
-                    for cand_sensor, cand_chans in sensorchan_hist.items():
-                        valid_chan_cands = []
-                        for cand_chan_group in cand_chans:
-                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
-                            chan_isect = chans & cand_chan_group
-                            if chan_isect.spec == chans.spec:
-                                valid_chan_cands.append(valid_chan_cands)
-                                expanded_input_sensorchan_streams.append(cand_sensor + ':' + chans.spec)
-                                break
-                else:
-                    expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
-
-            if not expanded_input_sensorchan_streams:
-                print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
-                raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
-
-            self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(
-                list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
-
-        # TODO: Clean up this code.
-        _input_channels = []
-        _sample_channels = []
-        _input_sensorchans = []
-        _sample_sensorchans = []
-        for fused_sensorchan in self.sensorchan.streams():
-            sensor = fused_sensorchan.sensor
-            chans = fused_sensorchan.chans
-            _stream = chans.as_oset()
-            _sample_stream = _stream.copy()
-            special_bands = _stream & util_bands.SPECIALIZED_BANDS
-            if special_bands:
-                raise NotImplementedError('This is broken ATM')
-                # TODO: introspect which extra bands are needed for to compute
-                # the sample, but hard code for now
-                # _sample_stream -= special_bands
-                # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                # self.special_inputs[key] = special_bands
-                # _stream = [s + p for p in _stream for s in ['', 'D']]
-            _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
-            _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
-            _input_channels.append('|'.join(_stream))
-            _sample_channels.append('|'.join(_sample_stream))
-
-            #### New: input_sensorchan will replace input_channels
-            self.sample_sensorchan = kwcoco.SensorChanSpec(
-                ','.join(_sample_sensorchans)
-            )
-
-            self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
-                ','.join(_input_sensorchans)
-            )
-
-        if self.config['normalize_peritem']:
-            # (this probably should be extended to be a sensorchan...)
-            if self.config['normalize_peritem'] is True:
-                # If True, then normalize all known channels
-                self.normalize_peritem = kwcoco.FusedChannelSpec.coerce(
-                    '|'.join(sorted(set(ub.flatten([
-                        s.chans.to_list()
-                        for s in self.input_sensorchan.streams()])))))
-            else:
-                # Otherwise assume the user specified what channels to normalize
-                self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
-        else:
-            self.normalize_peritem = None
-
-        self.mode = mode
-
-        # hidden option for now (todo: expose this)
-        self.inference_only = False
-        self.requested_tasks = {
-            'change': True,
-            'class': True,
-            'saliency': True,
-            # 'boxes': True,
-            'boxes': False,
-
-            # ouputs is not really a task, it requests the weights needed for
-            # predict-time stitching.
-            'outputs': mode != 'fit',
-        }
-
-        # Hacks: combinable channels can be visualized as RGB images.
-        # The only reason this is a hack is because of the hardcoded names
-        # otherwise it is a cool feature.
-        self.default_combinable_channels = [
-            ub.oset(['red', 'green', 'blue']),
-            ub.oset(['Dred', 'Dgreen', 'Dblue']),
-            ub.oset(['r', 'g', 'b']),
-            ub.oset(['impervious', 'forest', 'water']),
-            ub.oset(['baren', 'field', 'water']),
-            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
-            ub.oset(['sam.0', 'sam.1', 'sam.2']),
-            ub.oset(['sam.3', 'sam.4', 'sam.5']),
-        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
-
-        self.prenormalizers = None
-
-        if self.config['prenormalize_inputs'] is not None:
-            prenormalizers = None
-            if self.config['prenormalize_inputs'] is True:
-                # default_prenorm = {
-                #     'modality_stats': 'auto',
-                # }
-                #
-                """
-                e.g. we expect modality stats to look like:
-
-                modality_stats:
-                    - sensor: S2
-                      channels: red|green|blue
-                      domain: KR_R001
-                      month: 3
-                      mean: [120, 231, 233]
-                      std: [30, 20, 24]
-                      min: [0, 0, 0]
-                      max: [10000, 10000, 10000]
-                    - ...
-                """
-
-                # We generally want to compute these on the full dataset
-                stats = self.cached_dataset_stats(num_workers=4)
-                self.prenormalizers = stats['modality_input_stats']
-                # prenormalizers = []
-                # for key, value in stats['prenormalizers'].items():
-                #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
-                #     prenormalizers.append(item)
-                # ...
-                # raise NotImplementedError('need to compute prenormaliztions')
-
-            elif isinstance(self.config['prenormalize_inputs'], dict):
-                # TODO: Fixme!
-                ...
-            elif isinstance(self.config['prenormalize_inputs'], list):
-                ...
-            else:
-                raise NotImplementedError
-
-            if prenormalizers is None:
-                stats = self.cached_dataset_stats(num_workers=4)
-                prenormalizers = stats['modality_input_stats']
-
-            self.prenormalizers = prenormalizers
-
-    def _init_balance(self, new_sample_grid):
-        """
-        Build data structure used for balanced sampling.
-
-        Helper for __init__ which constructs a NestedPool to balance sampling
-        across input domains.
-
-        TODO:
-            HELP WANTED: We would like to configure the distribution in some
-            easy to specify way. We should be domain aware, or rather accept
-            some encoding of the domain. We want to oversample underrepresented
-            or important batch items and undersample overrepresented or
-            unimportant easy batch items. The "batch item" part is what makes
-            this hard because we need the notation of goodness, easiness, etc
-            at the batch level, which can contain multiple annotations.
-        """
-        # TODO: each video should be able to have some sort of group
-        # attribute we can use to balance over similar videos.
-        print('Balancing over videos')
-
-        neg_to_pos_ratio = self.config['neg_to_pos_ratio']
-
-        # Train time data balancing
-        n_pos = len(new_sample_grid['positives_indexes'])
-        n_neg = len(new_sample_grid['negatives_indexes'])
-
-        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
-
-        # Hack: determine if videos should be grouped together
-        target_posbit = kwarray.boolmask(
-            new_sample_grid['positives_indexes'],
-            len(new_sample_grid['targets']))
-
-        # Do this for unique video ids otherwise SQLviews will take forever
-        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
-        coco_dset = self.sampler.dset
-        try:
-            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
-        except KeyError:
-            # hack for loose images
-            unique_vidnames = []
-            for video_id in unique_vidids:
-                if video_id in coco_dset.index.videos:
-                    vidname = coco_dset.index.videos[video_id]['name']
-                else:
-                    vidname = video_id
-                unique_vidnames.append(vidname)
-
-        vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
-
-        # if 0:
-        #     # DEBUG postgres
-        #     # all_vidids = self.sampler.dset.videos()
-        #     # all_vidids = set(all_vidids)
-        #     # len(set(target_vidids) & all_vidids)
-        #     # len(set(target_vidids) - all_vidids)
-        #     # len(all_vidids - set(target_vidids))
-        #     vid_table = self.sampler.dset.raw_table('videos')
-
-        df = pd.DataFrame({
-            'vidid': target_vidids,
-            'vidname': vidnames,
-            'is_positive': target_posbit,
-        }).reset_index(drop=False)
-
-        # Hack, because we didn't encode the region in the cropped site
-        # (rookie move)
-        from kwutil import util_pattern
-        pat = util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
-        vidname_to_region_name = {}
-        for vidname in set(vidnames):
-            if pat.match(vidname):
-                vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
-
-        self.vidname_to_region_name = vidname_to_region_name
-
-        if vidname_to_region_name:
-            df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
-        else:
-            df['region'] = df['vidname']
-
-        key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
-        vidname_to_pool = {}
-        for key, group in key_to_group.items():
-            vidname, flag = key
-            if flag:
-                pos_vid_idxs = group['index']
-                other_key = (vidname, False)
-                if other_key in key_to_group:
-                    other = key_to_group[other_key]
-                    neg_vid_idxs = other['index']
-                else:
-                    neg_vid_idxs = []
-                    other = []
-                n_pos = len(group)
-                n_neg = len(other)
-                max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
-
-                if 0:
-                    # TODO: dataloader logger
-                    print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
-
-                # neg_vid_idxs = posneg_groups[False]['index'].values
-                neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
-                pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
-                vid_pool = pos_vid_pool_ + neg_vid_pool_
-                vidname_to_pool[vidname] = [p for p in vid_pool if p]
-
-        freqs = list(map(len, vidname_to_pool.values()))
-        if len(freqs) == 0:
-            max_per_vid = 100
-            warnings.warn('Warning: no video pool')
-        else:
-            max_per_vid = int(np.median(freqs))
-        all_chunks = []
-        for vidname, vid_pool in vidname_to_pool.items():
-            rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
-            all_chunks.extend(rechunked_video_pool)
-
-        self.nested_pool = data_utils.NestedPool(all_chunks)
-        if self.config['reseed_fit_random_generators']:
-            self.reseed()
-
-    def reseed(self):
-        """
-        Reinitialize the random number generator
-
-        TODO:
-            HELP WANTED: Lack of determenism likely comes from this module and
-            the order it gives data to predict. It would be very nice if we
-            could fix that.
-        """
-        # Randomize across DDP workers
-        if hasattr(self, 'nested_pool'):
-            rng = kwarray.ensure_rng(rng=None)
-            import secrets
-            import time
-            # Really try to be random
-            rng_seed = rng.randint(0, int(2 ** 31 - 2))
-            rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
-            secret_seed = secrets.randbits(22) + int(time.time())
-            seed = secret_seed ^ rank_seed ^ rng_seed
-            rng = kwarray.ensure_rng(rng=seed)
-            self.nested_pool.rng = rng
         ...
+        # TODO: what is the standard way to do the learned embedding
+        # "input vector"?
 
-    @property
-    def coco_dset(self):
-        return self.sampler.dset
+        # TODO: preprocess any auxiliary learnable information into a
+        # Tensor. It is likely ideal to pre-stack whenever possible, but we
+        # need to keep the row-form data to make visualization
+        # straight-forward. We could use a flag to toggle it depending on
+        # if we need to visualize or not.
+        permode_datas = ub.ddict(list)
+        prev_timestamp = None
 
-    def __len__(self):
-        return self.length
+        # TODO: this should be part of the model.
+        # The dataloader should know nothing about positional encodings
+        # except what is needed in order to pass the data to the model.
+        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
 
-    def _notify_about_tasks(self, requested_tasks=None, model=None):
+        for frame_item in frame_items:
+
+            k = 'timestamp'
+            frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
+
+            for mode_code in frame_item['modes'].keys():
+                # Maybe this should be a model responsibility.
+                # I dont like defining the positional encoding in the
+                # dataset
+                key_tensor = data_utils._string_to_hashvec(mode_code)
+                permode_datas['mode_tensor'].append(key_tensor)
+                #
+                k = 'time_index'
+                time_index = frame_item[k]
+                # v = np.array([frame_item[k]]).astype(np.float32)
+                v = time_index_encoding[time_index]
+                permode_datas[k].append(v)
+
+                if prev_timestamp is None:
+                    time_offset = np.array([0]).astype(np.float32)
+                else:
+                    time_offset = frame_timestamp - prev_timestamp
+
+                # TODO: add seasonal positional encoding
+
+                permode_datas['time_offset'].append(time_offset)
+
+                k = 'sensor'
+                key_tensor = data_utils._string_to_hashvec(k)
+                permode_datas[k].append(key_tensor)
+
+            frame_item['time_offset'] = time_offset
+            prev_timestamp = frame_timestamp
+
+        positional_arrays = ub.map_vals(np.stack, permode_datas)
+        time_offset = positional_arrays.pop('time_offset', None)
+        if time_offset is not None:
+            scaled_time_offset = data_utils.abslog_scaling(time_offset)
+            positional_arrays['time_offset'] = scaled_time_offset
+        else:
+            print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
+
+        # This is flattened for each frame for each mode.
+        # A bit hacky, not in love with it.
+        positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+        return positional_tensors
+
+    def _coerce_target(self, index):
         """
-        Hacky method. Given the multimodal model, tell all the datasets which
-        tasks they will need to generate data for. (This helps make the
-        visualizations cleaner).
+        Returns a target dictionary given an index or an explicit target dictionary
         """
-        if model is not None:
-            assert requested_tasks is None
-            if hasattr(model, 'global_head_weight'):
-                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+        # The index can be specified as either
+        # * directly as a target (target) dictionary, or
+        # * an integer index
+
+        if isinstance(index, dict):
+            print(f'index={index}')
+            target = index
+            requested_index = 'given-as-dictionary'
+            resolved_index = 'given-as-dictionary'
+        else:
+            requested_index = index
+            if self.mode == 'test':
+                # In test-mode the index directly determines the grid location.
+                resolved_index = requested_index
             else:
-                warnings.warn(ub.paragraph(
-                    f'''
-                    Model {model.__class__} does not have the structure needed
-                    to notify the dataset about tasks. A better design to make
-                    specifying tasks easier is needed without relying on the
-                    ``global_head_weights``.
-                    '''))
-        print(f'dataset notified: requested_tasks={requested_tasks}')
-        assert requested_tasks is not None
-        self.requested_tasks.update(requested_tasks)
+                # In non-test-mode we discard the user index and randomly
+                # sample a grid location to achive balanced sampling.
+                try:
+                    resolved_index = self.nested_pool.sample()
+                except Exception as ex:
+                    raise FailedSample(f'Failed to sample grid location: {ex=}')
+            target = self.new_sample_grid['targets'][resolved_index]
+
+        target = target.copy()
+        target['requested_index'] = requested_index
+        target['resolved_index'] = resolved_index
+        # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
+        # print(f'{LOCAL_RANK=}, {index=} {self.mode=}  {self.nested_pool.sample()} {target=}')
+        if target is None:
+            raise FailedSample('no target')
+        return target
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
@@ -1414,147 +941,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # Save the input dimensions we scaled to.
                     # We will need to transform this to the output dims later.
                     frame_dets.meta['input_dims'] = max_mode_dims
-
-    def __getitem__(self, index):
-        """
-        Build an input batch. Standard pytorch Dataset API.
-
-        Args:
-            index (int | Dict):
-                This can be an integer index between ``[0, len(self)]``.
-                In test mode this will correspond to the index in the sample
-                grid, but at train time it is randomized and you will usually
-                get a different item each time. You can pass a "target"
-                dictionary (e.g. an item from the sample grid). Note that the
-                subset of a target needed to rebuild a specific batch is
-                returned with each batch.
-
-        Returns:
-            Dict | None :
-                In this system an item is always a dictionary it is up to the
-                calling process to do any final collation. (avoiding collation
-                makes writing this module a lot simpler). If the sample fails
-                we return None, and the caller should also handle that.
-
-        Example:
-            >>> # Native sampling project data doctest
-            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import geowatch
-            >>> import kwcoco
-            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-geodata-dates')
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     input_space_scale='native',
-            >>>     window_space_scale='0.3GSD',
-            >>>     output_space_scale='0.6GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
-            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
-            ...     shist = ub.dict_hist(sensors)
-            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
-            ...         break
-            >>> target['allow_augment'] = False
-            >>> index = target
-            >>> item = self[index]
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> # Native sampling project data doctest
-            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import geowatch
-            >>> import kwcoco
-            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='native',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='native',
-            >>>     #output_space_scale='10GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
-            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
-            ...     shist = ub.dict_hist(sensors)
-            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
-            ...         break
-            >>> target['allow_augment'] = False
-            >>> index = target
-            >>> item = self[index]
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import geowatch
-            >>> import kwcoco
-            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='10GSD',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='10GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
-            >>> index['allow_augment'] = False
-            >>> item = self[index]
-            >>> target = item['target']
-            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-        """
-        try:
-            return self.getitem(index)
-        except FailedSample as ex:
-            if self.config['failed_sample_policy'] == 'raise':
-                raise
-            elif self.config['failed_sample_policy'] == 'warn':
-                warnings.warn('FailedSample: ex = {}'.format(ub.urepr(ex, nl=1)))
-            elif self.config['failed_sample_policy'] == 'ignore':
-                return None
-            else:
-                raise AssertionError(self.config['failed_sample_policy'])
 
     @profile
     def getitem(self, index):
@@ -1860,123 +1246,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'requested_target': requested_target_subset,
         }
         return item
-
-    def _populate_positional_information(self, frame_items):
-        """
-        Enrich each frame with information the model can use to build its
-        positional encodings. It currently returns these, but it shouldn't
-
-        Args:
-            frame_items (List[Dict]):
-
-        NOTE:
-            There is a part of this where we actually compute a sinusoidal
-            positional encoding, but that should be part of the model, not the
-            dataset.
-
-            The dataset can provide metadata to tell the model what it can use
-            to build positional encodings, but it should never tell it how to
-            use them!
-        """
-        ...
-        # TODO: what is the standard way to do the learned embedding
-        # "input vector"?
-
-        # TODO: preprocess any auxiliary learnable information into a
-        # Tensor. It is likely ideal to pre-stack whenever possible, but we
-        # need to keep the row-form data to make visualization
-        # straight-forward. We could use a flag to toggle it depending on
-        # if we need to visualize or not.
-        permode_datas = ub.ddict(list)
-        prev_timestamp = None
-
-        # TODO: this should be part of the model.
-        # The dataloader should know nothing about positional encodings
-        # except what is needed in order to pass the data to the model.
-        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
-
-        for frame_item in frame_items:
-
-            k = 'timestamp'
-            frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
-
-            for mode_code in frame_item['modes'].keys():
-                # Maybe this should be a model responsibility.
-                # I dont like defining the positional encoding in the
-                # dataset
-                key_tensor = data_utils._string_to_hashvec(mode_code)
-                permode_datas['mode_tensor'].append(key_tensor)
-                #
-                k = 'time_index'
-                time_index = frame_item[k]
-                # v = np.array([frame_item[k]]).astype(np.float32)
-                v = time_index_encoding[time_index]
-                permode_datas[k].append(v)
-
-                if prev_timestamp is None:
-                    time_offset = np.array([0]).astype(np.float32)
-                else:
-                    time_offset = frame_timestamp - prev_timestamp
-
-                # TODO: add seasonal positional encoding
-
-                permode_datas['time_offset'].append(time_offset)
-
-                k = 'sensor'
-                key_tensor = data_utils._string_to_hashvec(k)
-                permode_datas[k].append(key_tensor)
-
-            frame_item['time_offset'] = time_offset
-            prev_timestamp = frame_timestamp
-
-        positional_arrays = ub.map_vals(np.stack, permode_datas)
-        time_offset = positional_arrays.pop('time_offset', None)
-        if time_offset is not None:
-            scaled_time_offset = data_utils.abslog_scaling(time_offset)
-            positional_arrays['time_offset'] = scaled_time_offset
-        else:
-            print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
-
-        # This is flattened for each frame for each mode.
-        # A bit hacky, not in love with it.
-        positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
-        return positional_tensors
-
-    def _coerce_target(self, index):
-        """
-        Returns a target dictionary given an index or an explicit target dictionary
-        """
-        # The index can be specified as either
-        # * directly as a target (target) dictionary, or
-        # * an integer index
-
-        if isinstance(index, dict):
-            print(f'index={index}')
-            target = index
-            requested_index = 'given-as-dictionary'
-            resolved_index = 'given-as-dictionary'
-        else:
-            requested_index = index
-            if self.mode == 'test':
-                # In test-mode the index directly determines the grid location.
-                resolved_index = requested_index
-            else:
-                # In non-test-mode we discard the user index and randomly
-                # sample a grid location to achive balanced sampling.
-                try:
-                    resolved_index = self.nested_pool.sample()
-                except Exception as ex:
-                    raise FailedSample(f'Failed to sample grid location: {ex=}')
-            target = self.new_sample_grid['targets'][resolved_index]
-
-        target = target.copy()
-        target['requested_index'] = requested_index
-        target['resolved_index'] = resolved_index
-        # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
-        # print(f'{LOCAL_RANK=}, {index=} {self.mode=}  {self.nested_pool.sample()} {target=}')
-        if target is None:
-            raise FailedSample('no target')
-        return target
 
     @profile
     def _sample_from_target(self, target_, vidspace_box):
@@ -2758,6 +2027,377 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if wants_outputs:
             frame_item['output_weights'] = generic_frame_weight
 
+
+class IntrospectMixin:
+    """
+    Methods for introspection of data
+    """
+
+    def draw_item(self, item, item_output=None, combinable_extra=None,
+                  max_channels=5, max_dim=224, norm_over_time='auto',
+                  overlay_on_image=False, draw_weights=True, rescale='auto',
+                  classes=None, show_summary_text=True, **kw):
+        """
+        Visualize an item produced by this DataSet.
+
+        Each channel will be a row, and each column will be a timestep.
+
+        Args:
+            item (Dict): An item returned from the torch Dataset.
+
+            overlay_on_image (bool):
+                if True, the truth and prediction is drawn on top of
+                an image, otherwise it is drawn on a black image.
+
+            max_dim (int):
+                max dimension to resize each grid cell to.
+
+            max_channels (int) :
+                maximum number of channel rows to draw
+
+            item_output (Dict):
+                Special task keys that we know how to plot.
+                These should be some sort of binary or class prediction from
+                the network. I'm not sure how best to pass the details
+                of how they should be interpreted.
+
+                Known keys:
+                    change_probs
+                    saliency_probs
+                    class_probs
+                    pred_ltrb
+
+            classes (kwcoco.CategoryTree | None):
+                Classes any "class_probs" in the 'item_output' dictionary
+                corresponds to.  If unspecified uses the classes from the
+                datamodule.
+
+            show_summary_text (bool):
+                if True, draw additional summary debug information.
+                Defaults to True.
+
+        Note:
+            The ``self.requested_tasks`` controls the task labels returned by
+            getitem, and hence what can be visualized here.
+
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import kwcoco
+            >>> import kwarray
+            >>> import rich
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> channels = 'B10|B8a|B1|B8|B11'
+            >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
+            >>> # combinable_extra = None  # uncomment for raw behavior
+            >>> mode = 'fit'
+            >>> mode = 'test'
+            >>> coco_dset.clear_annotations()
+            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
+            >>> #index = len(self) // 4
+            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
+            >>> item = self[index]
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+            >>> kwplot.show_if_requested()
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> import geowatch
+            >>> import rich
+            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+            >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
+            >>> from geowatch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
+            >>> config = PredictConfig(**{
+            >>>     'key': 'set_cover_algo',
+            >>>     'test_dataset': coco_fpath,
+            >>>     'mask_low_quality': True,
+            >>>     'pred_dataset': expt_dvc_dpath / '_demo_khq_doctest/pred.kwcoco.zip',
+            >>>     'package_fpath': expt_dvc_dpath / 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt',
+            >>>     'devices': [0],
+            >>> })
+            >>> config, model, datamodule = _prepare_predict_data(config)
+            >>> self = datamodule.torch_datasets['test']
+            >>> index = self.new_sample_grid['targets'][0]
+            >>> # More controlled settings for debug
+            >>> self.disable_augmenter = True
+            >>> combinable_extra = None
+            >>> item = self[index]
+            >>> item_output = self._build_demo_outputs(item)
+            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+            >>> kwplot.show_if_requested()
+        """
+        if rescale == 'auto':
+            rescale = self.config['input_space_scale'] != 'native'
+
+        if item is None:
+            # BIG RED X
+            # h, w = vertical_stack[-1].shape[0:2]
+            h = w = (max_dim or 224)
+            bad_canvas = kwimage.draw_text_on_image(
+                {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
+                valign='center', halign='center', fontScale=10,
+                color='red')
+            return bad_canvas
+
+        default_combinable_channels = self.default_combinable_channels
+
+        if norm_over_time == 'auto':
+            norm_over_time = self.normalize_peritem is not None
+
+        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
+        builder = BatchVisualizationBuilder(
+            item=item, item_output=item_output,
+            default_combinable_channels=default_combinable_channels,
+            norm_over_time=norm_over_time, max_dim=max_dim,
+            max_channels=max_channels, overlay_on_image=overlay_on_image,
+            draw_weights=draw_weights, combinable_extra=combinable_extra,
+            classes=self.classes, requested_tasks=self.requested_tasks,
+            rescale=rescale, **kw)
+        canvas = builder.build()
+
+        if show_summary_text:
+            summary = self.summarize_item(item)
+            summary = ub.udict(summary) - {'frame_summaries'}
+            summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
+            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
+            canvas = kwimage.stack_images([canvas, header])
+
+        return canvas
+
+    def summarize_item(self, item):
+        """
+        Return debugging stats about the item
+
+        Args:
+            item (dict): an item returned by __getitem__
+
+        Returns:
+            dict : a summary of the item
+        """
+        if item is None:
+            raise Exception('Cant summarize a failed sample item=None')
+        item_summary = {}
+        item_summary['frame_summaries'] = []
+        timestamps = []
+        for frame in item['frames']:
+            frame_summary = {}
+            for mode_key, im_mode in frame['modes'].items():
+                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
+            label_keys = [
+                'class_idxs', 'class_ohe', 'saliency', 'change'
+                'class_weights', 'saliency_weights', 'change_weights',
+                'output_weights', 'box_ltrb',
+                # 'box_weights', 'box_tids', 'box_cidxs',
+            ]
+            for key in label_keys:
+                if frame.get(key, None) is not None:
+                    frame_summary[key] = frame[key].shape
+            item_summary['frame_summaries'].append(frame_summary)
+            if frame['date_captured']:
+                timestamps.append(ub.timeparse(frame['date_captured']))
+
+            if 0:
+                dset = self.sampler.dset
+                for gid in item['requested_target']['gids']:
+                    assert gid in dset.imgs
+
+            annots = self.sampler.dset.annots(frame['ann_aids'])
+            cids = annots.lookup('category_id')
+            class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
+            frame_summary['class_hist'] = class_hist
+            if frame.get('ann_aids') is not None:
+                frame_summary['num_annots'] = len(frame['ann_aids'])
+
+        vidname = item.get('video_name', None)
+        if vidname is not None:
+            item_summary['video_name'] = vidname
+            try:
+                video = self.coco_dset.index.name_to_video[vidname]
+                vid_w = video['width']
+                vid_h = video['height']
+                item_summary['video_hw'] = (vid_h, vid_w)
+            except (KeyError, AttributeError):
+                item_summary['video_hw'] = '?'
+
+        if len(timestamps) > 1:
+            deltas = np.diff(timestamps)
+            deltas = [d.total_seconds() for d in deltas]
+            item_summary['min_time'] = ub.timestamp(min(timestamps))
+            item_summary['max_time'] = ub.timestamp(max(timestamps))
+            if len(deltas):
+                item_summary['min_delta'] = min(deltas)
+                item_summary['max_delta'] = max(deltas)
+                item_summary['mean_delta'] = np.mean(deltas)
+        item_summary['input_gsd'] = item['input_gsd']
+        item_summary['output_gsd'] = item['output_gsd']
+
+        if 'requested_target' in item:
+            item_summary['requested_target'] = item['requested_target']
+
+        if 'target' in item:
+            item_summary['resolved_target'] = item['target']
+
+        item_summary['producer_rank'] = item.get('producer_rank', None)
+        item_summary['producer_mode'] = item.get('producer_mode', None)
+        item_summary['requested_index'] = item.get('requested_index', None)
+        item_summary['resolved_index'] = item.get('resolved_index', None)
+
+        return item_summary
+
+
+class BalanceMixin:
+    """
+    Helpers to build the sample grid and balance it
+    """
+
+    def _init_balance(self, new_sample_grid):
+        """
+        Build data structure used for balanced sampling.
+
+        Helper for __init__ which constructs a NestedPool to balance sampling
+        across input domains.
+
+        TODO:
+            HELP WANTED: We would like to configure the distribution in some
+            easy to specify way. We should be domain aware, or rather accept
+            some encoding of the domain. We want to oversample underrepresented
+            or important batch items and undersample overrepresented or
+            unimportant easy batch items. The "batch item" part is what makes
+            this hard because we need the notation of goodness, easiness, etc
+            at the batch level, which can contain multiple annotations.
+        """
+        # TODO: each video should be able to have some sort of group
+        # attribute we can use to balance over similar videos.
+        print('Balancing over videos')
+
+        neg_to_pos_ratio = self.config['neg_to_pos_ratio']
+
+        # Train time data balancing
+        n_pos = len(new_sample_grid['positives_indexes'])
+        n_neg = len(new_sample_grid['negatives_indexes'])
+
+        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+
+        # Hack: determine if videos should be grouped together
+        target_posbit = kwarray.boolmask(
+            new_sample_grid['positives_indexes'],
+            len(new_sample_grid['targets']))
+
+        # Do this for unique video ids otherwise SQLviews will take forever
+        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
+        coco_dset = self.sampler.dset
+        try:
+            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        except KeyError:
+            # hack for loose images
+            unique_vidnames = []
+            for video_id in unique_vidids:
+                if video_id in coco_dset.index.videos:
+                    vidname = coco_dset.index.videos[video_id]['name']
+                else:
+                    vidname = video_id
+                unique_vidnames.append(vidname)
+
+        vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
+
+        # if 0:
+        #     # DEBUG postgres
+        #     # all_vidids = self.sampler.dset.videos()
+        #     # all_vidids = set(all_vidids)
+        #     # len(set(target_vidids) & all_vidids)
+        #     # len(set(target_vidids) - all_vidids)
+        #     # len(all_vidids - set(target_vidids))
+        #     vid_table = self.sampler.dset.raw_table('videos')
+
+        df = pd.DataFrame({
+            'vidid': target_vidids,
+            'vidname': vidnames,
+            'is_positive': target_posbit,
+        }).reset_index(drop=False)
+
+        # Hack, because we didn't encode the region in the cropped site
+        # (rookie move)
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
+        vidname_to_region_name = {}
+        for vidname in set(vidnames):
+            if pat.match(vidname):
+                vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
+
+        self.vidname_to_region_name = vidname_to_region_name
+
+        if vidname_to_region_name:
+            df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
+        else:
+            df['region'] = df['vidname']
+
+        key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
+        vidname_to_pool = {}
+        for key, group in key_to_group.items():
+            vidname, flag = key
+            if flag:
+                pos_vid_idxs = group['index']
+                other_key = (vidname, False)
+                if other_key in key_to_group:
+                    other = key_to_group[other_key]
+                    neg_vid_idxs = other['index']
+                else:
+                    neg_vid_idxs = []
+                    other = []
+                n_pos = len(group)
+                n_neg = len(other)
+                max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
+
+                if 0:
+                    # TODO: dataloader logger
+                    print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
+
+                # neg_vid_idxs = posneg_groups[False]['index'].values
+                neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
+                pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
+                vid_pool = pos_vid_pool_ + neg_vid_pool_
+                vidname_to_pool[vidname] = [p for p in vid_pool if p]
+
+        freqs = list(map(len, vidname_to_pool.values()))
+        if len(freqs) == 0:
+            max_per_vid = 100
+            warnings.warn('Warning: no video pool')
+        else:
+            max_per_vid = int(np.median(freqs))
+        all_chunks = []
+        for vidname, vid_pool in vidname_to_pool.items():
+            rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
+            all_chunks.extend(rechunked_video_pool)
+
+        self.nested_pool = data_utils.NestedPool(all_chunks)
+        if self.config['reseed_fit_random_generators']:
+            self.reseed()
+
+
+class PreprocessMixin:
+    """
+    Methods related to dataset preprocessing
+    """
+
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):
         """
@@ -3160,6 +2800,61 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return dataset_stats
 
+
+class MiscMixin:
+    """
+    TODO: better groups
+    """
+
+    def reseed(self):
+        """
+        Reinitialize the random number generator
+
+        TODO:
+            HELP WANTED: Lack of determenism likely comes from this module and
+            the order it gives data to predict. It would be very nice if we
+            could fix that.
+        """
+        # Randomize across DDP workers
+        if hasattr(self, 'nested_pool'):
+            rng = kwarray.ensure_rng(rng=None)
+            import secrets
+            import time
+            # Really try to be random
+            rng_seed = rng.randint(0, int(2 ** 31 - 2))
+            rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
+            secret_seed = secrets.randbits(22) + int(time.time())
+            seed = secret_seed ^ rank_seed ^ rng_seed
+            rng = kwarray.ensure_rng(rng=seed)
+            self.nested_pool.rng = rng
+        ...
+
+    @property
+    def coco_dset(self):
+        return self.sampler.dset
+
+    def _notify_about_tasks(self, requested_tasks=None, model=None):
+        """
+        Hacky method. Given the multimodal model, tell all the datasets which
+        tasks they will need to generate data for. (This helps make the
+        visualizations cleaner).
+        """
+        if model is not None:
+            assert requested_tasks is None
+            if hasattr(model, 'global_head_weight'):
+                requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            else:
+                warnings.warn(ub.paragraph(
+                    f'''
+                    Model {model.__class__} does not have the structure needed
+                    to notify the dataset about tasks. A better design to make
+                    specifying tasks easier is needed without relying on the
+                    ``global_head_weights``.
+                    '''))
+        print(f'dataset notified: requested_tasks={requested_tasks}')
+        assert requested_tasks is not None
+        self.requested_tasks.update(requested_tasks)
+
     def _build_demo_outputs(self, item):
         """
         Construct dummy outputs that we would expect a network to generate.
@@ -3204,236 +2899,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         item_output['pred_ltrb'] = frame_pred_ltrb_list
         return item_output
 
-    def draw_item(self, item, item_output=None, combinable_extra=None,
-                  max_channels=5, max_dim=224, norm_over_time='auto',
-                  overlay_on_image=False, draw_weights=True, rescale='auto',
-                  classes=None, show_summary_text=True, **kw):
-        """
-        Visualize an item produced by this DataSet.
-
-        Each channel will be a row, and each column will be a timestep.
-
-        Args:
-            item (Dict): An item returned from the torch Dataset.
-
-            overlay_on_image (bool):
-                if True, the truth and prediction is drawn on top of
-                an image, otherwise it is drawn on a black image.
-
-            max_dim (int):
-                max dimension to resize each grid cell to.
-
-            max_channels (int) :
-                maximum number of channel rows to draw
-
-            item_output (Dict):
-                Special task keys that we know how to plot.
-                These should be some sort of binary or class prediction from
-                the network. I'm not sure how best to pass the details
-                of how they should be interpreted.
-
-                Known keys:
-                    change_probs
-                    saliency_probs
-                    class_probs
-                    pred_ltrb
-
-            classes (kwcoco.CategoryTree | None):
-                Classes any "class_probs" in the 'item_output' dictionary
-                corresponds to.  If unspecified uses the classes from the
-                datamodule.
-
-            show_summary_text (bool):
-                if True, draw additional summary debug information.
-                Defaults to True.
-
-        Note:
-            The ``self.requested_tasks`` controls the task labels returned by
-            getitem, and hence what can be visualized here.
-
-
-        Example:
-            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import kwcoco
-            >>> import kwarray
-            >>> import rich
-            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
-            >>> channels = 'B10|B8a|B1|B8|B11'
-            >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
-            >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> mode = 'fit'
-            >>> mode = 'test'
-            >>> coco_dset.clear_annotations()
-            >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
-            >>> #index = len(self) // 4
-            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
-            >>> index = self.new_sample_grid['targets'][0]
-            >>> # More controlled settings for debug
-            >>> self.disable_augmenter = True
-            >>> item = self[index]
-            >>> item_output = self._build_demo_outputs(item)
-            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
-            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
-            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
-            >>> kwplot.show_if_requested()
-
-        Ignore:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> import geowatch
-            >>> import rich
-            >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-            >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
-            >>> from geowatch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
-            >>> config = PredictConfig(**{
-            >>>     'key': 'set_cover_algo',
-            >>>     'test_dataset': coco_fpath,
-            >>>     'mask_low_quality': True,
-            >>>     'pred_dataset': expt_dvc_dpath / '_demo_khq_doctest/pred.kwcoco.zip',
-            >>>     'package_fpath': expt_dvc_dpath / 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt',
-            >>>     'devices': [0],
-            >>> })
-            >>> config, model, datamodule = _prepare_predict_data(config)
-            >>> self = datamodule.torch_datasets['test']
-            >>> index = self.new_sample_grid['targets'][0]
-            >>> # More controlled settings for debug
-            >>> self.disable_augmenter = True
-            >>> combinable_extra = None
-            >>> item = self[index]
-            >>> item_output = self._build_demo_outputs(item)
-            >>> rich.print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
-            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
-            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
-            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
-            >>> kwplot.show_if_requested()
-        """
-        if rescale == 'auto':
-            rescale = self.config['input_space_scale'] != 'native'
-
-        if item is None:
-            # BIG RED X
-            # h, w = vertical_stack[-1].shape[0:2]
-            h = w = (max_dim or 224)
-            bad_canvas = kwimage.draw_text_on_image(
-                {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
-                valign='center', halign='center', fontScale=10,
-                color='red')
-            return bad_canvas
-
-        default_combinable_channels = self.default_combinable_channels
-
-        if norm_over_time == 'auto':
-            norm_over_time = self.normalize_peritem is not None
-
-        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
-        builder = BatchVisualizationBuilder(
-            item=item, item_output=item_output,
-            default_combinable_channels=default_combinable_channels,
-            norm_over_time=norm_over_time, max_dim=max_dim,
-            max_channels=max_channels, overlay_on_image=overlay_on_image,
-            draw_weights=draw_weights, combinable_extra=combinable_extra,
-            classes=self.classes, requested_tasks=self.requested_tasks,
-            rescale=rescale, **kw)
-        canvas = builder.build()
-
-        if show_summary_text:
-            summary = self.summarize_item(item)
-            summary = ub.udict(summary) - {'frame_summaries'}
-            summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
-            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
-            canvas = kwimage.stack_images([canvas, header])
-
-        return canvas
-
-    def summarize_item(self, item):
-        """
-        Return debugging stats about the item
-
-        Args:
-            item (dict): an item returned by __getitem__
-
-        Returns:
-            dict : a summary of the item
-        """
-        if item is None:
-            raise Exception('Cant summarize a failed sample item=None')
-        item_summary = {}
-        item_summary['frame_summaries'] = []
-        timestamps = []
-        for frame in item['frames']:
-            frame_summary = {}
-            for mode_key, im_mode in frame['modes'].items():
-                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
-            label_keys = [
-                'class_idxs', 'class_ohe', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights',
-                'output_weights', 'box_ltrb',
-                # 'box_weights', 'box_tids', 'box_cidxs',
-            ]
-            for key in label_keys:
-                if frame.get(key, None) is not None:
-                    frame_summary[key] = frame[key].shape
-            item_summary['frame_summaries'].append(frame_summary)
-            if frame['date_captured']:
-                timestamps.append(ub.timeparse(frame['date_captured']))
-
-            if 0:
-                dset = self.sampler.dset
-                for gid in item['requested_target']['gids']:
-                    assert gid in dset.imgs
-
-            annots = self.sampler.dset.annots(frame['ann_aids'])
-            cids = annots.lookup('category_id')
-            class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
-            frame_summary['class_hist'] = class_hist
-            if frame.get('ann_aids') is not None:
-                frame_summary['num_annots'] = len(frame['ann_aids'])
-
-        vidname = item.get('video_name', None)
-        if vidname is not None:
-            item_summary['video_name'] = vidname
-            try:
-                video = self.coco_dset.index.name_to_video[vidname]
-                vid_w = video['width']
-                vid_h = video['height']
-                item_summary['video_hw'] = (vid_h, vid_w)
-            except (KeyError, AttributeError):
-                item_summary['video_hw'] = '?'
-
-        if len(timestamps) > 1:
-            deltas = np.diff(timestamps)
-            deltas = [d.total_seconds() for d in deltas]
-            item_summary['min_time'] = ub.timestamp(min(timestamps))
-            item_summary['max_time'] = ub.timestamp(max(timestamps))
-            if len(deltas):
-                item_summary['min_delta'] = min(deltas)
-                item_summary['max_delta'] = max(deltas)
-                item_summary['mean_delta'] = np.mean(deltas)
-        item_summary['input_gsd'] = item['input_gsd']
-        item_summary['output_gsd'] = item['output_gsd']
-
-        if 'requested_target' in item:
-            item_summary['requested_target'] = item['requested_target']
-
-        if 'target' in item:
-            item_summary['resolved_target'] = item['target']
-
-        item_summary['producer_rank'] = item.get('producer_rank', None)
-        item_summary['producer_mode'] = item.get('producer_mode', None)
-        item_summary['requested_index'] = item.get('requested_index', None)
-        item_summary['resolved_index'] = item.get('resolved_index', None)
-
-        return item_summary
-
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
                     pin_memory=False):
         """
@@ -3463,6 +2928,571 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             collate_fn=ub.identity,  # disable collation
         )
         return loader
+
+
+class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMixin, IntrospectMixin, MiscMixin, SpacetimeAugmentMixin, SMARTDataMixin):
+    """
+    Accepted keyword arguments are specified in
+    :class:`KWCocoVideoDatasetConfig`
+
+    Example:
+        >>> # Native Data Sampling
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-multisensor-msi', geodata=True)
+        >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
+        >>> print({c.channels.spec for c in coco_dset.images().coco_images})
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(100, 200),
+        >>>                           input_space_scale='native',
+        >>>                           window_space_scale='0.05GSD',
+        >>>                           output_space_scale='native',
+        >>>                           channels='auto',
+        >>> )
+        >>> self.disable_augmenter = True
+        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> item = self[target]
+        >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
+
+    Example:
+        >>> # Target GSD Data Sampling
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch', geodata=True)
+        >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
+        >>> print({c.channels.spec for c in coco_dset.images().coco_images})
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> self = KWCocoVideoDataset(sampler, window_dims=(100, 100), time_dims=5,
+        >>>                           input_space_scale='0.35GSD',
+        >>>                           window_space_scale='0.7GSD',
+        >>>                           output_space_scale='0.2GSD',
+        >>>                           channels='auto',
+        >>> )
+        >>> self.disable_augmenter = True
+        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> Box = util_kwimage.Box
+        >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
+        >>> item = self[index]
+        >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+        >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0, max_channels=3)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
+    """
+
+    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
+        """
+        Args:
+            sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
+            mode (str): fit or predict
+            **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+        """
+        config = KWCocoVideoDatasetConfig(**kwargs)
+
+        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
+        if config.sampler_backend is None:
+            sampler = ndsampler.CocoSampler.coerce(sampler)
+        else:
+            from geowatch.utils import util_parallel
+            sampler = ndsampler.CocoSampler.coerce(
+                sampler,
+                workdir=config.sampler_workdir,
+                backend=config.sampler_backend)
+            workers = util_parallel.coerce_num_workers(config.sampler_workers)
+            sampler.frames.prepare(workers=workers)
+
+        chip_dims = config['chip_dims']
+        if isinstance(chip_dims, str):
+            window_dims = chip_dims
+        else:
+            if not ub.iterable(chip_dims):
+                chip_dims = (chip_dims, chip_dims)
+            chip_h, chip_w = chip_dims
+            window_dims = (chip_h, chip_w)
+        time_dims = config['time_steps']
+        window_overlap = config['chip_overlap']
+
+        self.config = config
+        import rich
+        rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
+        # TODO: maintain instance variables xor items in the config, not both.
+        self.__dict__.update(self.config.to_dict())
+        self.sampler = sampler
+
+        # Add extra categories if we need to and construct a new classes object
+        graph = self.sampler.classes.graph
+
+        # Update with heuristics
+        # HACK: Overwrite kwcoco data
+        for _catinfo in heuristics.CATEGORIES:
+            name = _catinfo['name']
+            exists_flag = name in graph.nodes
+            if not exists_flag and _catinfo.get('required'):
+                graph.add_node(name, **_catinfo)
+            if exists_flag:
+                graph.nodes[name].update(**_catinfo)
+
+        # from kwutil import util_yaml
+        # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
+
+        self.classes = kwcoco.CategoryTree(graph)
+        self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
+        self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
+        self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
+        self.undistinguished_classes = set(heuristics.UNDISTINGUISHED_CLASSES) & set(graph.nodes)
+
+        # construct composite classes
+        # the idea is that these specific definitions will be configurable in the future
+        self.non_salient_classes = self.background_classes | self.negative_classes
+        self.salient_ignore_classes = self.ignore_classes
+        # should we remove the ignore classes from salient_classes in the future?
+        self.salient_classes = set(self.classes) - self.non_salient_classes
+
+        # define foreground classes for the class activity head
+        self.class_foreground_classes = set(self.classes) - (
+            self.background_classes |
+            self.ignore_classes |
+            self.undistinguished_classes)
+
+        channels = config['channels']
+        max_epoch_length = config['max_epoch_length']
+
+        self.disable_augmenter = False
+        self.augment_rng = kwarray.ensure_rng(None)
+
+        import os
+        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+        common_grid_kw = dict(
+            time_dims=time_dims,
+            window_dims=window_dims,
+            window_overlap=window_overlap,
+            exclude_sensors=config['exclude_sensors'],
+            include_sensors=config['include_sensors'],
+            select_images=config['select_images'],
+            select_videos=config['select_videos'],
+            time_sampling=config['time_sampling'],
+            time_span=config['time_span'],
+            time_kernel=config['time_kernel'],
+            window_space_scale=self.config['window_space_scale'],
+            set_cover_algo=config['set_cover_algo'],
+            workers=grid_workers,  # could configure this
+            use_cache=self.config['use_grid_cache'],
+            respect_valid_regions=self.config['use_grid_valid_regions'],
+        )
+        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
+
+        grid_kw = common_grid_kw.copy()
+
+        negative_classes = (
+            self.ignore_classes | self.background_classes | self.negative_classes)
+
+        annot_helper_kws = dict(
+            negative_classes=negative_classes,
+            keepbound=False,
+            use_annot_info=True,
+            use_centered_positives=config['use_centered_positives'],
+            use_grid_positives=config['use_grid_positives'],
+            use_grid_negatives=config['use_grid_negatives'],
+        )
+
+        if mode == 'custom':
+            new_sample_grid = None
+            self.length = 1
+        elif mode == 'test':
+            # FIXME: something is wrong with the cache when using an sqlview.
+            # In test mode we have to sample everything for BAS
+            # (TODO: for activity clf, we should only focus on candidate regions)
+
+            if test_with_annot_info:
+                grid_kw.update(annot_helper_kws)
+            else:
+                grid_kw.update(dict(
+                    keepbound=True,
+                    use_annot_info=False,
+                ))
+
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                dset=sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+            self.length = len(new_sample_grid['targets'])
+        else:
+            grid_kw.update(annot_helper_kws)
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+
+            if 1:
+                self._init_balance(new_sample_grid)
+
+            self.length = len(self.nested_pool)
+
+            if max_epoch_length is not None:
+                self.length = min(self.length, max_epoch_length)
+
+        # x = list(ub.flatten(ub.flatten(all_chunks)))
+        # import networkx as nx
+        # def nested_tree(tree, nested, name='root'):
+        #     tree.add_node(name)
+        #     for idx, child in enumerate(nested):
+        #         key = f'{name}.{idx}'
+        #         if ub.iterable(child):
+        #             child = nested_tree(tree, child, key)
+        #         else:
+        #             tree.add_node(key)
+        #         tree.add_edge(name, key)
+        # nested = self.nested_pool
+        # tree = nx.DiGraph()
+        # xdev.fix_embed_globals()
+        # node = nested_tree(tree, nested)
+        # ub.dict_hist(list(map(len, nested)))
+
+        self.new_sample_grid = new_sample_grid
+
+        bg_catname = ub.peek(sorted(self.background_classes))
+        self.bg_idx = self.classes.node_to_idx[bg_catname]
+
+        utils.category_tree_ensure_color(self.classes)
+
+        self.special_inputs = {}
+
+        if channels is None or channels == 'auto':
+            # Find reasonable channel defaults if channels is not specified.
+            # Use dataset stats to determine something sensible.
+            sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+            parts = []
+            for sensor, chan_hist in sensorchan_hist.items():
+                for c in chan_hist.keys():
+                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
+                    parts.append(f'{sensor}:{chancode}')
+            sensorchans = ','.join(sorted(parts))
+            sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            if len(sensorchan_hist) > 0 and channels is None:
+                # Only warn if not explicitly in auto mode
+                warnings.warn(
+                    'Channels are unspecified, but the dataset has a complex '
+                    'set of channels with multiple sensors. '
+                    'Passing an explicit sensorchan spec (via the `channels` '
+                    'argument would be better.')
+        else:
+            # hack
+            sensorchan_hist = None
+            sensorchans = channels
+        self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
+
+        # handle generic * sensors, the idea is that we find matches
+        # in the dataset that can support the requested channels.
+        if '*' in [s.sensor.spec for s in self.sensorchan.streams()]:
+            # handle * sensor in a way that works with previous models
+            # This code is a little messy and should be cleaned up
+            if sensorchan_hist is None:
+                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
+                sensorchan_hist = sensorchan_stats['sensorchan_hist']
+
+            expanded_input_sensorchan_streams = []
+            for fused_sensorchan in self.sensorchan.streams():
+                sensor = fused_sensorchan.sensor
+                chans = fused_sensorchan.chans
+                if sensor.spec == '*':
+                    for cand_sensor, cand_chans in sensorchan_hist.items():
+                        valid_chan_cands = []
+                        for cand_chan_group in cand_chans:
+                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
+                            chan_isect = chans & cand_chan_group
+                            if chan_isect.spec == chans.spec:
+                                valid_chan_cands.append(valid_chan_cands)
+                                expanded_input_sensorchan_streams.append(cand_sensor + ':' + chans.spec)
+                                break
+                else:
+                    expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
+
+            if not expanded_input_sensorchan_streams:
+                print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
+                raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
+
+            self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(
+                list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
+
+        # TODO: Clean up this code.
+        _input_channels = []
+        _sample_channels = []
+        _input_sensorchans = []
+        _sample_sensorchans = []
+        for fused_sensorchan in self.sensorchan.streams():
+            sensor = fused_sensorchan.sensor
+            chans = fused_sensorchan.chans
+            _stream = chans.as_oset()
+            _sample_stream = _stream.copy()
+            special_bands = _stream & util_bands.SPECIALIZED_BANDS
+            if special_bands:
+                raise NotImplementedError('This is broken ATM')
+                # TODO: introspect which extra bands are needed for to compute
+                # the sample, but hard code for now
+                # _sample_stream -= special_bands
+                # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+                # self.special_inputs[key] = special_bands
+                # _stream = [s + p for p in _stream for s in ['', 'D']]
+            _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
+            _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
+            _input_channels.append('|'.join(_stream))
+            _sample_channels.append('|'.join(_sample_stream))
+
+            #### New: input_sensorchan will replace input_channels
+            self.sample_sensorchan = kwcoco.SensorChanSpec(
+                ','.join(_sample_sensorchans)
+            )
+
+            self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
+                ','.join(_input_sensorchans)
+            )
+
+        if self.config['normalize_peritem']:
+            # (this probably should be extended to be a sensorchan...)
+            if self.config['normalize_peritem'] is True:
+                # If True, then normalize all known channels
+                self.normalize_peritem = kwcoco.FusedChannelSpec.coerce(
+                    '|'.join(sorted(set(ub.flatten([
+                        s.chans.to_list()
+                        for s in self.input_sensorchan.streams()])))))
+            else:
+                # Otherwise assume the user specified what channels to normalize
+                self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+        else:
+            self.normalize_peritem = None
+
+        self.mode = mode
+
+        # hidden option for now (todo: expose this)
+        self.inference_only = False
+        self.requested_tasks = {
+            'change': True,
+            'class': True,
+            'saliency': True,
+            # 'boxes': True,
+            'boxes': False,
+
+            # ouputs is not really a task, it requests the weights needed for
+            # predict-time stitching.
+            'outputs': mode != 'fit',
+        }
+
+        # Hacks: combinable channels can be visualized as RGB images.
+        # The only reason this is a hack is because of the hardcoded names
+        # otherwise it is a cool feature.
+        self.default_combinable_channels = [
+            ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['impervious', 'forest', 'water']),
+            ub.oset(['baren', 'field', 'water']),
+            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
+        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+        self.prenormalizers = None
+
+        if self.config['prenormalize_inputs'] is not None:
+            prenormalizers = None
+            if self.config['prenormalize_inputs'] is True:
+                # default_prenorm = {
+                #     'modality_stats': 'auto',
+                # }
+                #
+                """
+                e.g. we expect modality stats to look like:
+
+                modality_stats:
+                    - sensor: S2
+                      channels: red|green|blue
+                      domain: KR_R001
+                      month: 3
+                      mean: [120, 231, 233]
+                      std: [30, 20, 24]
+                      min: [0, 0, 0]
+                      max: [10000, 10000, 10000]
+                    - ...
+                """
+
+                # We generally want to compute these on the full dataset
+                stats = self.cached_dataset_stats(num_workers=4)
+                self.prenormalizers = stats['modality_input_stats']
+                # prenormalizers = []
+                # for key, value in stats['prenormalizers'].items():
+                #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
+                #     prenormalizers.append(item)
+                # ...
+                # raise NotImplementedError('need to compute prenormaliztions')
+
+            elif isinstance(self.config['prenormalize_inputs'], dict):
+                # TODO: Fixme!
+                ...
+            elif isinstance(self.config['prenormalize_inputs'], list):
+                ...
+            else:
+                raise NotImplementedError
+
+            if prenormalizers is None:
+                stats = self.cached_dataset_stats(num_workers=4)
+                prenormalizers = stats['modality_input_stats']
+
+            self.prenormalizers = prenormalizers
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        """
+        Build an input batch. Standard pytorch Dataset API.
+
+        Args:
+            index (int | Dict):
+                This can be an integer index between ``[0, len(self)]``.
+                In test mode this will correspond to the index in the sample
+                grid, but at train time it is randomized and you will usually
+                get a different item each time. You can pass a "target"
+                dictionary (e.g. an item from the sample grid). Note that the
+                subset of a target needed to rebuild a specific batch is
+                returned with each batch.
+
+        Returns:
+            Dict | None :
+                In this system an item is always a dictionary it is up to the
+                calling process to do any final collation. (avoiding collation
+                makes writing this module a lot simpler). If the sample fails
+                we return None, and the caller should also handle that.
+
+        Example:
+            >>> # Native sampling project data doctest
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
+            >>> import kwcoco
+            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-geodata-dates')
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='0.3GSD',
+            >>>     output_space_scale='0.6GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> # Native sampling project data doctest
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
+            >>> import kwcoco
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='native',
+            >>>     #output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
+            >>> import kwcoco
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_wsmall_split1.kwcoco.zip'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='10GSD',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index['allow_augment'] = False
+            >>> item = self[index]
+            >>> target = item['target']
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
+        try:
+            return self.getitem(index)
+        except FailedSample as ex:
+            if self.config['failed_sample_policy'] == 'raise':
+                raise
+            elif self.config['failed_sample_policy'] == 'warn':
+                warnings.warn('FailedSample: ex = {}'.format(ub.urepr(ex, nl=1)))
+            elif self.config['failed_sample_policy'] == 'ignore':
+                return None
+            else:
+                raise AssertionError(self.config['failed_sample_policy'])
 
 
 def more_demos():
