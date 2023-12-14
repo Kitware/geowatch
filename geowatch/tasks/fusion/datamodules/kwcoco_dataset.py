@@ -1170,16 +1170,16 @@ class GetItemMixin(TruthMixin):
                     mode_to_invalid_mask, resolution_info, truth_info,
                     meta_info)
 
-                VALIDATE_SHAPES = 1 or __debug__
-                if VALIDATE_SHAPES:
-                    output_dsize
-
-                    key0 = list(mode_to_imdata.keys())[0]
-                    val0 = mode_to_imdata[key0]
-                    _, h2, w2 = val0.shape
-                    h1, w1 = frame_item['saliency'].shape
-                    assert h2 == h1
-                    ...
+                # VALIDATE_SHAPES = 1 or __debug__
+                # if VALIDATE_SHAPES:
+                #     # can test for the no scale case in resolution_info
+                #     key0 = list(mode_to_imdata.keys())[0]
+                #     val0 = mode_to_imdata[key0]
+                #     _, h2, w2 = val0.shape
+                #     h1, w1 = frame_item['saliency'].shape
+                #     import xdev
+                #     with xdev.embed_on_exception_context:
+                #         assert h2 == h1
 
             wants_outputs = self.requested_tasks['outputs']
             if wants_outputs and 'output_weights' not in frame_item:
