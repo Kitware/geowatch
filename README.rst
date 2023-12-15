@@ -13,9 +13,10 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 
 .. FULL SVG .. image:: https://data.kitware.com/api/v1/file/657ca7298c54f378b99229dc/download
 .. FULL PNG..   image:: https://data.kitware.com/api/v1/file/657ca7698c54f378b99229e9/download
-.. THUMBNAIL .. image:: https://data.kitware.com/api/v1/file/657ca7df8c54f378b99229ee/download
+.. 64-THUMBNAIL .. image:: https://data.kitware.com/api/v1/file/657ca7df8c54f378b99229ee/download
+.. 128-THUMBNAIL .. image:: https://data.kitware.com/api/v1/file/657ca8a78c54f378b99229f5/download
 
-.. image:: https://data.kitware.com/api/v1/file/657ca7df8c54f378b99229ee/download
+.. image:: https://data.kitware.com/api/v1/file/657ca8a78c54f378b99229f5/download
    :height: 64px
    :align: left
 
