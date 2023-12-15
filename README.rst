@@ -96,7 +96,8 @@ The first image illustrates the broad area search (BAS) component of the
 pipeline that uses low spatio-temporal resolution data to detect candidate
 "salient" regions for further processing.
 
-.. image:: https://i.imgur.com/tilGphj.gif
+.. .. image:: https://i.imgur.com/tilGphj.gif
+.. image:: https://data.kitware.com/api/v1/file/657ca9778c54f378b99229fa/download
    :height: 100px
    :align: left
 
@@ -106,7 +107,8 @@ classify each polygon as a different phase of construction. In the above
 example there are 3 detected candidates. We now zoom in on the one in the
 middle.
 
-.. image:: https://i.imgur.com/2EBpDGZ.gif
+.. .. image:: https://i.imgur.com/2EBpDGZ.gif
+.. image:: https://data.kitware.com/api/v1/file/657ca9788c54f378b99229fd/download
    :height: 100px
    :align: left
 
