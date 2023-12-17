@@ -62,6 +62,8 @@ Research
 
 - [ ] Reproduce and integrate ScaleMAE
 
+- [ ] Better use of SAM as foundational model feature?
+
 
 Compatibility
 -------------
