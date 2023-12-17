@@ -37,6 +37,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Issue in dataloader where truth masks were drawn incorrectly for partially out of bounds samples. 
 
+* Add workaround for failed balance areas in dataloader.
+
 
 ## Version 0.12.1 - Released 2023-11-21
 

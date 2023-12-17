@@ -87,6 +87,54 @@ def test_oob_target():
     assert h1 == h2
     assert w1 == w2
 
+    if 0:
+        import numpy as np
+        import kwplot
+        kwplot.autompl()
+        canvas = self.draw_item(item)  # NOQA
+        kwplot.imshow(canvas, pnum=(1, 3, 1), fnum=1)
+
+        canvas = self.sampler.dset.coco_image(target['gids'][0]).imdelay().finalize()
+        kwplot.imshow(canvas, pnum=(1, 3, 2), fnum=1)
+
+        canvas = item['frames'][0]['modes']['r|g|b'].numpy().transpose(1, 2, 0).astype(np.uint8)
+        kwplot.imshow(canvas, pnum=(1, 3, 3), fnum=1)
+
+
+def test_resolution_on_nongeo_dataset():
+    """
+    The resolution parameter should help determine a scale factor on
+    non-geo datasets
+    """
+    import ubelt as ub
+    coco_dset = geowatch.coerce_kwcoco('vidshapes8')
+    sampler = ndsampler.CocoSampler(coco_dset)
+    self = KWCocoVideoDataset(
+        sampler,
+        time_dims=1,
+        window_dims=(128, 128),
+        channels=None,
+        window_resolution=1,
+        input_resolution=0.5,
+        output_resolution=0.5,
+        use_grid_positives=1,
+        use_centered_positives=0,
+    )
+    index = 0
+    item = self[index]
+    target = item['target']
+    summary = self.summarize_item(item)
+    print(f'summary = {ub.urepr(summary, nl=-1)}')
+
+    s1 = h1, w1, c1 = item['frames'][0]['class_ohe'].shape
+    s2 = c2, h2, w2 = item['frames'][0]['modes']['r|g|b'].shape
+    s3 = h3, w3 = item['frames'][0]['saliency'].shape
+    print(s1)
+    print(s2)
+    print(s3)
+    assert h1 == h2
+    assert w1 == w2
+
     if 1:
         import numpy as np
         import kwplot

@@ -854,23 +854,32 @@ class TruthMixin:
                 else:
                     raise AssertionError
 
-            if self.config['balance_areas']:
+            balance_areas = self.config['balance_areas']
+
+            if balance_areas:
+                import shapely
                 # num_fg_polys = len(saliency_sseg_groups['foreground'])
                 big_poly_fg = unary_union([p.to_shapely() for p in saliency_sseg_groups['foreground']])
                 big_poly_ignore = unary_union([p.to_shapely() for p in saliency_sseg_groups['ignore']])
-                big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
-                #unit_area_share = fg_polys.area / len(fg_polys)
-                total_area = frame_box.area
-                bg_cover_frac = big_poly_bg.area / (total_area + 1)
-                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
-                bg_weight_share = (1 - bg_cover_frac)
-                task_target_weight['saliency'][:] = bg_weight_share ** 0.5
+                try:
+                    big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
+                except shapely.errors.GEOSException:
+                    print('Warning: cannot balance areas, shapely error')
+                    task_target_weight['saliency'][:] = 1
+                    balance_areas = False
+                else:
+                    #unit_area_share = fg_polys.area / len(fg_polys)
+                    total_area = frame_box.area
+                    bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                    # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                    bg_weight_share = (1 - bg_cover_frac)
+                    task_target_weight['saliency'][:] = bg_weight_share ** 0.5
             else:
                 task_target_weight['saliency'][:] = 1
 
             for poly in saliency_sseg_groups['background']:
                 weight = poly.meta['weight']
-                if self.config['balance_areas']:
+                if balance_areas:
                     area_weight = (1 - (poly.area / (total_area + 1)))
                     weight = weight * area_weight
                 if weight != 1:
@@ -879,7 +888,7 @@ class TruthMixin:
             for poly in saliency_sseg_groups['foreground']:
                 task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
                 weight = poly.meta['weight']
-                if self.config['balance_areas']:
+                if balance_areas:
                     area_weight = (1 - (poly.area / (total_area + 1)))
                     weight = weight * area_weight
                 if weight != 1:
@@ -935,7 +944,7 @@ class TruthMixin:
                 elif new_class_catname in self.undistinguished_classes:
                     class_sseg_groups['undistinguished'].append(poly)
 
-            if self.config['balance_areas']:
+            if balance_areas:
                 big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
                 big_poly_ignore = unary_union([p.to_shapely() for p in class_sseg_groups['ignore']])
                 big_poly_undistinguished = unary_union([p.to_shapely() for p in class_sseg_groups['undistinguished']])
@@ -963,7 +972,7 @@ class TruthMixin:
                 poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
                 weight = poly.meta['weight']
 
-                if self.config['balance_areas']:
+                if balance_areas:
                     area_weight = (1 - (poly.area / (total_area + 1)))
                     weight = weight * area_weight
 
