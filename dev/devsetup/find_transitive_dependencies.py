@@ -109,7 +109,7 @@ def find_transitive_dependencies(req_fpaths):
         transitive_fpath = fpath.augment(stemsuffix=f'-{pyver}-{mode}-transitive')
         transitive_fpath.write_text(new_text)
 
-    all_fpath = 'all-{pyver}-{mode}-transitive.txt'
+    all_fpath = ub.Path(f'all-{pyver}-{mode}-transitive.txt')
     all_text = '\n'.join(ub.unique(sorted(all_lines)))
     all_fpath.write_text(all_text)
 
