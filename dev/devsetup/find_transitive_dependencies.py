@@ -1,24 +1,59 @@
-# Quick and dirty way to grab potential transitive deps
+#!/usr/bin/env python3
+"""
+Determine Transitive Dependencies from requirements.txt files
+"""
+import scriptconfig as scfg
+import ubelt as ub
 
 
-def find_transitive_dependencies(repo_dpath):
+class FindTransitiveDependenciesCLI(scfg.DataConfig):
+    requirements = scfg.Value([], nargs='+', help='one or more requirement files')
+
+    @classmethod
+    def main(cls, cmdline=1, **kwargs):
+        """
+        Example:
+            >>> # xdoctest: +SKIP
+            >>> from find_transitive_dependencies import *  # NOQA
+            >>> cmdline = 0
+            >>> kwargs = dict(requirements='requirements/*.txt')
+            >>> cls = FindTransitiveDependenciesCLI
+            >>> cls.main(cmdline=cmdline, **kwargs)
+        """
+        import rich
+        import kwutil
+        config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+        rich.print('config = ' + ub.urepr(config, nl=2))
+        req_fpaths = kwutil.util_path.coerce_patterned_paths(config.requirements)
+        find_transitive_dependencies(req_fpaths)
+
+
+def find_transitive_dependencies(req_fpaths):
     """
     import pathlib
     repo_dpath = "."
+
+    TODO:
+        - [ ] allow strict versions
+        - [ ] prevent duplicate downloads
+        - [ ] reduce network usage if possible
     """
     import setup
-    import pathlib
-    req_dpath = pathlib.Path(repo_dpath) / 'requirements'
-
     import ubelt as ub
-    repo_dpath = ub.Path(repo_dpath)
-    assert req_dpath.exists()
+    # repo_dpath = ub.Path(repo_dpath)
+    import tempfile
+    tempdir = tempfile.TemporaryDirectory()
 
-    req_fpaths = list(req_dpath.glob('*'))
+    # Exclude paths that have a "transitive" in the filename
     req_fpaths = [r for r in req_fpaths if 'transitive' not in r.stem]
 
-    tmp_dpath = (repo_dpath / 'tmp_deps').ensuredir()
+    tmp_root = ub.Path(tempdir.name)
+    tmp_dpath = (tmp_root / 'tmp_deps').ensuredir()
 
+    # TODO: allow strict versions
+    mode = 'loose'
+
+    # Actually download the requirement wheels
     import cmd_queue
     queue = cmd_queue.Queue.create(backend='tmux', size=16)
     for req_fpath in req_fpaths:
@@ -30,6 +65,7 @@ def find_transitive_dependencies(repo_dpath):
     queue.print_commands()
     queue.run()
 
+    # Parse the output
     import re
     pat = re.compile('[=><~]')
     req_to_names = {}
@@ -55,6 +91,27 @@ def find_transitive_dependencies(repo_dpath):
             })
 
         req_to_closures[req_name] = closure_items
+
+    import sys
+    major, minor = sys.version_info[0:2]
+    pyver = f'cp{major}{minor}'
+    pypart = f"python_version < '{major}.{minor + 1}'  and python_version >= '{major}.{minor}'"
+
+    all_lines = []
+    for fpath in req_fpaths:
+        closures = req_to_closures[fpath.stem]
+        new_lines = []
+        for row in closures:
+            line = row['name'] + '==' + row['version'] + '; ' + pypart
+            new_lines.append(line)
+        all_lines += new_lines
+        new_text = '\n'.join(new_lines)
+        transitive_fpath = fpath.augment(stemsuffix=f'-{pyver}-{mode}-transitive')
+        transitive_fpath.write_text(new_text)
+
+    all_fpath = 'all-{pyver}-{mode}-transitive.txt'
+    all_text = '\n'.join(ub.unique(sorted(all_lines)))
+    all_fpath.write_text(all_text)
 
     # print(chr(10).join(lines))
 
@@ -91,3 +148,16 @@ def find_transitive_dependencies(repo_dpath):
                 g.add_edge(f'{req_name}_transitive', row['name'])
 
     nx.write_network_text(g)
+
+
+__cli__ = FindTransitiveDependenciesCLI
+main = __cli__.main
+
+if __name__ == '__main__':
+    """
+
+    CommandLine:
+        python ~/code/geowatch/dev/devsetup/find_transitive_dependencies.py
+        python -m find_transitive_dependencies
+    """
+    main()
