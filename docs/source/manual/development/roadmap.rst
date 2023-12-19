@@ -15,7 +15,7 @@ Features
 
 - [ ] **Balanced Sampling**: Better balanced API and code structure.
 
-- [ ] **Augmentation**: Better augmentation API with more options
+- [ ] **Augmentation**: Better augmentation API with more options (time symmetry).
 
 - [ ] **Online Hard Negative Mining**: Track per-item loss and update sampling probabilities to target some degree of medium to hard difficulty.
 
@@ -71,6 +71,12 @@ Research
 
 - [ ] Can we find a better way to use SAM as foundational model feature?
 
+- [ ] Support "soft" targets for instance segmentation loss.
+
+- [ ] Build QFabric KWCoco dataset.
+
+- [ ] Build Black Marble KWCoco dataset.
+
 
 Compatibility
 -------------
@@ -97,6 +103,8 @@ System Design
 
 - [ ] Extend mlops to make it easier to test and evaluate ensembles.
 
+- [ ] Extend mlops with teamfeats nodes.
+
 
 Algorithmic Exploration
 -----------------------
@@ -106,6 +114,8 @@ Algorithmic Exploration
 - [ ] Measure uncertainty.
 
 - [ ] Recurrent transformers that can look at previous predictions in a different context, and then update the predictions.
+
+- [ ] Add decoder to predict unobserved events.
 
 
 User Interface
