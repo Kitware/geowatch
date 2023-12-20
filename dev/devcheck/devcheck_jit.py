@@ -1,7 +1,7 @@
 """
 
         Ignore:
-            python -m geowatch.cli.gifify \
+            python -m kwplot.cli.gifify \
                     -i /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7/ \
                     -o /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7.gif
 

@@ -22,6 +22,9 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 
 |main-pipeline| |main-coverage| |Pypi| |Downloads| |ReadTheDocs|
 
+Geowatch is an open source research and production environment for image and
+video segmentation and detection with geospatial awareness.
+
 
 This repository addresses the algorithmic challenges of the
 `IARPA SMART <https://www.iarpa.gov/research-programs/smart>`_ (Space-based

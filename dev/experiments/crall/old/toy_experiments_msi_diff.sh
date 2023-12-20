@@ -11,7 +11,7 @@ Specifically this demonstrates using diff-image inputs between channels
 DATA_DPATH=$HOME/data/work/toy_change
 TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
 VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
-TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
+TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json
 
 mkdir -p $DATA_DPATH
 kwcoco toydata vidshapes8-frames5-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_train
@@ -21,7 +21,7 @@ kwcoco toydata vidshapes2-frames6-speed0.2-multispectral --bundle_dpath $DATA_DP
 
 # Print stats
 python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
-python -m geowatch watch_coco_stats $TRAIN_FPATH 
+python -m geowatch watch_coco_stats $TRAIN_FPATH
 
 
 optional_visualize_step(){
@@ -34,11 +34,11 @@ optional_visualize_step(){
     items=$(jq -r '.videos[] | .name' $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json)
     for item in ${items[@]}; do
         echo "item = $item"
-        python -m geowatch.cli.gifify --frames_per_second 1.0 \
+        python -m kwplot.cli.gifify --frames_per_second 1.0 \
             --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_anns/B1" \
             --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_ann.gif"
 
-        python -m geowatch.cli.gifify --frames_per_second 1.0 \
+        python -m kwplot.cli.gifify --frames_per_second 1.0 \
             --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_imgs/B1|B8|B11" \
             --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_img.gif"
     done
@@ -57,12 +57,12 @@ WORKDIR=$DATA_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 
 # Specify the expected input / output files
-PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt
 PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
 EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 
-TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
-PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
+TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml
+PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml
 
 # Configure training hyperparameters
 python -m geowatch.tasks.fusion.fit \
@@ -93,7 +93,7 @@ python -m geowatch.tasks.fusion.predict \
     --dump=$PRED_CONFIG_FPATH
 
 
-# Fit 
+# Fit
 python -m geowatch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
     --default_root_dir=$DEFAULT_ROOT_DIR \
@@ -102,14 +102,14 @@ python -m geowatch.tasks.fusion.fit \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH
 
-# Predict 
+# Predict
 python -m geowatch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH
 
-# Evaluate 
+# Evaluate
 python -m geowatch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \

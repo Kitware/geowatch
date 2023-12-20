@@ -67,7 +67,7 @@ def stack_debug_regions():
             kwimage.imwrite(fpath, d3)
 
     output_fpath = manual_fpath / 'compare_ani.gif'
-    from watch.cli import gifify
+    from kwplot.cli import gifify
     gifify.ffmpeg_animate_frames(fpaths, output_fpath, in_framerate=0.7)
 
 
@@ -92,5 +92,5 @@ def stack_ann_img_animations():
             fpaths3.append(fpath3)
         output_fpath = viz_dpath / f'stack_{vid_name}.gif'
         if fpaths3:
-            from watch.cli import gifify
+            from kwplot.cli import gifify
             gifify.ffmpeg_animate_frames(fpaths3, output_fpath, in_framerate=0.7)

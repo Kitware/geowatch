@@ -93,7 +93,7 @@ def hackit():
     for job in jobs.as_completed(desc='stacking'):
         job.result()
 
-    from watch.cli import gifify
+    from kwplot.cli import gifify
     frame_fpaths = stacked_gpaths
     gif_fpath = dvc_dpath / '_tmp' / 'gif.gif'
     frames_per_second = 0.7
