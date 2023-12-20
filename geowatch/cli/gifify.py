@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+NOTE: Ported to kwplot, remove later.
+
 A gif-ify script
 
 Wrapper around imgmagik convert or ffmpeg

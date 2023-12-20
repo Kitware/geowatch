@@ -1,4 +1,6 @@
 """
+NODE: Deprecated in favor of "simple_dvc"
+
 SeeAlso:
     ../cli/find_dvc.py
 
