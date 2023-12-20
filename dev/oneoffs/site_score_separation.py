@@ -67,7 +67,7 @@ def site_score_analysis(sites):
     """
     import pandas as pd
     import ubelt as ub
-    from watch.cli.kwcoco_to_geojson import smooth_observation_scores
+    from watch.cli.run_tracker import smooth_observation_scores
     # import geowatch_tpl
     # from watch.utils import util_gis
     # shapestats = geowatch_tpl.import_submodule('shapestats')

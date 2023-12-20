@@ -8,7 +8,7 @@ geowatch stats "$BAS_HEATMAPS"
 
 jq .info "$BAS_HEATMAPS"
 
-python -m geowatch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.run_tracker \
     "$BAS_HEATMAPS" \
     --default_track_fn saliency_heatmaps \
     --clear_annots \

@@ -36,7 +36,7 @@ def main(cmdline=True, **kw):
 
         'reproject_annotations',
 
-        'kwcoco_to_geojson',
+        'run_tracker',
         'run_metrics_framework',
 
         'crop_sites_to_regions',
@@ -63,7 +63,7 @@ def main(cmdline=True, **kw):
         'geowatch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
         'geowatch.cli.run_metrics_framework': ['iarpa_eval'],
         'geowatch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
-        'geowatch.cli.kwcoco_to_geojson': ['run_tracker'],
+        'geowatch.cli.run_tracker': ['run_tracker'],
         'geowatch.cli.find_dvc': ['dvc', 'dvcdir'],
         'geowatch.cli.gifify': ['animate'],
         'geowatch.cli.coco_average_features': ['average_features', 'ensemble'],

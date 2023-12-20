@@ -537,7 +537,7 @@ def smooth_observation_scores(observations, smoothing=0.5, smooth_mode='ewma'):
     Add smoothed scores inplace
 
     Example:
-        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.cli.run_tracker import *  # NOQA
         >>> from geowatch.geoannots import geomodels
         >>> site = geomodels.SiteModel.random(num_observations=15)
         >>> observations = list(site.observations())
@@ -791,7 +791,7 @@ def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
 
     Example:
         >>> import geowatch
-        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from geowatch.cli.run_tracker import *  # NOQA
         >>> from geowatch.tasks.tracking.normalize import run_tracking_pipeline
         >>> from geowatch.tasks.tracking.from_polygon import MonoTrack
         >>> import ubelt as ub
@@ -1154,8 +1154,8 @@ def main(argv=None, **kwargs):
     """
     Example:
         >>> # test BAS and default (SC) modes
-        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from geowatch.cli.kwcoco_to_geojson import main
+        >>> from geowatch.cli.run_tracker import *  # NOQA
+        >>> from geowatch.cli.run_tracker import main
         >>> from geowatch.demo import smart_kwcoco_demodata
         >>> from geowatch.utils import util_gis
         >>> import json
@@ -1230,8 +1230,8 @@ def main(argv=None, **kwargs):
 
     Example:
         >>> # test resolution
-        >>> from geowatch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from geowatch.cli.kwcoco_to_geojson import main
+        >>> from geowatch.cli.run_tracker import *  # NOQA
+        >>> from geowatch.cli.run_tracker import main
         >>> import geowatch
         >>> dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
         >>> dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'main1').ensuredir()
@@ -1283,7 +1283,7 @@ def main(argv=None, **kwargs):
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # test a more complicated track function
         >>> import geowatch
-        >>> from geowatch.cli.kwcoco_to_geojson import demo
+        >>> from geowatch.cli.run_tracker import demo
         >>> import kwcoco
         >>> import geowatch
         >>> import ubelt as ub
@@ -1401,7 +1401,7 @@ def main(argv=None, **kwargs):
     info = tracking_output['info']
 
     proc_context = process_context.ProcessContext(
-        name='geowatch.cli.kwcoco_to_geojson', type='process',
+        name='geowatch.cli.run_tracker', type='process',
         config=jsonified_config,
         extra={'pred_info': pred_info},
         track_emissions=False,

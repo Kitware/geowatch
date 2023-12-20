@@ -237,7 +237,7 @@ def new_process_context_parser(proc_item):
     Load parameters out of data saved by a ProcessContext object
     """
     tracker_name_pat = util_pattern.MultiPattern.coerce({
-        'geowatch.cli.kwcoco_to_geojson',
+        'geowatch.cli.run_tracker',
         'geowatch.cli.run_tracker',
     })
     heatmap_name_pat = util_pattern.MultiPattern.coerce({

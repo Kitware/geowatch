@@ -2,7 +2,7 @@
 Main tracker logic
 
 SeeAlso:
-    * ../../cli/kwcoco_to_geojson.py
+    * ../../cli/run_tracker.py
 """
 import ubelt as ub
 import math
@@ -698,7 +698,7 @@ def _determine_tracking_scale(config, sub_dset, video_gids, video):
 #
 # Note:
 #     The following are valid choices of `track_fn` in
-#     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
+#     ../../cli/run_tracker.py and will be called by ./normalize.py
 
 class TimeAggregatedPolysConfig(PolygonExtractConfig):
     """
@@ -832,7 +832,7 @@ class TimeAggregatedSC(TrackFnWithSV):
     Alias: class_heatmaps
 
     Note:
-        This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
+        This is a valid choice of `track_fn` in ../../cli/run_tracker.py
     """
     thresh: float = 0.01
 
@@ -935,7 +935,7 @@ class TimeAggregatedSV(CommonTrackFn):
         site_validation
 
     Note:
-        This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
+        This is a valid choice of `track_fn` in ../../cli/run_tracker.py
     """
     thresh: float = 0.1
     key: str = 'salient'

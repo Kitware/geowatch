@@ -520,7 +520,7 @@ def test_tracker(pro_tracked_dset):
     audit_fpath = (pro_tracked_dset.parent / 'audit' / 'tracker').ensuredir()
     repro_pro_trk_dpath = audit_fpath
 
-    # from watch.cli import kwcoco_to_geojson
+    # from watch.cli import run_tracker
     from watch.cli import run_tracker
     run_tracker.__config__.__default__
 
@@ -635,5 +635,5 @@ def audit_dataset(coco_dset):
     except Exception:
         pass
     return audit_info
-    # trk_items = list(smart_result_parser.find_info_items(info, 'process', 'watch.cli.kwcoco_to_geojson'))
+    # trk_items = list(smart_result_parser.find_info_items(info, 'process', 'watch.cli.run_tracker'))
     # pxl_items = list(smart_result_parser.find_info_items(info, 'process', 'watch.tasks.fusion.predict'))

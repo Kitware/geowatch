@@ -9,7 +9,7 @@ def test_tracker_with_sv():
     import kwcoco
     import pandas as pd
     import ubelt as ub
-    from geowatch.cli import kwcoco_to_geojson
+    from geowatch.cli import run_tracker
     from geowatch.utils import util_gis
     import geowatch
 
@@ -54,7 +54,7 @@ def test_tracker_with_sv():
             # 'moving_window_size': 1,
         }),
     ]
-    kwcoco_to_geojson.main(bas_argv)
+    run_tracker.main(bas_argv)
 
     bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
     bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
@@ -79,7 +79,7 @@ def test_tracker_with_sv():
             'key': ('salient',)
         }),
     ]
-    kwcoco_to_geojson.main(sc_argv)
+    run_tracker.main(sc_argv)
 
     # Run SV on the same dset
     sites_dir = dpath / 'sv_sites'
@@ -100,7 +100,7 @@ def test_tracker_with_sv():
             # 'thresh': 0
         }),
     ]
-    kwcoco_to_geojson.main(sv_argv)
+    run_tracker.main(sv_argv)
 
     # Check expected results
     sc_coco_dset = kwcoco.CocoDataset(sc_coco_fpath)
@@ -151,7 +151,7 @@ def test_tracker_bas_with_boundary_region():
     import json
     import kwcoco
     import ubelt as ub
-    from geowatch.cli import kwcoco_to_geojson
+    from geowatch.cli import run_tracker
     import geowatch
     from geowatch.geoannots import geomodels
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
@@ -242,7 +242,7 @@ def test_tracker_bas_with_boundary_region():
         '--track_kwargs', json.dumps(track_kwargs),
         '--sensor_warnings', '0',
     ]
-    kwcoco_to_geojson.main(bas_argv1)
+    run_tracker.main(bas_argv1)
 
     # Run BAS with region bounds off (2)
     in_coco_fpath2 = dpath2 / 'bas_input.kwcoco.json'
@@ -259,7 +259,7 @@ def test_tracker_bas_with_boundary_region():
         '--track_kwargs', json.dumps(track_kwargs),
         '--sensor_warnings', '0',
     ]
-    kwcoco_to_geojson.main(bas_argv2)
+    run_tracker.main(bas_argv2)
 
     bas_coco_dset1 = kwcoco.CocoDataset(bas_coco_fpath1)
     bas_coco_dset2 = kwcoco.CocoDataset(bas_coco_fpath2)
@@ -330,7 +330,7 @@ def test_tracker_nan_params():
     import json
     import kwcoco
     import ubelt as ub
-    from geowatch.cli import kwcoco_to_geojson
+    from geowatch.cli import run_tracker
     import geowatch
 
     coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
@@ -370,7 +370,7 @@ def test_tracker_nan_params():
             'polygon_simplify_tolerance': 1,
         }),
     ]
-    kwcoco_to_geojson.main(bas_argv)
+    run_tracker.main(bas_argv)
 
     bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
     bas_trackids = bas_coco_dset.annots().lookup('track_id', None)

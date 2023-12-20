@@ -39,7 +39,7 @@ CommandLine:
 Notes:
     To add iMerit regions, we will need to recognize site-summaries from
     region models instead of site-models themselves.  Code to do this is in:
-        https://gitlab.kitware.com/smart/watch/-/blob/master/geowatch/cli/kwcoco_to_geojson.py#L476
+        https://gitlab.kitware.com/smart/watch/-/blob/master/geowatch/cli/run_tracker.py#L476
     in `add_site_summary_to_kwcoco`.
 
 TODO:
