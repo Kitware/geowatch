@@ -29,7 +29,7 @@ Features
 Quality of Life
 ---------------
 
-- [ ] Manual specification of input mean / std
+- [ ] Manual specification of input mean / std at train (or predict) time.
 
 - [ ] Better checkpoint / package management CLI tools
 
@@ -73,9 +73,13 @@ Research
 
 - [ ] Support "soft" targets for instance segmentation loss.
 
-- [ ] Build QFabric KWCoco dataset.
+- [ ] Build new KWCoco datasets
 
-- [ ] Build Black Marble KWCoco dataset.
+   - [ ] QFabric
+
+   - [ ] Black Marble
+
+- [ ] Support for point-based annotations at train time. Build a loss function.
 
 
 Compatibility
@@ -83,7 +87,7 @@ Compatibility
 
 - [ ] Further subdivide and sequester dependencies.
 
-- [ ] Upgrade pytorch lightning / jsonargparse.
+- [ ] Upgrade pytorch lightning / jsonargparse to latest versions.
 
 
 Documentation
@@ -104,6 +108,10 @@ System Design
 - [ ] Extend mlops to make it easier to test and evaluate ensembles.
 
 - [ ] Extend mlops with teamfeats nodes.
+
+- [ ] Smartflow tiling to split up regions, run prediction on smaller regions, and then consolidate stitching.
+
+- [ ] Better support for training on AWS: https://www.reddit.com/r/MachineLearning/comments/18mfi70/p_kubernetes_plugin_for_mounting_datasets_to/
 
 
 Algorithmic Exploration
