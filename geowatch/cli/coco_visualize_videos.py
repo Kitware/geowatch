@@ -47,7 +47,7 @@ class CocoVisualizeConfig(scfg.DataConfig):
         python -m geowatch.cli.coco_visualize_videos --src $COCO_FPATH --space="image"
 
         # Also note you can make an animated gif
-        python -m geowatch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
+        python -m kwplot.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
         # NEW: as of 2021-11-04 : helper animation script
         python -m geowatch.cli.animate_visualizations --viz_dpath ./viz_out

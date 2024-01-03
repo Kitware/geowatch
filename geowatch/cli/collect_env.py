@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
 Extends torch.utils.collect_env with other relevant information
+
+This was merged into torch upstream via:
+    https://github.com/pytorch/pytorch/pull/112993
+
+And could be removed in the future.
 """
 
 import scriptconfig as scfg

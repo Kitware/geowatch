@@ -20,7 +20,7 @@ def main(cmdline=1, **kwargs):
     import rich
     rich.print('config = ' + ub.urepr(config, nl=1))
     import itertools as it
-    from watch.cli import gifify
+    from kwplot.cli import gifify
     import kwimage
 
     viz_dpath = ub.Path(config.viz_dpath)

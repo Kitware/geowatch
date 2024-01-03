@@ -13,7 +13,7 @@ __notes__ = r"""
             echo "_BANDS = $_BANDS"
             BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
             GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
-            python -m geowatch.cli.gifify --frames_per_second .7 \
+            python -m kwplot.cli.gifify --frames_per_second .7 \
                 --input "$BAND_DPATH" --output "$GIF_FPATH"
         done
     done
@@ -63,7 +63,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> from geowatch.cli.animate_visualizations import *  # NOQA
         >>> animate_visualizations(viz_dpath, verbose=1, workers=0)
     """
-    from geowatch.cli import gifify
+    from kwplot.cli import gifify
     import ubelt as ub
     import kwcoco
     from geowatch.utils import util_parallel

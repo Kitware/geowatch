@@ -321,7 +321,7 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
             This should be the "info" section of a tracker result (i.e. "info"
             in the kwcoco json or geojson manifest file), which is a list of
             process context dictionaries. One of these dictionaries will have a
-            process name "geowatch.cli.kwcoco_to_geojson" or
+            process name "geowatch.cli.run_tracker" or
             "geowatch.cli.run_tracker", and that item will contain the config used
             to run the tracker. It may also contain an "extra.pred_info"
             property containing the pixel prediction params, and that may
@@ -839,7 +839,7 @@ def _load_json(fpath):
 
 def find_track_item(tracker_info):
     tracker_alias = {
-        'geowatch.cli.kwcoco_to_geojson',
+        'geowatch.cli.run_tracker',
         'geowatch.cli.run_tracker',
     }
     track_items = list(find_info_items(

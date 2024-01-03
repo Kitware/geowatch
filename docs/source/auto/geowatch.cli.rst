@@ -43,8 +43,6 @@ Submodules
    geowatch.cli.fix_region_models
    geowatch.cli.geojson_site_stats
    geowatch.cli.geotiffs_to_kwcoco
-   geowatch.cli.gifify
-   geowatch.cli.kwcoco_to_geojson
    geowatch.cli.merge_region_models
    geowatch.cli.mlops_cli
    geowatch.cli.predict

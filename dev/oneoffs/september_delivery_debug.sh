@@ -149,7 +149,7 @@ python -m geowatch.tasks.fusion.predict \
     
 
 
-python -m geowatch.cli.kwcoco_to_geojson \
+python -m geowatch.cli.run_tracker \
     /home/joncrall/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/testing/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco_cropped_kwcoco_for_bas/predcfg_41fd3894/pred.kwcoco.json \
     --default_track_fn saliency_heatmaps \
     --track_kwargs '{"thresh": 0.1, "morph_kernel": 3, "norm_ord": 1, "agg_fn": "probs", "thresh_hysteresis": null, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \

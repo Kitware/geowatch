@@ -3,7 +3,7 @@ import networkx as nx
 import parso
 from liberator.core import undefined_names
 
-fpath = ub.Path('~/code/watch/watch/cli/kwcoco_to_geojson.py').expand()
+fpath = ub.Path('~/code/watch/watch/cli/run_tracker.py').expand()
 module = parso.parse(fpath.read_text())
 
 funcs = list(module.iter_funcdefs())

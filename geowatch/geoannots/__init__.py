@@ -12,7 +12,7 @@ to these specific types of geojsons into this submodule.
 Location of existing tools that should likely be moved:
 
     * ../demo/metrics_demo/__init__.py :: various
-    * ../cli/kwcoco_to_geojson.py :: various
+    * ../cli/run_tracker.py :: various
     * ../cli/reproject_annotations.py :: various
     * ../cli/validate_annotation_schemas.py :: various
     * ../cli/extend_sc_sites.py :: various

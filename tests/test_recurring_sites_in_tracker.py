@@ -4,7 +4,7 @@ def test_tracker_time_split_thresh():
     import json
     import kwcoco
     import ubelt as ub
-    from geowatch.cli import kwcoco_to_geojson
+    from geowatch.cli import run_tracker
 
     coco_dset = build_recurring_sites_coco()
 
@@ -36,7 +36,7 @@ def test_tracker_time_split_thresh():
             'time_split_thresh': 0.5,
         }),
     ]
-    kwcoco_to_geojson.main(bas_argv)
+    run_tracker.main(bas_argv)
 
     bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
 
