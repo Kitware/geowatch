@@ -15,10 +15,13 @@ def print_provider_debug_information():
     information about what other endpoints might exist.
 
     CommandLine:
-        source $HOME/code/watch/secrets/secrets
+        source $HOME/code/watch-smartflow-dags/secrets/secrets
         xdoctest dev/notebooks/stac_notebook.py print_provider_debug_information
     """
     from rich import print
+    import pandas as pd
+    import pystac_client
+    import rich
     print('Printing debug information about known and discoverable providers')
     rows = []
     for stac_code, stac_info in SENSOR_TO_DEFAULTS.items():
@@ -32,7 +35,6 @@ def print_provider_debug_information():
                 'collection': collection,
             })
 
-    import pandas as pd
     df = pd.DataFrame(rows)
     print('Registered endpoints / collections / codes')
     print(df.to_string())
@@ -59,7 +61,6 @@ def print_provider_debug_information():
     found_endpoint_to_catalog = {}
     found_endpoint_to_collections = {}
 
-    import pystac_client
     for endpoint in unique_endpoints:
         print(f'Query {endpoint=}')
 
@@ -125,7 +126,13 @@ def print_provider_debug_information():
                     collections=[collection_name],
                     max_items=1
                 )
-                found = list(result.items())
+                try:
+                    found = list(result.items())
+                except Exception:
+                    rich.print('[red]ERROR!!!')
+                    print(f'[red]collection_name = {ub.urepr(collection_name, nl=1)}')
+                    print(f'[red]row = {ub.urepr(row, nl=2)}')
+                    raise
                 row['has_items'] = len(found)
 
                 print(row)

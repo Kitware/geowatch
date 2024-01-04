@@ -28,8 +28,6 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --align_workers=4 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
-    --separate_region_queues=1 \
-    --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
     --cache=0 \

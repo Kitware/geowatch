@@ -355,7 +355,7 @@ SENSOR_TO_DEFAULTS = ub.dict_union(
 CONVINIENCE_SENSOR_GROUPS = {
     'TA1': [
         'ta1-s2-kit',
-        'ta1-l8-kit',
+        # 'ta1-l8-kit',
         'ta1-wv-kit',
     ],
     'L2-S2': [

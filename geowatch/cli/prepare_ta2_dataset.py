@@ -1,4 +1,6 @@
 r"""
+Builds a multi-region dataset.
+
 An end-to-end script for calling all the scripts needed to
 
 * Pulls the STAC catalog that points to processed large image tiles
@@ -6,9 +8,8 @@ An end-to-end script for calling all the scripts needed to
 * Crops the dataset to create an aligned TA2 dataset
 
 See Also:
-    ~/code/watch/scripts/prepare_drop3.sh
-    ~/code/watch/scripts/prepare_drop4.sh
-    ~/code/watch/scripts/prepare_drop5.sh
+    ~/code/geowatch/scripts/prepare_drop4.sh
+    ~/code/geowatch/scripts/prepare_drop5.sh
 
 CommandLine:
 
@@ -65,7 +66,7 @@ CommandLine:
     geowatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 TODO:
-    handl GE01 and WV01 platforms
+    handle GE01 and WV01 platforms
 
 CommandLine:
     xdoctest -m geowatch.cli.prepare_ta2_dataset __doc__:0
@@ -276,6 +277,13 @@ class PrepareTA2Config(CMDQueueConfig):
             (2) affine_warp - which ignores RPCs and uses the affine
             transform in the geotiff metadata.
             '''))
+
+    sensor_to_time_window = scfg.Value(None, help=ub.paragraph(
+        '''
+        Specify a yaml mapping from a sensor to a time window. We will chunk up
+        candidate images based on this window and only choose 1 image per
+        chunk with the lowest cloud cover using earlier images as tiebreakers.
+        '''))
 
     reproject_annotations = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
@@ -688,6 +696,7 @@ def main(cmdline=False, **kwargs):
                     --visualize={align_visualize} \
                     --debug_valid_regions={debug_valid_regions} \
                     --rpc_align_method {config.rpc_align_method} \
+                    --sensor_to_time_window {config.sensor_to_time_window} \
                     --verbose={config.verbose} \
                     --aux_workers={config.align_aux_workers} \
                     --target_gsd={config.target_gsd} \

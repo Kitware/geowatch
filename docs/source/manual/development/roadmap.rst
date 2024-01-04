@@ -25,6 +25,8 @@ Features
 
 - [ ] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps
 
+- [ ] **Train Monitoring**: Log more weight statistics like rank, magnitude, etc. in tensorboard to better understand the training process.
+
 
 Quality of Life
 ---------------
