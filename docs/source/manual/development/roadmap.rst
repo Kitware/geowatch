@@ -19,9 +19,9 @@ Features
 
 - [ ] **Online Hard Negative Mining**: Track per-item loss and update sampling probabilities to target some degree of medium to hard difficulty.
 
-- [ ] **OTF Models**: Off-the-shelf Model wrapper API.
+- [ ] **OTS Models**: Off-the-shelf Model wrapper API.
 
-- [ ] **Distilation**: Easy distilation by settting heatmaps from existing predictions as truth targets.
+- [ ] **Distilation**: Easy distilation (i.e. student / teacher networks) by settting heatmaps from existing predictions as truth targets.
 
 - [ ] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps
 
@@ -87,7 +87,7 @@ Research
 Compatibility
 -------------
 
-- [ ] Further subdivide and sequester dependencies.
+- [ ] Further subdivide and sequester software dependencies.
 
 - [ ] Upgrade pytorch lightning / jsonargparse to latest versions.
 
@@ -113,7 +113,7 @@ System Design
 
 - [ ] Smartflow tiling to split up regions, run prediction on smaller regions, and then consolidate stitching.
 
-- [ ] Better support for training on AWS: https://www.reddit.com/r/MachineLearning/comments/18mfi70/p_kubernetes_plugin_for_mounting_datasets_to/
+- [ ] Better support for training on AWS / HPC systems: https://www.reddit.com/r/MachineLearning/comments/18mfi70/p_kubernetes_plugin_for_mounting_datasets_to/
 
 
 Algorithmic Exploration
