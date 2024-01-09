@@ -24,7 +24,7 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
         key = 'salient'
         for vidid in coco_dset.videos():
             frames = []
-            for gid in coco_dset.images(vidid=vidid):
+            for gid in coco_dset.images(video_id=vidid):
                 delayed = coco_dset.coco_image(gid).imdelay(channels=key, space='video')
                 final = delayed.finalize()
                 frames.append(final)
@@ -133,7 +133,7 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
 
     # Hack in other metadata
     for vidid in coco_dset.videos():
-        vid_gids = list(coco_dset.images(vidid=vidid))
+        vid_gids = list(coco_dset.images(video_id=vidid))
         time_pool = sorted(time_distri.sample(len(vid_gids)))
         for gid, timestamp in zip(vid_gids, time_pool):
             ts = datetime_mod.datetime.fromtimestamp(timestamp)
@@ -170,7 +170,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
         override_geom_epsg = 4326
 
     for vidid in coco_dset.videos():
-        img = coco_dset.images(vidid=vidid).peek()
+        img = coco_dset.images(video_id=vidid).peek()
         coco_img = coco_dset.coco_image(img['id'])
         obj = coco_img.primary_asset()
         fpath = str(ub.Path(coco_dset.bundle_dpath) / obj['file_name'])
@@ -477,7 +477,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         # Also hack in an invalid region in the top left of some videos
         vidids = coco_dset.videos()
         for _idx, vidid in enumerate(vidids):
-            gids = coco_dset.images(vidid=vidid)
+            gids = coco_dset.images(video_id=vidid)
             if _idx == 0:
                 # For the first one make ALL frames invalid here
                 pass

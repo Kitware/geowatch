@@ -166,7 +166,7 @@ class CommonSamplerMixin:
     @classmethod
     def from_coco_video(cls, dset, vidid, gids=None, **kwargs):
         if gids is None:
-            gids = dset.images(vidid=vidid).lookup('id')
+            gids = dset.images(video_id=vidid).lookup('id')
         images = dset.images(gids)
         try:
             name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')

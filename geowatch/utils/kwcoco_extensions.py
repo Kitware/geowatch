@@ -165,7 +165,7 @@ def populate_watch_fields(
         vidids = list(coco_dset.index.videos.keys())
         gids = list(coco_dset.index.imgs.keys())
     else:
-        gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
+        gids = list(ub.flatten(coco_dset.images(video_id=video_id) for video_id in vidids))
 
     coco_populate_geo_heuristics(
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
@@ -191,8 +191,8 @@ def populate_watch_fields(
                 video['domain'] = region_id
 
     if enable_video_stats:
-        for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
-            coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+        for video_id in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+            coco_populate_geo_video_stats(coco_dset, video_id, target_gsd=target_gsd)
 
     # serialize intermediate objects
     coco_dset._ensure_json_serializable()
@@ -794,7 +794,7 @@ def _coerce_overwrite(overwrite):
 
 
 @profile
-def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution'):
+def coco_populate_geo_video_stats(coco_dset, video_id, target_gsd='max-resolution'):
     """
     Create a "video-space" for all images in a video sequence at a specified
     resolution.
@@ -824,7 +824,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
     Args:
         coco_dset (CocoDataset): coco dataset to be modified inplace
-        vidid (int): video_id to modify
+        video_id (int): video_id to modify
         target_gsd (float | str): string code, or float target gsd
 
 
@@ -835,21 +835,21 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> vidid = 2
+        >>> video_id = 2
 
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> target_gsd = 10.0
-        >>> vidid = 1
+        >>> video_id = 1
         >>> # We can check transforms before we apply this function
-        >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid', None)
+        >>> coco_dset.images(video_id=video_id).lookup('warp_img_to_vid', None)
         >>> # Apply the function
-        >>> coco_populate_geo_video_stats(coco_dset, vidid, target_gsd)
+        >>> coco_populate_geo_video_stats(coco_dset, video_id, target_gsd)
         >>> # Check these transforms to make sure they look right
-        >>> popualted_video = coco_dset.index.videos[vidid]
+        >>> popualted_video = coco_dset.index.videos[video_id]
         >>> popualted_video = ub.dict_isect(popualted_video, ['width', 'height', 'warp_wld_to_vid', 'target_gsd'])
         >>> print('popualted_video = {}'.format(ub.urepr(popualted_video, nl=-1)))
-        >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid')
+        >>> coco_dset.images(video_id=video_id).lookup('warp_img_to_vid')
 
         # TODO: make a demo dataset with some sort of gsd metadata
         coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -858,7 +858,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
         coco_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/combo_data.kwcoco.json'
         coco_dset = kwcoco.CocoDataset(coco_fpath)
-        vidid = 1
+        video_id = 1
 
         target_gsd = 2.8
 
@@ -907,8 +907,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     from kwcoco.coco_image import CocoImage
     # Compute an image-to-video transform that aligns all frames to some
     # common resolution.
-    video = coco_dset.index.videos[vidid]
-    gids = coco_dset.index.vidid_to_gids[vidid]
+    video = coco_dset.index.videos[video_id]
+    gids = coco_dset.index.vidid_to_gids[video_id]
 
     check_unique_channel_names(coco_dset, gids=gids)
 
@@ -1675,8 +1675,8 @@ def transfer_geo_metadata(coco_dset, gid):
                 # If an asset in our local image has no data, we can
                 # check to see if anyone in the vide has data.
                 # Check if anything in the video has geo-data
-                vidid = coco_img.img['video_id']
-                for other_gid in coco_dset.images(vidid=vidid):
+                video_id = coco_img.img['video_id']
+                for other_gid in coco_dset.images(video_id=video_id):
                     if other_gid != gid:
                         other_coco_img = coco_dset.coco_image(other_gid)
                         for obj in other_coco_img.iter_asset_objs():
@@ -1780,8 +1780,8 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
         # If an asset in our local image has no data, we can
         # check to see if anyone in the vide has data.
         # Check if anything in the video has geo-data
-        vidid = coco_img.img['video_id']
-        for other_gid in coco_dset.images(vidid=vidid):
+        video_id = coco_img.img['video_id']
+        for other_gid in coco_dset.images(video_id=video_id):
             if other_gid != gid:
                 other_coco_img = coco_dset.coco_image(other_gid)
                 for obj in other_coco_img.iter_asset_objs():
@@ -2625,7 +2625,7 @@ def covered_video_geo_regions(coco_dset):
     # if 0:
     # import geowatch
     rows = []
-    for vidid, video in coco_dset.index.videos.items():
+    for video_id, video in coco_dset.index.videos.items():
         if 'valid_region_geos' in video:
             crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos']).to_shapely()
         else:
@@ -2645,7 +2645,7 @@ def covered_video_geo_regions(coco_dset):
                 crs84_poly = transform(project, wld_poly_)
             else:
                 raise NotImplementedError('We dont have a way to get the geo bounds for a video')
-        gids = coco_dset.index.vidid_to_gids[vidid]
+        gids = coco_dset.index.vidid_to_gids[video_id]
         if gids:
             start_gid = gids[0]
             stop_gid = gids[-1]

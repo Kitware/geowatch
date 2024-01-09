@@ -1618,7 +1618,7 @@ class SimpleDataCube:
                     raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.urepr(unserializable, nl=0)))
 
         kwcoco_extensions.coco_populate_geo_video_stats(
-            new_dset, target_gsd=extract_config.target_gsd, vidid=new_vidid)
+            new_dset, target_gsd=extract_config.target_gsd, video_id=new_vidid)
 
         # Enable if serialization is breaking
         if False:
@@ -1645,8 +1645,9 @@ class SimpleDataCube:
                 unserializable = list(util_json.find_json_unserializable(new_video))
                 if unserializable:
                     print('new_video = {}'.format(ub.urepr(new_video, nl=1)))
-                    raise AssertionError('unserializable(vidid={}) = {}'.format(
-                        new_vidid, ub.urepr(unserializable, nl=1)))
+                    unserializable_repr = ub.urepr(unserializable, nl=1)
+                    raise AssertionError(
+                        f'unserializable(video_id={new_vidid}) = {unserializable_repr}')
 
         # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
         # if unserializable:

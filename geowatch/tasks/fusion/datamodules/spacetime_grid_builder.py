@@ -1188,7 +1188,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
                 })
 
         video_canvases = []
-        common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
+        common = ub.oset(dset.images(video_id=vidid)) & (gid_to_infos)
 
         if True:
             # HACK: Use a temporal sampler once to get a nice overview of the

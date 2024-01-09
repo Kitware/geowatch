@@ -545,7 +545,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
     _TRACKS = _TRACKS_COMPACT.explode('gid')
 
     # ensure index is sorted in video order
-    sorted_gids = sub_dset.images(vidid=video['id']).gids
+    sorted_gids = sub_dset.images(video_id=video['id']).gids
     _TRACKS = gpd_sort_by_gid(_TRACKS, sorted_gids)
 
     # awk, find better way of bookkeeping and indexing into scores needed
