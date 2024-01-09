@@ -321,7 +321,7 @@ def prep_feats(cmdline=True, **kwargs):
 
 def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
     from geowatch.mlops.pipeline_nodes import ProcessNode
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from geowatch.utils import simple_dvc
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 

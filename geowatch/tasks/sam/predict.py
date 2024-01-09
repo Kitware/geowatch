@@ -255,7 +255,7 @@ class DenseFeaturePredictor:
     def setup(self):
         from geowatch.tasks.fusion.datamodules import kwcoco_datamodule
         from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
-        from geowatch.utils import util_parallel
+        from kwutil import util_parallel
         from geowatch.utils import process_context
         import kwcoco
 

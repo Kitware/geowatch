@@ -562,7 +562,7 @@ def main(cmdline=True, **kw):
 
     from kwcoco.util.util_json import ensure_json_serializable
     from geowatch.utils import util_gis
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from geowatch.utils import util_resolution
     from geowatch.utils import kwcoco_extensions
     import kwcoco

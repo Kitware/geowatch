@@ -72,7 +72,7 @@ def baseline_framework_ingress(input_path,
                                jobs=1,
                                virtual=False):
 
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil import util_progress
     import rich
     import pystac

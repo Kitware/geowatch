@@ -90,7 +90,7 @@ def main(cmdline=True, **kwargs):
         select_videos=config['select_videos'],
     )
 
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     workers = util_parallel.coerce_num_workers(config['workers'])
 
     mode = config['mode']

@@ -104,7 +104,7 @@ def main(cmdline=True, **kwargs):
     import numpy as np
     import kwcoco
     import kwimage
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from geowatch.utils import kwcoco_extensions
 
     if config['dst'] is None:

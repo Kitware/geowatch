@@ -33,7 +33,7 @@ from shapely.ops import unary_union
 from geowatch.utils import kwcoco_extensions
 from geowatch.utils import process_context
 from kwutil import util_progress
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch import heuristics
 
 try:

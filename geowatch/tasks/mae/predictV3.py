@@ -42,7 +42,7 @@ from torch.utils.data import DataLoader, Dataset
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import numpy as np
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch.tasks.fusion.predict import CocoStitchingManager
 
 

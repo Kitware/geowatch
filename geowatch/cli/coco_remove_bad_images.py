@@ -46,7 +46,7 @@ def main(cmdline=True, **kwargs):
     mode = config['mode']
 
     import kwcoco
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from rich.prompt import Confirm
     import safer
     workers = util_parallel.coerce_num_workers(config['workers'])

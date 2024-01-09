@@ -262,7 +262,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     from geowatch.utils import process_context
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil import util_progress
     from kwutil import util_json
     resolved_config = config.to_dict()

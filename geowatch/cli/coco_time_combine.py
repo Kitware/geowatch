@@ -485,7 +485,7 @@ def combine_kwcoco_channels_temporally(config):
     from kwutil import util_progress
     from kwutil import util_time
     from geowatch.utils import kwcoco_extensions
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
     # Check inputs.
 

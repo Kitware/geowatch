@@ -34,7 +34,7 @@ from .pretext_model import pretext
 from .segmentation_model import segmentation_model as seg_model
 from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
 from geowatch.utils import util_kwimage  # NOQA
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch.utils.lightning_ext import util_device
 
 import scriptconfig as scfg
@@ -290,7 +290,7 @@ class Predictor(object):
 
         # Start background processes
         # Build a task queue for background write results workers
-        from geowatch.utils import util_parallel
+        from kwutil import util_parallel
         from kwutil import util_progress
         writer_queue = util_parallel.BlockingJobQueue(max_workers=self.io_workers)
         self.stitch_manager.writer_queue = writer_queue

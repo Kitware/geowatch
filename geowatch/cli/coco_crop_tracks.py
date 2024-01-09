@@ -144,7 +144,7 @@ def main(cmdline=0, **kwargs):
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     workers = util_parallel.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
 

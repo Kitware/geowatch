@@ -257,7 +257,7 @@ def main(cmdline=True, **kwargs):
     from geowatch.utils import util_gis
     from kwutil import slugify_ext
     from kwutil import util_progress
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from geowatch.utils import util_pandas
     from kwutil import util_time
     import pandas as pd

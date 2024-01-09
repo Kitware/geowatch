@@ -255,7 +255,7 @@ def main(cmdline=True, **kwargs):
     """
     config = CocoVisualizeConfig.cli(data=kwargs, cmdline=cmdline and
                                      {'strict': True}, strict=True)
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil import util_resources
     from geowatch.utils import kwcoco_extensions
     import kwcoco
