@@ -14,7 +14,7 @@ The outline of this document is:
     + `Building the Pyenv Base Image <BuildPyenv_>`__,
     + `Building the GEOWATCH Image 2 <BuildGeowatch_>`__.
     + `Baking Models into the Image <BakeModel_>`__.
-    + `Updating Existing Images <UpdateImage>`__.
+    + `Updating Existing Images <UpdateImage_>`__.
 * `Submit a DAG <SubmitDAG_>`__.
     + `Debugging a DAG <DebugDAGS_>`__.
 * `Old Notes <OldNotes_>`__.

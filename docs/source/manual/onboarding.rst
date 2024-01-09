@@ -78,11 +78,11 @@ Tutorials
 The following tutorials detail how to train simple fusion models
 
 
-* Tutorial 1: `Toy RGB Tutorial <../../../tutorial/tutorial1_rgb_network.sh>`_
+* Tutorial 1: `Toy RGB Tutorial <./tutorial/tutorial1_rgb_network.sh>`_
 
-* Tutorial 2: `Toy MSI Tutorial <../../../tutorial/tutorial2_msi_network.sh>`_
+* Tutorial 2: `Toy MSI Tutorial <./tutorial/tutorial2_msi_network.sh>`_
 
-* Tutorial 3: `Feature Fusion Tutorial <../../../tutorial/tutorial3_feature_fusion.sh>`_
+* Tutorial 3: `Feature Fusion Tutorial <./tutorial/tutorial3_feature_fusion.sh>`_
 
 * Tutorial 4: TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
 
@@ -96,48 +96,51 @@ The current ``geowatch`` module struture is summarized as follows:
 
 .. code:: bash
 
-    ╙── watch {'.py': 4, '.sh': 1}
-        ├─╼ cli {'.py': 47}
-        │   └─╼ dag_cli {'.py': 9, '.rst': 1}
+    ╙── geowatch {'.py': 4, '': 1}
+        ├─╼ cli {'.py': 45}
+        │   ├─╼ smartflow {'.py': 17, '.rst': 1}
+        │   └─╼ special {'.py': 2}
         ├─╼ demo {'.py': 8}
         │   └─╼ metrics_demo {'.py': 6}
-        ├─╼ mlops {'.py': 14}
-        ├─╼ stac {'.py': 4}
+        ├─╼ mlops {'.py': 13}
+        ├─╼ stac {'.py': 3}
         ├─╼ monkey {'.py': 10}
         ├─╼ geoannots {'.py': 3}
         ├─╼ gis {'.py': 5}
         │   └─╼ sensors {'.py': 2}
         ├─╼ rc {'.json': 3, '.gtx': 1, '.xml': 1, '.py': 2}
-        ├─╼ utils {'.py': 49}
-        │   └─╼ lightning_ext {'.py': 11}
-        │       └─╼ callbacks {'.py': 7, '.txt': 1}
+        │   └─╼ requirements {'.txt': 18, '.py': 1}
+        ├─╼ utils {'.py': 39}
+        │   └─╼ lightning_ext {'.py': 13}
+        │       └─╼ callbacks {'.py': 8, '.txt': 1}
         └─╼ tasks {'.py': 1}
-            ├─╼ fusion {'.py': 11, '.md': 1}
-            │   ├─╼ datamodules {'.py': 12}
-            │   │   └─╼ temporal_sampling {'.py': 8, '.pyx': 1}
+            ├─╼ fusion {'.py': 9, '.md': 1}
+            │   ├─╼ datamodules {'.py': 10}
+            │   │   └─╼ temporal_sampling {'.py': 7, '.pyx': 1}
             │   ├─╼ methods {'.py': 7}
             │   └─╼ architectures {'.py': 6}
             ├─╼ dino_detector {'.py': 3, '.sh': 1}
-            ├─╼ depth {'.py': 9, '.json': 1, '.md': 1}
+            ├─╼ depth {'.py': 8, '.json': 1, '.md': 1}
+            ├─╼ sam {'.py': 2}
             ├─╼ rutgers_material_seg {'.py': 5}
             │   ├─╼ datasets {'.py': 13}
-            │   ├─╼ experiments {'.py': 31}
             │   ├─╼ models {'.py': 21}
             │   ├─╼ utils {'.py': 6}
             │   └─╼ scripts {'.py': 3}
             ├─╼ metrics {'.py': 3}
-            ├─╼ cold {'.py': 9, '.txt': 6, '.yaml': 1}
+            ├─╼ cold {'.py': 11, '.yaml': 1}
+            ├─╼ mae {'.py': 4, '': 1}
             ├─╼ invariants {'.py': 8, '.md': 1, '': 1}
-            │   └─╼ data {'.py': 4}
+            │   ├─╼ late_fusion {'.py': 3}
+            │   ├─╼ data {'.py': 4}
+            │   └─╼ utils {'.py': 6}
             ├─╼ rutgers_material_change_detection {'.py': 4, '.md': 1}
             │   ├─╼ datasets {'.py': 5}
             │   ├─╼ models {'.py': 23, '.tmp': 1}
             │   └─╼ utils {'.py': 6}
             ├─╼ landcover {'.py': 8, '.md': 1}
             ├─╼ uky_temporal_prediction {'.py': 7, '.md': 1, '.yml': 1, '': 1}
-            │   ├─╼ spacenet {'.py': 2}
-            │   │   └─╼ data {'.py': 2}
-            │   │       └─╼ splits_unmasked {'.py': 2}
             │   └─╼ models {'.py': 4}
-            └─╼ tracking {'.py': 7}
+            ├─╼ tracking {'.py': 11}
+            └─╼ depth_pcd {'.py': 5}
 
