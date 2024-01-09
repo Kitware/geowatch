@@ -27,8 +27,8 @@ TIMECOMBO_DSET_DPATH=$DEMO_DPATH/TimeCombine-$DATASET_SUFFIX
 # paths, which are by default written in your ~/.cache folder
 python -m geowatch.demo.demo_region
 
-REGION_FPATH="$HOME/.cache/watch/demo/annotations/${REGION_ID}.geojson"
-SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/${REGION_ID}_sites/*.geojson"
+REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/${REGION_ID}.geojson"
+SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/${REGION_ID}_sites/*.geojson"
 
 mkdir -p "$DEMO_DPATH"
 

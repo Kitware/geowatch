@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$HOME"/code/watch/secrets/secrets
+source "$HOME"/code/watch-smartflow-dags/secrets/secrets
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
