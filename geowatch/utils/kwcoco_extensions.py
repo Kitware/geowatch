@@ -1443,7 +1443,7 @@ def check_unique_channel_names(coco_dset, gids=None, verbose=0):
     images = coco_dset.images(gids=gids)
     errors = []
     for img in images.objs:
-        coco_img = coco_dset._coco_image(img['id'])
+        coco_img = coco_dset.coco_image(img['id'])
         try:
             _check_unique_channel_names_in_image(coco_img)
         except AssertionError as ex:
@@ -1481,7 +1481,7 @@ def coco_list_asset_infos(coco_dset):
     """
     asset_infos = []
     for gid in coco_dset.images():
-        coco_img = coco_dset._coco_image(gid)
+        coco_img = coco_dset.coco_image(gid)
         asset_objs = list(coco_img.iter_asset_objs())
         for _asset_idx, obj in enumerate(asset_objs):
             fname = obj.get('file_name', None)
@@ -1641,12 +1641,12 @@ def transfer_geo_metadata(coco_dset, gid):
         >>> hack_seed_geometadata_in_dset(coco_dset, force=True, rng=0)
         >>> gid = 2
         >>> transfer_geo_metadata(coco_dset, gid)
-        >>> fpath = join(coco_dset.bundle_dpath, coco_dset._coco_image(gid).primary_asset()['file_name'])
+        >>> fpath = join(coco_dset.bundle_dpath, coco_dset.coco_image(gid).primary_asset()['file_name'])
         >>> _ = ub.cmd('gdalinfo ' + fpath, verbose=1)
     """
     import geowatch
     from osgeo import gdal
-    coco_img = coco_dset._coco_image(gid)
+    coco_img = coco_dset.coco_image(gid)
 
     assets_with_geo_info = {}
     assets_without_geo_info = {}
@@ -1678,7 +1678,7 @@ def transfer_geo_metadata(coco_dset, gid):
                 vidid = coco_img.img['video_id']
                 for other_gid in coco_dset.images(vidid=vidid):
                     if other_gid != gid:
-                        other_coco_img = coco_dset._coco_image(other_gid)
+                        other_coco_img = coco_dset.coco_image(other_gid)
                         for obj in other_coco_img.iter_asset_objs():
                             fname = obj.get('file_name', None)
                             if fname is not None:
@@ -1783,7 +1783,7 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
         vidid = coco_img.img['video_id']
         for other_gid in coco_dset.images(vidid=vidid):
             if other_gid != gid:
-                other_coco_img = coco_dset._coco_image(other_gid)
+                other_coco_img = coco_dset.coco_image(other_gid)
                 for obj in other_coco_img.iter_asset_objs():
                     fname = obj.get('file_name', None)
                     if fname is not None:
