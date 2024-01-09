@@ -113,7 +113,7 @@ python -m geowatch.tasks.cold.predict \
     --combine=False \
     --resolution=10GSD
 
-geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001_cold.kwcoco.zip --smart=1 \
+geowatch visualize "$DEMO_DPATH"/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001_cold.kwcoco.zip --smart=1 \
     --channels="(L8,S2):(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)"
 
 python -m geowatch.cli.coco_combine_features \
