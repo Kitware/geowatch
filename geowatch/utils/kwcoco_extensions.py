@@ -250,9 +250,16 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-        job = jobs.submit(
-            coco_populate_geo_img_heuristics2, coco_img,
-            overwrite=overwrite, default_gsd=default_gsd, **kw)
+
+        job_args = (coco_img,)
+        job_kwargs = dict(overwrite=overwrite, default_gsd=default_gsd, **kw)
+        job = jobs.submit(coco_populate_geo_img_heuristics2,
+                          *job_args, **job_kwargs)
+        if 0:
+            # For debugging
+            job.job_func = coco_populate_geo_img_heuristics2
+            job.job_args = job_args
+            job.job_kwargs = job_kwargs
         job.gid = gid
 
     broken_image_ids = []
@@ -260,18 +267,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         gid = job.gid
         try:
             img = job.result()
-        except RuntimeError as ex:
+        except Exception as ex:
             # Check for known error messages that might cause errors grabbing
             # data
-            has_404 = remove_broken and "404" in repr(ex)
-            has_acc_problem = "not recognized as a supported file format" in repr(ex)
-            connection_reset = "Connection reset by peer" in repr(ex)
-            known_errors = [
-                has_404,
-                has_acc_problem,
-                connection_reset,
-            ]
-            if any(known_errors):
+            known_errors = {}
+            known_errors['has_404'] = remove_broken and "404" in repr(ex)
+            known_errors['has_acc_problem'] = "not recognized as a supported file format" in repr(ex)
+            known_errors['connection_reset'] = "Connection reset by peer" in repr(ex)
+            print(f'known_errors = {ub.urepr(known_errors, nl=1)}')
+            if any(known_errors.values()):
                 broken_image_ids.append(gid)
                 print('')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
@@ -288,6 +292,13 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 coco_img = coco_dset.coco_image(gid)
                 print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                 rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+
+                if 0:
+                    job.job_args
+                    job.job_kwargs
+                    coco_img, = job.job_args
+                    globals().update(**job.job_kwargs)
+                    result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
                 raise
         else:
             if mode == 'process':
@@ -628,7 +639,10 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
+                if info['is_rpc']:
+                    obj_to_wld = None
+                else:
+                    obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
 
                 geos_corners = info['geos_corners']
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
@@ -656,7 +670,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
-                obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
+                if obj_to_wld is not None:
+                    obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
             try:

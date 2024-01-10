@@ -15,7 +15,7 @@ from functools import partial
 from geowatch.gis.elevation import ElevationDatabase
 
 
-class RPCTransform(object):
+class RPCTransform:
     r"""
     Wrapper around rasterio RPC transforms
 
@@ -216,17 +216,6 @@ class RPCTransform(object):
             xs, ys, zs = pts_in.T
         return xs, ys, zs
 
-    # def warp_world_to_pixel(self, pts_in, return_elevation=False):
-    #     # DEPRECATE
-    #     # Old "_to_" variant
-    #     return self.warp_pixel_from_world(
-    #         pts_in, return_elevation=return_elevation)
-
-    # def warp_pixel_to_world(self, pts_in, return_elevation=False):
-    #     # DEPRECATE
-    #     # Old "_to_" variant
-    #     return self.warp_world_from_pixel(pts_in)
-
     def warp_pixel_from_world(self, pts_in, return_elevation=False):
         """
         Args:
@@ -332,3 +321,43 @@ class RPCTransform(object):
         else:
             pts_out = np.concatenate([lons, lats], axis=1)
         return pts_out
+
+    def make_warp_pixel_from_world(self):
+        """
+        Hack for pickelability
+        """
+        return RPCPixelFromWorldTransform(self)
+
+    def make_warp_world_from_pixel(self):
+        """
+        Hack for pickelability
+        """
+        return RPCWorldFromPixelTransform(self)
+
+
+class RPCPixelFromWorldTransform:
+    """
+    Helper class to pickle the warp_pixel_from_world method.
+    I'm not sure if this is really needed. I would think a method can be
+    pickled if its class can be pickeld...
+    """
+
+    def __init__(self, rpc_transform):
+        self.rpc_transform = rpc_transform
+
+    def __call__(self, pts_in, return_elevation=False):
+        return self.rpc_transform.warp_pixel_from_world(pts_in, return_elevation)
+
+
+class RPCWorldFromPixelTransform:
+    """
+    Helper class to pickle the warp_world_from_pixel method.
+    I'm not sure if this is really needed. I would think a method can be
+    pickled if its class can be pickeld...
+    """
+
+    def __init__(self, rpc_transform):
+        self.rpc_transform = rpc_transform
+
+    def __call__(self, pts_in, return_elevation=False):
+        return self.rpc_transform.warp_world_from_pixel(pts_in, return_elevation)

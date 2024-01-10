@@ -11,7 +11,7 @@ import ubelt as ub
 from os.path import join
 
 
-class ElevationDatabase(object):
+class ElevationDatabase:
     """
     An object that might use various backends to query elevation for a given
     latitude and longitude.
@@ -182,6 +182,25 @@ class DEM_Collection(ElevationDatabase):
         dems.dem_paths = dem_paths
         dems.dem_infos = dem_infos
         dems.dem_crs84_polys = dem_crs84_polys
+
+    def __reduce__(self):
+        """
+        Make this object pickleable by saving references, and then reconstruct
+        infos on unpickle. Note: this is inefficient and could be improved.
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--network)
+            >>> # xdoctest: +REQUIRES(--slow)
+            >>> # Check that we can pickle this object
+            >>> from geowatch.gis.elevation import *  # NOQA
+            >>> dems = DEM_Collection.gtop30()
+            >>> import pickle
+            >>> text = pickle.dumps(dems)
+            >>> recon = pickle.loads(text)
+        """
+        cls = self.__class__
+        args = (self.dem_paths,)
+        return (cls, args)
 
     def find_reference_fpath(dems, lat, lon):
         import shapely
