@@ -92,7 +92,7 @@ def make_small_kwcoco_subset(dset, output_dpath):
     import pytest
     from geowatch.utils import kwcoco_extensions
     vidid = dset.videos().peek()['id']
-    gids = list(dset.images(vidid=vidid))[0:11]
+    gids = list(dset.images(video_id=vidid))[0:11]
     subset = dset.subset(gids)
     if subset.missing_images(check_aux=True):
         pytest.skip('data has not been pulled down')

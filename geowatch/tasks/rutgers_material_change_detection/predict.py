@@ -158,10 +158,10 @@ class Evaluator:
             # Get geo metadata
             # TODO: Update this method.
             gid = image_ids[1]
-            coco_img = kwcoco_dataset._coco_image(gid)
+            coco_img = kwcoco_dataset.coco_image(gid)
             dset_root = coco_img.dset.bundle_dpath
             image_folder_name = kwcoco_dataset.index.imgs[gid]["name"]
-            long_region_name = kwcoco_dataset._coco_image(gid).img["parent_name"]
+            long_region_name = kwcoco_dataset.coco_image(gid).img["parent_name"]
             long_region_name = "_".join(long_region_name.split("_")[:3])
 
             try:

@@ -356,8 +356,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)  # 10% of the execution time
 
     if is_rpc:
-        pxl_from_wld = rpc_transform.warp_pixel_from_world
-        wld_from_pxl = rpc_transform.warp_world_from_pixel
+        pxl_from_wld = rpc_transform.make_warp_pixel_from_world()
+        wld_from_pxl = rpc_transform.make_warp_world_from_pixel()
     else:
         wld_from_pxl = aff_wld_from_pxl
         pxl_from_wld = aff_pxl_from_wld

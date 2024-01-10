@@ -27,7 +27,7 @@ vid_width = video['width']
 vid_height = video['height']
 vid_dims = (vid_height, vid_width)
 
-video_images = dset.images(vidid=video['id'])
+video_images = dset.images(video_id=video['id'])
 
 
 video_frames = []

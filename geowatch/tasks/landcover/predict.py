@@ -49,7 +49,7 @@ from pathlib import Path
 import kwcoco
 from torch.utils.data import DataLoader
 
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from kwutil import util_progress
 from . import detector
 from .model_info import lookup_model_info

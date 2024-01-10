@@ -246,7 +246,7 @@ def main(cmdline=False, **kwargs):
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
     from geowatch.utils import util_gis
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
     from geowatch import heuristics
     from geowatch.utils import kwcoco_extensions

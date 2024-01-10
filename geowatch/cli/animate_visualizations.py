@@ -66,7 +66,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     from kwplot.cli import gifify
     import ubelt as ub
     import kwcoco
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
 
     if channels is not None:
         channels = kwcoco.ChannelSpec.coerce(channels)

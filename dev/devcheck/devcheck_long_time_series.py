@@ -17,7 +17,7 @@ def check_long_time():
     # Grab one video and S2 / L8 images in it
     vidid = list(dset.videos())[0]
     video = dset.index.videos[vidid]
-    images = dset.images(vidid=vidid)
+    images = dset.images(video_id=vidid)
     flags = [s != 'WV' for s in images.get('sensor_coarse')]
     images = images.compress(flags)
     gids = list(images)

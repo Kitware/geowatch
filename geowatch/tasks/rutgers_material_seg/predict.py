@@ -39,7 +39,7 @@ from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import geowatch.tasks.rutgers_material_seg.utils.utils as utils
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch.tasks.rutgers_material_seg.models import build_model
 from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 import torch.nn.functional as F

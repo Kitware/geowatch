@@ -94,7 +94,7 @@ def main(cmdline=1, **kwargs):
     rich.print(ub.urepr(config))
 
     from geowatch.geoannots import geomodels
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
 
     io_workers = util_parallel.coerce_num_workers(config['io_workers'])
 

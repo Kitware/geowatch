@@ -566,8 +566,8 @@ def dedupe_dates(coco_dset):
     # remove full images instead of iterating over tracks for efficiency
     # not possible for some other removal methods, but it is for this one
     gids_to_remove = []
-    for vidid in coco_dset.index.vidid_to_gids.keys():
-        images = coco_dset.images(vidid=vidid)
+    for video_id in coco_dset.index.vidid_to_gids.keys():
+        images = coco_dset.images(video_id=video_id)
         dates = [util_time.coerce_datetime(d).date() for d in images.lookup('date_captured')]
         dup_dates_to_idxs: Dict[Any, List[int]] = ub.find_duplicates(dates)
         # If we have any duplicates for a day, lookup their priorities and
@@ -579,7 +579,7 @@ def dedupe_dates(coco_dset):
                 sensor_priority.get(s, -1) for s in dup_sensors]
             keep_idx = ub.argmax(dup_priorities)
             remove_gids = list(set(dup_images) - {dup_images[keep_idx]})
-            print(f'removing {len(remove_gids)} dup imgs from {date} in {vidid=}')
+            print(f'removing {len(remove_gids)} dup imgs from {date} in video_id={video_id}')
             gids_to_remove.extend(remove_gids)
 
     # coco_dset.remove_annotations(aids_to_remove, verbose=1)

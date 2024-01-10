@@ -3031,7 +3031,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         if config.sampler_backend is None:
             sampler = ndsampler.CocoSampler.coerce(sampler)
         else:
-            from geowatch.utils import util_parallel
+            from kwutil import util_parallel
             sampler = ndsampler.CocoSampler.coerce(
                 sampler,
                 workdir=config.sampler_workdir,

@@ -220,7 +220,7 @@ def main(cmdline=True, **kwargs):
         >>> main(cmdline=False, **kwargs)
     """
     from geowatch.utils import kwcoco_extensions
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     import geowatch
     import kwcoco
     import numpy as np

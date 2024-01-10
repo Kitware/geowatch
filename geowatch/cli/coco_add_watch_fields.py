@@ -104,7 +104,7 @@ def main(cmdline=True, **kwargs):
     import numpy as np
     import kwcoco
     import kwimage
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from geowatch.utils import kwcoco_extensions
 
     if config['dst'] is None:
@@ -113,7 +113,7 @@ def main(cmdline=True, **kwargs):
         else:
             raise ValueError('must specify dst: {}'.format(config['dst']))
 
-    print('read dataset')
+    print('[coco_add_watch_fields] read dataset')
     dset = kwcoco.CocoDataset.coerce(config['src'])
     print('dset = {!r}'.format(dset))
 
@@ -126,7 +126,7 @@ def main(cmdline=True, **kwargs):
     # hack in colors
     heuristics.ensure_heuristic_coco_colors(dset)
 
-    print('start populate')
+    print('[coco_add_watch_fields] start populate')
 
     populate_kw = ub.compatible(config, kwcoco_extensions.populate_watch_fields)
     populate_kw['workers'] = util_parallel.coerce_num_workers(config['workers'])
@@ -149,12 +149,12 @@ def main(cmdline=True, **kwargs):
     if config['dst'] == 'return':
         return dset
     elif config['dst'] is not None:
-        print('write dataset')
+        print('[coco_add_watch_fields] write dataset')
         dset.fpath = config['dst']
         print('dset.fpath = {!r}'.format(dset.fpath))
         dset.dump(dset.fpath, newlines=True)
     else:
-        print('not writing')
+        print('[coco_add_watch_fields] not writing')
 
 
 __config__ = AddWatchFieldsConfig

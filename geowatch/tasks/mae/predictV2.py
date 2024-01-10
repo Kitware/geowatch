@@ -22,7 +22,7 @@ Basline Example:
 """
 import ubelt as ub
 from geowatch.utils import util_kwimage  # NOQA
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 import scriptconfig as scfg
 import albumentations as A
 import kwcoco

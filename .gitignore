@@ -101,3 +101,5 @@ lightning_logs
 aggregate
 emissions.csv
 requirements-strict
+
+.aider*

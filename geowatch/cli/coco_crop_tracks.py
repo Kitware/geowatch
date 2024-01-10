@@ -144,7 +144,7 @@ def main(cmdline=0, **kwargs):
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     workers = util_parallel.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
 
@@ -324,9 +324,9 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
         if 'auxiliary' in img:
             img['auxiliary'] = sorted(img['auxiliary'], key=lambda aux: aux['channels'])
 
-    for vidid in ub.ProgIter(new_dset.videos(), desc='populate videos'):
+    for video_id in ub.ProgIter(new_dset.videos(), desc='populate videos'):
         kwcoco_extensions.coco_populate_geo_video_stats(
-            new_dset, target_gsd=target_gsd, vidid=vidid
+            new_dset, target_gsd=target_gsd, video_id=video_id
         )
 
     return new_dset
@@ -393,9 +393,9 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
     bundle_dpath = ub.Path(coco_dset.bundle_dpath)
     _lut_coco_image = ub.memoize(coco_dset.coco_image)
 
-    # for vidid in coco_dset.videos():
-    #     video = coco_dset.index.videos[vidid]
-    #     # video_images = coco_dset.images(vidid=vidid)
+    # for video_id in coco_dset.videos():
+    #     video = coco_dset.index.videos[video_id]
+    #     # video_images = coco_dset.images(video_id=video_id)
     #     # Get all annotations for this video in video space
     #     # video_aids = list(ub.flatten(video_images.annots.lookup('id')))
     #     # video_annots = coco_dset.annots(video_aids)

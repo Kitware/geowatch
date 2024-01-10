@@ -90,7 +90,7 @@ def _check_questionable_cases():
     #     parent_img = parent_dset.index.name_to_img[img['parent_name']]
 
     video = coco_dset.index.name_to_video['BH_R001']
-    images = coco_dset.images(vidid=video['id'])
+    images = coco_dset.images(video_id=video['id'])
     flags = [d == '2020-04-14T07:06:21' for d in images.lookup('date_captured')]
     img = images.compress(flags).peek()
 

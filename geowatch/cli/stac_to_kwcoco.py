@@ -533,7 +533,7 @@ def stac_to_kwcoco(input_stac_catalog,
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
                                   'as a secondary step instead')
 
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     import pystac
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)

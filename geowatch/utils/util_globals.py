@@ -3,7 +3,7 @@ Utilities for handling global resources
 """
 from kwutil.util_eval import restricted_eval, RestrictedSyntaxError  # NOQA
 from kwutil.util_resources import request_nofile_limits, check_shm_limits  # NOQA
-from geowatch.utils.util_parallel import coerce_num_workers  # NOQA
+from kwutil.util_parallel import coerce_num_workers  # NOQA
 
 
 def configure_global_attributes(**config):

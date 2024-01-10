@@ -30,7 +30,7 @@ import kwarray
 import kwcoco
 from geowatch.tasks.fusion import datamodules
 from geowatch.tasks.fusion import utils
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
 from geowatch.tasks.fusion.coco_stitcher import quantize_float01  # NOQA

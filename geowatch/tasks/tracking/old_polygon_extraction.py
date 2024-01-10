@@ -178,7 +178,7 @@ def _gids_polys(sub_dset, **kwargs):
         # The gids are lexically sorted, not sorted by order in video!
         # gids = list(sub_dset.imgs.keys())
         vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
-        gids = sub_dset.images(vidid=vidid).gids
+        gids = sub_dset.images(video_id=vidid).gids
 
     images = sub_dset.images(gids)
     image_dates = [util_time.coerce_datetime(d)

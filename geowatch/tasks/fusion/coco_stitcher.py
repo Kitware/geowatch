@@ -289,7 +289,7 @@ class CocoStitchingManager(object):
                  assets_dname='_assets',
                  dtype='float32'):
 
-        from geowatch.utils import util_parallel
+        from kwutil import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device

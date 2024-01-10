@@ -23,9 +23,9 @@ TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/co
 
 SeeAlso SMART-specific tutorials:
 
-* `SMART Activity Characterization Tutorial <../docs/smart/smart_ac_tutorial.rst>`_
+* `SMART Activity Characterization Tutorial <../smart/smart_ac_tutorial.rst>`_
 
-* `SMART Ensemble Tutorial <../docs/smart/smart_ensemble_tutorial.rst>`_
+* `SMART Ensemble Tutorial <../smart/smart_ensemble_tutorial.rst>`_
 
 .. |Tutorial1_Jupyter| image:: https://img.shields.io/badge/jupyter-%23FA0F00.svg?style=for-the-badge&logo=jupyter&logoColor=white
     :target: tutorial1_rgb_network.ipynb

@@ -117,7 +117,7 @@ middle.
 
 This shows the system detecting the construction of the KHQ building and
 classifying its phases. This demo was run on public data, and can be reproduced
-with `Tutorial 6 <tutorial/tutorial6_predict_KHQ.sh>`_. The system was not
+with `Tutorial 6 <docs/source/manual/tutorial/tutorial6_predict_KHQ.sh>`_. The system was not
 trained on this region.
 
 Getting Started
@@ -169,20 +169,20 @@ We also have limited windows support, see `installing GEOWATCH on Windows  <docs
 Tutorials
 ---------
 
-We have a set of `tutorials <./tutorial>`_ related to training models and predicting with the
+We have a set of `tutorials <./docs/source/manual/tutorial>`_ related to training models and predicting with the
 system.
 
-* Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
+* Tutorial 1: `Toy RGB Fusion Model Example <docs/source/manual/tutorial/tutorial1_rgb_network.sh>`_
 
-* Tutorial 2: `Toy MSI Fusion Model Example <tutorial/tutorial2_msi_network.sh>`_
+* Tutorial 2: `Toy MSI Fusion Model Example <docs/source/manual/tutorial/tutorial2_msi_network.sh>`_
 
-* Tutorial 3: `Feature Fusion Tutorial <tutorial/tutorial3_feature_fusion.sh>`_
+* Tutorial 3: `Feature Fusion Tutorial <docs/source/manual/tutorial/tutorial3_feature_fusion.sh>`_
 
-* Tutorial 4: `Misc Training Tutorial <tutorial/tutorial4_advanced_training.sh>`_
+* Tutorial 4: `Misc Training Tutorial <docs/source/manual/tutorial/tutorial4_advanced_training.sh>`_
 
-* Tutorial 5: `KR2 BAS SMART Demo <tutorial/tutorial5_bas_prediction.sh>`_
+* Tutorial 5: `KR2 BAS SMART Demo <docs/source/manual/tutorial/tutorial5_bas_prediction.sh>`_
 
-* Tutorial 6: `KHQ SMART Demo <tutorial/tutorial6_predict_KHQ.sh>`_
+* Tutorial 6: `KHQ SMART Demo <docs/source/manual/tutorial/tutorial6_predict_KHQ.sh>`_
 
 
 Documentation

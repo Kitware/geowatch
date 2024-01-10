@@ -212,7 +212,7 @@ def check_loadtime():
         # Find images that have the requested channels
         sample_gids = []
         for gid in candidate_gids:
-            coco_img = coco_dset._coco_image(gid)
+            coco_img = coco_dset.coco_image(gid)
             if (coco_img.channels & channels).numel():
                 sample_gids.append(gid)
 

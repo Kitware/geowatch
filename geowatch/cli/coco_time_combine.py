@@ -485,7 +485,7 @@ def combine_kwcoco_channels_temporally(config):
     from kwutil import util_progress
     from kwutil import util_time
     from geowatch.utils import kwcoco_extensions
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
     # Check inputs.
 
@@ -684,8 +684,8 @@ def combine_kwcoco_channels_temporally(config):
     # after_video_dsize = (video['width'], video['height'])
     # print(f'after_video_dsize={after_video_dsize}')
 
-    # for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
-    #     coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+    # for video_id in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+    #     coco_populate_geo_video_stats(coco_dset, video_id, target_gsd=target_gsd)
 
     # Debugging:
     if 0:

@@ -12,7 +12,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 from geowatch.utils import util_globals
-from geowatch.utils import util_parallel
+from kwutil import util_parallel
 from geowatch.tasks.fusion import utils
 from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
 

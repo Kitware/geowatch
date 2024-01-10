@@ -255,7 +255,7 @@ def main(cmdline=True, **kwargs):
     """
     config = CocoVisualizeConfig.cli(data=kwargs, cmdline=cmdline and
                                      {'strict': True}, strict=True)
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     from kwutil import util_resources
     from geowatch.utils import kwcoco_extensions
     import kwcoco
@@ -651,7 +651,7 @@ class SkipChanGroup(Exception):
 
 def video_track_info(coco_dset, vidid):
     import kwimage
-    vid_annots = coco_dset.images(vidid=vidid).annots
+    vid_annots = coco_dset.images(video_id=vidid).annots
     track_ids = set(ub.flatten(vid_annots.lookup('track_id')))
     tid_to_info = {}
     for tid in track_ids:

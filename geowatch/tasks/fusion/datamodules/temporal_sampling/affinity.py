@@ -675,7 +675,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
         >>> video = dset.index.videos[vidid]
         >>> name = (video['name'])
         >>> print('name = {!r}'.format(name))
-        >>> images = dset.images(vidid=vidid)
+        >>> images = dset.images(video_id=vidid)
         >>> datetimes = [util_time.coerce_datetime(date) for date in images.lookup('date_captured')]
         >>> unixtimes = np.array([dt.timestamp() for dt in datetimes])
         >>> time_window = 5

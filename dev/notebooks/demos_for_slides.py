@@ -24,10 +24,10 @@ def demo_visualize_tokenization():
                               resample_invalid_frames=False)
     self.requested_tasks['change'] = False
 
-    vidid = coco_dset.index.name_to_video['NZ_R001']['id']
-    # vidid = list(coco_dset.videos())[3]
-    coco_dset.index.videos[vidid]
-    images = coco_dset.images(vidid=vidid)
+    video_id = coco_dset.index.name_to_video['NZ_R001']['id']
+    # video_id = list(coco_dset.videos())[3]
+    coco_dset.index.videos[video_id]
+    images = coco_dset.images(video_id=video_id)
     sensor_gids = {}
     for coco_img in images.coco_images:
         sensor = coco_img.img.get('sensor_coarse')
@@ -39,7 +39,7 @@ def demo_visualize_tokenization():
 
     tr = {
         'main_idx': 0,
-        'video_id': vidid,
+        'video_id': video_id,
         # 'space_slice': (slice(0, 96, None), slice(0, 96, None)),
         'space_slice': (slice(200, 296, None), slice(200, 296, None)),
         'gids': gids,
@@ -201,20 +201,20 @@ def demo_visualize_heterogeneous_inputs():
 def assert_temporal_sampler_consistency(dataset):
     coco_dset = dataset.sampler.dset
     vidid_to_imgs = ub.group_items(coco_dset.dataset['images'], key=lambda img: img['video_id'])
-    for vidid, temporal_sampler in dataset.new_sample_grid['vidid_to_time_sampler'].items():
+    for video_id, temporal_sampler in dataset.new_sample_grid['vidid_to_time_sampler'].items():
         # vidids = coco_dset.images(temporal_sampler.video_gids).lookup('video_id')
-        imgs = vidid_to_imgs[vidid]
+        imgs = vidid_to_imgs[video_id]
         n_imgs = len(imgs)
         n_video_gids = len(temporal_sampler.video_gids)
         assert n_video_gids == n_imgs
-        print(f'{vidid=} {n_imgs=} {n_video_gids=}')
+        print(f'{video_id=} {n_imgs=} {n_video_gids=}')
 
 
 def find_varied_region(coco_dset, dataset):
     vidid = coco_dset.index.name_to_video['NZ_R001']['id']
     # vidid = list(coco_dset.videos())[3]
     coco_dset.index.videos[vidid]
-    images = coco_dset.images(vidid=vidid)
+    images = coco_dset.images(video_id=vidid)
     sensor_gids = ub.ddict(list)
     for coco_img in images.coco_images:
         sensor = coco_img.img.get('sensor_coarse')

@@ -1352,7 +1352,7 @@ class GdalDataset(ub.NiceRepr):
                     else:
                         break
             if __ref is None:
-                raise RuntimeError('Error opening {_path}') from ex
+                raise RuntimeError(f'Error opening {_path}') from ex
         self = cls(__ref, _path, _str_mode)
         return self
 
@@ -1376,7 +1376,7 @@ class GdalDataset(ub.NiceRepr):
         else:
             raise TypeError(type(data))
         if ref is None:
-            raise Exception('data={} is not a gdal dataset'.format(data))
+            raise Exception(f'data={(data)} is not a gdal dataset')
         return ref
 
     @property

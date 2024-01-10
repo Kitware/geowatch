@@ -681,6 +681,12 @@ def main(cmdline=False, **kwargs):
 
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
+        import kwutil
+        if config.sensor_to_time_window:
+            sensor_to_time_window = kwutil.util_yaml.Yaml.dumps(kwutil.util_yaml.Yaml.loads(config.sensor_to_time_window))
+            sensor_to_time_window = "\n" + ub.indent(sensor_to_time_window, ' ' * (4 * 6))
+        else:
+            sensor_to_time_window = config.sensor_to_time_window
         align_node = new_pipeline.submit(
             name=f'align-geotiffs-{name}',
             executable=ub.codeblock(
@@ -696,7 +702,7 @@ def main(cmdline=False, **kwargs):
                     --visualize={align_visualize} \
                     --debug_valid_regions={debug_valid_regions} \
                     --rpc_align_method {config.rpc_align_method} \
-                    --sensor_to_time_window {config.sensor_to_time_window} \
+                    --sensor_to_time_window "{sensor_to_time_window}" \
                     --verbose={config.verbose} \
                     --aux_workers={config.align_aux_workers} \
                     --target_gsd={config.target_gsd} \

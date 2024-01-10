@@ -8,6 +8,7 @@ rm -rf lightning_logs
 rm -rf __pycache__
 rm -rf htmlcov
 rm -rf dist
+rm -rf build
 rm -rf pred_out
 rm -rf .pytest_cache
 

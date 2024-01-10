@@ -165,7 +165,7 @@ def populate_watch_fields(
         vidids = list(coco_dset.index.videos.keys())
         gids = list(coco_dset.index.imgs.keys())
     else:
-        gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
+        gids = list(ub.flatten(coco_dset.images(video_id=video_id) for video_id in vidids))
 
     coco_populate_geo_heuristics(
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
@@ -191,8 +191,8 @@ def populate_watch_fields(
                 video['domain'] = region_id
 
     if enable_video_stats:
-        for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
-            coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+        for video_id in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+            coco_populate_geo_video_stats(coco_dset, video_id, target_gsd=target_gsd)
 
     # serialize intermediate objects
     coco_dset._ensure_json_serializable()
@@ -250,9 +250,16 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-        job = jobs.submit(
-            coco_populate_geo_img_heuristics2, coco_img,
-            overwrite=overwrite, default_gsd=default_gsd, **kw)
+
+        job_args = (coco_img,)
+        job_kwargs = dict(overwrite=overwrite, default_gsd=default_gsd, **kw)
+        job = jobs.submit(coco_populate_geo_img_heuristics2,
+                          *job_args, **job_kwargs)
+        if 0:
+            # For debugging
+            job.job_func = coco_populate_geo_img_heuristics2
+            job.job_args = job_args
+            job.job_kwargs = job_kwargs
         job.gid = gid
 
     broken_image_ids = []
@@ -260,18 +267,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         gid = job.gid
         try:
             img = job.result()
-        except RuntimeError as ex:
+        except Exception as ex:
             # Check for known error messages that might cause errors grabbing
             # data
-            has_404 = remove_broken and "404" in repr(ex)
-            has_acc_problem = "not recognized as a supported file format" in repr(ex)
-            connection_reset = "Connection reset by peer" in repr(ex)
-            known_errors = [
-                has_404,
-                has_acc_problem,
-                connection_reset,
-            ]
-            if any(known_errors):
+            known_errors = {}
+            known_errors['has_404'] = remove_broken and "404" in repr(ex)
+            known_errors['has_acc_problem'] = "not recognized as a supported file format" in repr(ex)
+            known_errors['connection_reset'] = "Connection reset by peer" in repr(ex)
+            print(f'known_errors = {ub.urepr(known_errors, nl=1)}')
+            if any(known_errors.values()):
                 broken_image_ids.append(gid)
                 print('')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
@@ -288,6 +292,12 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 coco_img = coco_dset.coco_image(gid)
                 print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                 rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                # if 0:
+                #     job.job_args
+                #     job.job_kwargs
+                #     coco_img, = job.job_args
+                #     globals().update(**job.job_kwargs)
+                #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
                 raise
         else:
             if mode == 'process':
@@ -628,7 +638,10 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
+                if info['is_rpc']:
+                    obj_to_wld = None
+                else:
+                    obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
 
                 geos_corners = info['geos_corners']
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
@@ -656,7 +669,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
-                obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
+                if obj_to_wld is not None:
+                    obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
             try:
@@ -794,7 +808,7 @@ def _coerce_overwrite(overwrite):
 
 
 @profile
-def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution'):
+def coco_populate_geo_video_stats(coco_dset, video_id, target_gsd='max-resolution'):
     """
     Create a "video-space" for all images in a video sequence at a specified
     resolution.
@@ -824,7 +838,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
     Args:
         coco_dset (CocoDataset): coco dataset to be modified inplace
-        vidid (int): video_id to modify
+        video_id (int): video_id to modify
         target_gsd (float | str): string code, or float target gsd
 
 
@@ -835,21 +849,21 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> vidid = 2
+        >>> video_id = 2
 
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> target_gsd = 10.0
-        >>> vidid = 1
+        >>> video_id = 1
         >>> # We can check transforms before we apply this function
-        >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid', None)
+        >>> coco_dset.images(video_id=video_id).lookup('warp_img_to_vid', None)
         >>> # Apply the function
-        >>> coco_populate_geo_video_stats(coco_dset, vidid, target_gsd)
+        >>> coco_populate_geo_video_stats(coco_dset, video_id, target_gsd)
         >>> # Check these transforms to make sure they look right
-        >>> popualted_video = coco_dset.index.videos[vidid]
+        >>> popualted_video = coco_dset.index.videos[video_id]
         >>> popualted_video = ub.dict_isect(popualted_video, ['width', 'height', 'warp_wld_to_vid', 'target_gsd'])
         >>> print('popualted_video = {}'.format(ub.urepr(popualted_video, nl=-1)))
-        >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid')
+        >>> coco_dset.images(video_id=video_id).lookup('warp_img_to_vid')
 
         # TODO: make a demo dataset with some sort of gsd metadata
         coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -858,7 +872,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
         coco_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/combo_data.kwcoco.json'
         coco_dset = kwcoco.CocoDataset(coco_fpath)
-        vidid = 1
+        video_id = 1
 
         target_gsd = 2.8
 
@@ -907,8 +921,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     from kwcoco.coco_image import CocoImage
     # Compute an image-to-video transform that aligns all frames to some
     # common resolution.
-    video = coco_dset.index.videos[vidid]
-    gids = coco_dset.index.vidid_to_gids[vidid]
+    video = coco_dset.index.videos[video_id]
+    gids = coco_dset.index.vidid_to_gids[video_id]
 
     check_unique_channel_names(coco_dset, gids=gids)
 
@@ -1443,7 +1457,7 @@ def check_unique_channel_names(coco_dset, gids=None, verbose=0):
     images = coco_dset.images(gids=gids)
     errors = []
     for img in images.objs:
-        coco_img = coco_dset._coco_image(img['id'])
+        coco_img = coco_dset.coco_image(img['id'])
         try:
             _check_unique_channel_names_in_image(coco_img)
         except AssertionError as ex:
@@ -1481,7 +1495,7 @@ def coco_list_asset_infos(coco_dset):
     """
     asset_infos = []
     for gid in coco_dset.images():
-        coco_img = coco_dset._coco_image(gid)
+        coco_img = coco_dset.coco_image(gid)
         asset_objs = list(coco_img.iter_asset_objs())
         for _asset_idx, obj in enumerate(asset_objs):
             fname = obj.get('file_name', None)
@@ -1641,12 +1655,12 @@ def transfer_geo_metadata(coco_dset, gid):
         >>> hack_seed_geometadata_in_dset(coco_dset, force=True, rng=0)
         >>> gid = 2
         >>> transfer_geo_metadata(coco_dset, gid)
-        >>> fpath = join(coco_dset.bundle_dpath, coco_dset._coco_image(gid).primary_asset()['file_name'])
+        >>> fpath = join(coco_dset.bundle_dpath, coco_dset.coco_image(gid).primary_asset()['file_name'])
         >>> _ = ub.cmd('gdalinfo ' + fpath, verbose=1)
     """
     import geowatch
     from osgeo import gdal
-    coco_img = coco_dset._coco_image(gid)
+    coco_img = coco_dset.coco_image(gid)
 
     assets_with_geo_info = {}
     assets_without_geo_info = {}
@@ -1675,10 +1689,10 @@ def transfer_geo_metadata(coco_dset, gid):
                 # If an asset in our local image has no data, we can
                 # check to see if anyone in the vide has data.
                 # Check if anything in the video has geo-data
-                vidid = coco_img.img['video_id']
-                for other_gid in coco_dset.images(vidid=vidid):
+                video_id = coco_img.img['video_id']
+                for other_gid in coco_dset.images(video_id=video_id):
                     if other_gid != gid:
-                        other_coco_img = coco_dset._coco_image(other_gid)
+                        other_coco_img = coco_dset.coco_image(other_gid)
                         for obj in other_coco_img.iter_asset_objs():
                             fname = obj.get('file_name', None)
                             if fname is not None:
@@ -1780,10 +1794,10 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
         # If an asset in our local image has no data, we can
         # check to see if anyone in the vide has data.
         # Check if anything in the video has geo-data
-        vidid = coco_img.img['video_id']
-        for other_gid in coco_dset.images(vidid=vidid):
+        video_id = coco_img.img['video_id']
+        for other_gid in coco_dset.images(video_id=video_id):
             if other_gid != gid:
-                other_coco_img = coco_dset._coco_image(other_gid)
+                other_coco_img = coco_dset.coco_image(other_gid)
                 for obj in other_coco_img.iter_asset_objs():
                     fname = obj.get('file_name', None)
                     if fname is not None:
@@ -2625,7 +2639,7 @@ def covered_video_geo_regions(coco_dset):
     # if 0:
     # import geowatch
     rows = []
-    for vidid, video in coco_dset.index.videos.items():
+    for video_id, video in coco_dset.index.videos.items():
         if 'valid_region_geos' in video:
             crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos']).to_shapely()
         else:
@@ -2645,7 +2659,7 @@ def covered_video_geo_regions(coco_dset):
                 crs84_poly = transform(project, wld_poly_)
             else:
                 raise NotImplementedError('We dont have a way to get the geo bounds for a video')
-        gids = coco_dset.index.vidid_to_gids[vidid]
+        gids = coco_dset.index.vidid_to_gids[video_id]
         if gids:
             start_gid = gids[0]
             stop_gid = gids[-1]

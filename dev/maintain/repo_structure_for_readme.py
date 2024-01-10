@@ -1,7 +1,11 @@
 def main():
+    """
+    Builds a tree of extension histograms. Can use xdev.DirectoryStats instead.
+
+    """
     import ubelt as ub
-    import watch
-    watch_repo_dpath = ub.Path(watch.__file__).parent
+    import geowatch
+    watch_repo_dpath = ub.Path(geowatch.__file__).parent
     import networkx as nx
     import xdev
     dname_block_pattern = xdev.MultiPattern.coerce([
@@ -49,10 +53,18 @@ def main():
     # nx.write_network_text
     print(util.util_networkx.write_network_text(g, sources=[base]))
 
+    #### NEW ALTERNATIVE
+    #### TODO: adapt to work similarly to above.
+    from xdev.cli import dirstats
+    stats = dirstats.DirectoryWalker(watch_repo_dpath,
+                                     block_dnames=dname_block_pattern)
+    stats.build()
+    stats.write_report()
+
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/dev/maintain/repo_structure_for_readme.py
+        python ~/code/geowatch/dev/maintain/repo_structure_for_readme.py
     """
     main()

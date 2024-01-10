@@ -61,7 +61,7 @@ def main(cmdline=1, **kwargs):
     from kwutil import util_time
     from geowatch.geoannots import geomodels
     from geowatch.utils import util_gis
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
 
     site_models = []
     region_models = []

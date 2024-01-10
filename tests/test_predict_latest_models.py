@@ -185,7 +185,7 @@ def make_small_kwcoco_subset(dset, output_dpath):
         if found is not None:
             gids = dset.annots(change_annots).get('image_id')
             vidid = list(dset.images(gids).lookup('video_id'))[0]
-            vid_gids = list(dset.images(vidid=vidid))
+            vid_gids = list(dset.images(video_id=vidid))
             vid_gids = ub.oset(vid_gids)
             remain_gids = vid_gids - ub.oset(gids)
             import kwarray
@@ -197,8 +197,8 @@ def make_small_kwcoco_subset(dset, output_dpath):
             raise Exception
     # else:
     #     vidid = dset.videos().peek()['id']
-    #     video_images = dset.images(vidid=vidid)
-    #     final_gids = list(dset.images(vidid=vidid))[0:11]
+    #     video_images = dset.images(video_id=vidid)
+    #     final_gids = list(dset.images(video_id=vidid))[0:11]
 
     subset = dset.subset(final_gids)
     if subset.missing_images(check_aux=True):

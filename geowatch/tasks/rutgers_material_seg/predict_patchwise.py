@@ -266,7 +266,7 @@ def main(cmdline=True, **kwargs):
     print(dataset.__len__())
 
     from kwutil import util_resources
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     num_workers = util_parallel.coerce_num_workers(args.num_workers)
     if num_workers > 0:
         util_resources.request_nofile_limits()

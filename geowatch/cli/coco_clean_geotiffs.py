@@ -185,7 +185,7 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), title='before')
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
     """
-    from geowatch.utils import util_parallel
+    from kwutil import util_parallel
     import kwcoco
 
     config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
