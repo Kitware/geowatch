@@ -292,13 +292,12 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 coco_img = coco_dset.coco_image(gid)
                 print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                 rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-
-                if 0:
-                    job.job_args
-                    job.job_kwargs
-                    coco_img, = job.job_args
-                    globals().update(**job.job_kwargs)
-                    result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
+                # if 0:
+                #     job.job_args
+                #     job.job_kwargs
+                #     coco_img, = job.job_args
+                #     globals().update(**job.job_kwargs)
+                #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
                 raise
         else:
             if mode == 'process':
