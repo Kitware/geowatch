@@ -253,8 +253,8 @@ Particularly, developers should be have some familiarity with
 Also helpful is familiarity with
 `ndsampler <https://gitlab.kitware.com/computer-vision/ndsampler>`_,
 `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_,
-`cmd_queue <https://gitlab.kitware.com/utils/cmd_queue>`_, and
-`xdoctest <https://gitlab.kitware.com/utils/xdoctest>`_.
+`cmd_queue <https://gitlab.kitware.com/computer-vision/cmd_queue>`_, and
+`xdoctest <https://github.com/Erotemic/xdoctest>`_.
 
 
 
