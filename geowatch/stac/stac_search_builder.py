@@ -153,6 +153,30 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
 
 }
 
+_ARA_PHASE3_TA1_PRODUCTS = {
+    'ta1-ls-ara-4': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-ls-ara-4'],
+    },
+    'ta1-pd-ara-4': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-pd-ara-4'],
+    },
+    'ta1-s2-ara-4': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-s2-ara-4'],
+    },
+    'ta1-wv-ara-4': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-wv-ara-4'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+}
+
 
 # ta1-mixedgsd-acc
 
@@ -348,6 +372,7 @@ SENSOR_TO_DEFAULTS = ub.dict_union(
     _PUBLIC_L2_PRODUCTS,
     _PUBLIC_ARD_PRODUCTS,
     _SMARTSTAC_PRODUCTS,
+    _ARA_PHASE3_TA1_PRODUCTS,
 )
 
 
