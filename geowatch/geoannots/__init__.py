@@ -27,3 +27,16 @@ Related tool that should NOT be moved are related to general geojson:
 
     * ../utils/util_gis.py :: coerce_geojson_datas
 """
+import lazy_loader
+
+
+__getattr__, __dir__, __all__ = lazy_loader.attach(
+    __name__,
+    submodules={
+        'geococo_objects',
+        'geomodels',
+    },
+    submod_attrs={},
+)
+
+__all__ = ['geococo_objects', 'geomodels']

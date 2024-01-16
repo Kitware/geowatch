@@ -94,7 +94,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.14.1'
+__version__ = '0.14.2'
 
 
 # ../dev/maintain/generate_authors.py
@@ -245,8 +245,8 @@ if 'hard-to-inspect-key' in vars():
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
-mkinit -m geowatch --lazy_loader --diff
-mkinit -m geowatch --lazy_loader -w
+mkinit geowatch --lazy_loader --diff
+mkinit geowatch --lazy_loader -w
 
 # Debug import time
 python -X importtime -c "import geowatch"
@@ -274,6 +274,7 @@ __getattr__, __dir__, __all__ = lazy_loader.attach(
         'demo',
         'exceptions',
         'gis',
+        'geoannots',
         'heuristics',
         'mlops',
         'monkey',
