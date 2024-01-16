@@ -20,7 +20,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
    :height: 64px
    :align: left
 
-|main-pipeline| |main-coverage| |Pypi| |Downloads| |ReadTheDocs|
+|GitlabCIPipeline| |GitlabCICoverage| |Pypi| |PypiDownloads| |ReadTheDocs|
 
 Geowatch is an open source research and production environment for image and
 video segmentation and detection with geospatial awareness.
@@ -241,23 +241,40 @@ For internal collaborators, please refer to the `internal docs <docs/source/manu
 For more details about the GEOWATCH CLI and other CLI tools included in this package see:
 `the GEOWATCH CLI docs <docs/source/manual/watch_cli.rst>`_
 
+The geowatch module is built on top of several other
+`supporting libraries <docs/source/manual/misc/supporting_projects.rst>`_
+developed by Kitware. Familiarity with these packages will make it easier to
+understand the geowatch codebase.
+Particularly, developers should be have some familiarity with
+`kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_,
+`kwimage <https://gitlab.kitware.com/computer-vision/kwimage>`_,
+`scriptconfig <https://gitlab.kitware.com/utils/scriptconfig>`_, and
+`ubelt <https://github.com/Erotemic/ubelt>`_.
+Also helpful is familiarity with
+`ndsampler <https://gitlab.kitware.com/computer-vision/ndsampler>`_,
+`delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_,
+`cmd_queue <https://gitlab.kitware.com/computer-vision/cmd_queue>`_, and
+`xdoctest <https://github.com/Erotemic/xdoctest>`_.
+
+
 
 Related Work
 ------------
 
 There are other GIS and segmentation focused torch packages out there:
 
-* https://github.com/microsoft/torchgeo - Torch geo provides many custom
+* `TorchGeo <https://github.com/microsoft/torchgeo>`_ - Torch geo provides many custom
   dataloaders for standard datasets. In contrast, we provide a single data
   loader for kwcoco files.
 
-* https://github.com/azavea/raster-vision - based on chips, whereas ours
+* `Raster Vision <https://github.com/azavea/raster-vision>`_ - based on chips, whereas ours
   focuses on the ability to process data in-situ (using the help of
   `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_).
 
-* https://github.com/open-mmlab/mmsegmentation - A very good package (and
-  research group), we use some the mmlabs models, but their library doesn't
-  have the data flexibility (e.g. large image support) that kwcoco provides.
+* `MMSegmentation <https://github.com/open-mmlab/mmsegmentation>`_ -
+  Contains standardized models with flexible model configuration.
+  We use some the mmlabs models, but their library doesn't have the data
+  flexibility (e.g. large image support) that kwcoco provides.
 
 
 Acknowledgement
@@ -273,13 +290,17 @@ reproduce and distribute reprints for governmental purposes notwithstanding any
 copyright annotation therein
 
 
-.. |main-pipeline| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/pipeline.svg
+.. |GitlabCIPipeline| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/pipeline.svg
    :target: https://gitlab.kitware.com/computer-vision/geowatch/-/pipelines/main/latest
-.. |main-coverage| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/coverage.svg
+
+.. |GitlabCICoverage| image:: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/coverage.svg
    :target: https://gitlab.kitware.com/computer-vision/geowatch/badges/main/coverage.svg
+
 .. |Pypi| image:: https://img.shields.io/pypi/v/geowatch.svg
    :target: https://pypi.python.org/pypi/geowatch
-.. |Downloads| image:: https://img.shields.io/pypi/dm/geowatch.svg
+
+.. |PypiDownloads| image:: https://img.shields.io/pypi/dm/geowatch.svg
    :target: https://pypistats.org/packages/geowatch
+
 .. |ReadTheDocs| image:: https://readthedocs.org/projects/geowatch/badge/?version=latest
     :target: http://geowatch.readthedocs.io/en/latest/
