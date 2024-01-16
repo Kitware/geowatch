@@ -5,6 +5,8 @@ GEOWATCH Onboarding
 The purpose of this document is to guide a new user in the installation and
 usage of the GEOWATCH system.
 
+For a high level overview of the system, see the `overview <overview.rst>`_.
+
 This document assumes you are proficient with Python and have an understanding
 of virtual environments.
 

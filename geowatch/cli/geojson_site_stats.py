@@ -179,9 +179,14 @@ def main(cmdline=1, **kwargs):
             summary_df = summary_df.sort_values('status')
             summary_utm = util_gis.project_gdf_to_local_utm(summary_df, mode=1)
 
+            region_df = region.pandas_region()
+            region_utm = util_gis.project_gdf_to_local_utm(region_df, mode=1)
+
             # Find spatial intersection within the region
             if 1:
-                gdf_site_overlaps(summary_utm)
+                region_start_date = region.start_date
+                region_end_date = region.end_date
+                gdf_site_overlaps(summary_utm, region_start_date, region_end_date)
 
             display_summary = summary_utm.drop(['type', 'geometry'], axis=1)
             display_summary['area_square_meters'] = summary_utm.geometry.area
@@ -225,6 +230,20 @@ def main(cmdline=1, **kwargs):
             print('Summary Stats:')
             summary_stats = pd.DataFrame(status_summaries)
             rich.print(summary_stats)
+
+            import pint
+            ureg = pint.UnitRegistry()
+            region_area = region_utm.area.iloc[0] * (ureg.meter ** 2)
+            region_area = region_area.to(ureg.kilometer ** 2)
+            duration = region.end_date - region.start_date
+            duration = util_time.format_timedelta(duration)
+
+            region_stats = {
+                'region_area': region_area,
+                'duration': duration,
+            }
+            # print(f'region_stats = {ub.urepr(region_stats, nl=1)}')
+            print(f'region_stats = {repr(region_stats)}')
         else:
             # Only site models are given, show their summaries
             import geopandas as gpd
@@ -246,7 +265,7 @@ def main(cmdline=1, **kwargs):
                        region_to_site_accum, viz_dpath)
 
 
-def gdf_site_overlaps(summary_utm):
+def gdf_site_overlaps(summary_utm, region_start_date, region_end_date):
     import kwutil
     from geowatch.utils import util_gis
     import numpy as np
@@ -261,8 +280,8 @@ def gdf_site_overlaps(summary_utm):
             geoms2 = summary_utm.iloc[other_idxs]
             s1 = geoms1.iloc[0]
 
-            start1 = kwutil.util_time.datetime.coerce(s1['start_date'])
-            end1 = kwutil.util_time.datetime.coerce(s1['end_date'])
+            start1 = kwutil.util_time.coerce_datetime(s1['start_date']) or region_start_date
+            end1 = kwutil.util_time.coerce_datetime(s1['end_date']) or region_end_date
             delta1 = end1 - start1
 
             g1 = s1.geometry
@@ -275,8 +294,8 @@ def gdf_site_overlaps(summary_utm):
             for _ix, site_id2 in enumerate(geoms2['site_id']):
                 s2 = geoms2.iloc[_ix]
                 g2 = s2.geometry
-                start2 = kwutil.util_time.datetime.coerce(s2['start_date'])
-                end2 = kwutil.util_time.datetime.coerce(s2['end_date'])
+                start2 = kwutil.util_time.coerce_datetime(s2['start_date']) or region_start_date
+                end2 = kwutil.util_time.coerce_datetime(s2['end_date']) or region_end_date
                 delta2 = end2 - start2
 
                 start3 = max(start1, start2)
