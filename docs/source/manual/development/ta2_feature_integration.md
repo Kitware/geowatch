@@ -1,3 +1,5 @@
+# TA2 Feature Integration
+
 The following is a set of high level instructions for integrating your feature model into the TA2 fusion system.
 
 Recall that the input -- for both training and prediction -- into the TA2

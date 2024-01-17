@@ -16,8 +16,8 @@ Welcome to geowatch's documentation!
 .. toctree::
    :maxdepth: 5
 
-   auto/modules
-
+   auto/modules.rst
+   manual/manual
 
 See Also:
 

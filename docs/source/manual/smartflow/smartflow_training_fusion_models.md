@@ -1,8 +1,7 @@
 # Prerequisites
 
 Running smartflow requires setting up aws and kubectl. 
-We have [streamlined aws and kubctl install
-instructions](../docs/getting_started_aws.rst) but you may also fine the
+We have [streamlined aws and kubctl install instructions](../environment/getting_started_aws.rst) but you may also fine the
 official resources useful:
 
 Install:

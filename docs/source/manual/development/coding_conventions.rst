@@ -123,28 +123,28 @@ Spaces
 See `KWCOCO Spaces <https://kwcoco.readthedocs.io/en/release/concepts/warping_and_spaces.html>`_ section in the in kwcoco docs.
 
 
-There are several 'spaces' here and that can get confusing.
+There are several 'spaces' (which we will are rebranding as 'views') here and that can get confusing.
 
-**Native Space** / **Asset Space** - The space of the data on disk
+**Native Space/View** / **Asset Space/View** - The space of the data on disk
 
-**Image Space** - The space all bands in an image are aligned to.
+**Image Space/View** - The space all bands in an image are aligned to.
 
-**Video Space** - The space a sequence is geo-aligned in.  This is the space we generally want to be thinking in.
+**Video Space/View** - The space a sequence is geo-aligned in.  This is the space we generally want to be thinking in.
     It is hard coded wrt to the kwcoco dataset.
 
-**Window Space** - GSD the sliding window is expressed in.
+**Window Space/View** - GSD the sliding window is expressed in.
    Defaults to video space.
    Computes a integer-sized box as the 'space_slice' in video space.
    Effectively this space is only used to compute the size of the box
    in the underlying video space. It does nothing else.
    Alias: Grid Space
 
-**Input Space** - GSD of the input to the network
+**Input Space/View** - GSD of the input to the network
    Computes a scale factor relative to video space.
    Alias: Sample Space
    Alias: Data Space
 
-**Output Space** - GSD of the output of the network
+**Output Space/View** - GSD of the output of the network
    Scale factor is wrt to video space.
    Alias: Prediction Space
 

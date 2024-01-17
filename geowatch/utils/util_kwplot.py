@@ -459,7 +459,8 @@ class FigureFinalizer(ub.NiceRepr):
             fig.tight_layout()
         # TODO: could save to memory and then write as an image
         fig.savefig(final_fpath, **savekw)
-        cropwhite_ondisk(final_fpath)
+        if self.cropwhite:
+            cropwhite_ondisk(final_fpath)
 
     def __call__(self, fig, fpath, **kwargs):
         """

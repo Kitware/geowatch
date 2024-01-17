@@ -1,3 +1,6 @@
+Internal Resources
+------------------
+
 While GEOWATCH is designed and intended to be a fully open source system, some
 aspects of the GEOWATCH module are developed in private. Additionally, there are
 some data sources which will not be made public.

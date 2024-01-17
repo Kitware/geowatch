@@ -1,3 +1,6 @@
+FAQ: Model Prediction
+=====================
+
 Question
 --------
 
@@ -65,9 +68,9 @@ data that was stitched in each location.
 
 I think this image illustrates the process well:
 
-.. image:: https://i.imgur.com/exGv3uX.png
+.. .. image:: https://i.imgur.com/exGv3uX.png
 
-.. image:: https://data.kitware.com/api/v1/file/656fd3a8dfc0e5d60cffa244/download?contentDisposition=inline
+.. image:: https://data.kitware.com/api/v1/file/656fd3a8dfc0e5d60cffa244/download
 
 
 I've been writing up slides like this with software-level descriptions here:

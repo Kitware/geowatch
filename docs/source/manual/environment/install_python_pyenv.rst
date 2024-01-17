@@ -122,7 +122,7 @@ On ubuntu this can be setup as follows:
 
 
 Create GEOWATCH environment with Pyenv
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 First create and activate a new virtual environment (note this could be done
 with conda as well).

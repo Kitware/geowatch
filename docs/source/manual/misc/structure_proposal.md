@@ -1,4 +1,4 @@
-## Directory Structure for Multi-task Integration
+# Directory Structure for Multi-task Integration
 
 
 ## Design Goals (2021): 
@@ -73,14 +73,14 @@ Other code in each task folder can be arbitrary, and task-developers should be
 able to expect that their task folder to be somewhat sandboxed, and
 other developers will not introduce conflicts.
 
-#### Usage:
+### Usage:
 This structure allows for training and evaluating tasks independently, 
 or evaluate models jointly (meaning concatenated features) through 
 the fusion module. When a method stores the best performing model, 
 it saves a "deployed.zip" zipfile which contains dataset hyperparameters, 
 model weights, and method specific configurations. 
 
-#### Fit API:
+### Fit API:
 To train a model, we expect that the task-specific fit script will use 
 a command line interface somewhat like this:
 
@@ -107,7 +107,7 @@ NOTE: if your method does not require learning parameters of a model, it is
 fine to omit the "fit" script and just provide "predict".
 
 
-#### Predict API:
+### Predict API:
 To predict with a model, we expect that there will be a task-specific 
 predict script. This should take model weights to predict with, 
 and a kwcoco dataset to predict on.
@@ -122,13 +122,13 @@ Again `<additional prediction config>` can be a config file, or additional
 command line arguments (again we suggest using `scriptconfig`).
 
 
-#### Evaluation:
+### Evaluation:
 
 Evaluation will be handled by using the predict API in conjunction with an
 external evaluation tool.
 
 
-### Examples:
+## Examples:
 
 
 Example invocations of fit and predict scripts may look like this:
