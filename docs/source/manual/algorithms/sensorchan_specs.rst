@@ -1,20 +1,22 @@
+Sensor Channel Spec
+-------------------
 
 We use the following notation to describe combinations of channels in a human readable way.
 
 
 
-Say you are computing 
+Say you are computing
 
 If you want to write a raster that has 17 channels, you need to give them a
 name. Let's call them mychan. The channel spec would refers to multiple bands
 with the same name using a slice-like notation: mychan:17
 
-.. code:: 
+.. code::
 
     from delayed_image import ChannelSpec
     spec = ChannelSpec('mychan:17')
     spec.normalize()
-    
+
 
 
 You can see that each "fused-band" is connected together by a pipe ``|``.
@@ -51,7 +53,7 @@ wanted to include late fused `nir|swir16|swir22` with the S2 sensor I would writ
 
 That expands  like this
 
-.. code:: 
+.. code::
 
     from delayed_image import SensorChanSpec
     spec = SensorChanSpec.coerce('S2:(red|green|blue,nir|swir16|swir22),WV:(red|green|blue|mywvfeat:4)')
@@ -63,7 +65,7 @@ S2:red|green|blue,S2:nir|swir16|swir22,WV:red|green|blue|mywvfeat.0|mywvfeat.1|m
 
 Its also possible to take an expanded code and shorten it.
 
-.. code:: 
+.. code::
 
 
     from delayed_image import SensorChanSpec

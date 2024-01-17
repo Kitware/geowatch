@@ -8,6 +8,7 @@ Submodules
    :maxdepth: 4
 
    geowatch.tasks.fusion.datamodules.temporal_sampling.affinity
+   geowatch.tasks.fusion.datamodules.temporal_sampling.affinity_sampling
    geowatch.tasks.fusion.datamodules.temporal_sampling.exceptions
    geowatch.tasks.fusion.datamodules.temporal_sampling.plots
    geowatch.tasks.fusion.datamodules.temporal_sampling.sampler
