@@ -271,6 +271,7 @@ class PolygonExtractor:
         idx, cnts = np.unique(vol_label, return_counts=True)
         max_cnts = max(cnts)
         if max_cnts > 200:
+            print(f'max_cnts = {ub.urepr(max_cnts, nl=1)}')
             count_thresh = min(50, max_cnts)
             to_remove = idx[cnts < count_thresh]
             vol_label[np.isin(vol_label, to_remove)] = 0

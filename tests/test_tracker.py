@@ -400,8 +400,10 @@ def test_tracker_ac_refinement():
     import kwcoco
 
     coco_dset = geowatch.coerce_kwcoco(
-        'geowatch-msi',
-        heatmap='No Activity|Site Preparation|Active Construction|Post Construction|ac_salient',
+        'geowatch',
+        heatmap='No Activity|Site Preparation|Active Construction|Post Construction,ac_salient',
+        num_frames=12,
+        num_videos=1,
         geodata=True, dates=True, image_size=(96, 96))
     coco_dset.clear_annotations()
 
@@ -427,7 +429,7 @@ def test_tracker_ac_refinement():
         utm_region_poly = random_inscribed_polygon(utm_poly, rng=rng)
 
         # Shrink it so we are more likely to remove annotations
-        utm_region_poly = utm_region_poly.scale(0.5, about='centroid')
+        utm_region_poly = utm_region_poly.scale(0.8, about='centroid')
 
         crs84_region_poly = kwimage.Polygon.coerce(gpd.GeoDataFrame(
             geometry=[utm_region_poly],
@@ -441,7 +443,9 @@ def test_tracker_ac_refinement():
 
         for sitesum in region_model.site_summaries():
             # Modify status of site summaries to simulate bas output
-            sitesum['properties']['status'] = 'system_confirmed'
+            # sitesum['properties']['status'] = 'system_confirmed'
+            sitesum['properties']['status'] = 'Site Boundary'
+
         input_region_models.append(region_model)
 
     video0 = coco_dset.videos().objs[0]
@@ -460,11 +464,12 @@ def test_tracker_ac_refinement():
         region_fpath.write_text(region_model.dumps(indent=4))
 
     track_kwargs = {
-        'thresh': 0.72,
+        'thresh': 0.2,
         'time_thresh': .4,
         'polygon_simplify_tolerance': None,
         'new_algo': 'crall',
-        'boundaries_as': 'bounds',
+        # 'boundaries_as': 'bounds',
+        'boundaries_as': None,
         # 'resolution': '8GSD',
         # 'min_area_square_meters': None,
         # 'max_area_square_meters': None,
@@ -478,7 +483,7 @@ def test_tracker_ac_refinement():
     coco_dset.dump(in_coco_fpath, indent=2)
 
     out_coco_fpath = dpath / 'ac_tracked.kwcoco.json'
-    out_regions_dir = dpath / 'out_site_summaries/'
+    out_sitesum_dpath = dpath / 'out_site_summaries/'
     out_sitesum_fpath = dpath / 'out_site_summaries.json'
     out_site_fpath = dpath / 'out_sites.json'
     out_sites_dir = dpath / 'out_sites'
@@ -487,14 +492,14 @@ def test_tracker_ac_refinement():
         '--in_site_summaries', in_region_models_dpath,
         '--out_sites_dir', str(out_sites_dir),
         '--out_sites_fpath', str(out_site_fpath),
-        '--out_site_summaries_dir', str(out_regions_dir),
+        '--out_site_summaries_dir', str(out_sitesum_dpath),
         '--out_site_summaries_fpath',  str(out_sitesum_fpath),
         '--out_kwcoco', str(out_coco_fpath),
         '--track_fn', 'class_heatmaps',
-        '--boundary_region', in_region_models_dpath,
+        # '--boundary_region', in_region_models_dpath,
         '--track_kwargs', json.dumps(track_kwargs),
-        '--site_score_thresh', '0.3',
-        '--smoothing', '0.3',
+        '--site_score_thresh', '0.2',
+        '--smoothing', '0.0',
         '--sensor_warnings', '0',
     ]
     run_tracker.main(bas_argv1)
@@ -509,8 +514,9 @@ def test_tracker_ac_refinement():
         kwplot.autosns()
 
         # Show via site summaries
+        print(out_sitesum_dpath.ls())
         bas_region = geomodels.RegionModel.coerce(in_region_models_dpath / 'toy_video_1.geojson')
-        refined_region = geomodels.RegionModel.coerce(out_regions_dir / 'toy_video_1.geojson')
+        refined_region = geomodels.RegionModel.coerce(out_sitesum_dpath / 'toy_video_1.geojson')
 
         fig = kwplot.figure(fnum=1, doclf=1)
         ax = fig.gca()

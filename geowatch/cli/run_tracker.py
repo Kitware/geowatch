@@ -1471,11 +1471,13 @@ def main(argv=None, **kwargs):
 
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
                                                args.region_id)
-        cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']
-        coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
-        print('restricting dset to videos with site_summary annots: ',
-              set(coco_dset.index.name_to_video))
-        assert coco_dset.n_images > 0, 'no valid videos!'
+        if 0:
+            # Going to test to see if removing this helps anything
+            cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']
+            coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
+            print('restricting dset to videos with site_summary annots: ',
+                  set(coco_dset.index.name_to_video))
+            assert coco_dset.n_images > 0, 'no valid videos!'
     else:
         # Note: this may be a warning if we use this in a pipeline where the
         # inputed kwcoco files already have polygons reprojected (and in that

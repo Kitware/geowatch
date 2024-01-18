@@ -374,7 +374,7 @@ def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps',
         >>> with_nan = False
         >>> rng = None
         >>> heatmap_dname = 'dummy_heatmaps'
-        >>> num_frames = 30
+        >>> num_frames = 34
         >>> num_videos = 1
         >>> dates=True
         >>> geodata=True
@@ -382,7 +382,7 @@ def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps',
         >>> kwargs = {}
         >>> heatmap = channels = 'ac_salient,No Activity|Site Preparation|Active Construction|Post Construction'
         >>> # heatmap = channels = 'ac_salient'
-        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=bad_nodata, num_frames=num_frames, num_videos=num_videos, multisensor=0, multispectral=0)
+        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=bad_nodata, num_frames=num_frames, num_videos=num_videos, multisensor=0, multispectral=0, max_speed=0)
         >>> # xdoctest: +SKIP
         >>> ub.cmd(f'geowatch visualize {coco_dset.fpath} --smart', system=1)
 
@@ -418,21 +418,39 @@ def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps',
             track_annots = coco_dset.annots(aids)
             num_frames = len(track_annots)
 
-            loc = np.linspace(0, np.pi * 2, num_frames)
+            # loc = np.linspace(0, np.pi * 2, num_frames)
 
             for stream in sensorchan.chans.streams():
                 stream_size = stream.numel()
 
-                # Choose starting probability for each class
-                start = (rng.rand(stream_size) * np.pi * 2)
-
-                # kwarray.ArrayAPI.softmax(start)
-                stream_loc = loc[:, None] + start[None, :]
-                class_energy = np.sin(stream_loc)
-                # class_intensities = (np.sin(stream_loc) / 2) + 0.5
-                class_intensities = kwarray.ArrayAPI.softmax(class_energy, axis=1)
+                rng.rand(stream_size).argmax()
 
                 stream_chan_names = stream.to_list()
+                if len(stream_chan_names) == 1:
+                    class_intensities = np.ones((num_frames, stream_size))
+                else:
+                    kwarray.shuffle(stream_chan_names, rng=rng)
+                    transition_points = rng.randint(num_frames, size=stream_size - 1)
+                    transition_points.sort()
+                    transition_points = np.hstack([transition_points, [num_frames]])
+
+                    data = np.zeros((num_frames, stream_size))
+                    prev_rx = 0
+                    for cx, rx in enumerate(transition_points):
+                        data[prev_rx:rx, cx] = 1
+                        prev_rx = rx
+                    class_energy = data
+
+                    # # Choose starting probability for each class
+                    # start = (rng.rand(stream_size) * np.pi * 2)
+                    # # kwarray.ArrayAPI.softmax(start)
+                    # stream_loc = loc[:, None] + start[None, :]
+                    # class_energy = np.sin(stream_loc)
+                    # class_energy = (np.sin(stream_loc) / 2) + 0.5
+                    # class_energy = kwarray.ArrayAPI.softmax(class_energy * 20, axis=1)
+                    # class_energy = kwimage.gaussian_blur(class_energy)
+                    class_intensities = kwarray.normalize(class_energy)
+
                 if 0:
                     import kwplot
                     import pandas as pd
