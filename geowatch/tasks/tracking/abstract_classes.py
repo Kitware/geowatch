@@ -185,7 +185,9 @@ class TrackFunction:
                 new_annots.set('track_id', new_tids)
 
         # TODO: why is this assert here?
-        assert None not in sub_dset.annots().lookup('track_id', None)
+        sub_track_ids = sub_dset.annots().lookup('track_id', None)
+        if None in sub_track_ids:
+            raise AssertionError(f'None in track ids: {sub_track_ids}')
 
         if legacy:
             out_dset = self.safe_union(rest_dset, sub_dset)

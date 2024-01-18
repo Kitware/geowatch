@@ -38,13 +38,14 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
         f'geowatch-msi-geodata-dates-heatmap-videos{num_videos}-frames{num_frames}-gsize{image_size[0]}')
 
 
-def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
+def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
     rng = kwarray.ensure_rng(rng)
     asset_dpath = ub.Path(coco_dset.assets_dpath)
     dummy_heatmap_dpath = asset_dpath / heatmap_dname
     dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
 
-    channels = 'notsalient|salient'
+    if channels == 'auto':
+        channels = 'notsalient|salient'
     channels = kwcoco.FusedChannelSpec.coerce(channels)
     chan_codes = channels.normalize().as_list()
 
@@ -409,7 +410,8 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                 kwimage.imwrite(fpath, imdata)
 
     if heatmap:
-        hack_in_heatmaps(coco_dset, rng=rng)
+        channels = heatmap if isinstance(heatmap, str) else 'auto'
+        hack_in_heatmaps(coco_dset, channels, rng=rng)
 
     def coerce_bool_config_dict(data):
         if not isinstance(data, dict):
@@ -614,6 +616,7 @@ def _parse_demostr(data, defaults, alias_to_key=None):
 
 def random_inscribed_polygon(bounding_polygon, rng=None):
     """
+    Ignore:
         if 1:
             import kwplot
             kwplot.plt.ion()
@@ -713,6 +716,9 @@ def demo_dataset_with_regions_and_sites(dpath=None):
 
 @ub.memoize
 def _register_polygon_hash_data():
+    """
+    Allows ub.hash_data hash shapely geometry
+    """
     import shapely.geometry.base
 
     @ub.hash_data.extensions.register(shapely.geometry.base.BaseGeometry)

@@ -71,24 +71,6 @@ class SmartTrainer(pl.Trainer):
         dpath = ub.Path(self.logger.log_dir)
         rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
 
-        start_tensorboard_fpath = dpath / 'start_tensorboard.sh'
-        start_tensorboard_fpath.write_text(ub.codeblock(
-            f'''
-            tensorboard --logdir {dpath}
-            '''))
-        start_tensorboard_fpath.chmod(start_tensorboard_fpath.stat().st_mode | 0o110)
-
-        draw_tensorboard = dpath / 'draw_tensorboard.sh'
-        draw_tensorboard.write_text(ub.codeblock(
-            fr'''
-            #!/bin/bash
-            WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
-                {dpath}
-            '''
-        ))
-
-        draw_batches_fpath = dpath / 'draw_batches.sh'
-
         try:
             vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
         except Exception:
@@ -99,9 +81,33 @@ class SmartTrainer(pl.Trainer):
         except Exception:
             train_coco_path = None
 
-        draw_batches_fpath.write_text(ub.codeblock(
+        script_fpaths = {}
+
+        key = 'start_tensorboard'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        fpath.write_text(ub.codeblock(
+            f'''
+            tensorboard --logdir {dpath}
+            '''))
+
+        key = 'draw_tensorboard'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        fpath.write_text(ub.codeblock(
             fr'''
             #!/bin/bash
+            WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+                {dpath}
+            '''
+        ))
+
+        checkpoint_header_part = ub.codeblock(
+            fr'''
+            #!/bin/bash
+
+            # Device defaults to CPU, but the user can pass a GPU in
+            # as the first argument.
+            DEVICE=${{1:-"cpu"}}
+
             TRAIN_DPATH="{dpath}"
             echo $TRAIN_DPATH
 
@@ -137,74 +143,108 @@ class SmartTrainer(pl.Trainer):
                 print(p.stem.replace('.ckpt', ''))
             ")
             echo $PACKAGE_NAME
+            ''')
 
-            ### --- Validation Batch Prediction --- ###
+        key = 'draw_train_batches'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        text = chr(10).join([
+            checkpoint_header_part,
+            ub.codeblock(
+                fr'''
+                ### --- Train Batch Prediction --- ###
 
-            # Predict on the validation set
-            python -m geowatch.tasks.fusion.predict \
-                --package_fpath $PACKAGE_FPATH \
-                --test_dataset {vali_coco_fpath} \
-                --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                --window_overlap 0 \
-                --clear_annots=False \
-                --test_with_annot_info=True \
-                --use_centered_positives=True \
-                --use_grid_positives=False \
-                --use_grid_negatives=False \
-                --draw_batches=True \
-                --devices cpu
+                # Predict on the validation set
+                python -m geowatch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {train_coco_path} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --window_overlap 0 \
+                    --clear_annots=False \
+                    --test_with_annot_info=True \
+                    --use_centered_positives=True \
+                    --use_grid_positives=False \
+                    --use_grid_negatives=False \
+                    --draw_batches=True \
+                    --devices "$DEVICE"
+                ''')
+        ])
+        fpath.write_text(text)
 
-            ### --- Train Batch Prediction --- ###
+        key = 'draw_vali_batches'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        text = chr(10).join([
+            checkpoint_header_part,
+            ub.codeblock(
+                fr'''
+                ### --- Validation Batch Prediction --- ###
 
-            # Predict on the validation set
-            python -m geowatch.tasks.fusion.predict \
-                --package_fpath $PACKAGE_FPATH \
-                --test_dataset {train_coco_path} \
-                --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                --window_overlap 0 \
-                --clear_annots=False \
-                --test_with_annot_info=True \
-                --use_centered_positives=True \
-                --use_grid_positives=False \
-                --use_grid_negatives=False \
-                --draw_batches=True \
-                --devices cpu
+                # Predict on the validation set
+                python -m geowatch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {vali_coco_fpath} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --window_overlap 0 \
+                    --clear_annots=False \
+                    --test_with_annot_info=True \
+                    --use_centered_positives=True \
+                    --use_grid_positives=False \
+                    --use_grid_negatives=False \
+                    --draw_batches=True \
+                    --devices "$DEVICE"
+                ''')
+        ])
+        fpath.write_text(text)
 
-            ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
+        key = 'draw_train_dataset'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        text = chr(10).join([
+            checkpoint_header_part,
+            ub.codeblock(
+                fr'''
+                ### --- Train Full-Image Prediction (best run on a GPU) --- ###
 
-            # Predict on the validation set
-            python -m geowatch.tasks.fusion.predict \
-                --package_fpath $PACKAGE_FPATH \
-                --test_dataset {vali_coco_fpath} \
-                --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                --window_overlap 0 \
-                --clear_annots=False \
-                --devices cpu
+                # Predict on the training set
+                python -m geowatch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --window_overlap 0 \
+                    --test_dataset {train_coco_path} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --clear_annots=False \
+                    --devices "$DEVICE"
 
-            # Visualize vali predictions
-            geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+                # Visualize train predictions
+                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+                ''')
+        ])
+        fpath.write_text(text)
 
-            ### --- Train Full-Image Prediction (best run on a GPU) --- ###
+        key = 'draw_vali_dataset'
+        script_fpaths[key] = fpath = dpath / f'{key}.sh'
+        text = chr(10).join([
+            checkpoint_header_part,
+            ub.codeblock(
+                fr'''
+                ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
 
-            # Predict on the training set
-            python -m geowatch.tasks.fusion.predict \
-                --package_fpath $PACKAGE_FPATH \
-                --window_overlap 0 \
-                --test_dataset {train_coco_path} \
-                --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                --clear_annots=False \
-                --devices cpu
+                # Predict on the validation set
+                python -m geowatch.tasks.fusion.predict \
+                    --package_fpath $PACKAGE_FPATH \
+                    --test_dataset {vali_coco_fpath} \
+                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --window_overlap 0 \
+                    --clear_annots=False \
+                    --devices "$DEVICE"
 
-            # Visualize train predictions
-            geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
-            '''
-        ))
+                # Visualize vali predictions
+                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+                ''')
+        ])
+        fpath.write_text(text)
 
         try:
             from geowatch.utils.util_chmod import new_chmod
-            new_chmod(start_tensorboard_fpath, 'u+x')
-            new_chmod(draw_tensorboard, 'u+x')
-            new_chmod(draw_batches_fpath, 'u+x')
+            for fpath in script_fpaths.values():
+                new_chmod(fpath, 'u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 

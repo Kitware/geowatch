@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""
+r"""
 This file contains logic to convert a kwcoco file into an IARPA Site Model.
 
 At a glance the IARPA Site Model is a GeoJSON FeatureCollection with the
 following informal schema:
 
-For official documentation about the KWCOCO json format see [1]_. A formal
+For official documentation about the KWCOCO json format see [kwcoco]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
 
 For official documentation about the IARPA json format see [2, 3]_. A formal
 json-schema can be found in ``../../geowatch/rc/site-model.schema.json``.
 
 References:
-    .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
+    .. [kwcoco] https://gitlab.kitware.com/computer-vision/kwcoco
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
 
@@ -132,7 +132,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
 
     in_file_gt = scfg.Value(None, help=ub.paragraph(
             '''
-            If available, ground truth KWCOCO to visualize
+            If available, ground truth KWCOCO to visualize.
+            DEPRECATED.
             '''), group='convenience')
 
     region_id = scfg.Value(None, help=ub.paragraph(
@@ -174,13 +175,15 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             Directory to save tracking vizualizations to; if None, don't viz
             '''), group='track')
+
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
             A filepath glob or json blob containing either a
             site_summary or a region_model that includes site summaries.
             Each summary found will be added to in_file as
             'Site Boundary' annotations.
-            '''), group='behavior')
+            '''), alias=['in_site_summaries'], group='behavior')
+
     clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Clears all annotations before running tracking, so it starts
