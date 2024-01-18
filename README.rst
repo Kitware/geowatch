@@ -120,6 +120,25 @@ classifying its phases. This demo was run on public data, and can be reproduced
 with `Tutorial 6 <docs/source/manual/tutorial/tutorial6_predict_KHQ.sh>`_. The system was not
 trained on this region.
 
+
+The latest model weights indexed via the decentralized `IPFS <https://en.wikipedia.org/wiki/InterPlanetary_File_System>`_ protocol as well as through Kitware's centralized `Girder <https://girder.readthedocs.io/en/latest/>`_ system.
+Note IPFS links use the ipfs.io gateway, but the CID can be used to accesss the data directly. See `IPFS tutorials <https://docs.ipfs.tech/how-to/desktop-app/#install-ipfs-desktop>`_ for details.
+
+
++--------------------------------------------------------------------------------------------------------------+
+|                Model Weights                                                                                 |
++---------------+----------------------------------------------------------------+-----------------------------+
+| Release Date  | IPFS                                                           | Girder                      |
++===============+================================================================+=============================+
+| 2024-01-11    | `bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa`_ | `65a94833d5d9e43895a66505`_ |
++---------------+----------------------------------------------------------------+-----------------------------+
+
+
+.. _bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa: https://ipfs.io/ipfs/bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa
+.. _65a94833d5d9e43895a66505: https://data.kitware.com/#item/65a94833d5d9e43895a66505
+
+
+
 Getting Started
 ---------------
 
