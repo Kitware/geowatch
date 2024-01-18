@@ -101,7 +101,10 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
         num_frames (int): number of frames per video in the demo dataset
 
-        heatmap (bool): if True adds dummy saliency heatmaps to the demodata.
+        heatmap (bool | ChannelSpec):
+            if True adds dummy saliency heatmaps to the demodata.  Can also be
+            given as data coercable to a channel spec, in which case those
+            channels are generated.
 
         geodata (bool | dict): if True adds dummy geographic referencing to
             the demodata.
@@ -151,6 +154,15 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
     rng = kwarray.ensure_rng(demo_kwargs['rng'])
     demo_kwargs['rng' ] = rng
     demo_kwargs.update(kwargs)
+
+    if geodata:
+        renderkw = demo_kwargs.get('render', True)
+        if renderkw:
+            if not isinstance(renderkw, dict):
+                renderkw = {}
+            renderkw['main_ext'] = '.tif'
+            renderkw['main_channels'] = 'red|green|blue'
+        demo_kwargs['render'] = renderkw
 
     stamp_dpath = (dpath / '_stamps').ensuredir()
 
@@ -218,7 +230,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                 kwimage.imwrite(fpath, imdata)
 
     if heatmap:
-        channels = heatmap if isinstance(heatmap, str) else 'auto'
+        channels = heatmap
         hack_in_heatmaps(coco_dset, channels, rng=rng)
 
     def coerce_bool_config_dict(data):
@@ -351,70 +363,211 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
 
 
 def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
+    """
+    Adds dummy heatmaps into a coco dataset.
+
+    Args:
+        channels (ChannelSpec): heatmap channels to generate
+
+    Example:
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> with_nan = False
+        >>> rng = None
+        >>> heatmap_dname = 'dummy_heatmaps'
+        >>> num_frames = 30
+        >>> num_videos = 1
+        >>> dates=True
+        >>> geodata=True
+        >>> bad_nodata = False
+        >>> kwargs = {}
+        >>> heatmap = channels = 'ac_salient,No Activity|Site Preparation|Active Construction|Post Construction'
+        >>> # heatmap = channels = 'ac_salient'
+        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=bad_nodata, num_frames=num_frames, num_videos=num_videos, multisensor=0, multispectral=0)
+        >>> # xdoctest: +SKIP
+        >>> ub.cmd(f'geowatch visualize {coco_dset.fpath} --smart', system=1)
+
+    Ignore:
+        coco_dset.fpath
+        ub.cmd(f'geowatch visualize {coco_dset.fpath} --smart', system=1)
+        ub.cmd(f'geowatch stats {coco_dset.fpath}', system=1)
+    """
     rng = kwarray.ensure_rng(rng)
     asset_dpath = ub.Path(coco_dset.assets_dpath)
     dummy_heatmap_dpath = asset_dpath / heatmap_dname
     dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
 
-    if channels == 'auto':
+    if channels == 'auto' or isinstance(channels, int):
         channels = 'notsalient|salient'
-    channels = kwcoco.FusedChannelSpec.coerce(channels)
-    chan_codes = channels.normalize().as_list()
+    from delayed_image import sensorchan_spec
+    # channels = sensorchan_spec.SensorChanSpec.coerce(heatmap)
+    # channels = heatmap if isinstance(heatmap, str) else 'auto'
+    # channels = kwcoco.FusedChannelSpec.coerce(channels)
+    sensorchan = sensorchan_spec.SensorChanSpec.coerce(channels)
+    sensorchan = sensorchan.normalize()
 
     aux_width = 128
     aux_height = 128
     dims = (aux_width, aux_height)
-    for img in coco_dset.index.imgs.values():
+    coco_images = coco_dset.images().coco_images
+
+    # Precompute class osillation on a per-track basis
+    if 1:
+        chan_names = sensorchan.chans.fuse()
+        aidchan_to_intensities = {}
+        for tid, aids in coco_dset.index.trackid_to_aids.items():
+            track_annots = coco_dset.annots(aids)
+            num_frames = len(track_annots)
+
+            loc = np.linspace(0, np.pi * 2, num_frames)
+
+            for stream in sensorchan.chans.streams():
+                stream_size = stream.numel()
+
+                # Choose starting probability for each class
+                start = (rng.rand(stream_size) * np.pi * 2)
+
+                # kwarray.ArrayAPI.softmax(start)
+                stream_loc = loc[:, None] + start[None, :]
+                class_energy = np.sin(stream_loc)
+                # class_intensities = (np.sin(stream_loc) / 2) + 0.5
+                class_intensities = kwarray.ArrayAPI.softmax(class_energy, axis=1)
+
+                stream_chan_names = stream.to_list()
+                if 0:
+                    import kwplot
+                    import pandas as pd
+                    sns = kwplot.autosns()
+                    df = pd.DataFrame(ub.dzip(stream_chan_names, class_intensities.T))
+                    df1 = df.reset_index(names='frame_index')
+                    df2 = df1.melt(**{'id_vars': ['frame_index'], 'value_name': 'intensity', 'var_name': 'catname'})
+                    sns.lineplot(data=df2, x='frame_index', y='intensity', hue='catname')
+
+                for aid, vals in zip(aids, class_intensities):
+                    for c, v in zip(stream_chan_names, vals):
+                        aidchan_to_intensities[(aid, c)] = v
+
+    # _tasks = []
+    for coco_img in coco_images:
+        img = coco_img.img
 
         warp_img_from_aux = kwimage.Affine.scale((
             img['width'] / aux_width, img['height'] / aux_height))
         warp_aux_from_img = warp_img_from_aux.inv()
 
         # Grab perterbed detections from this image
-        img_dets = coco_dset.annots(gid=img['id']).detections
+        annots = coco_img.annots()
+        # track_ids = annots.lookup('track_id', None)
+
+        img_dets = annots.detections
 
         # Transfom dets into aux space
         aux_dets = img_dets.warp(warp_aux_from_img)
 
         # Hack: use dets to draw some randomish heatmaps
         sseg = aux_dets.data['segmentations']
-        chan_datas = []
-        for _code in chan_codes:
-            chan_data = np.zeros(dims, dtype=np.float32)
-            for poly in sseg.data:
-                poly.fill(chan_data, 1)
+        chan_to_intensities = {
+            c: [aidchan_to_intensities[(aid, c)] for aid in annots]
+            for c in chan_names
+        }
 
-            # Add lots of noise to the data
-            chan_data += (rng.randn(*dims) * 0.1)
-            chan_data + chan_data.clip(0, 1)
-            chan_data = kwimage.gaussian_blur(chan_data, sigma=1.2)
-            chan_data = chan_data.clip(0, 1)
-            mask = rng.randn(*dims)
-            chan_data = chan_data * ((kwimage.fourier_mask(chan_data, mask)[..., 0]) + .5)
-            chan_data += (rng.randn(*dims) * 0.1)
-            chan_data = chan_data.clip(0, 1)
-            chan_datas.append(chan_data)
-        hwc_probs = np.stack(chan_datas, axis=2)
+        # new_assets = []
+        for stream in sensorchan.streams():
+            stream_hash = ub.hash_data(stream.spec)[0:16]
+            if stream.sensor.spec != '*':
+                raise NotImplementedError
 
-        if with_nan:
-            invalid_mask = (rng.rand(*hwc_probs.shape) > 0.95)
-            hwc_probs[invalid_mask] = np.nan
+            # for _code in stream.chans.to_list():
+            chan_datas = []
+            for fused_chan in stream.chans.to_list():
+                sseg.meta['intensities'] = chan_to_intensities[fused_chan]
+                chan_data = _random_chan_data(dims, sseg, rng)
+                chan_datas.append(chan_data)
 
-        # TODO do something with __WIP_add_auxiliary to make this clear and
-        # concise
-        heatmap_fpath = dummy_heatmap_dpath / 'dummy_heatmap_{}.tif'.format(img['id'])
-        kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='DEFLATE',
-                        blocksize=128)
-        aux_height, aux_width = hwc_probs.shape[0:2]
+            hwc_probs = np.stack(chan_datas, axis=2)
 
-        auxlist = img['auxiliary']
-        auxlist.append({
-            'file_name': str(heatmap_fpath),
-            'width': aux_width,
-            'height': aux_height,
-            'channels': channels.spec,
-            'warp_aux_to_img': warp_img_from_aux.concise(),
-        })
+            if with_nan:
+                invalid_mask = (rng.rand(*hwc_probs.shape) > 0.95)
+                hwc_probs[invalid_mask] = np.nan
+
+            heatmap_fpath = dummy_heatmap_dpath / f'dummy_heatmap_{img["id"]}_{stream_hash}.tif'
+            kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='DEFLATE',
+                            blocksize=128)
+            aux_height, aux_width = hwc_probs.shape[0:2]
+
+            new_asset = {
+                'file_name': str(heatmap_fpath),
+                'sensor_coarse': stream.sensor.spec,
+                'width': aux_width,
+                'height': aux_height,
+                'sensor': stream.sensor.spec,
+                'channels': stream.chans.concise().spec,
+                'warp_aux_to_img': warp_img_from_aux.concise(),
+            }
+            # print(f'new_asset = {ub.urepr(new_asset, nl=1)}')
+            coco_img.add_asset(**new_asset)
+
+    #         new_assets.append(new_asset)
+    #     _tasks.append([coco_img, new_assets])
+
+    # for coco_img, new_assets in _tasks:
+    #     for new_asset in new_assets:
+    #         coco_img.add_asset(**new_asset)
+
+
+def _random_chan_data(dims, sseg, rng):
+    """
+    Create a noisy random heatmap using sseg as a template
+
+    Example:
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> from geowatch.demo.smart_kwcoco_demodata import _random_chan_data, _random_utm_box, _parse_demostr, _register_polygon_hash_data
+        >>> import kwarray
+        >>> import kwimage
+        >>> rng = kwarray.ensure_rng()
+        >>> dims = (128, 128)
+        >>> sseg1 = kwimage.Polygon.random().scale(dims).scale(0.5).translate((0, 32))
+        >>> sseg2 = kwimage.Polygon.random().scale(dims).scale(0.5).translate((32, 0))
+        >>> sseg3 = kwimage.Polygon.random().scale(dims).scale(0.5).translate((64, 0))
+        >>> sseg4 = kwimage.Polygon.random().scale(dims).scale(0.5).translate((0, 64))
+        >>> sseg = kwimage.PolygonList([sseg1, sseg2, sseg3, sseg4])
+        >>> sseg.meta['intensities'] = [0.3, 0.8, 1.0, 0.1]
+        >>> chan_data = _random_chan_data(dims, sseg, rng)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(doclf=1)
+        >>> kwplot.imshow(chan_data)
+        >>> sseg.draw(fill=0, border=1)
+    """
+    import numpy as np
+    intensities = sseg.meta.get('intensities', None)
+
+    # Generate a clean signal
+    clean = np.zeros(dims, dtype=np.float32)
+    if intensities is None:
+        for poly in sseg.data:
+            poly.fill(clean, 1)
+    else:
+        for v, poly in zip(intensities, sseg.data):
+            poly.fill(clean, v)
+
+    # Make a dirty copy of the signal
+    dirty = clean.copy()
+    # Add lots of noise to the data
+    dirty += (rng.randn(*dims) * 0.1)
+    dirty + dirty.clip(0, 1)
+    dirty = kwimage.gaussian_blur(dirty, sigma=1.2)
+    dirty = dirty.clip(1e-6, 1)
+    mask = rng.randn(*dims)
+    dirty = dirty * ((kwimage.fourier_mask(dirty, mask)[..., 0]) + .5)
+    dirty += (rng.randn(*dims) * 0.1)
+    dirty = dirty.clip(0, 1)
+
+    # Blend between clean and dirty
+    a1 = 0.5
+    a2 = 1 - a1
+    chan_data = (dirty * a1) + (clean * a2)
+    return chan_data
 
 
 def hack_in_timedata(coco_dset, dates=True, rng=None):
@@ -488,7 +641,11 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
         obj = coco_img.primary_asset()
         fpath = str(ub.Path(coco_dset.bundle_dpath) / obj['file_name'])
 
-        format_info = kwcoco_extensions.geotiff_format_info(fpath)
+        try:
+            format_info = kwcoco_extensions.geotiff_format_info(fpath)
+        except Exception:
+            print(f'FAILED fpath={fpath}')
+            raise
         if force or not format_info['has_geotransform']:
 
             if override_geom_box is None:

@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.14.0 - Unreleased
 
+### Added
+
+* `demo_kwcoco_multisensor` can now generate heatmaps with any given chanelspec
+
 
 ## Version 0.13.3 - Released 2023-12-xx
 
