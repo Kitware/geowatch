@@ -389,7 +389,6 @@ def test_tracker_ac_refinement():
     CommandLine:
         pytest tests/test_tracker.py -k test_tracker_ac_refinement -s
     """
-
     from geowatch.demo.smart_kwcoco_demodata import random_inscribed_polygon
     import json
     import ubelt as ub
@@ -490,7 +489,7 @@ def test_tracker_ac_refinement():
     out_sitesum_fpath = dpath / 'out_site_summaries.json'
     out_site_fpath = dpath / 'out_sites.json'
     out_sites_dir = dpath / 'out_sites'
-    bas_argv1 = [
+    ac_argv = [
         '--input_kwcoco', in_coco_fpath,
         '--in_site_summaries', in_region_models_dpath,
         '--out_sites_dir', str(out_sites_dir),
@@ -504,8 +503,9 @@ def test_tracker_ac_refinement():
         '--site_score_thresh', '0.2',
         '--smoothing', '0.0',
         '--sensor_warnings', '0',
+        '--viz_out_dir', ub.Path('~/testviz').expand(),
     ]
-    run_tracker.main(bas_argv1)
+    run_tracker.main(ac_argv)
     ac_coco_dset = kwcoco.CocoDataset(out_coco_fpath)
 
     trackids = ac_coco_dset.annots().lookup('track_id', None)
@@ -556,3 +556,41 @@ def test_tracker_ac_refinement():
 
         _ = ub.cmd(f'geowatch visualize {out_coco_fpath} --smart', verbose=3,
                    system=True)
+
+    """
+    # Real Data Testing
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R001/sc-fusion/
+
+    python -m geowatch.cli.run_tracker \
+        --in_file=./sc_fusion_kwcoco.json \
+        --out_kwcoco=./sc_fusion_kwcoco_tracked2.json \
+        --out_sites_dir=./sc_out_site_models2 \
+        --out_site_summaries_dir=./sc_out_region_models2 \
+        --out_sites_fpath=./site_models_manifest2.json \
+        --out_site_summaries_fpath=./sc_out_region_models_manifest.json \
+        --in_file_gt=None \
+        --region_id=None \
+        --track_fn=None \
+        --default_track_fn=class_heatmaps \
+        --viz_out_dir="/home/joncrall/testviz/real" \
+        --site_summary='./sv_out_region_models/*.geojson' \
+        --clear_annots=True \
+        --append_mode=False \
+        --boundary_region=None \
+        --sensor_warnings=True \
+        --time_pad_before=None \
+        --time_pad_after=None \
+        --smoothing=0.0 \
+        --site_score_thresh=0.3 \
+        --track_kwargs '
+        {
+            "boundaries_as": "bounds",
+            "min_area_square_meters": 7200,
+            "new_algo": "crall",
+            "polygon_simplify_tolerance": 1,
+            "resolution": "8GSD",
+            "thresh": 0.3
+        }'
+
+
+    """

@@ -606,10 +606,10 @@ def ensure_heuristic_category_tree_colors(classes, force=False):
         - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
 
     Example:
-        >>> from geowatch.heuristics import *  # NOQA
+        >>> from geowatch import heuristics
         >>> import kwcoco
         >>> classes = kwcoco.CategoryTree.coerce(['ignore', 'positive', 'Active Construction', 'foobar', 'Unknown', 'baz'])
-        >>> ensure_heuristic_category_tree_colors(classes)
+        >>> heuristics.ensure_heuristic_category_tree_colors(classes)
         >>> assert all(d['color'] for n, d in classes.graph.nodes(data=True))
     """
     # Set any missing class color with the heuristic category

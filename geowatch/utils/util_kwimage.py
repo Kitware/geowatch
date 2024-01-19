@@ -384,7 +384,6 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None,
             label_to_color = {str(k) if k not in label_mapping else str(k) + ': ' + str(label_mapping[k]): v
                               for k, v in label_to_color.items()}
 
-        print(f'legend_dpi={legend_dpi}')
         legend = kwplot.make_legend_img(label_to_color, dpi=legend_dpi)
 
         h1, w1 = legend.shape[0:2]

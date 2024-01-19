@@ -861,8 +861,6 @@ class TimeAggregatedSC(TrackFnWithSV):
         import kwimage
         import rich
         rich.print('[white] --- Create Tracks ---')
-        print(f'self={self}')
-        print(f'self.boundaries_as={self.boundaries_as}')
         if self.boundaries_as == 'polys':
 
             # Just score the polygons, no need to extract
@@ -884,7 +882,7 @@ class TimeAggregatedSC(TrackFnWithSV):
         else:
             # Need to extract and score
             aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
-            aggkw['use_boundaries'] = self.get('boundaries_as', 'none') != 'none'
+            aggkw['use_boundaries'] = str(self.get('boundaries_as', 'none')).lower() not in {'none', 'null'}
             tracks = time_aggregated_polys(sub_dset, **aggkw)
         print('Tracks:')
         print(tracks)
