@@ -286,9 +286,7 @@ There are other GIS and segmentation focused torch packages out there:
   dataloaders for standard datasets. In contrast, we provide a single data
   loader for kwcoco files.
 
-* `Raster Vision <https://github.com/azavea/raster-vision>`_ - based on chips, whereas ours
-  focuses on the ability to process data in-situ (using the help of
-  `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_).
+* `Raster Vision <https://github.com/azavea/raster-vision>`_ - A similar framework. One major difference is that ours provides the ability to construct multi-sensor batches with heterogeneous resolutions (using the help of `delayed_image <https://gitlab.kitware.com/computer-vision/delayed_image>`_).
 
 * `MMSegmentation <https://github.com/open-mmlab/mmsegmentation>`_ -
   Contains standardized models with flexible model configuration.
