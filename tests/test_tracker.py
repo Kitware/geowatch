@@ -383,6 +383,9 @@ def test_tracker_ac_refinement():
     Generates random BAS predictions and a demo dataset with random AC
     heatmaps. Then run AC tracking.
 
+    Quick Links:
+        ~/code/geowatch/geowatch/cli/run_tracker.py
+
     CommandLine:
         pytest tests/test_tracker.py -k test_tracker_ac_refinement -s
     """

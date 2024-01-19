@@ -336,8 +336,17 @@ htmlhelp_basename = project + 'doc'
 # References:
 # https://tex.stackexchange.com/questions/546246/centos-8-the-font-freeserif-cannot-be-found
 
+"""
+# https://www.sphinx-doc.org/en/master/usage/builders/index.html#sphinx.builders.latex.LaTeXBuilder
+# https://tex.stackexchange.com/a/570691/83399
+sudo apt install fonts-freefont-otf texlive-luatex texlive-latex-extra texlive-fonts-recommended texlive-latex-recommended tex-gyre latexmk
+make latexpdf LATEXMKOPTS="-shell-escape --synctex=-1 -src-specials -interaction=nonstopmode"
+make latexpdf LATEXMKOPTS="-lualatex -interaction=nonstopmode"
+make LATEXMKOPTS="-lualatex -interaction=nonstopmode"
+
+"""
 # latex_engine = 'lualatex'
-latex_engine = 'xelatex'
+# latex_engine = 'xelatex'
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
@@ -394,8 +403,10 @@ from sphinx.domains.python import PythonDomain  # NOQA
 from typing import Any, List  # NOQA
 
 
-USE_TIMER = 0
-if USE_TIMER:
+# HACK TO PREVENT EXCESSIVE TIME.
+# TODO: FIXME FOR REAL
+MAX_TIME_MINUTES = 5
+if MAX_TIME_MINUTES:
     import ubelt  # NOQA
     TIMER = ubelt.Timer()
     TIMER.tic()
@@ -622,10 +633,7 @@ class GoogleStyleDocstringProcessor:
 
         render_doc_images = 1
 
-        # HACK TO PREVENT EXCESSIVE TIME.
-        # TODO: FIXME FOR REAL
-        MAX_TIME_MINUTES = 5
-        if USE_TIMER and TIMER.toc() > 60 * MAX_TIME_MINUTES:
+        if MAX_TIME_MINUTES and TIMER.toc() > (60 * MAX_TIME_MINUTES):
             render_doc_images = False  # FIXME too slow on RTD
 
         if render_doc_images:
