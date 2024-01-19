@@ -118,23 +118,53 @@ WATCH_PREIMPORT_VARIANTS = {
 }
 
 
+# Use this to debug import-time effects
+_GEOWATCH_DEBUG = False
+
+
 def _handle_hidden_commands():
     """
-    Hidden developer features
+    Hidden developer features based on CLI flags or enviornment variables.
+    The following table summarizes these options and their effect.
+
+    +-------------------+------------------------+-----------------------------------------------+
+    | CLI Flag          | Environment Variable   | Effect                                        |
+    +-------------------+------------------------+-----------------------------------------------+
+    | --warntb          | WARN_WITH_TRACEBACK    | Any warnings will emit a traceback to stderr  |
+    +-------------------+------------------------+-----------------------------------------------+
+    | --geowatch-debug  | _GEOWATCH_DEBUG        | Will print internal module setup info         |
+    +-------------------+------------------------+-----------------------------------------------+
+
     """
+    if ub.argflag('--geowatch-debug') or os.environ.get('_GEOWATCH_DEBUG', ''):
+        global _GEOWATCH_DEBUG
+        _GEOWATCH_DEBUG = 1
+        if _GEOWATCH_DEBUG:
+            print('Enabled geowatch debugging')
+
     if ub.argflag('--warntb') or os.environ.get('WARN_WITH_TRACEBACK', ''):
         import xdev
         xdev.make_warnings_print_tracebacks()
+
+        if _GEOWATCH_DEBUG:
+            print('Enable warning tracebacks')
+
+    if _GEOWATCH_DEBUG:
+        print('Finished handling hidden commands')
 
 
 def _import_troublesome_module(modname):
     """
     Defines exactly how to import each troublesome (binary) module
     """
+    if _GEOWATCH_DEBUG:
+        print(f'Import troublesome module: {modname}')
     if modname == 'gdal':
         from osgeo import gdal as module
         gdal = module
         if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+            if _GEOWATCH_DEBUG:
+                print('Configuring GDAL to use exceptions')
             gdal.UseExceptions()
     elif modname == 'pyproj':
         import pyproj as module
@@ -176,21 +206,31 @@ def _is_running_a_fast_cli_tool():
 
     References:
         .. [SO42076706] https://stackoverflow.com/questions/42076706/sys-argv-behavior-with-python-m
+
+    Returns:
+        bool: True if we should minimize startup time
     """
     if os.environ.get('_ARGCOMPLETE', ''):
-        return True
-    if sys.argv and 'geowatch_dvc' in sys.argv[0] or 'geowatch' in sys.argv[0]:
-        return True
-    if sys.argv and len(sys.argv) == 1:
-        # No args given case
-        return True
-    if sys.argv and sys.argv == ['-m']:
-        return True
-    if sys.argv and ('--help' in sys.argv or '-h' in sys.argv):
-        return True
-    if 'finish_install' in sys.argv:
-        return True
-    return False
+        flag = True
+    elif sys.argv and 'geowatch_dvc' in sys.argv[0] or 'geowatch' in sys.argv[0]:
+        flag = True
+    # elif sys.argv and len(sys.argv) == 1 and sys.argv[0] != '-c':
+    #     # No args given case
+    #     flag = True
+    # elif sys.argv and sys.argv == ['-m']:
+    #     flag = True
+    elif sys.argv and ('--help' in sys.argv or '-h' in sys.argv):
+        flag = True
+    elif 'finish_install' in sys.argv:
+        flag = True
+    else:
+        flag = False
+
+    if _GEOWATCH_DEBUG:
+        print(f'sys.argv={sys.argv}')
+        print(f'Is running a fast CLI tool?: {flag}')
+
+    return flag
 
 
 def _execute_ordered_preimports():
@@ -203,12 +243,18 @@ def _execute_ordered_preimports():
     ``WATCH_PREIMPORT_VARIANTS`` dictionary and the setting is
     controlled by the ``WATCH_PREIMPORT`` environment variable.
     """
-
+    if _GEOWATCH_DEBUG:
+        print('Execute preordered imports')
     # Shorter alias because we are using it now
     WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
     WATCH_PREIMPORT = os.environ.get('WATCH_HACK_IMPORT_ORDER', WATCH_PREIMPORT)
 
+    if _GEOWATCH_DEBUG:
+        print(f'WATCH_PREIMPORT = {ub.urepr(WATCH_PREIMPORT, nl=1)}')
+
     if not WATCH_PREIMPORT:
+        if _GEOWATCH_DEBUG:
+            print('Fast return')
         return
 
     if WATCH_PREIMPORT == 'auto':
