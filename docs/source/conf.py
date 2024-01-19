@@ -405,7 +405,7 @@ from typing import Any, List  # NOQA
 
 # HACK TO PREVENT EXCESSIVE TIME.
 # TODO: FIXME FOR REAL
-MAX_TIME_MINUTES = 5
+MAX_TIME_MINUTES = 1
 if MAX_TIME_MINUTES:
     import ubelt  # NOQA
     TIMER = ubelt.Timer()
