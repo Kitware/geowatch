@@ -51,7 +51,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --force_nodata=-9999 \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=8 \
+    --tmux_workers=16 \
     --sensor_to_time_window='
         S2: 2 weeks
         L8: 2 weeks
