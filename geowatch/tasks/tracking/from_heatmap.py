@@ -36,6 +36,7 @@ except Exception:
 class DataFrameFilter:
 
     def __call__(self, gdf):
+        raise AssertionError("Use the explicit .filter_dataframe method instead")
         return self.filter_dataframe(gdf)
 
     def filter_dataframe(self, gdf):

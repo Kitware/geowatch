@@ -12,6 +12,7 @@ class TrackFunction:
     """
 
     def __call__(self, sub_dset, **kwargs):
+        raise AssertionError("Use the explicit .forward method instead")
         return self.forward(sub_dset, **kwargs)
 
     def forward(self, sub_dset):
@@ -54,9 +55,6 @@ class TrackFunction:
         for sub_dset in ub.ProgIter(tracked_subdsets,
                                     desc='Ensure ok tracks',
                                     verbose=3):
-
-            if _debug:
-                sub_dset = sub_dset.copy()
 
             # Rebuild the index to ensure any hacks are removed.
             # We should be able to remove this step.
