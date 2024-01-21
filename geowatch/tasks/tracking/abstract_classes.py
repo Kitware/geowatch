@@ -11,7 +11,10 @@ class TrackFunction:
     Abstract class that all track functions should inherit from.
     """
 
-    def __call__(self, sub_dset):
+    def __call__(self, sub_dset, **kwargs):
+        return self.forward(sub_dset, **kwargs)
+
+    def forward(self, sub_dset):
         """
         Ensure each annotation in coco_dset has a track_id.
 
@@ -131,7 +134,7 @@ class TrackFunction:
         ####
         # APPLY THE TRACKING FUNCTION.
         # THIS IS THE MAIN WORK. SEE SPECIFIC __call__ FUNCTIOSN
-        sub_dset = self(sub_dset)
+        sub_dset = self.forward(sub_dset)
         ####
 
         if DEBUG_JSON_SERIALIZABLE:
@@ -202,7 +205,7 @@ class NoOpTrackFunction(TrackFunction):
     def __init__(self, **kwargs):
         self.kwargs = kwargs  # Unused
 
-    def __call__(self, sub_dset):
+    def forward(self, sub_dset):
         return sub_dset
 
 
@@ -212,7 +215,7 @@ class NewTrackFunction(TrackFunction):
     in coco_dset, and add them as new annotations
     """
 
-    def __call__(self, sub_dset):
+    def forward(self, sub_dset):
         # print(f'Enter {self.__class__} __call__ function')
         # print('Create tracks')
         tracks = self.create_tracks(sub_dset)

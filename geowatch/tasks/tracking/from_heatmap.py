@@ -33,7 +33,16 @@ except Exception:
 #
 
 
-class TimePolygonFilter:
+class DataFrameFilter:
+
+    def __call__(self, gdf):
+        return self.filter_dataframe(gdf)
+
+    def filter_dataframe(self, gdf):
+        raise NotImplementedError
+
+
+class TimePolygonFilter(DataFrameFilter):
     """
     Cuts off start and end of each track based on min response.
     """
@@ -41,7 +50,7 @@ class TimePolygonFilter:
     def __init__(self, threshold):
         self.threshold = threshold
 
-    def __call__(self, gdf):
+    def filter_dataframe(self, gdf):
 
         def _edit(grp):
             magic_thresh = 0.5
@@ -62,7 +71,7 @@ class TimePolygonFilter:
         return result
 
 
-class TimeSplitFilter:
+class TimeSplitFilter(DataFrameFilter):
     """
     Splits tracks based on start and end of each subtracks min response.
     """
@@ -71,7 +80,7 @@ class TimeSplitFilter:
         self.threshold = threshold
         self.frame_buffer = frame_buffer
 
-    def __call__(self, gdf):
+    def filter_dataframe(self, gdf):
         import geopandas as gpd
         import pandas as pd
 
@@ -149,7 +158,7 @@ class TimeSplitFilter:
         return result
 
 
-class ResponsePolygonFilter:
+class ResponsePolygonFilter(DataFrameFilter):
     """
     Filters each track based on the average response of all tracks.
     """
@@ -164,7 +173,7 @@ class ResponsePolygonFilter:
         self.gids = gids
         self.mean_response = mean_response
 
-    def __call__(self, gdf, gids=None, threshold=None, cross=True):
+    def filter_dataframe(self, gdf, gids=None, threshold=None, cross=True):
         if gids is None:
             gids = self.gids
         if threshold is None:
@@ -606,7 +615,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
         n_orig = gpd_len(_TRACKS)
         rsp_filter = ResponsePolygonFilter(_TRACKS, config.key, config.response_thresh)
-        _TRACKS = rsp_filter(_TRACKS)
+        _TRACKS = rsp_filter.filter_dataframe(_TRACKS)
         print('filter based on per-polygon response: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
@@ -614,14 +623,14 @@ def time_aggregated_polys(sub_dset, **kwargs):
     if config.time_thresh:  # as a fraction of thresh
         time_filter = TimePolygonFilter(config.time_thresh * config.thresh)
         n_orig = gpd_len(_TRACKS)
-        _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
+        _TRACKS = time_filter.filter_dataframe(_TRACKS)  # 7% of runtime? could be next line
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     if config.time_split_thresh:
         split_filter = TimeSplitFilter(config.time_split_thresh, config.time_split_frame_buffer)
         n_orig = gpd_len(_TRACKS)
-        _TRACKS = split_filter(_TRACKS)
+        _TRACKS = split_filter.filter_dataframe(_TRACKS)
         n_result = gpd_len(_TRACKS)
         print('filter based on time splitting: remaining tracks '
               f'{n_result} / {n_orig}')
