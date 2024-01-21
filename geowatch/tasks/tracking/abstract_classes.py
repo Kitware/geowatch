@@ -116,7 +116,7 @@ class TrackFunction:
             debug_json_unserializable(coco_dset.dataset,
                                       'Input to safe_apply: ')
 
-        sub_dset = self.safe_partition(coco_dset, gids, remove=False)
+        sub_dset = self.safe_partition(coco_dset, gids)
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(sub_dset.dataset, 'Before __call__')
@@ -173,20 +173,13 @@ class TrackFunction:
 
     @staticmethod
     @profile
-    def safe_partition(coco_dset, gids, remove=True):
-
-        assert not remove, 'should never remove'
+    def safe_partition(coco_dset, gids):
 
         sub_dset = coco_dset.subset(gids=gids, copy=True)
         # HACK ensure tracks are not duplicated between videos
         # (if they are, this is fixed in dedupe_tracks anyway)
         sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
-        if remove:
-            rest_gids = list(set(coco_dset.imgs.keys()) - set(gids))
-            rest_dset = coco_dset.subset(rest_gids)
-            return sub_dset, rest_dset
-        else:
-            return sub_dset
+        return sub_dset
 
     @staticmethod
     @profile
