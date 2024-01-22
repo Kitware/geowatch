@@ -1,5 +1,6 @@
 from geowatch.tasks.tracking.abstract_classes import TrackFunction
 import scriptconfig as scfg
+import ubelt as ub
 
 
 class MonoTrack(TrackFunction):
@@ -10,10 +11,12 @@ class MonoTrack(TrackFunction):
     def __init__(self, **kwargs):
         self.kwargs = kwargs  # Unused
 
-    def forward(self, coco_dset):
+    def forward(self, coco_dset, video_id):
         from geowatch.utils.kwcoco_extensions import TrackidGenerator
-        coco_dset.annots().set('track_id', next(TrackidGenerator(coco_dset)))
+        aids = list(ub.flatten(coco_dset.images(video_id=video_id).annots))
+        annots = coco_dset.annots(aids)
 
+        annots.set('track_id', next(TrackidGenerator(coco_dset)))
         return coco_dset
 
 
@@ -28,11 +31,12 @@ class OverlapTrack(scfg.DataConfig, TrackFunction):
     '''
     min_overlap: float = 0
 
-    def forward(self, coco_dset):
+    def forward(self, coco_dset, video_id):
         from geowatch.utils.kwcoco_extensions import TrackidGenerator
         new_trackids = TrackidGenerator(coco_dset)
 
-        annots = coco_dset.annots()
+        aids = list(ub.flatten(coco_dset.images(video_id=video_id).annots))
+        annots = coco_dset.annots(aids)
 
         aid_to_poly = dict(zip(annots.aids, as_shapely_polys(annots)))
 
@@ -80,7 +84,6 @@ class OverlapTrack(scfg.DataConfig, TrackFunction):
                     from kwcoco.util import util_json
                     unserializable = list(util_json.find_json_unserializable(next_ann))
                     if unserializable:
-                        import ubelt as ub
                         raise Exception('Inside OverlapTrack: ' + ub.urepr(unserializable))
 
         return coco_dset

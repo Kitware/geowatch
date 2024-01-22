@@ -272,6 +272,7 @@ def _compute_group_scores(grp, thrs=[], _valid_keys=[], resolution=None,
 
 @profile
 def score_track_polys(coco_dset,
+                      video_id,
                       cnames=None,
                       score_chan=None,
                       resolution: Optional[str] = None):
@@ -281,6 +282,8 @@ def score_track_polys(coco_dset,
 
     Args:
         coco_dset (kwcoco.CocoDataset):
+
+        video_id (int): video to score tracks for
 
         cnames (Iterable[str] | None):
             category names. Only annotations with these names will be
@@ -315,17 +318,21 @@ def score_track_polys(coco_dset,
     Example:
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-msi')
+        >>> video_id = list(coco_dset.videos())[0]
         >>> cnames = None
         >>> resolution = None
         >>> score_chan = kwcoco.ChannelSpec.coerce('B1|B8|B8a|B10|B11')
-        >>> gdf = score_track_polys(coco_dset, cnames, score_chan, resolution)
+        >>> gdf = score_track_polys(coco_dset, video_id, cnames, score_chan, resolution)
         >>> print(gdf)
     """
     # TODO could refactor to work on coco_dset.annots() and integrate
     import numpy as np
 
-    annots = coco_dset.annots()
-    gdf, flat_scales = _build_annot_gdf(coco_dset, cnames=cnames, resolution=resolution)
+    aids = list(ub.flatten(coco_dset.images(video_id=video_id).annots))
+    annots = coco_dset.annots(aids)
+    # annots = coco_dset.annots()
+    gdf, flat_scales = _build_annot_gdf(
+        coco_dset, aids=aids, cnames=cnames, resolution=resolution)
 
     if score_chan is not None:
         # USE_DASK = True

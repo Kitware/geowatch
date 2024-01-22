@@ -11,13 +11,17 @@ class TrackFunction:
     Abstract class that all track functions should inherit from.
     """
 
-    def __call__(self, sub_dset, **kwargs):
+    def __call__(self, sub_dset, video_id, **kwargs):
         raise AssertionError("Use the explicit .forward method instead")
-        return self.forward(sub_dset, **kwargs)
+        return self.forward(sub_dset, video_id,  **kwargs)
 
-    def forward(self, sub_dset):
+    def forward(self, sub_dset, video_id):
         """
-        Ensure each annotation in coco_dset has a track_id.
+        Detect new annotations and track them in images for a single video.
+
+        Args:
+            sub_dset (CocoDataset):
+            video_id (int): video to track
 
         Returns:
             kwcoco.CocoDataset
@@ -27,40 +31,76 @@ class TrackFunction:
     def apply_per_video(self, coco_dset):
         """
         Main entrypoint for this class.
+
+        Calls :func:`safe_apply` on each video in the coco dataset.
+
+        Args:
+            coco_dset (kwcoco.CocoDataset):
+                the dataset to run tracking on
+
+        Returns:
+            kwcoco.CocoDataset:
+                A modified or copied version of the input with new annotations
+                and tracks.
+
+        Example:
+            >>> from geowatch.tasks.tracking.abstract_classes import *  # NOQA
+            >>> import kwcoco
+            >>> self = NoOpTrackFunction()
+            >>> coco_dset = kwcoco.CocoDataset.coerce('vidshapes8')
+            >>> self.apply_per_video(coco_dset)
         """
         import kwcoco
+        from geowatch.utils import kwcoco_extensions
 
-        tracked_subdsets = []
-        vid_gids = coco_dset.index.vidid_to_gids.values()
+        # Note (2024-01-24): previously this was implemented in a way that
+        # broke up a larger coco dataset into one for each video, but we have
+        # modified the implementation to avoid the "subset" and "union"
+        # overhead.
+
+        DO_SUBSET = False  # True for old behavior
+
+        tracking_results = []
+        vid_gids = list(coco_dset.index.vidid_to_gids.items())
         total = len(coco_dset.index.vidid_to_gids)
-        for gids in ub.ProgIter(vid_gids,
-                                total=total,
-                                desc='apply_per_video',
-                                verbose=3):
+        for video_id, gids in ub.ProgIter(vid_gids,
+                                          total=total,
+                                          desc='apply_per_video',
+                                          verbose=3):
 
             # Beware, in the past there was a crash here that required
             # wrapping the rest of this loop in a try/except. -csg
-            sub_dset = self.safe_apply(coco_dset, gids)
-            tracked_subdsets.append(sub_dset)
+            sub_dset = self.safe_apply(coco_dset, video_id, gids,
+                                       DO_SUBSET=DO_SUBSET)
+
+            # Store a reference to the dataset (which may be a modified subset,
+            # or an unmodified reference with the image ids that were tracked)
+            tracking_results.append({
+                'sub_dset': sub_dset,
+                'video_id': video_id,
+                'image_ids': gids,
+            })
 
         # Tracks were either updated or added.
         # In the case they were updated the existing track ids should
         # be disjoint. All new tracks should not overlap with
 
-        _debug = 0
+        _debug = 1
 
-        from geowatch.utils import kwcoco_extensions
         new_trackids = kwcoco_extensions.TrackidGenerator(None)
-        fixed_subdataset = []
-        for sub_dset in ub.ProgIter(tracked_subdsets,
-                                    desc='Ensure ok tracks',
-                                    verbose=3):
+        for tracking_result in ub.ProgIter(tracking_results,
+                                           desc='Ensure ok tracks',
+                                           verbose=3):
+
+            sub_dset = tracking_result['sub_dset']
+            sub_gids = tracking_result['image_ids']
 
             # Rebuild the index to ensure any hacks are removed.
             # We should be able to remove this step.
             # sub_dset._build_index()
 
-            sub_annots = sub_dset.annots()
+            sub_aids = list(ub.flatten(sub_dset.images(sub_gids).annots))
+            sub_annots = sub_dset.annots(sub_aids)
             sub_tids = sub_annots.lookup('track_id')
             existing_tids = set(sub_tids)
 
@@ -90,11 +130,12 @@ class TrackFunction:
                 print('collisions = {!r}'.format(collisions))
                 print(f'{after_tids=}')
 
-            fixed_subdataset.append(sub_dset)
-
-        # Is this safe to do? It would be more efficient
-        coco_dset = kwcoco.CocoDataset.union(*fixed_subdataset,
-                                             disjoint_tracks=False)
+        if DO_SUBSET:
+            # If we broke up the dataset into subsets, we need to combine them
+            # back together.
+            fixed_subdataset = [r['sub_dset'] for r in tracking_results]
+            coco_dset = kwcoco.CocoDataset.union(*fixed_subdataset,
+                                                 disjoint_tracks=False)
 
         if _debug:
             x = coco_dset.annots().images.get('video_id')
@@ -107,7 +148,7 @@ class TrackFunction:
         return coco_dset
 
     @profile
-    def safe_apply(self, coco_dset, gids):
+    def safe_apply(self, coco_dset, video_id, gids, DO_SUBSET=False):
         import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
@@ -117,29 +158,34 @@ class TrackFunction:
             debug_json_unserializable(coco_dset.dataset,
                                       'Input to safe_apply: ')
 
-        sub_dset = self.safe_partition(coco_dset, gids)
+        if DO_SUBSET:
+            # Try not to do this if we can avoid it.
+            sub_dset = self.safe_partition(coco_dset, gids)
+        else:
+            sub_dset = coco_dset
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(sub_dset.dataset, 'Before __call__')
 
-        orig_annots = sub_dset.annots()
+        orig_aids = list(ub.flatten(sub_dset.images(gids).annots))
+        orig_annots = sub_dset.annots(orig_aids)
+        # orig_annots = sub_dset.annots()
         orig_tids = orig_annots.get('track_id', None)
         orig_trackless_flags = np.array([tid is None for tid in orig_tids])
         orig_aids = list(orig_annots)
 
-        # TODO more sophisticated way to check if we can skip self()
-
         ####
         # APPLY THE TRACKING FUNCTION.
-        # THIS IS THE MAIN WORK. SEE SPECIFIC __call__ FUNCTIOSN
-        sub_dset = self.forward(sub_dset)
+        # THIS IS THE MAIN WORK. SEE SPECIFIC forward FUNCTIONS
+        sub_dset = self.forward(sub_dset, video_id)
         ####
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(sub_dset.dataset, 'After __call__')
 
         # if new annots were not created, rollover the old tracks
-        new_annots = sub_dset.annots()
+        new_aids = list(ub.flatten(sub_dset.images(gids).annots))
+        new_annots = sub_dset.annots(new_aids)
         if new_annots.aids == orig_aids:
             new_tids = new_annots.get('track_id', None)
             # Only overwrite track ids for annots that didn't have them
@@ -150,7 +196,7 @@ class TrackFunction:
 
             def _fixtype(tid):
                 # need to keep strings the same, but integers need to be
-                # case from numpy to python ints.
+                # cast from numpy to python ints.
                 if isinstance(tid, numbers.Integral):
                     return int(tid)
                 else:
@@ -161,7 +207,7 @@ class TrackFunction:
             new_annots.set('track_id', new_tids)
 
         # TODO: why is this assert here?
-        sub_track_ids = sub_dset.annots().lookup('track_id', None)
+        sub_track_ids = new_annots.lookup('track_id', None)
         if None in sub_track_ids:
             raise AssertionError(f'None in track ids: {sub_track_ids}')
 
@@ -203,7 +249,7 @@ class NoOpTrackFunction(TrackFunction):
     def __init__(self, **kwargs):
         self.kwargs = kwargs  # Unused
 
-    def forward(self, sub_dset):
+    def forward(self, sub_dset, video_id):
         return sub_dset
 
 
@@ -213,10 +259,10 @@ class NewTrackFunction(TrackFunction):
     in coco_dset, and add them as new annotations
     """
 
-    def forward(self, sub_dset):
+    def forward(self, sub_dset, video_id):
         # print(f'Enter {self.__class__} __call__ function')
         # print('Create tracks')
-        tracks = self.create_tracks(sub_dset)
+        tracks = self.create_tracks(sub_dset, video_id)
         # print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
         # print('After tracking sub_dset.stats(): ' +
@@ -224,10 +270,11 @@ class NewTrackFunction(TrackFunction):
         # print(f'Exit {self.__class__} __call__ function')
         return sub_dset
 
-    def create_tracks(self, sub_dset):
+    def create_tracks(self, sub_dset, video_id):
         """
         Args:
             sub_dset (CocoDataset):
+            video_id (int): video to create tracks for
 
         Returns:
             GeoDataFrame

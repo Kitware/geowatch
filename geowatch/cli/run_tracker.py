@@ -1403,12 +1403,27 @@ def main(argv=None, **kwargs):
     # TODO: ensure all args are resolved here.
     info = tracking_output['info']
 
+    PROCESSCONTEXT_INFO_HACK = True
+    proc_context_kwargs = {}
+    if PROCESSCONTEXT_INFO_HACK:
+        # TODO: now that we are no longer doing subsets and unions in the tracker
+        # we dont need to maintain the old "info" here. In fact if we do, we get
+        # circular references. In order to maintain compatability with older output
+        # we are going to clear the old info and continue to use extra pred info,
+        # but in the future after we are sure nothing depends on this, we should
+        # simply remove the extra kwarg, as it will be implicitly maintained.
+        proc_context_kwargs['extra'] = {'pred_info': pred_info}
+        # Clear out the old info to prevent circular references while we do the
+        # above hack. Remove the next line once we fix the above hack.
+        coco_dset.dataset['info'] = []
+
     proc_context = process_context.ProcessContext(
         name='geowatch.cli.run_tracker', type='process',
         config=jsonified_config,
-        extra={'pred_info': pred_info},
         track_emissions=False,
+        **proc_context_kwargs,
     )
+
     proc_context.start()
     info.append(proc_context.obj)
 

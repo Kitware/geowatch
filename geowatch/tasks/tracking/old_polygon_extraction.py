@@ -121,7 +121,7 @@ class PolygonExtractConfig(scfg.DataConfig):
         '''))
 
 
-def _gids_polys(sub_dset, **kwargs):
+def _gids_polys(sub_dset, video_id, **kwargs):
     """
     This is associated with :class:`PolygonExtractConfig`
 
@@ -131,6 +131,7 @@ def _gids_polys(sub_dset, **kwargs):
         >>> import geowatch
         >>> coco_dset = geowatch.coerce_kwcoco(data='geowatch-msi', dates=True, geodata=True, heatmap=True)
         >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
+        >>> video_id = list(sub_dset.videos())[0]
         >>> key = ['salient']
         >>> agg_fn = 'probs'
         >>> thresh = 0.001
@@ -149,9 +150,9 @@ def _gids_polys(sub_dset, **kwargs):
         >>>     resolution=resolution,
         >>>     outer_window_size=outer_window_size,
         >>>     use_boundaries=None)
-        >>> results1 = list(_gids_polys(sub_dset, **kwargs))
+        >>> results1 = list(_gids_polys(sub_dset, video_id, **kwargs))
         >>> kwargs['new_algo'] = 'crall'
-        >>> results2 = list(_gids_polys(sub_dset, **kwargs))
+        >>> results2 = list(_gids_polys(sub_dset, video_id, **kwargs))
 
     Returns:
         Iterable[Tuple[List[int], MultiPolygon]] -
@@ -164,7 +165,7 @@ def _gids_polys(sub_dset, **kwargs):
     config = PolygonExtractConfig(**kwargs)
 
     if config.use_boundaries:  # for SC
-        raw_boundary_tracks = score_track_polys(sub_dset, [SITE_SUMMARY_CNAME],
+        raw_boundary_tracks = score_track_polys(sub_dset, video_id, [SITE_SUMMARY_CNAME],
                                                 resolution=config.resolution)
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
         gids = raw_boundary_tracks['gid'].unique()
@@ -177,8 +178,9 @@ def _gids_polys(sub_dset, **kwargs):
         # TODO WARNING this is wrong!!! need to make sure this is never used.
         # The gids are lexically sorted, not sorted by order in video!
         # gids = list(sub_dset.imgs.keys())
-        vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
-        gids = sub_dset.images(video_id=vidid).gids
+        # vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
+
+        gids = sub_dset.images(video_id=video_id).gids
 
     images = sub_dset.images(gids)
     image_dates = [util_time.coerce_datetime(d)
@@ -187,7 +189,7 @@ def _gids_polys(sub_dset, **kwargs):
 
     channels_list = config.key
     channels = '|'.join(config.key)
-    coco_images = sub_dset.images(gids).coco_images
+    coco_images = images.coco_images
 
     load_workers = 0  # TODO: configure
     load_jobs = ub.JobPool(mode='process', max_workers=load_workers)
@@ -214,12 +216,19 @@ def _gids_polys(sub_dset, **kwargs):
             from geowatch.tasks.tracking.utils import _build_annot_gdf
             cnames = [SITE_SUMMARY_CNAME]
             resolution = config.resolution
-            gdf, flat_scales = _build_annot_gdf(sub_dset, cnames=cnames, resolution=resolution)
+            aids = list(ub.flatten(images.annots))
+            gdf, flat_scales = _build_annot_gdf(sub_dset, aids=aids, cnames=cnames, resolution=resolution)
             assert len(gdf) > 0, 'need valid site boundaries!'
             union_poly = gdf.unary_union
             bounds = kwimage.MultiPolygon.from_shapely(union_poly)
         else:
             bounds = None
+
+        video_name = sub_dset.index.videos[video_id]['name']
+        if config.viz_out_dir is None:
+            extractor_viz_dir = None
+        else:
+            extractor_viz_dir = ub.Path(config.viz_out_dir) / video_name
 
         from geowatch.tasks.tracking import polygon_extraction
         import kwcoco
@@ -233,7 +242,7 @@ def _gids_polys(sub_dset, **kwargs):
                 'scale_factor': 1,
                 'thresh': config.thresh,
                 'algo': config.new_algo,
-                'viz_out_dir': config.viz_out_dir,
+                'viz_out_dir': extractor_viz_dir,
             })
         polygons = extractor.predict_polygons()
 
@@ -249,7 +258,11 @@ def _gids_polys(sub_dset, **kwargs):
         missing_ix = np.array([channels not in i.channels for i in coco_images])
 
         num_missing = missing_ix.sum()
-        rich.print(f'[yellow]There are {num_missing} images that are missing {channels} channels')
+        num_images  = len(missing_ix)
+        if num_missing > 0:
+            rich.print(f'[yellow]There are {num_missing} / {num_images} images that are missing {channels} channels')
+        else:
+            rich.print(f'[green]There are {num_missing} / {num_images} images that are missing {channels} channels')
 
         # TODO this was actually broken in orig, so turning it off here for now
         interpolate = 0
@@ -430,8 +443,8 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     h_init = heatmaps[xs_init]
     t_init = heatmap_unixtime_intervals[xs_init]
 
-    print(f'n_steps={n_steps}')
-    print('!!!!')
+    # print(f'n_steps={n_steps}')
+    # print('!!!!')
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     # prog.begin()
     with prog:
