@@ -122,12 +122,12 @@ class SmartTrainer(pl.Trainer):
                 found = [f for f in found if 'last.ckpt' not in str(f)]
                 print(found[-1])
                 ")
-            echo $CHECKPOINT_FPATH
+            echo "$CHECKPOINT_FPATH"
 
             ### --- Repackage Checkpoint --- ###
 
             # Convert it into a package, then get the name of that
-            geowatch repackage $CHECKPOINT_FPATH
+            geowatch repackage "$CHECKPOINT_FPATH"
 
             PACKAGE_FPATH=$(python -c "if 1:
                 import pathlib
@@ -135,14 +135,14 @@ class SmartTrainer(pl.Trainer):
                 found = list(p.parent.glob(p.stem + '*.pt'))
                 print(found[-1])
             ")
-            echo $PACKAGE_FPATH
+            echo "$PACKAGE_FPATH"
 
             PACKAGE_NAME=$(python -c "if 1:
                 import pathlib
                 p = pathlib.Path('$PACKAGE_FPATH')
                 print(p.stem.replace('.ckpt', ''))
             ")
-            echo $PACKAGE_NAME
+            echo "$PACKAGE_NAME"
             ''')
 
         key = 'draw_train_batches'
@@ -155,9 +155,9 @@ class SmartTrainer(pl.Trainer):
 
                 # Predict on the validation set
                 python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
-                    --test_dataset {train_coco_path} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --package_fpath "$PACKAGE_FPATH" \
+                    --test_dataset "{train_coco_path}" \
+                    --pred_dataset="$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
                     --window_overlap 0 \
                     --clear_annots=False \
                     --test_with_annot_info=True \
@@ -181,8 +181,8 @@ class SmartTrainer(pl.Trainer):
                 # Predict on the validation set
                 python -m geowatch.tasks.fusion.predict \
                     --package_fpath $PACKAGE_FPATH \
-                    --test_dataset {vali_coco_fpath} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --test_dataset "{vali_coco_fpath}" \
+                    --pred_dataset "$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
                     --window_overlap 0 \
                     --clear_annots=False \
                     --test_with_annot_info=True \
@@ -205,15 +205,15 @@ class SmartTrainer(pl.Trainer):
 
                 # Predict on the training set
                 python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
+                    --package_fpath "$PACKAGE_FPATH" \
                     --window_overlap 0 \
-                    --test_dataset {train_coco_path} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
-                    --clear_annots=False \
+                    --test_dataset "{train_coco_path}" \
+                    --pred_dataset "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
+                    --clear_annots False \
                     --devices "$DEVICE"
 
                 # Visualize train predictions
-                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
+                geowatch visualize "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" --smart
                 ''')
         ])
         fpath.write_text(text)
