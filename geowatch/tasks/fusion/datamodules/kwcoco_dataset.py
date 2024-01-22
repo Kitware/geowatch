@@ -1143,7 +1143,7 @@ class GetItemMixin(TruthMixin):
             # The size of the larger image this output is expected to be
             # embedded in.
             outimg_dsize = video_dsize * scale_outspace_from_vid
-            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
+            outimg_box = kwimage.Box.from_dsize(outimg_dsize).quantize()
 
             frame_item = {
                 'gid': gid,
@@ -1971,8 +1971,8 @@ class GetItemMixin(TruthMixin):
         target_['scale'] = common_input_scale
 
         # Put the target slice in video space.
-        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'],
-                                                   clip=False, wrap=False)
+        vidspace_box = kwimage.Box.from_slice(target_['space_slice'],
+                                              clip=False, wrap=False)
         vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
 
         # Size of the video the target is embedded in.
@@ -3006,7 +3006,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>> )
         >>> self.disable_augmenter = True
         >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-        >>> Box = util_kwimage.Box
+        >>> Box = kwimage.Box
         >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
         >>> item = self[index]
         >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))

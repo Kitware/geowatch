@@ -33,7 +33,7 @@ from .data.datasets import GriddedDataset
 from .pretext_model import pretext
 from .segmentation_model import segmentation_model as seg_model
 from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
-from geowatch.utils import util_kwimage  # NOQA
+import kwimage
 from kwutil import util_parallel
 from geowatch.utils.lightning_ext import util_device
 
@@ -409,8 +409,8 @@ class Predictor(object):
                 # CocoStitchingManager._stitcher_center_weighted_add(
                 #     stitcher2, slice_, save_feat2)
 
-                sample_outspace_ltrb = util_kwimage.Box.coerce(batch['sample_outspace_ltrb'].numpy(), format='ltrb')
-                full_stitch_outspace_box = util_kwimage.Box.coerce(batch['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
+                sample_outspace_ltrb = kwimage.Box.coerce(batch['sample_outspace_ltrb'].numpy(), format='ltrb')
+                full_stitch_outspace_box = kwimage.Box.coerce(batch['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
                 scale_outspace_from_vid = batch['scale_outspace_from_vid'].numpy()[0]
                 outspace_slice = sample_outspace_ltrb.to_slice()
                 outspace_dsize = full_stitch_outspace_box.dsize
