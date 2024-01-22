@@ -12,6 +12,8 @@ class TrackFunction:
     """
 
     def __call__(self, sub_dset, video_id, **kwargs):
+        # The original impl with __call__ methods made it difficult for me to
+        # grep for things, so I'm disabling it.
         raise AssertionError("Use the explicit .forward method instead")
         return self.forward(sub_dset, video_id,  **kwargs)
 
@@ -58,7 +60,9 @@ class TrackFunction:
         # modified the implementation to avoid the "subset" and "union"
         # overhead.
 
-        DO_SUBSET = False  # True for old behavior
+        # If there are downstream issues set to True for old behavior
+        # otherwise, when stable the else branch should be deleted.
+        DO_SUBSET_HACK = False  # True for old behavior
 
         tracking_results = []
         vid_gids = list(coco_dset.index.vidid_to_gids.items())
@@ -71,7 +75,7 @@ class TrackFunction:
             # Beware, in the past there was a crash here that required
             # wrapping the rest of this loop in a try/except. -csg
             sub_dset = self.safe_apply(coco_dset, video_id, gids,
-                                       DO_SUBSET=DO_SUBSET)
+                                       DO_SUBSET_HACK=DO_SUBSET_HACK)
 
             # Store a reference to the dataset (which may be a modified subset,
             # or an unmodified reference with the image ids that were tracked)
@@ -130,7 +134,7 @@ class TrackFunction:
                 print('collisions = {!r}'.format(collisions))
                 print(f'{after_tids=}')
 
-        if DO_SUBSET:
+        if DO_SUBSET_HACK:
             # If we broke up the dataset into subsets, we need to combine them
             # back together.
             fixed_subdataset = [r['sub_dset'] for r in tracking_results]
@@ -148,7 +152,7 @@ class TrackFunction:
         return coco_dset
 
     @profile
-    def safe_apply(self, coco_dset, video_id, gids, DO_SUBSET=False):
+    def safe_apply(self, coco_dset, video_id, gids, DO_SUBSET_HACK=False):
         import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
@@ -158,11 +162,15 @@ class TrackFunction:
             debug_json_unserializable(coco_dset.dataset,
                                       'Input to safe_apply: ')
 
-        if DO_SUBSET:
+        if DO_SUBSET_HACK:
             # Try not to do this if we can avoid it.
             sub_dset = self.safe_partition(coco_dset, gids)
         else:
+            # Simulate a single-video dataset (and maintain relevant caches)
             sub_dset = coco_dset
+            # TODO: holding context to revent re-looking up annotations for
+            # each video-id will likely improve performance.
+            # sub_dset = WrappedSingleVideoCocoDataset(coco_dset, video_id, gids)
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(sub_dset.dataset, 'Before __call__')
@@ -290,3 +298,10 @@ class NewTrackFunction(TrackFunction):
             kwcoco.CocoDataset
         """
         raise NotImplementedError('must be implemented by subclasses')
+
+
+class WrappedSingleVideoCocoDataset:
+    def __init__(self, dset, video_id, gids):
+        self.dset = dset
+        self.video_id = video_id
+        self.gids = gids

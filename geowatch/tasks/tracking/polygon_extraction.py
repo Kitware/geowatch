@@ -134,6 +134,10 @@ class PolygonExtractor:
 
     def _predict_crall(self):
         import rich
+        from geowatch.utils import util_kwimage
+        from scipy import ndimage
+        import kwarray
+        import numpy as np
         raw_heatmap = self.heatmap_thwc
 
         SHOW = 0
@@ -151,8 +155,11 @@ class PolygonExtractor:
 
         if self.config['viz_out_dir']:
             SHOW = 1
-            dpath = self.config['viz_out_dir']
+
+        if SHOW:
+            import kwplot
             from geowatch.utils import util_kwplot
+            dpath = self.config['viz_out_dir']
             finalizer = util_kwplot.FigureFinalizer(dpath, cropwhite=False)
 
         _n = [1]
@@ -182,11 +189,6 @@ class PolygonExtractor:
             masked = imputed * small_mask[None, :, :, None]
         else:
             masked = imputed
-
-        import kwplot
-        import numpy as np
-        from scipy import ndimage
-        from geowatch.utils import util_kwimage
         cube = FeatureCube(masked,
                            TimeIntervalSequence.coerce(self.heatmap_time_intervals),
                            self.classes)
@@ -269,7 +271,6 @@ class PolygonExtractor:
 
         PRINT_STEP('Max Saliency')
         max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
-        import kwarray
         max_saliency_stats = kwarray.stats_dict(max_saliency)
         print('max_saliency_stats = {}'.format(ub.urepr(max_saliency_stats, nl=1)))
 
@@ -301,28 +302,32 @@ class PolygonExtractor:
                 self._intermediates['small_bounds'].draw(edgecolor='white', fill=0)
                 finalizer.finalize(fig4, f'step_{_n[0]:03d}_volume_labels_bounds.png')
 
-        PRINT_STEP(f'Initialize {len(unique_labels)} Seed Points')
-        markers = np.zeros_like(max_saliency, dtype=np.int32)
-        marker_points = []
-        for labelid in unique_labels:
-            mask = labels1 == labelid
-            idxmax = (max_saliency * mask).argmax()
-            highval = np.unravel_index(idxmax, mask.shape)
-            r, c = highval[0], highval[1]
-            marker_points.append((c, r))
-            markers[r, c] = labelid
+        do_watershed = self.bounds is not None
+        if do_watershed:
+            PRINT_STEP(f'Initialize {len(unique_labels)} Seed Points')
+            markers = np.zeros_like(max_saliency, dtype=np.int32)
+            marker_points = []
+            for labelid in unique_labels:
+                mask = labels1 == labelid
+                idxmax = (max_saliency * mask).argmax()
+                highval = np.unravel_index(idxmax, mask.shape)
+                r, c = highval[0], highval[1]
+                marker_points.append((c, r))
+                markers[r, c] = labelid
 
-        PRINT_STEP('Watershed')
-        if SHOW:
-            watershed_image = max_saliency
-            fig6, _ = kwplot.imshow(watershed_image, fnum=6, doclf=1, title='Watershed Energy')
-            import kwimage
-            kwimage.Points(xy=np.array(marker_points)).draw()
-            finalizer.finalize(fig6, f'step_{_n[0]:03d}_watershed_energy.png')
+            PRINT_STEP('Watershed')
+            if SHOW:
+                watershed_image = max_saliency
+                fig6, _ = kwplot.imshow(watershed_image, fnum=6, doclf=1, title='Watershed Energy')
+                import kwimage
+                kwimage.Points(xy=np.array(marker_points)).draw()
+                finalizer.finalize(fig6, f'step_{_n[0]:03d}_watershed_energy.png')
 
-            ...
-        from skimage.segmentation import watershed
-        labels = watershed(-max_saliency, markers=markers, mask=small_mask)
+                ...
+            from skimage.segmentation import watershed
+            labels = watershed(-max_saliency, markers=markers, mask=small_mask)
+        else:
+            labels = labels1
 
         if SHOW:
             fig5, _ = kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}), fnum=4, doclf=1, title='Final Labels')

@@ -560,19 +560,21 @@ def test_tracker_ac_refinement():
     """
     # Real Data Testing
     cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R001/sc-fusion/
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R002/sc-fusion/
 
+    VIZ_DPATH=/home/joncrall/testviz/real-old
     python -m geowatch.cli.run_tracker \
         --in_file=./sc_fusion_kwcoco.json \
+        --in_file_gt=None \
         --out_kwcoco=./sc_fusion_kwcoco_tracked2.json \
         --out_sites_dir=./sc_out_site_models2 \
         --out_site_summaries_dir=./sc_out_region_models2 \
         --out_sites_fpath=./site_models_manifest2.json \
         --out_site_summaries_fpath=./sc_out_region_models_manifest.json \
-        --in_file_gt=None \
         --region_id=None \
         --track_fn=None \
         --default_track_fn=class_heatmaps \
-        --viz_out_dir="/home/joncrall/testviz/real" \
+        --viz_out_dir="$VIZ_DPATH" \
         --site_summary='./sv_out_region_models/*.geojson' \
         --clear_annots=True \
         --append_mode=False \
@@ -585,12 +587,62 @@ def test_tracker_ac_refinement():
         --track_kwargs '
         {
             "boundaries_as": "bounds",
+            # "boundaries_as": "null",
             "min_area_square_meters": 7200,
             "new_algo": "crall",
             "polygon_simplify_tolerance": 1,
             "resolution": "8GSD",
             "thresh": 0.3
         }'
+
+    cd "$VIZ_DPATH"
+    kwimage stack_images "$VIZ_DPATH"/*/*final_labels.png --out "$VIZ_DPATH"/all_final_labels.png
+    kwimage stack_images "$VIZ_DPATH"/*/*agg_cube.png --out "$VIZ_DPATH"/all_agg_cube.png
+    kwimage stack_images "$VIZ_DPATH"/*/*cubes.png --out "$VIZ_DPATH"/cubes.png
+    kwimage stack_images "$VIZ_DPATH"/*/*step_007_volume_labels_bounds.png --out "$VIZ_DPATH"/all_step_007_volume_labels_bounds.png
+
+
+
+    # Real Data Testing
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R002/sc-fusion/
+    VIZ_DPATH=/home/joncrall/testviz/kr2-real-new
+    python -m geowatch.cli.run_tracker \
+        --in_file=./sc_fusion_kwcoco.json \
+        --out_kwcoco=./sc_fusion_kwcoco_tracked2.json \
+        --out_sites_dir=./sc_out_site_models2 \
+        --out_site_summaries_dir=./sc_out_region_models2 \
+        --out_sites_fpath=./site_models_manifest2.json \
+        --out_site_summaries_fpath=./sc_out_region_models_manifest.json \
+        --in_file_gt=None \
+        --region_id=None \
+        --track_fn=None \
+        --default_track_fn=class_heatmaps \
+        --viz_out_dir="$VIZ_DPATH" \
+        --site_summary='./sv_out_region_models/*.geojson' \
+        --clear_annots=True \
+        --append_mode=False \
+        --boundary_region=None \
+        --sensor_warnings=True \
+        --time_pad_before=None \
+        --time_pad_after=None \
+        --smoothing=0.0 \
+        --site_score_thresh=0.3 \
+        --track_kwargs '
+        {
+            # "boundaries_as": "bounds",
+            "boundaries_as": "null",
+            "min_area_square_meters": 7200,
+            "new_algo": "crall",
+            "polygon_simplify_tolerance": 1,
+            "resolution": "8GSD",
+            "thresh": 0.3
+        }'
+
+    cd "$VIZ_DPATH"
+    VIZ_DPATH="."
+    kwimage stack_images "$VIZ_DPATH"/*/*final_labels.png --out "$VIZ_DPATH"/all_final_labels.png
+    kwimage stack_images "$VIZ_DPATH"/*/*agg_cube.png --out "$VIZ_DPATH"/all_agg_cube.png
+    kwimage stack_images "$VIZ_DPATH"/*/*cubes.png --out "$VIZ_DPATH"/cubes.png
 
 
     """

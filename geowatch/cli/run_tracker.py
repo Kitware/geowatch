@@ -1622,6 +1622,9 @@ def main(argv=None, **kwargs):
         with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
 
+    if args.viz_out_dir is not None:
+        rich.print(f'Tracking Viz: [link={args.viz_out_dir}]{args.viz_out_dir}[/link]')
+
 
 def coco_video_gdf(coco_dset):
     # TODO: rectify with covered_video_geo_regions

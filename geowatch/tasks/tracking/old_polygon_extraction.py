@@ -167,11 +167,27 @@ def _gids_polys(sub_dset, video_id, **kwargs):
     if config.use_boundaries:  # for SC
         raw_boundary_tracks = score_track_polys(sub_dset, video_id, [SITE_SUMMARY_CNAME],
                                                 resolution=config.resolution)
-        assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
-        gids = raw_boundary_tracks['gid'].unique()
-        print('generating polys in bounds: number of bounds: ',
-              gpd_len(raw_boundary_tracks))
-        boundary_tracks = list(raw_boundary_tracks.groupby('track_idx'))
+
+        if len(raw_boundary_tracks) == 0:
+            gids = sub_dset.images(video_id=video_id).gids
+
+            print(f'SITE_SUMMARY_CNAME={SITE_SUMMARY_CNAME}')
+            print(f'config.resolution={config.resolution}')
+            print(f'sub_dset={sub_dset}')
+            print(f'video_id={video_id}')
+            # anns = sub_dset.annots(video_id=video_id)
+            anns = sub_dset.annots()
+            set(anns.images.lookup('video_id'))
+            boundary_tracks = [(None, None)]
+            import warnings
+            msg = ('need valid site boundaries!')
+            warnings.warn(msg)
+            # raise AssertionError(msg)
+        else:
+            gids = raw_boundary_tracks['gid'].unique()
+            print('generating polys in bounds: number of bounds: ',
+                  gpd_len(raw_boundary_tracks))
+            boundary_tracks = list(raw_boundary_tracks.groupby('track_idx'))
 
     else:
         boundary_tracks = [(None, None)]
@@ -179,7 +195,6 @@ def _gids_polys(sub_dset, video_id, **kwargs):
         # The gids are lexically sorted, not sorted by order in video!
         # gids = list(sub_dset.imgs.keys())
         # vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
-
         gids = sub_dset.images(video_id=video_id).gids
 
     images = sub_dset.images(gids)
@@ -218,9 +233,12 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             resolution = config.resolution
             aids = list(ub.flatten(images.annots))
             gdf, flat_scales = _build_annot_gdf(sub_dset, aids=aids, cnames=cnames, resolution=resolution)
-            assert len(gdf) > 0, 'need valid site boundaries!'
-            union_poly = gdf.unary_union
-            bounds = kwimage.MultiPolygon.from_shapely(union_poly)
+            if len(gdf) == 0:
+                # assert len(gdf) > 0, 'need valid site boundaries!'
+                bounds = None
+            else:
+                union_poly = gdf.unary_union
+                bounds = kwimage.MultiPolygon.from_shapely(union_poly)
         else:
             bounds = None
 
