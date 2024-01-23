@@ -1,8 +1,13 @@
 #!/bin/bash
+__doc__="
+This process was done on horologic
+
+Setting up the AWS bucket and DVC repo
+"
 
 source "$HOME"/code/watch-smartflow-dags/secrets/secrets
 
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
 
 DATASET_SUFFIX=Drop8-ARA
@@ -58,3 +63,40 @@ python -m geowatch.cli.prepare_ta2_dataset \
         PD: 2 weeks
     ' \
     --run=1
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
+echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
+
+git pull
+
+# Add a few files from KR_R001 to start with so people have data
+dvc add -vvv -- \
+    KR_R001/L8 \
+    KR_R001/S2 \
+    KR_R001/WV \
+    KR_R001/imganns-*-rawbands.kwcoco.zip \
+    KR_R001/imgonly-*-rawbands.kwcoco.zip
+
+git commit -am "Add KR_R001"
+git push
+dvc push -r aws -R KR_R001 -vvv
+
+
+# Add more select regions
+dvc add -vvv -- \
+    BR_R002/L8 \
+    BR_R002/S2 \
+    BR_R002/WV \
+    BR_R002/PD \
+    BR_R002/*.kwcoco.zip \
+    HK_T003/L8 \
+    HK_T003/S2 \
+    HK_T003/WV \
+    HK_T003/PD \
+    HK_T003/*.kwcoco.zip
+
+git commit -am "Add BR_R002 and HK_T003"
+git push
+dvc push -r aws -R . -vvv

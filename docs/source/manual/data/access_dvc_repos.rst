@@ -2,6 +2,8 @@
 Accessing GEOWATCH DVC Repos
 ****************************
 
+NOTE (2024-01-23): See the `new Phase 3 DVC repo docs <./access_internal_phase3_dvc_repos.rst>` for the latest data.
+
 This document outlines how to access the GEOWATCH DVC repos for internal
 collaberators.
 
@@ -215,4 +217,4 @@ After this downloads, any of the kwcoco files in the directory can be used.
 
 
 We recommend using ``geowatch_dvc`` tool to register the path you cloned
-these repos to as illustrated in ../environment/getting_started_dvc.rst
+these repos to as illustrated in `using_geowatch_dvc <./using_geowatch_dvc.rst>`_.

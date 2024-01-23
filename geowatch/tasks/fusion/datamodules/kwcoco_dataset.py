@@ -299,6 +299,9 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # SAMPLING GRID OPTIONS
     #######################
 
+    # TODO: add alias for set_cover_algo to be something more intuitive,
+    # maybe grid_spacetime_setcover_algo, or grid_spacetime_sample_density
+    # something like that...
     set_cover_algo = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
             '''
             Set cover algorithm to remove redundant gids when building

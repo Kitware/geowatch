@@ -79,6 +79,13 @@ You probably wont need:
 
     # Useful environs
 
+    # Phase 3
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+    echo "$DVC_DATA_DPATH"
+    echo "$DVC_EXPT_DPATH"
+
+    # Phase 2
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     HIGHRES_DVC_EXPT_DPATH=$(geowatch_dvc --tags='smart_drop7' --hardware=auto)
