@@ -2,13 +2,34 @@
 Accessing Phase3 GEOWATCH DVC Repos
 ***********************************
 
-This document contains up to date references, but for prereq see the  `old phase 2 document <./access_dvc_repos.rst>`_.
+This document was written on 2024-01-23 and is relevant for phase 3 data.
+For phase2 data instructions see: `old phase 2 document <./access_dvc_repos.rst>`_.
 
-As of 2024-01-23 there are two primary internal DVC repos:
+For Phase 3, there are two primary internal DVC repos:
 
 * The Phase 3 Internal SMART GEOWATCH DVC **Data** Repo:  https://gitlab.kitware.com/smart/smart_phase3_data/
 
 * The Phase 3 Internal SMART GEOWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_phase3_expt/
+
+
+Prerequistes
+------------
+
+To clone the DVC repos you must have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`.
+If you do not have permission please contact someone at Kitware to gain access and have them add you to the smart group.
+
+Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`, ensure that you
+have ssh keys setup and registered with gitlab. More details on generating ssh
+keys and registering them with gitlab can be found in the
+`ssh setup instructions <../environment/getting_started_ssh_keys.rst>`_.
+
+To access the internal DVC remotes you must have AWS credentials.
+For details see `the aws getting started docs <../environment/getting_started_aws.rst>`_.
+
+
+You should also have DVC installed.
+See `getting started with dvc <../environment/getting_started_dvc.rst>`_
+if you are unfamiliar with the concepts of DVC.
 
 
 Clone the Repos
