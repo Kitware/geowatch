@@ -44,7 +44,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --requester_pays=$REQUESTER_PAYS \
     --fields_workers=8 \
     --convert_workers=0 \
-    --align_workers=4 \
+    --align_workers=16 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
     --visualize=0 \
@@ -54,7 +54,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
-    --align_tries=1 \
+    --align_tries=0 \
     --asset_timeout="10 minutes" \
     --image_timeout="30 minutes" \
     --hack_lazy=False \

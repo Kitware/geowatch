@@ -61,7 +61,7 @@ CommandLine:
         --visualize=True \
         --max_products_per_region=10 \
         --backend=serial \
-        --run=1
+        --run=0
 
     geowatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
@@ -719,12 +719,12 @@ def main(cmdline=False, **kwargs):
                     --sensor_to_time_window "{sensor_to_time_window}" \
                     --verbose={config.verbose} \
                     --aux_workers={config.align_aux_workers} \
-                    --target_gsd={config.target_gsd} \
-                    --force_min_gsd={config.force_min_gsd} \
+                    --target_gsd="{config.target_gsd}" \
+                    --force_min_gsd="{config.force_min_gsd}" \
                     --workers={config.align_workers} \
-                    --tries={config.align_tries} \
-                    --asset_timeout={config.asset_timeout} \
-                    --image_timeout={config.image_timeout} \
+                    --tries="{config.align_tries}" \
+                    --asset_timeout="{config.asset_timeout}" \
+                    --image_timeout="{config.image_timeout}" \
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths=_justkeys({
