@@ -185,6 +185,18 @@ class PrepareTA2Config(CMDQueueConfig):
             commands before stopping.
             '''))
 
+    image_timeout = scfg.Value('8hours', help=ub.paragraph(
+            '''
+            The maximum amount of time to spend pulling down a all image
+            assets before giving up
+            '''))
+
+    asset_timeout = scfg.Value('4hours', help=ub.paragraph(
+            '''
+            The maximum amount of time to spend pulling down a single
+            image asset before giving up
+            '''))
+
     ignore_duplicates = scfg.Value(1, help='workers for align script')
 
     visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
@@ -527,6 +539,7 @@ def main(cmdline=False, **kwargs):
                 'name': ub.Path(s3_fpath).stem,
                 'inputs_fpath': s3_fpath,
                 'region_globstr': config.regions,
+                'site_globstr': config.sites,
                 'collated': collated,
             })
 
@@ -583,10 +596,11 @@ def main(cmdline=False, **kwargs):
             },
             group_dname=uncropped_bundle_name,
         )
-        try:
-            grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
-        except KeyError:
-            grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
+        if grab_node is not None:
+            try:
+                grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
+            except KeyError:
+                grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
 
@@ -709,6 +723,8 @@ def main(cmdline=False, **kwargs):
                     --force_min_gsd={config.force_min_gsd} \
                     --workers={config.align_workers} \
                     --tries={config.align_tries} \
+                    --asset_timeout={config.asset_timeout} \
+                    --image_timeout={config.image_timeout} \
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths=_justkeys({

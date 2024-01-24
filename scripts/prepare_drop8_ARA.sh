@@ -54,6 +54,9 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
+    --align_tries=1 \
+    --asset_timeout="10 minutes" \
+    --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=16 \
@@ -100,3 +103,24 @@ dvc add -vvv -- \
 git commit -am "Add BR_R002 and HK_T003"
 git push
 dvc push -r aws -R . -vvv
+
+# Add regions where kwcoco files exist
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
+echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
+python -c "
+import ubelt as ub
+root = ub.Path('.').absolute()
+regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip')})
+to_add = []
+for dpath in regions_dpaths_with_kwcoco:
+    to_add.extend(list(dpath.glob('*.kwcoco.zip')))
+    to_add.extend(list(dpath.glob('S2')))
+    to_add.extend(list(dpath.glob('WV')))
+    to_add.extend(list(dpath.glob('PD')))
+    to_add.extend(list(dpath.glob('L8')))
+
+import simple_dvc as sdvc
+dvc_repo = sdvc.SimpleDVC.coerce(root)
+dvc_repo.add(to_add, verbose=3)
+"

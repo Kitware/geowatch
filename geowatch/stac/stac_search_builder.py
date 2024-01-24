@@ -542,10 +542,10 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     import json
-    import rich
+    # import rich
     config = StacSearchBuilderConfig.cli(cmdline=cmdline, data=kwargs,
                                          strict=True)
-    rich.print(f'config = {ub.urepr(config, nl=2)}')
+    # rich.print(f'config = {ub.urepr(config, nl=2)}')
 
     search_json = build_search_json(**ub.compatible(config, build_search_json))
     text = json.dumps(search_json, indent='    ')
