@@ -2,7 +2,7 @@
 Accessing Phase3 GEOWATCH DVC Repos
 ***********************************
 
-This document contains up to date references, but for prereq see the  `old phase 2 document <./access_dvc_repos.rst>`.
+This document contains up to date references, but for prereq see the  `old phase 2 document <./access_dvc_repos.rst>`_.
 
 As of 2024-01-23 there are two primary internal DVC repos:
 
@@ -52,7 +52,7 @@ Register Repos
 
 To keep instructions machine agnostic, we want to register the paths to the DVC
 repos with the ``geowatch_dvc`` tool (which may soon be superseded by the
-simple_dvc ``sdvc`` tool).
+`simple_dvc <https://gitlab.kitware.com/computer-vision/simple_dvc>`_ ``sdvc`` tool).
 
 
 In order to make reproducing results as easy as copy/pasting commands into a
