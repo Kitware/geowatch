@@ -94,10 +94,11 @@ class FSPath(str):
             >>> print(f'path1={path1}')
             >>> assert path1.is_remote()
         """
+        path = os.fspath(path)
         if path.startswith('s3:'):
             self = S3Path(path)
         elif path.startswith('/vsis3/'):
-            # convert gdal virtual filesystems to s3 paths?
+            # convert gdal virtual filesystems to s3 paths
             self = S3Path('s3://' + path[7:])
         else:
             self = LocalPath(path)
