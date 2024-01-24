@@ -137,6 +137,6 @@ dvc push -r aws -- */*.kwcoco.zip.dvc
 dvc push -r aws -- */L8.dvc
 
 # Push S2 next, then PD and WV
-dvc push -r aws -- */S2.dvc
-dvc push -r aws -- */PD.dvc
+dvc push -r aws -- */S2.dvc && \
+dvc push -r aws -- */PD.dvc && \
 dvc push -r aws -- */WV.dvc

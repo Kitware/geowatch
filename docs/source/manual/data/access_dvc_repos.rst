@@ -2,14 +2,14 @@
 Accessing GEOWATCH DVC Repos
 ****************************
 
-NOTE (2024-01-23): See the `new Phase 3 DVC repo docs <./access_internal_phase3_dvc_repos.rst>` for the latest data.
+NOTE (2024-01-23): See the `new Phase 3 DVC repo docs <./access_internal_phase3_dvc_repos.rst>`_ for the latest data.
 
 This document outlines how to access the GEOWATCH DVC repos for internal
 collaberators.
 
 DVC stands for Data Version Control, and is a layer on top of git that helps
 manage larger data files. For more information on DVC see
-`getting started with dvc <getting_started_dvc.rst>_`.
+`getting started with dvc <getting_started_dvc.rst>`_.
 
 .. note: As the system expands these docs should also expand to detail how to use public DVC repos.
 
