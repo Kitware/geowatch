@@ -32,10 +32,10 @@ relevant data from them.
 Prerequistes
 ------------
 
-To clone the DVC repos you must have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`.
+To clone the DVC repos you must have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>`_.
 If you do not have permission please contact someone at Kitware to gain access and have them add you to the smart group.
 
-Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`, ensure that you
+Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>`_, ensure that you
 have ssh keys setup and registered with gitlab. More details on generating ssh
 keys and registering them with gitlab can be found in the
 `ssh setup instructions <../environment/getting_started_ssh_keys.rst>`_.
