@@ -284,21 +284,47 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex.__dict__={ex.__dict__}')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
             else:
-                print('')
-                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-                print(f'ex={ex!r}')
-                print(f'ex={ex}')
-                print(f'ex.__dict__={ex.__dict__}')
                 coco_img = coco_dset.coco_image(gid)
-                print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
-                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-                # if 0:
-                #     job.job_args
-                #     job.job_kwargs
-                #     coco_img, = job.job_args
-                #     globals().update(**job.job_kwargs)
-                #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
-                raise
+
+                # Check for remote existence and handle the case where the data
+                # might be at a remote location
+                from geowatch.utils import util_fsspec
+                missing_paths = []
+                existing_paths = []
+                for p in coco_img.iter_image_filepaths():
+                    # Use fsspec to check if the files exist
+                    fspath = util_fsspec.FSPath.coerce(p)
+                    if not fspath.exists():
+                        missing_paths.append(fspath)
+                    else:
+                        existing_paths.append(fspath)
+                if missing_paths:
+                    print('')
+                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    print(f'existing_paths = {ub.urepr(existing_paths, nl=1)}')
+                    print(f'missing_paths = {ub.urepr(missing_paths, nl=1)}')
+                    print(f'ex={ex!r}')
+                    print(f'ex={ex}')
+                    print(f'ex.__dict__={ex.__dict__}')
+                    print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    broken_image_ids.append(gid)
+                    # raise FileNotFoundError(str(missing_paths))
+                else:
+                    print('')
+                    rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    print(f'ex={ex!r}')
+                    print(f'ex={ex}')
+                    print(f'ex.__dict__={ex.__dict__}')
+                    print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                    rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    # if 0:
+                    #     job.job_args
+                    #     job.job_kwargs
+                    #     coco_img, = job.job_args
+                    #     globals().update(**job.job_kwargs)
+                    #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
+                    raise
         else:
             if mode == 'process':
                 # for multiprocessing

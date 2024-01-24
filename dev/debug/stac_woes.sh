@@ -414,3 +414,8 @@ aws s3 --profile=iarpa ls s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/20
 
 aws s3 --profile=iarpa cp s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_QA.tif foo-qa.tif
 aws s3 --profile=iarpa cp s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_B12.tif foo-12.tif
+
+
+
+
+

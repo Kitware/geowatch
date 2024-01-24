@@ -25,14 +25,13 @@ Example:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
                 bas_pxl.window_space_scale: 15GSD
                 bas_pxl.time_sampling:
-                    - "auto"
+                    - 'auto'
                 bas_pxl.input_space_scale:
-                    - "15GSD"
+                    - '15GSD'
                 bas_poly_eval.true_site_dpath: null
                 bas_poly_eval.true_region_dpath: null
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
-                    - 0.1
                     - 0.1
                     - 0.2
                 sc_pxl.test_dataset:
@@ -65,12 +64,11 @@ Example:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
                 bas_pxl.window_space_scale: 15GSD
                 bas_pxl.time_sampling:
-                    - "auto"
+                    - 'auto'
                 bas_pxl.input_space_scale:
-                    - "15GSD"
+                    - '15GSD'
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
-                    - 0.1
                     - 0.1
                     - 0.2
                 bas_pxl.enabled: 1
