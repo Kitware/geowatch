@@ -23,7 +23,7 @@ class StacSearchBuilderConfig(scfg.DataConfig):
     """
     Helper to create STAC search json queries
     """
-    default = {
+    __default__ = {
         'start_date': scfg.Value(None, help='iso starting date'),
         'end_date': scfg.Value(None, help='iso ending date'),
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage'),
@@ -542,8 +542,10 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     import json
+    import rich
     config = StacSearchBuilderConfig.cli(cmdline=cmdline, data=kwargs,
                                          strict=True)
+    rich.print(f'config = {ub.urepr(config, nl=2)}')
 
     search_json = build_search_json(**ub.compatible(config, build_search_json))
     text = json.dumps(search_json, indent='    ')
@@ -558,6 +560,6 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/geowatch/stac/stac_search_build.py
+        python ~/code/geowatch/geowatch/stac/stac_search_builder.py
     """
     main()
