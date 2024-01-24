@@ -124,3 +124,19 @@ import simple_dvc as sdvc
 dvc_repo = sdvc.SimpleDVC.coerce(root)
 dvc_repo.add(to_add, verbose=3)
 "
+
+git pull
+git add -- */.gitignore
+git commit -am "Add rest of drop8 regions"
+git push
+
+# Push kwcoco files first
+dvc push -r aws -- */*.kwcoco.zip.dvc
+
+# Push L8 next
+dvc push -r aws -- */L8.dvc
+
+# Push S2 next, then PD and WV
+dvc push -r aws -- */S2.dvc
+dvc push -r aws -- */PD.dvc
+dvc push -r aws -- */WV.dvc
