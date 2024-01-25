@@ -10,7 +10,7 @@ TEST:
 __submodules__ = {
     '*': [],
     'util_data': ['find_smart_dvc_dpath', 'find_dvc_dpath'],
-    'util_yaml': ['Yaml'],
+    # 'util_yaml': ['Yaml'],
 }
 
 
@@ -58,20 +58,16 @@ __getattr__, __dir__, __all__ = lazy_loader.attach(
         'util_s3',
         'util_stringalgo',
         'util_torchmetrics',
-        'util_yaml',
     },
     submod_attrs={
         'util_data': [
             'find_smart_dvc_dpath',
             'find_dvc_dpath',
         ],
-        'util_yaml': [
-            'Yaml',
-        ],
     },
 )
 
-__all__ = ['Yaml', 'configargparse_ext', 'ext_monai', 'find_dvc_dpath',
+__all__ = ['configargparse_ext', 'ext_monai', 'find_dvc_dpath',
            'find_smart_dvc_dpath', 'ijson_ext', 'kwcoco_extensions',
            'lightning_ext', 'process_context', 'result_analysis',
            'reverse_hashid', 'simple_dvc', 'util_bands', 'util_chmod',
@@ -81,4 +77,4 @@ __all__ = ['Yaml', 'configargparse_ext', 'ext_monai', 'find_dvc_dpath',
            'util_kwimage', 'util_kwplot', 'util_logging', 'util_nesting',
            'util_netharn', 'util_nvidia', 'util_pandas', 'util_param_grid',
            'util_raster', 'util_regex', 'util_resolution', 'util_rgdc',
-           'util_s3', 'util_stringalgo', 'util_torchmetrics', 'util_yaml']
+           'util_s3', 'util_stringalgo', 'util_torchmetrics']
