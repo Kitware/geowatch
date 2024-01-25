@@ -9022,3 +9022,135 @@ torch_globals:
 initializer:
     init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop7-Cropped2GSD-V2/runs/Drop7-Cropped2GSD_SC_bgrn_gnt_2GSD_split6_V92/lightning_logs/version_4/checkpoints/last_weight_hacked.ckpt
 "
+
+
+### ------ Fine tune the good COLD model on RGB only
+#
+
+# Hack
+python -c "if 1:
+import kwcoco
+dset = kwcoco.CocoDataset('data_train_rawbands_split6.kwcoco.zip')
+to_remove = list(dset.videos(names=['CO_C011', 'VN_C003']))
+dset.remove_videos(to_remove)
+dset.fpath = 'data_train_rawbands_split6_hack.kwcoco.zip'
+dset.validate()
+dset.dump()
+"
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='hdd')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD-V2
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_hack.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop7_finetune_COLD_phase3_V01
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+MAX_STEPS=5000
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : 2
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_space_scale      : 10.0GSD
+  input_space_scale       : 10.0GSD
+  output_space_scale      : 10.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  neg_to_pos_ratio        : 1.0
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : true
+  verbose                 : 1
+  max_epoch_length        : 2048
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p16
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: true
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.01
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale: 1.0e-07
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights: auto
+    stream_channels: 16
+    tokenizer: linconv
+
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.1
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay: 3e-06
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: 48
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : gpu
+  devices              : 0,
+  #devices              : 0,1
+  #strategy             : ddp
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: 720
+  num_sanity_val_steps: 0
+  limit_val_batches: 256
+  limit_train_batches: 2048
+"

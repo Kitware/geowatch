@@ -291,13 +291,19 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 from geowatch.utils import util_fsspec
                 missing_paths = []
                 existing_paths = []
-                for p in coco_img.iter_image_filepaths():
-                    # Use fsspec to check if the files exist
-                    fspath = util_fsspec.FSPath.coerce(p)
-                    if not fspath.exists():
-                        missing_paths.append(fspath)
-                    else:
-                        existing_paths.append(fspath)
+
+                HACK_CHECK_EXISTS = 0
+                if HACK_CHECK_EXISTS:
+                    # Force this one to be current for fs
+                    # fs = util_fsspec.S3Path._new_fs(profile='iarpa', requester_pays=True)
+                    for p in coco_img.iter_image_filepaths():
+                        # Use fsspec to check if the files exist
+                        fspath = util_fsspec.FSPath.coerce(p)
+                        if not fspath.exists():
+                            missing_paths.append(fspath)
+                        else:
+                            existing_paths.append(fspath)
+
                 if missing_paths:
                     print('')
                     rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
