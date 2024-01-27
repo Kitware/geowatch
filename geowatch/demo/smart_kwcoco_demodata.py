@@ -369,6 +369,9 @@ def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps',
     Args:
         channels (ChannelSpec): heatmap channels to generate
 
+    CommandLine:
+        xdoctest -m geowatch.demo.smart_kwcoco_demodata hack_in_heatmaps
+
     Example:
         >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
         >>> with_nan = False
@@ -417,6 +420,8 @@ def hack_in_heatmaps(coco_dset, channels='auto', heatmap_dname='dummy_heatmaps',
         for tid, aids in coco_dset.index.trackid_to_aids.items():
             track_annots = coco_dset.annots(aids)
             num_frames = len(track_annots)
+            if num_frames == 0:
+                continue
 
             # loc = np.linspace(0, np.pi * 2, num_frames)
 
