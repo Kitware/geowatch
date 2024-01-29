@@ -1,8 +1,6 @@
 GeoWATCH Overview
 =================
 
-This is an overview of GeoWATCH framework and its relation to RasterVision as of 2024-01-16.
-
 In 2020 Kitware won a contract to compete in the
 `IARPA SMART <https://www.iarpa.gov/research-programs/smart>`_ program.
 The SMART program challenged 5 teams to design algorithms for utilizing
@@ -286,6 +284,7 @@ be four) backends:
 Relationship to RasterVision
 ----------------------------
 
+This section was written on 2024-01-16.
 
 Our dataloader automatically computes mean/std of input dataset as well as
 class frequency. This seems similar to the "ANALYZE" step in RasterVision.

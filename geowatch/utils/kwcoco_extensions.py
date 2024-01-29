@@ -1629,7 +1629,9 @@ def geotiff_format_info(fpath):
     height = gdal_ds.RasterYSize
 
     ovr_count = main_band.GetOverviewCount()
-    ifd_offset = int(main_band.GetMetadataItem('IFD_OFFSET', 'TIFF'))
+    ifd_offset = main_band.GetMetadataItem('IFD_OFFSET', 'TIFF')
+    if ifd_offset is not None:
+        ifd_offset = int(ifd_offset)
     block_offset = main_band.GetMetadataItem('BLOCK_OFFSET_0_0', 'TIFF')
     structure = gdal_ds.GetMetadata("IMAGE_STRUCTURE")
     compress = structure.get("COMPRESSION", 'NONE')
