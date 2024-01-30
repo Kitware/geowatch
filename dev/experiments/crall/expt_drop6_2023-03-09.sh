@@ -9274,6 +9274,14 @@ trainer:
   num_sanity_val_steps: 0
   limit_val_batches: 256
   limit_train_batches: 2048
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+          save_last: true
 torch_globals:
     float32_matmul_precision: auto
 initializer:
@@ -9397,6 +9405,14 @@ trainer:
   num_sanity_val_steps: 0
   limit_val_batches: 256
   limit_train_batches: 2048
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+          save_last: true
 torch_globals:
     float32_matmul_precision: auto
 initializer:
