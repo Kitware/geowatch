@@ -79,8 +79,14 @@ def print_provider_debug_information():
             found_endpoint_to_collections[endpoint] = collections
 
     unregistered_rows = []
-    for endpoint, collections in found_endpoint_to_collections.items():
-        print(f'\nCollections in endpoint={endpoint}')
+    print('======')
+    total = len(found_endpoint_to_collections)
+    for idx, (endpoint, collections) in enumerate(found_endpoint_to_collections.items()):
+        print('-----')
+        print('-----')
+        print('-----')
+        print('-----')
+        print(f'\nCollections {idx} / {total} in endpoint={endpoint}')
         known_collection_names = set(endpoint_to_collections[endpoint])
         found_collection_names = {c.id for c in collections}
         registered_names = known_collection_names & found_collection_names
@@ -90,6 +96,9 @@ def print_provider_debug_information():
             print('Valid registered collections = {}'.format(ub.urepr(registered_names, nl=1)))
         if misregistered_names:
             print(f'!!! Collections are registered that dont exist {misregistered_names=}')
+        else:
+            print('All registered collections exist')
+
         if unregistered_names:
             print('There are unregistered collections = {}'.format(ub.urepr(unregistered_names, nl=1)))
             for name in unregistered_names:
@@ -98,9 +107,13 @@ def print_provider_debug_information():
                     'endpoint': endpoint,
                     'collection': name,
                 })
+        else:
+            print('No unregistered names')
     print('Unregistered Collections')
     unregistered_df = pd.DataFrame(unregistered_rows)
     print(unregistered_df.to_string())
+    print('DONE')
+    return
 
     full_df = pd.concat([df, unregistered_df])
     new_rows = full_df.to_dict(orient='records')

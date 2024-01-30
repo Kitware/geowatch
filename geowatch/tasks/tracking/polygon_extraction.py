@@ -134,6 +134,10 @@ class PolygonExtractor:
 
     def _predict_crall(self):
         import rich
+        from geowatch.utils import util_kwimage
+        from scipy import ndimage
+        import kwarray
+        import numpy as np
         raw_heatmap = self.heatmap_thwc
 
         SHOW = 0
@@ -149,7 +153,17 @@ class PolygonExtractor:
         else:
             mask = None
 
-        def PRINT_STEP(msg, _n=[1]):
+        if self.config['viz_out_dir']:
+            SHOW = 1
+
+        if SHOW:
+            import kwplot
+            from geowatch.utils import util_kwplot
+            dpath = self.config['viz_out_dir']
+            finalizer = util_kwplot.FigureFinalizer(dpath, cropwhite=False)
+
+        _n = [1]
+        def PRINT_STEP(msg, _n=_n):
             import rich
             n = _n[0]
             rich.print(f'Step {n}: {msg}')
@@ -175,18 +189,14 @@ class PolygonExtractor:
             masked = imputed * small_mask[None, :, :, None]
         else:
             masked = imputed
-
-        import kwplot
-        import numpy as np
-        from scipy import ndimage
-        from geowatch.utils import util_kwimage
         cube = FeatureCube(masked,
                            TimeIntervalSequence.coerce(self.heatmap_time_intervals),
                            self.classes)
         agg_cube = cube.window_max('12 months')
 
         if SHOW:
-            kwplot.imshow(agg_cube.draw())
+            fig, _ = kwplot.imshow(agg_cube.draw(), title='Input Feature Cube')
+            finalizer.finalize(fig, f'step_{_n[0]:03d}_agg_cube.png')
 
         if 'ac_salient' in self.classes:
             cube1 = agg_cube.take_channels('ac_salient')
@@ -247,21 +257,20 @@ class PolygonExtractor:
         # cube9.heatmap_thwc = (cube9.heatmap_thwc > thresh).astype(np.float32)
 
         if SHOW:
-            kwplot.imshow(cube1.draw(), pnum=(3, 4, 1), fnum=2)
-
-            # kwplot.imshow(cube2.draw(), pnum=(3, 4, 5), fnum=2)
-            kwplot.imshow(cube3.draw(), pnum=(3, 4, 6), fnum=2)
-            # kwplot.imshow(cube4.draw(), pnum=(3, 4, 7), fnum=2)
-            # kwplot.imshow(cube5.draw(), pnum=(3, 4, 8), fnum=2)
-
-            # kwplot.imshow(cube6.draw(), pnum=(3, 4, 9), fnum=2)
-            # kwplot.imshow(cube7.draw(), pnum=(3, 4, 10), fnum=2)
-            kwplot.imshow(cube8.draw(), pnum=(3, 4, 11), fnum=2)
-            # kwplot.imshow(cube9.draw(), pnum=(3, 4, 12), fnum=2)
+            fig2 = kwplot.figure(fnum=2, doclf=1)
+            cubes = [cube1, cube4, cube8]
+            ncubes = sum([c is not None for c in cubes])
+            pnum = kwplot.PlotNums(nSubplots=ncubes)
+            if cube1 is not None:
+                kwplot.imshow(cube1.draw(), pnum=pnum(), fnum=2, title='Salient')
+            if cube4 is not None:
+                kwplot.imshow(cube4.draw(), pnum=pnum(), fnum=2, title='Morphed Active')
+            if cube8 is not None:
+                kwplot.imshow(cube8.draw(), pnum=pnum(), fnum=2, title='Binarized Active * Salient')
+            finalizer.finalize(fig2, f'step_{_n[0]:03d}_cubes.png')
 
         PRINT_STEP('Max Saliency')
         max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
-        import kwarray
         max_saliency_stats = kwarray.stats_dict(max_saliency)
         print('max_saliency_stats = {}'.format(ub.urepr(max_saliency_stats, nl=1)))
 
@@ -271,36 +280,58 @@ class PolygonExtractor:
         idx, cnts = np.unique(vol_label, return_counts=True)
         max_cnts = max(cnts)
         if max_cnts > 200:
+            print(f'max_cnts = {ub.urepr(max_cnts, nl=1)}')
             count_thresh = min(50, max_cnts)
             to_remove = idx[cnts < count_thresh]
+            n_remove = sum(to_remove)
+            print(f'n_remove={n_remove}')
             vol_label[np.isin(vol_label, to_remove)] = 0
 
         labels1 = vol_label.max(axis=0)[..., 0]
         if SHOW:
-            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}))
+            fig3, _ = kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=3, doclf=1, title='Volume Labels')
+            finalizer.finalize(fig3, f'step_{_n[0]:03d}_volume_labels.png')
+
         unique_labels = np.setdiff1d(np.unique(labels1), [0])
 
         if self.bounds is not None:
             self._intermediates['small_bounds'] = self.bounds.scale(1 / scale_factor)
 
+            if SHOW:
+                fig4, _ = kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=4, doclf=1, title='Volume Labels With Bounds')
+                self._intermediates['small_bounds'].draw(edgecolor='white', fill=0)
+                finalizer.finalize(fig4, f'step_{_n[0]:03d}_volume_labels_bounds.png')
+
+        do_watershed = self.bounds is not None
+        if do_watershed:
+            PRINT_STEP(f'Initialize {len(unique_labels)} Seed Points')
+            markers = np.zeros_like(max_saliency, dtype=np.int32)
+            marker_points = []
+            for labelid in unique_labels:
+                mask = labels1 == labelid
+                idxmax = (max_saliency * mask).argmax()
+                highval = np.unravel_index(idxmax, mask.shape)
+                r, c = highval[0], highval[1]
+                marker_points.append((c, r))
+                markers[r, c] = labelid
+
+            PRINT_STEP('Watershed')
+            if SHOW:
+                watershed_image = max_saliency
+                fig6, _ = kwplot.imshow(watershed_image, fnum=6, doclf=1, title='Watershed Energy')
+                import kwimage
+                kwimage.Points(xy=np.array(marker_points)).draw()
+                finalizer.finalize(fig6, f'step_{_n[0]:03d}_watershed_energy.png')
+
+                ...
+            from skimage.segmentation import watershed
+            labels = watershed(-max_saliency, markers=markers, mask=small_mask)
+        else:
+            labels = labels1
+
         if SHOW:
-            kwplot.imshow(util_kwimage.colorize_label_image(labels1, label_to_color={0: 'black'}), fnum=3)
-            self._intermediates['small_bounds'].draw(edgecolor='white', fill=0)
-
-        PRINT_STEP('Initialize Seed Points')
-        markers = np.zeros_like(max_saliency, dtype=np.int32)
-        for labelid in unique_labels:
-            mask = labels1 == labelid
-            idxmax = (max_saliency * mask).argmax()
-            highval = np.unravel_index(idxmax, mask.shape)
-            markers[highval[0], highval[1]] = labelid
-
-        PRINT_STEP('Watershed')
-        from skimage.segmentation import watershed
-        labels = watershed(-max_saliency, markers=markers, mask=small_mask)
-
-        if SHOW:
-            kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}), fnum=4)
+            fig5, _ = kwplot.imshow(util_kwimage.colorize_label_image(labels, label_to_color={0: 'black'}), fnum=4, doclf=1, title='Final Labels')
+            finalizer.finalize(fig5, f'step_{_n[0]:03d}_final_labels.png')
         return labels
 
     def predict(self):
@@ -958,6 +989,9 @@ class FeatureCube(ub.NiceRepr):
         norm_heatmaps = kwarray.robust_normalize(heatmaps)
 
         if self.classes is not None:
+            from geowatch import heuristics
+            heuristics.ensure_heuristic_category_tree_colors(self.classes)
+
             channel_colors = [kwimage.Color.coerce(cat['color']).as01()
                               for cat in self.classes.cats.values()]
             to_show_frames = [kwimage.nodata_checkerboard(

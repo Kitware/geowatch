@@ -924,7 +924,7 @@ class AggregatorAnalysisMixin:
 
     def plot_all(agg, rois=None, plot_config=None):
         plotter = agg.build_plotter(rois, plot_config)
-        plotter.plot_all()
+        plotter.plot_requested()
 
     def _wip_build_per_region_variance_tables(agg):
         from geowatch.utils import util_pandas

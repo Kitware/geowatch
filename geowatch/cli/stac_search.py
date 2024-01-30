@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 Performs the stac search to create the .input file needed for
-prepare_ta2_dataset
+:mod:`geowatch.cli.prepare_ta2_dataset`.
 
 
 SeeAlso:
@@ -60,7 +60,7 @@ CommandLine:
         --cache=0 \
         --ignore_duplicates=0 \
         --visualize=True \
-        --serial=True --run=1
+        --backend=serial --run=0
 
 
 CommandLine:

@@ -6,7 +6,6 @@ import kwarray
 import ndsampler
 import ubelt as ub
 import warnings
-from geowatch.utils import util_kwimage
 from geowatch.monkey import monkey_albumentations
 
 monkey_albumentations.patch_albumentations_for_311()
@@ -428,7 +427,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         item['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
         item['img1_id'] = gids[0]
 
-        vidspace_box = util_kwimage.Box.from_slice(target['space_slice'])
+        vidspace_box = kwimage.Box.from_slice(target['space_slice'])
 
         if self.include_debug_info:
             item['sampled_input_gsd'] = target['_input_gsd']
@@ -444,7 +443,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
         video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
         # The size of the canvas we will stitch into in video space and output space
-        full_stitch_vidspace_box = util_kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
+        full_stitch_vidspace_box = kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
         full_stitch_outspace_box = full_stitch_vidspace_box.scale(target['scale']).quantize().astype(np.int32)
 
         item['full_stitch_outspace_ltrb'] = torch.from_numpy(full_stitch_outspace_box.data)
@@ -759,7 +758,7 @@ def find_complete_image_indexes(samples, fast=True):
     return sample_to_complete_gids, graphs
 
 
-class HashableBox(util_kwimage.Box):
+class HashableBox(kwimage.Box):
     def to_tuple(box):
         return tuple([box.format] + box.data.tolist())
 
@@ -869,7 +868,7 @@ def fixup_samples(coco_dset, sample_grid, time_dims):
             })
             for space_slice in spatial_slices.keys():
                 format, a, b, c, d = space_slice
-                box = util_kwimage.Box.coerce([[a, b, c, d]], format=format)
+                box = kwimage.Box.coerce([[a, b, c, d]], format=format)
                 space_slice = box.to_slice()
                 new_tr = partial_tr | {
                     'space_slice': space_slice,

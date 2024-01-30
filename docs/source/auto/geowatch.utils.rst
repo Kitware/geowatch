@@ -24,6 +24,7 @@ Submodules
    geowatch.utils.reverse_hashid
    geowatch.utils.simple_dvc
    geowatch.utils.util_bands
+   geowatch.utils.util_chmod
    geowatch.utils.util_codes
    geowatch.utils.util_data
    geowatch.utils.util_dotdict
@@ -43,7 +44,6 @@ Submodules
    geowatch.utils.util_netharn
    geowatch.utils.util_nvidia
    geowatch.utils.util_pandas
-   geowatch.utils.util_parallel
    geowatch.utils.util_param_grid
    geowatch.utils.util_raster
    geowatch.utils.util_regex

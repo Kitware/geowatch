@@ -47,10 +47,17 @@ class FSPath(str):
         """
         Create a new filesystem instance based on __protocol__
         """
-        return fsspec.filesystem(cls.__protocol__, **kwargs)
+        fs_cls = cls.get_filesystem_class()
+        fs = fs_cls(**kwargs)
+        return fs
 
     @classmethod
-    def _current_fs(cls, **kwargs):
+    def get_filesystem_class(cls):
+        fs_cls = fsspec.get_filesystem_class(cls.__protocol__)
+        return fs_cls
+
+    @classmethod
+    def _current_fs(cls):
         """
         The "default" FileSystem object.  Get the most recent filesystem with
         this protocol, or create a new one with defaults.
@@ -58,8 +65,9 @@ class FSPath(str):
         Returns:
             AbstractFileSystem
         """
-        fs_cls = fsspec.get_filesystem_class(cls.__protocol__)
-        return fs_cls.current()
+        fs_cls = cls.get_filesystem_class()
+        fs = fs_cls.current()
+        return fs
 
     def __new__(cls, path, *, fs=None):
         # Note: the value of the string is set in the __new__ method because
@@ -94,13 +102,23 @@ class FSPath(str):
             >>> print(f'path1={path1}')
             >>> assert path1.is_remote()
         """
-        if path.startswith('s3:'):
-            self = S3Path(path)
-        # elif path.startswith('/vsis3/'):
-        #     # convert gdal virtual filesystems to s3 paths?
-        #     self = S3Path('s3://' + path[7:])
+        path = os.fspath(path)
+        if path.startswith(('s3:', '/vsis3/')):
+            self = S3Path.coerce(path)
+        elif path.startswith(('ssh:')):
+            raise NotImplementedError('getting ssh to work with uris is tricky')
         else:
             self = LocalPath(path)
+        return self
+
+    @property
+    def path(self):
+        """
+        By default the string representation is assumed to be the entire path,
+        however, for subclasses like SSHPath it is necessary to overwrite this
+        so the core object represents the entire URI, but this just returns the
+        path part, which is what the fsspec.FileSystem object expects.
+        """
         return self
 
     def relative_to(self, other):
@@ -123,22 +141,43 @@ class FSPath(str):
             >>> file.close()
             >>> assert fpath.read_text() == fpath.open('r').read()
         """
-        return self.fs.open(self, mode=mode, block_size=block_size,
+        return self.fs.open(self.path, mode=mode, block_size=block_size,
                             cache_options=cache_options,
                             compression=compression)
 
     def ls(self, detail=False, **kwargs):
-        return self.fs.ls(self, detail=detail, **kwargs)
+        """
+        Example:
+            >>> import ubelt as ub
+            >>> dpath = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'ls').ensuredir()
+            >>> (dpath / 'file1').touch()
+            >>> (dpath / 'file2').touch()
+            >>> (dpath / 'subfolder').ensuredir()
+            >>> self = FSPath.coerce(dpath)
+            >>> results = self.ls()
+            >>> assert sorted(results) == sorted(map(str, dpath.ls()))
+        """
+        return self.fs.ls(self.path, detail=detail, **kwargs)
 
     def touch(self, truncate=False, **kwargs):
-        self.fs.touch(self, truncate=truncate, **kwargs)
+        """
+        Example:
+            >>> import ubelt as ub
+            >>> dpath = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'touch').ensuredir()
+            >>> dpath_ = FSPath.coerce(dpath)
+            >>> self = (dpath_ / 'file')
+            >>> self.touch()
+            >>> assert self.exists()
+            >>> assert (dpath / 'file').exists()
+        """
+        self.fs.touch(self.path, truncate=truncate, **kwargs)
 
     def move(self, path2, recursive='auto', maxdepth=None, verbose=1, **kwargs):
         if recursive == 'auto':
             recursive = self.is_dir()
         if verbose:
             print(f'Move {self} -> {path2}')
-        self.fs.move(self, path2, recursive=recursive, maxdepth=maxdepth,
+        self.fs.move(self.path, path2, recursive=recursive, maxdepth=maxdepth,
                      **kwargs)
 
     def delete(self, recursive='auto', maxdepth=True, verbose=1):
@@ -153,7 +192,7 @@ class FSPath(str):
         if recursive == 'auto':
             recursive = self.is_dir()
         try:
-            return self.fs.delete(self, recursive=recursive, maxdepth=maxdepth)
+            return self.fs.delete(self.path, recursive=recursive, maxdepth=maxdepth)
         except FileNotFoundError:
             ...
 
@@ -163,38 +202,38 @@ class FSPath(str):
         """
         if recursive == 'auto':
             recursive = self.is_dir()
-        return self.fs.rm(self, recursive=recursive, maxdepth=maxdepth)
+        return self.fs.rm(self.path, recursive=recursive, maxdepth=maxdepth)
 
     def mkdir(self, create_parents=True, **kwargs):
         """
         Note:
             does nothing on some filesystems (e.g. S3)
         """
-        return self.fs.mkdir(self, create_parents=create_parents, **kwargs)
+        return self.fs.mkdir(self.path, create_parents=create_parents, **kwargs)
 
     def stat(self):
-        return self.fs.stat(self)
+        return self.fs.stat(self.path)
 
     def is_dir(self):
-        return self.fs.isdir(self)
+        return self.fs.isdir(self.path)
 
     def is_file(self):
-        return self.fs.isfile(self)
+        return self.fs.isfile(self.path)
 
     def is_link(self):
         try:
-            return self.fs.islink(self)
+            return self.fs.islink(self.path)
         except AttributeError:
             return False
 
     def exists(self):
-        return self.fs.exists(self)
+        return self.fs.exists(self.path)
 
     def write_text(self, value, **kwargs):
-        return self.fs.write_text(self, value, **kwargs)
+        return self.fs.write_text(self.path, value, **kwargs)
 
     def read_text(self, **kwargs):
-        return self.fs.read_text(self, **kwargs)
+        return self.fs.read_text(self.path, **kwargs)
 
     def walk(self, include_protocol='auto', **kwargs):
         """
@@ -204,7 +243,7 @@ class FSPath(str):
         if include_protocol == 'auto':
             include_protocol = self.is_remote()
         if include_protocol:
-            for root, dnames, fnames in self.fs.walk(self, **kwargs):
+            for root, dnames, fnames in self.fs.walk(self.path, **kwargs):
                 root = self.__class__(self.fs.unstrip_protocol(root), fs=self.fs)
                 yield root, dnames, fnames
         else:
@@ -214,27 +253,63 @@ class FSPath(str):
 
     @property
     def parent(self):
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz.raz')
+            >>> assert str(ub.Path(self).parent) == self.parent
+            >>> assert self.parent == 'foo/bar'
+        """
         return self.__class__(os.path.dirname(self), fs=self.fs)
 
     @property
     def name(self):
-        return os.path.basename(self)
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz')
+            >>> assert ub.Path(self).name == self.name
+            >>> assert self.name == 'baz.jaz'
+        """
+        return os.path.basename(self.path)
 
     @property
     def stem(self):
-        return os.path.splitext(self.name)[0]
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz')
+            >>> assert ub.Path(self).stem == self.stem
+            >>> assert self.stem == 'baz'
+        """
+        return os.path.splitext(self.path.name)[0]
 
     @property
     def suffix(self):
-        return os.path.splitext(self.name)[1]
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz.raz')
+            >>> assert ub.Path(self).suffix == self.suffix
+            >>> assert self.suffix == '.raz'
+        """
+        return os.path.splitext(self.path.name)[1]
 
     @property
     def suffixes(self):
-        return self.name.split('.')[1:]
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz.raz')
+            >>> assert ub.Path(self).suffixes == self.suffixes
+            >>> assert self.suffixes == ['.jaz', '.raz']
+        """
+        return ['.' + x for x in self.name.split('.')[1:]]
 
     @property
     def parts(self):
-        return self.split(self.fs.sep)
+        """
+        Example:
+            >>> self = FSPath.coerce('foo/bar/baz.jaz.raz')
+            >>> assert ub.Path(self).parts == self.parts
+            >>> assert self.parts == ('foo', 'bar', 'baz.jaz.raz')
+        """
+        return tuple(self.path.split(self.fs.sep))
 
     def copy(self, dst, recursive='auto', maxdepth=None, on_error=None,
              callback=None, verbose=1, idempotent=True, overwrite=False,
@@ -338,11 +413,11 @@ class FSPath(str):
                     if recursive:
                         if verbose >= 3:
                             print(' * local -> remote (put recursive)')
-                        return dst.fs.put(self, dst, **commonkw, callback=callback)
+                        return dst.fs.put(self.path, dst, **commonkw, callback=callback)
                     else:
                         if verbose >= 3:
                             print(' * local -> remote (put_file)')
-                        return dst.fs.put_file(self, dst, callback=callback)
+                        return dst.fs.put_file(self.path, dst, callback=callback)
                 except FileExistsError:
                     # TODO: overwrite
                     raise
@@ -350,20 +425,20 @@ class FSPath(str):
             elif isinstance(dst, LocalPath):
                 if verbose >= 3:
                     print(' * local -> local')
-                return self.fs.copy(self, dst, **commonkw, callback=callback)
+                return self.fs.copy(self.path, dst, **commonkw, callback=callback)
             else:
                 raise TypeError(type(dst))
         elif isinstance(self, RemotePath):
             if isinstance(dst, RemotePath):
                 if verbose >= 3:
                     print(' * remote -> remote')
-                return self.fs.copy(self, dst, **commonkw, on_error=on_error)
+                return self.fs.copy(self.path, dst, **commonkw, on_error=on_error)
             elif isinstance(dst, (LocalPath, pathlib.Path)):
 
                 if recursive:
                     if verbose >= 3:
                         print(' * remote -> local (get recursive)')
-                    return self.fs.get(self, dst, **commonkw, callback=callback)
+                    return self.fs.get(self.path, dst, **commonkw, callback=callback)
                 else:
                     # Using put on an s3 bucket seems like it fails when
                     # directories have tight permissions, but put file
@@ -371,7 +446,7 @@ class FSPath(str):
                     # using a file in this instance.
                     if verbose >= 3:
                         print(' * remote -> local (get_file)')
-                    return self.fs.get_file(self, dst, callback=callback)
+                    return self.fs.get_file(self.path, dst, callback=callback)
             else:
                 raise TypeError(type(dst))
         else:
@@ -604,6 +679,27 @@ class LocalPath(FSPath):
         return cls(str(ub.Path.appdir(*args, **kw)))
 
 
+class MemoryPath(FSPath):
+    """
+    Ignore:
+        self = MemoryPath('/')
+        self.ls()
+        (self / 'file').write_text('data')
+        self.ls()
+
+        ref_mempath = MemoryPath('/')
+        ref_mempath.ls()
+
+        # The MemoryFileSystem is global for the entire program
+        new_mempath = MemoryPath('/', fs=MemoryPath._new_fs())
+        new_mempath.ls()
+
+        # Show the entire contents of the memory filesystem
+        new_mempath.fs.store
+    """
+    __protocol__ = 'memory'
+
+
 class RemotePath(FSPath):
     """
     Abstract implementation for all remote filesystems
@@ -624,6 +720,19 @@ class S3Path(RemotePath):
         self = S3Path('s3://kitware-smart-watch-data/', fs=fs)
         self.ls()
 
+        # Can also do
+        S3Path.register_bucket('s3://kitware-smart-watch-data', profile='iarpa')
+        self = S3Path.coerce('s3://kitware-smart-watch-data/')
+        self.ls()
+
+        # Demo of multiple registered buckets
+        S3Path.register_bucket('s3://usgs-landsat-ard', profile='iarpa', requester_pays=True)
+        self = S3Path.coerce('s3://usgs-landsat-ard/collection02')
+        self.ls()
+
+        self = S3Path.coerce('/vsis3/usgs-landsat-ard/collection02')
+        self.ls()
+
     To work with different S3 filesystems,
 
     See [S3FS_Docs]_.
@@ -640,13 +749,35 @@ class S3Path(RemotePath):
     """
     __protocol__ = 's3'
 
+    _bucket_registry = {}
+
     def _as_gdal_vsi(self):
+        # replace the s3:// part with /vsis3
         return '/vsis3/' + self[len(self.__protocol__) + 3:]
 
     def ensuredir(self, mode=0o0777):
         # Does nothing on S3 because you cannot create an empty directory
         # they are always auto-created for you.
         ...
+        return self
+
+    @classmethod
+    def register_bucket(cls, bucket, **kwargs):
+        # Parse out the bucket part
+        assert '/' not in bucket[5], 'not a bucket'
+        fs = cls._new_fs(**kwargs)
+        # want to store and associate buckets with fs objects
+        cls._bucket_registry[bucket] = fs
+
+    @classmethod
+    def coerce(cls, path):
+        if path.startswith('/vsis3/'):
+            # convert gdal virtual filesystems to s3 paths
+            path = 's3://' + path[7:]
+        # Parse out the bucket part
+        bucket = path[:path.find('/', 5)]
+        fs = cls._bucket_registry.get(bucket, None)
+        self = cls(path, fs=fs)
         return self
 
 
@@ -666,22 +797,207 @@ class SSHPath(RemotePath):
         return self.fs.host
 
 
-class MemoryPath(FSPath):
+class _BROKEN_SSHURI(RemotePath):
     """
+    The idea here is to do something like the bucket registery in S3Path, but
+    weird corner cases pop up here making the path forward not easy to
+    identify.
+
+    Requires a RFC3986 style URI.
+
+    The idea here is that we keep the remote information in the string so we
+    can automatically lookup the appropriate fs object and only have to
+    authenticate it once.
+
+    Note this is a mess, and we may just drop this idea...
+
     Ignore:
-        self = MemoryPath('/')
+        from geowatch.utils.util_fsspec import *  # NOQA
+        self = SSHPath('ssh://localhost/.')
+        print(f'self={self}')
         self.ls()
-        (self / 'file').write_text('data')
-        self.ls()
+        (self / 'misc/notes').tree()
 
-        ref_mempath = MemoryPath('/')
-        ref_mempath.ls()
+        self = SSHPath('misc/notes', fs=fs)
+        self.tree()
 
-        # The MemoryFileSystem is global for the entire program
-        new_mempath = MemoryPath('/', fs=MemoryPath._new_fs())
-        new_mempath.ls()
-
-        # Show the entire contents of the memory filesystem
-        new_mempath.fs.store
+        fs = SSHPath._new_fs(host='localhost')
+        path = 'ssh://localhost/.'
+        self = SSHPath(path, fs=fs)
     """
-    __protocol__ = 'memory'
+    __protocol__ = 'ssh'
+
+    _fs_registry = {}
+
+    @property
+    def host(self):
+        return self.fs.host
+
+    @classmethod
+    def _lookup_fs_remote(cls, path, fs=None, **kwargs):
+        import uritools
+        uri_parsed = uritools.urisplit(path)
+
+        remote = uritools.uricompose(
+            scheme=uri_parsed.scheme, authority=uri_parsed.authority,
+            userinfo=uri_parsed.userinfo, host=uri_parsed.host,
+            port=uri_parsed.port)
+
+        if remote in cls._fs_registry:
+            fs = cls._fs_registry[remote]
+
+        if fs is None:
+            fs = cls.register_remote(remote, **kwargs)
+
+        return fs
+
+    @classmethod
+    def register_remote(cls, remote, **kwargs):
+        import uritools
+        uri_parsed = uritools.urisplit(remote)
+        assert not uri_parsed.path
+        remote = uritools.uricompose(
+            scheme=uri_parsed.scheme, authority=uri_parsed.authority,
+            userinfo=uri_parsed.userinfo, host=uri_parsed.host,
+            port=uri_parsed.port)
+        ssh_kwargs = {}
+        ssh_kwargs['host'] = uri_parsed.host
+        if uri_parsed.port is not None:
+            ssh_kwargs['port'] = uri_parsed.port
+        if uri_parsed.userinfo is not None:
+            ssh_kwargs['username'] = uri_parsed.userinfo
+        ssh_kwargs.update(kwargs)
+        print('new remote')
+        print(f'remote={remote}')
+        print(f'ssh_kwargs={ssh_kwargs}')
+        fs = cls._new_fs(**ssh_kwargs)
+        print(f'fs={fs}')
+        cls._fs_registry[remote] = fs
+        return fs
+
+    def __new__(cls, path, *, fs=None):
+        parsed, remote = _uri_parse(path)
+        if fs is None:
+            fs = cls._lookup_fs_remote(path)
+        self = super().__new__(cls, path, fs=fs)
+        self._path = parsed.path
+        return self
+
+    @property
+    def path(self):
+        return self._path
+
+
+def _uri_parse(uri):
+    import uritools
+    uri_parsed = uritools.urisplit(uri)
+    remote = uritools.uricompose(
+        scheme=uri_parsed.scheme, authority=uri_parsed.authority,
+        userinfo=uri_parsed.userinfo, host=uri_parsed.host,
+        port=uri_parsed.port)
+    return uri_parsed, remote
+
+
+def _devtest_ssh_registry1():
+    """
+    TODO:
+        - [ ] Generate a test that setups the docker ssh server
+
+    This assumes you've run the instructions in
+        ~/code/ci-docker/ubuntu_sshd.dockerfile
+
+    and have a local ssh server running
+    """
+    from geowatch.utils.util_fsspec import SSHPath
+
+    ssh_kwargs = {
+        'port': 2222,
+        'username': 'ubuntu',
+        # 'password': 'ubuntu',
+        'key_filename': str(ub.Path('~/code/ci-docker/tmp_keys/id_ed25519').expand()),
+    }
+    fs1 = SSHPath._new_fs(host='localhost', **ssh_kwargs)
+
+    fs2 = SSHPath._new_fs(host='localhost')
+    fs1.open('testfile2', mode='w').write('foo')
+
+    # Should be files on the docker ssh server
+    fs1.ls('.')
+
+    # Should be files on the local ssh server (todo: test with 2 docker instances)
+    fs2.ls('.')
+
+    # import fsspec
+    # uri1 = 'ssh://localhost:22/testfile1'
+    # uri2 = 'ssh://ubuntu@localhost:2222/testfile2'
+    # file1 = fsspec.open(uri1, mode='w')
+    # file2 = fsspec.open(uri2)
+
+    # p1 = SSHPath(uri1, fs=fs1)
+    # p2 = SSHPath(uri1, fs=fs1)
+    # fsspec.core.get_fs_token_paths(uri1)
+    # fsspec.core.get_fs_token_paths(uri2)
+
+    # # uri1 = 'ssh://localhost:22/.ssh'
+    # uri2 = 'ssh://ubuntu@localhost:2222/.ssh'
+
+    # import uritools
+    # # uri_parsed1 = uritools.urisplit(uri1)
+    # # uri_parsed2 = uritools.urisplit(uri2)
+
+    # remote = uri2
+    # options = {
+    #     'key_filename': str(ub.Path('~/code/ci-docker/tmp_keys/id_ed25519').expand()),
+    # }
+    # registry = {}
+    # if remote in registry:
+    #     raise ValueError('already exists')
+    # uri_parsed = uritools.urisplit(remote)
+    # options['port'] = uri_parsed.port
+    # options['host'] = uri_parsed.host
+    # options['username'] = uri_parsed.userinfo
+    # fs = SSHPath._new_fs(**options)
+    # # registry
+    # prefix = uritools.uricompose(
+    #     scheme=uri_parsed.scheme, authority=uri_parsed.authority,
+    #     userinfo=uri_parsed.userinfo, host=uri_parsed.host,
+    #     port=uri_parsed.port)
+    # registry[prefix] = fs
+
+    # uri = 's3://usgs-landsat-ard/collection02/oli-tirs/2016/CU/003/008/LC08_CU_003008_20161026_20210502_02/LC08_CU_003008_20161026_20210502_02_SR_B2.TIF'
+    # parsed, prefix = _uri_parse(uri)
+    # prefix = 's3://usgs-landsat-ard'
+    # parsed, prefix = _uri_parse(uri)
+
+    from uritools import uricompose
+    from uritools import urisplit
+    uricompose(scheme='foo', host='example.com', port=8042, path='/over/there',
+               query={'name': 'ferret'}, fragment='nose')
+
+    x = uricompose(scheme='foo', host='example.com', port=8042, path='/.')
+    urisplit(x).authority
+    uricompose(scheme='foo', host='example.com', path='/.')
+
+
+def _devtest_ssh_registry2():
+    # from geowatch.utils.util_fsspec import SSHPath, FSPath
+    prefix1 = 'ssh://localhost:22'
+    prefix2 = 'ssh://ubuntu@localhost:2222'
+    options1 = {
+        'port': 22,
+        'host': 'localhost',
+    }
+    options2 = {
+        'port': 2222,
+        'host': 'localhost',
+        'username': 'ubuntu',
+        'key_filename': str(ub.Path('~/code/ci-docker/tmp_keys/id_ed25519').expand()),
+    }
+    f1 = SSHPath.register_remote(prefix1, **options1)
+    f2 = SSHPath.register_remote(prefix2, **options2)
+    print(f'f1={f1}')
+    print(f'f2={f2}')
+
+    path1 = SSHPath('ssh://ubuntu@localhost:2222/.')
+    path1.ls()
+    path1.fs.ls('/')

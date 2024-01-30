@@ -31,7 +31,7 @@ console_scripts = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p no:doctest --xdoctest --xdoctest-style=google --ignore-glob=setup.py"
+addopts = "-p no:doctest --xdoctest --xdoctest-style=google --ignore-glob=setup.py --ignore-glob=geowatch_tpl --ignore-glob=docs"
 norecursedirs = ".git ignore build __pycache__ dev _skbuild"
 filterwarnings = [
     "default",
@@ -68,10 +68,18 @@ filterwarnings = [
 [tool.coverage.run]
 branch = true
 omit = [
-    "geowatch/stac/_notebook.py",
-    "geowatch/mlops/_notebook.py",
-    "geowatch/tasks/fusion/datamodules/_notebook.py",
-    "geowatch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
+    #"geowatch/stac/_notebook.py",
+    #"geowatch/mlops/_notebook.py",
+    #"geowatch/tasks/fusion/datamodules/_notebook.py",
+    #"geowatch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
+
+    # Not covered, because these will likely be refactored or factored out
+    "geowatch/tasks/change_detection",
+    "geowatch/tasks/rutgers_material_seg",
+    "geowatch/tasks/rutgers_material_seg_v2",
+    "geowatch/tasks/rutgers_material_change_detection",
+    "geowatch/tasks/super_res",
+
 ]
 
 [tool.coverage.report]

@@ -33,7 +33,17 @@ except Exception:
 #
 
 
-class TimePolygonFilter:
+class DataFrameFilter:
+
+    def __call__(self, gdf):
+        raise AssertionError("Use the explicit .filter_dataframe method instead")
+        return self.filter_dataframe(gdf)
+
+    def filter_dataframe(self, gdf):
+        raise NotImplementedError
+
+
+class TimePolygonFilter(DataFrameFilter):
     """
     Cuts off start and end of each track based on min response.
     """
@@ -41,7 +51,7 @@ class TimePolygonFilter:
     def __init__(self, threshold):
         self.threshold = threshold
 
-    def __call__(self, gdf):
+    def filter_dataframe(self, gdf):
 
         def _edit(grp):
             magic_thresh = 0.5
@@ -62,7 +72,7 @@ class TimePolygonFilter:
         return result
 
 
-class TimeSplitFilter:
+class TimeSplitFilter(DataFrameFilter):
     """
     Splits tracks based on start and end of each subtracks min response.
     """
@@ -71,7 +81,7 @@ class TimeSplitFilter:
         self.threshold = threshold
         self.frame_buffer = frame_buffer
 
-    def __call__(self, gdf):
+    def filter_dataframe(self, gdf):
         import geopandas as gpd
         import pandas as pd
 
@@ -149,7 +159,7 @@ class TimeSplitFilter:
         return result
 
 
-class ResponsePolygonFilter:
+class ResponsePolygonFilter(DataFrameFilter):
     """
     Filters each track based on the average response of all tracks.
     """
@@ -164,7 +174,7 @@ class ResponsePolygonFilter:
         self.gids = gids
         self.mean_response = mean_response
 
-    def __call__(self, gdf, gids=None, threshold=None, cross=True):
+    def filter_dataframe(self, gdf, gids=None, threshold=None, cross=True):
         if gids is None:
             gids = self.gids
         if threshold is None:
@@ -373,7 +383,7 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
 
 
 @profile
-def time_aggregated_polys(sub_dset, **kwargs):
+def time_aggregated_polys(sub_dset, video_id, **kwargs):
     """
     Polygon extraction and tracking function.
 
@@ -382,6 +392,8 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
     Args:
         sub_dset (kwcoco.CocoDataset): a kwcoco dataset with exactly 1 video
+
+        video_id (int): The video-id to track.
 
         **kwargs:
             see :class:`TimeAggregatedPolysConfig` and
@@ -403,14 +415,15 @@ def time_aggregated_polys(sub_dset, **kwargs):
         >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
+        >>> video_id = list(sub_dset.videos())[0]
         >>> min_area_square_meters = None
         >>> kwargs = dict(thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
-        >>> orig_track = time_aggregated_polys(sub_dset, **kwargs)
+        >>> orig_track = time_aggregated_polys(sub_dset, video_id, **kwargs)
         >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(sub_dset,  **kwargs)
+        >>> inter_track = time_aggregated_polys(sub_dset, video_id, **kwargs)
         >>> assert inter_track.iloc[0][('fg', -1)] == 0
         >>> assert inter_track.iloc[1][('fg', -1)] > 0
 
@@ -422,15 +435,16 @@ def time_aggregated_polys(sub_dset, **kwargs):
         >>> sub_dset = geowatch.coerce_kwcoco(
         >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True, dates=True)
+        >>> video_id = list(sub_dset.videos())[0]
         >>> thresh = 0.01
         >>> min_area_square_meters = None
         >>> kwargs = dict(thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
-        >>> orig_track = time_aggregated_polys(sub_dset, **kwargs)
+        >>> orig_track = time_aggregated_polys(sub_dset, video_id, **kwargs)
         >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(sub_dset,  **kwargs)
+        >>> inter_track = time_aggregated_polys(sub_dset, video_id, **kwargs)
         >>> assert inter_track.iloc[0][('fg', -1)] == 0
         >>> assert inter_track.iloc[1][('fg', -1)] > 0
     """
@@ -446,11 +460,13 @@ def time_aggregated_polys(sub_dset, **kwargs):
     _all_keys = set(config.key + config.bg_key)
     has_requested_chans_list = []
 
-    coco_videos = sub_dset.videos()
-    assert len(coco_videos) == 1, 'we expect EXACTLY one video here'
+    # coco_videos = sub_dset.videos()
+    # assert len(coco_videos) == 1, 'we expect EXACTLY one video here'
+    assert video_id is not None
+    coco_videos = sub_dset.videos(video_ids=[video_id])
     video = coco_videos.objs[0]
     video_name = video.get('name', None)
-    video_id = video['id']
+    # video_id = video['id']
 
     video_gids = list(sub_dset.images(video_id=video_id))
     for gid in video_gids:
@@ -479,7 +495,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
     # polys are in "tracking-space", i.e. video-space up to a scale factor.
     gid_poly_config = PolygonExtractConfig(**ub.udict(config).subdict(PolygonExtractConfig.__default__.keys()))
-    gids_polys = _gids_polys(sub_dset, **gid_poly_config)
+    gids_polys = _gids_polys(sub_dset, video_id, **gid_poly_config)
 
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
@@ -606,7 +622,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
 
         n_orig = gpd_len(_TRACKS)
         rsp_filter = ResponsePolygonFilter(_TRACKS, config.key, config.response_thresh)
-        _TRACKS = rsp_filter(_TRACKS)
+        _TRACKS = rsp_filter.filter_dataframe(_TRACKS)
         print('filter based on per-polygon response: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
@@ -614,14 +630,14 @@ def time_aggregated_polys(sub_dset, **kwargs):
     if config.time_thresh:  # as a fraction of thresh
         time_filter = TimePolygonFilter(config.time_thresh * config.thresh)
         n_orig = gpd_len(_TRACKS)
-        _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
+        _TRACKS = time_filter.filter_dataframe(_TRACKS)  # 7% of runtime? could be next line
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     if config.time_split_thresh:
         split_filter = TimeSplitFilter(config.time_split_thresh, config.time_split_frame_buffer)
         n_orig = gpd_len(_TRACKS)
-        _TRACKS = split_filter(_TRACKS)
+        _TRACKS = split_filter.filter_dataframe(_TRACKS)
         n_result = gpd_len(_TRACKS)
         print('filter based on time splitting: remaining tracks '
               f'{n_result} / {n_orig}')
@@ -806,9 +822,9 @@ class TimeAggregatedBAS(TrackFnWithSV):
     key: str = 'salient'
     agg_fn: str = 'probs'
 
-    def create_tracks(self, sub_dset):
+    def create_tracks(self, sub_dset, video_id):
         aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
-        tracks = time_aggregated_polys(sub_dset, **aggkw)
+        tracks = time_aggregated_polys(sub_dset, video_id, **aggkw)
         print('Tracks:')
         print(tracks)
         return tracks
@@ -850,7 +866,7 @@ class TimeAggregatedSC(TrackFnWithSV):
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
     time_thresh = None
 
-    def create_tracks(self, sub_dset):
+    def create_tracks(self, sub_dset, video_id):
         """
         boundaries_as: use for Site Boundary annots in coco_dsennjk
             'bounds': generated polys will lie inside the boundaries
@@ -861,13 +877,12 @@ class TimeAggregatedSC(TrackFnWithSV):
         import kwimage
         import rich
         rich.print('[white] --- Create Tracks ---')
-        print(f'self={self}')
-        print(f'self.boundaries_as={self.boundaries_as}')
         if self.boundaries_as == 'polys':
 
             # Just score the polygons, no need to extract
             tracks = score_track_polys(
                 sub_dset,
+                video_id,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
@@ -884,8 +899,8 @@ class TimeAggregatedSC(TrackFnWithSV):
         else:
             # Need to extract and score
             aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
-            aggkw['use_boundaries'] = self.get('boundaries_as', 'none') != 'none'
-            tracks = time_aggregated_polys(sub_dset, **aggkw)
+            aggkw['use_boundaries'] = str(self.get('boundaries_as', 'none')).lower() not in {'none', 'null'}
+            tracks = time_aggregated_polys(sub_dset, video_id, **aggkw)
         print('Tracks:')
         print(tracks)
         rich.print('[white] ---')
@@ -942,7 +957,7 @@ class TimeAggregatedSV(CommonTrackFn):
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
     span_steps: int = 120
 
-    def create_tracks(self, sub_dset):
+    def create_tracks(self, sub_dset, video_id):
         """
         boundaries_as: use for Site Boundary annots in coco_dset
             'bounds': generated polys will lie inside the boundaries
@@ -954,6 +969,7 @@ class TimeAggregatedSV(CommonTrackFn):
         if self.boundaries_as == 'polys':
             tracks = score_track_polys(
                 sub_dset,
+                video_id,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.

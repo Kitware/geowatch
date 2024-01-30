@@ -6,6 +6,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.14.0 - Unreleased
 
+### Added
+
+* `demo_kwcoco_multisensor` can now generate heatmaps with any given chanelspec
+
+* Tracker can now re-estimate polygons with the new "crall-leotta" algorithm.
+
+
+### Changed
+
+* Sphinx documentation now includes all manual and auto-generated docs.
+
+* Tracker no longer splits / merges the kwcoco file and instead passes a video_id reference.
+
+* Removed a sizable amount of unused code.
+
 
 ## Version 0.13.3 - Released 2023-12-xx
 

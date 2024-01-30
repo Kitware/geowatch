@@ -284,21 +284,53 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex.__dict__={ex.__dict__}')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
             else:
-                print('')
-                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-                print(f'ex={ex!r}')
-                print(f'ex={ex}')
-                print(f'ex.__dict__={ex.__dict__}')
                 coco_img = coco_dset.coco_image(gid)
-                print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
-                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-                # if 0:
-                #     job.job_args
-                #     job.job_kwargs
-                #     coco_img, = job.job_args
-                #     globals().update(**job.job_kwargs)
-                #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
-                raise
+
+                # Check for remote existence and handle the case where the data
+                # might be at a remote location
+                from geowatch.utils import util_fsspec
+                missing_paths = []
+                existing_paths = []
+
+                HACK_CHECK_EXISTS = 0
+                if HACK_CHECK_EXISTS:
+                    # Force this one to be current for fs
+                    # fs = util_fsspec.S3Path._new_fs(profile='iarpa', requester_pays=True)
+                    for p in coco_img.iter_image_filepaths():
+                        # Use fsspec to check if the files exist
+                        fspath = util_fsspec.FSPath.coerce(p)
+                        if not fspath.exists():
+                            missing_paths.append(fspath)
+                        else:
+                            existing_paths.append(fspath)
+
+                if missing_paths:
+                    print('')
+                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    print(f'existing_paths = {ub.urepr(existing_paths, nl=1)}')
+                    print(f'missing_paths = {ub.urepr(missing_paths, nl=1)}')
+                    print(f'ex={ex!r}')
+                    print(f'ex={ex}')
+                    print(f'ex.__dict__={ex.__dict__}')
+                    print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    broken_image_ids.append(gid)
+                    # raise FileNotFoundError(str(missing_paths))
+                else:
+                    print('')
+                    rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    print(f'ex={ex!r}')
+                    print(f'ex={ex}')
+                    print(f'ex.__dict__={ex.__dict__}')
+                    print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                    rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    # if 0:
+                    #     job.job_args
+                    #     job.job_kwargs
+                    #     coco_img, = job.job_args
+                    #     globals().update(**job.job_kwargs)
+                    #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
+                    raise
         else:
             if mode == 'process':
                 # for multiprocessing
@@ -1597,7 +1629,9 @@ def geotiff_format_info(fpath):
     height = gdal_ds.RasterYSize
 
     ovr_count = main_band.GetOverviewCount()
-    ifd_offset = int(main_band.GetMetadataItem('IFD_OFFSET', 'TIFF'))
+    ifd_offset = main_band.GetMetadataItem('IFD_OFFSET', 'TIFF')
+    if ifd_offset is not None:
+        ifd_offset = int(ifd_offset)
     block_offset = main_band.GetMetadataItem('BLOCK_OFFSET_0_0', 'TIFF')
     structure = gdal_ds.GetMetadata("IMAGE_STRUCTURE")
     compress = structure.get("COMPRESSION", 'NONE')

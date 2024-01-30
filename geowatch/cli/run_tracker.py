@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""
+r"""
 This file contains logic to convert a kwcoco file into an IARPA Site Model.
 
 At a glance the IARPA Site Model is a GeoJSON FeatureCollection with the
 following informal schema:
 
-For official documentation about the KWCOCO json format see [1]_. A formal
+For official documentation about the KWCOCO json format see [kwcoco]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
 
 For official documentation about the IARPA json format see [2, 3]_. A formal
 json-schema can be found in ``../../geowatch/rc/site-model.schema.json``.
 
 References:
-    .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
+    .. [kwcoco] https://gitlab.kitware.com/computer-vision/kwcoco
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
 
@@ -132,7 +132,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
 
     in_file_gt = scfg.Value(None, help=ub.paragraph(
             '''
-            If available, ground truth KWCOCO to visualize
+            If available, ground truth KWCOCO to visualize.
+            DEPRECATED.
             '''), group='convenience')
 
     region_id = scfg.Value(None, help=ub.paragraph(
@@ -174,13 +175,15 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             Directory to save tracking vizualizations to; if None, don't viz
             '''), group='track')
+
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
             A filepath glob or json blob containing either a
             site_summary or a region_model that includes site summaries.
             Each summary found will be added to in_file as
             'Site Boundary' annotations.
-            '''), group='behavior')
+            '''), alias=['in_site_summaries'], group='behavior')
+
     clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Clears all annotations before running tracking, so it starts
@@ -1400,12 +1403,27 @@ def main(argv=None, **kwargs):
     # TODO: ensure all args are resolved here.
     info = tracking_output['info']
 
+    PROCESSCONTEXT_INFO_HACK = True
+    proc_context_kwargs = {}
+    if PROCESSCONTEXT_INFO_HACK:
+        # TODO: now that we are no longer doing subsets and unions in the tracker
+        # we dont need to maintain the old "info" here. In fact if we do, we get
+        # circular references. In order to maintain compatability with older output
+        # we are going to clear the old info and continue to use extra pred info,
+        # but in the future after we are sure nothing depends on this, we should
+        # simply remove the extra kwarg, as it will be implicitly maintained.
+        proc_context_kwargs['extra'] = {'pred_info': pred_info}
+        # Clear out the old info to prevent circular references while we do the
+        # above hack. Remove the next line once we fix the above hack.
+        coco_dset.dataset['info'] = []
+
     proc_context = process_context.ProcessContext(
         name='geowatch.cli.run_tracker', type='process',
         config=jsonified_config,
-        extra={'pred_info': pred_info},
         track_emissions=False,
+        **proc_context_kwargs,
     )
+
     proc_context.start()
     info.append(proc_context.obj)
 
@@ -1468,11 +1486,13 @@ def main(argv=None, **kwargs):
 
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
                                                args.region_id)
-        cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']
-        coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
-        print('restricting dset to videos with site_summary annots: ',
-              set(coco_dset.index.name_to_video))
-        assert coco_dset.n_images > 0, 'no valid videos!'
+        if 0:
+            # Going to test to see if removing this helps anything
+            cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']
+            coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
+            print('restricting dset to videos with site_summary annots: ',
+                  set(coco_dset.index.name_to_video))
+            assert coco_dset.n_images > 0, 'no valid videos!'
     else:
         # Note: this may be a warning if we use this in a pipeline where the
         # inputed kwcoco files already have polygons reprojected (and in that
@@ -1601,6 +1621,9 @@ def main(argv=None, **kwargs):
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
         with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
+
+    if args.viz_out_dir is not None:
+        rich.print(f'Tracking Viz: [link={args.viz_out_dir}]{args.viz_out_dir}[/link]')
 
 
 def coco_video_gdf(coco_dset):

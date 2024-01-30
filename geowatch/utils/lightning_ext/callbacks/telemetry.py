@@ -17,7 +17,7 @@ class LightningTelemetry(pl.callbacks.Callback):
         >>> import ubelt as ub
         >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
-        >>> default_root_dir = ub.Path.appdir('lightning_ext/test/telemetry')
+        >>> default_root_dir = ub.Path.appdir('geowatch/lightning_ext/test/telemetry')
         >>> default_root_dir.delete().ensuredir()
         >>> self = LightningTelemetry()
         >>> # Test starting a model without any existing checkpoints

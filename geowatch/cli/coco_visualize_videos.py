@@ -401,13 +401,18 @@ def main(cmdline=True, **kwargs):
         coco_images = coco_dset.images(selected_gids).coco_images
         keep = []
         for coco_img in coco_images:
-            code = coco_img.channels.fuse().as_set()
-            if config['skip_aggressive']:
-                if len(requested_channels & code) == len(requested_channels):
+            channels = coco_img.channels
+            if channels is None:
+                if not config['skip_aggressive']:
                     keep.append(coco_img.img['id'])
             else:
-                if requested_channels & code:
-                    keep.append(coco_img.img['id'])
+                code = coco_img.channels.fuse().as_set()
+                if config['skip_aggressive']:
+                    if len(requested_channels & code) == len(requested_channels):
+                        keep.append(coco_img.img['id'])
+                else:
+                    if requested_channels & code:
+                        keep.append(coco_img.img['id'])
         rich.print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
@@ -758,6 +763,16 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
             rich.print('Choosing channels')
             rich.print(f'request_grouped_bands={request_grouped_bands}')
         channels = coco_img.channels
+
+        if channels is None:
+            # Image does not have channel metadata, the best we can do is
+            # assume RGB
+            chan_groups = [{
+                'pname': 'null',
+                'chan': None,
+            }]
+            return chan_groups
+
         if request_grouped_bands == 'default':
             # Use false color for special groups
             request_grouped_bands = ['red|green|blue', 'r|g|b']
@@ -1192,7 +1207,8 @@ def _write_ann_visualizations2(coco_dset,
                 rich.print(f'... skipped render {chan_row=}')
         else:
             stack_idx += 1
-            handled_specs.add(chan_row['chan'].spec)
+            if chan_row['chan'] is not None:
+                handled_specs.add(chan_row['chan'].spec)
             if verbose > 2:
                 rich.print(f'... success render {chan_row=}')
 
@@ -1284,20 +1300,30 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     import rich
     chan_pname = chan_row['pname']
     chan_group_obj = chan_row['chan']
-    chan_list = chan_group_obj.parsed
-    chan_group = chan_group_obj.spec
+    # import xdev
+    # with xdev.embed_on_exception_context:
 
     img_chan_dpath = img_view_dpath / chan_pname
     ann_chan_dpath = ann_view_dpath / chan_pname
 
     # Prevent long names for docker (limit is 242 chars)
-    chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
-    prefix = '_'.join([frame_id, chan_pname2])
+    if chan_group_obj is not None:
+        chan_list = chan_group_obj.parsed
+        chan_group = chan_group_obj.spec
+        chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
+        prefix = '_'.join([frame_id, chan_pname2])
+    else:
+        chan_group = None
+        chan_list = None
+        prefix = '_'.join([frame_id, 'null'])
 
     view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
     view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
 
-    chan = delayed.take_channels(chan_group)
+    if chan_group_obj is not None:
+        chan = delayed.take_channels(chan_group)
+    else:
+        chan = delayed
     chan = chan.prepare().optimize()
 
     # When util_delayed_poc is removed, remove **delayed_ops
@@ -1404,7 +1430,10 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         print('after checkers part')
 
     # Do the channels correspond to classes with known colors?
-    chan_names = chan_row['chan'].to_list()
+    if chan_group_obj is not None:
+        chan_names = chan_row['chan'].to_list()
+    else:
+        chan_names = []
     channel_colors = []
 
     from geowatch import heuristics
@@ -1471,7 +1500,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         canvas = canvas[..., 0]
 
     chan_header_lines = header_lines.copy()
-    chan_header_lines.append(chan_group)
+    chan_header_lines.append(str(chan_group))
     header_text = '\n'.join(chan_header_lines)
 
     if valid_image_poly is not None:

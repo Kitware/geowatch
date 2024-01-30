@@ -1,4 +1,7 @@
-# Prerequisites
+
+# Copying Large Files to EFS
+
+## Prerequisites
 Install:
 - AWS CLI tool `aws` ([https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
 - Kubernetes command-line tool `kubectl` ([https://kubernetes.io/docs/tasks/tools/#kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl))
@@ -26,7 +29,7 @@ aws eks --profile iarpa --region $AWS_REGION update-kubeconfig \
 	--role-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:role/smartflow-${ENVIRONMENT_NAME}-${AWS_REGION}-eks-admin"  
 ```
 
-## `rsync` and kubernetes
+### `rsync` and kubernetes
 
 Copying files to a kubernetes pod is tricky, below is a script which makes this less painful.
  [Source](https://serverfault.com/a/887402)

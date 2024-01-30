@@ -19,6 +19,121 @@ another image has "r|g|b|yellow", there is no logic to split those channels out
 at the moment.
 
 
+The following is an end-to-end example works on public data
+
+CommandLine:
+    # Create a demo region file
+    xdoctest geowatch.demo.demo_region demo_khq_region_fpath
+
+    DATASET_SUFFIX=DemoKHQ-2022-06-10-V2
+    DEMO_DPATH=$HOME/.cache/geowatch/demo/datasets
+
+    REGION_FPATH="$HOME/.cache/geowatch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/KHQ_R001_sites/*.geojson"
+
+    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
+    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
+    # Shrink time window to test with less data
+    START_DATE=2016-12-02
+    END_DATE=2020-12-31
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
+    SEARCH_FPATH=$DEMO_DPATH/stac_search.json
+    RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
+    CATALOG_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}_catalog.json
+    KWCOCO_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.kwcoco.zip
+    KWCOCO_FIELDED_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}-fielded.kwcoco.zip
+    KWCOCO_ALIGNED_DPATH=$DEMO_DPATH/all_sensors_kit/cropped/
+    KWCOCO_ALIGNED_FPATH=$DEMO_DPATH/all_sensors_kit/cropped/${REGION_ID}-fielded.kwcoco.zip
+
+    mkdir -p "$DEMO_DPATH"
+
+    # Create the search json wrt the sensors and processing level we want
+    python -m geowatch.stac.stac_search_builder \
+        --start_date="$START_DATE" \
+        --end_date="$END_DATE" \
+        --cloud_cover=40 \
+        --sensors=sentinel-s2-l2a-cogs \
+        --out_fpath "$SEARCH_FPATH"
+    cat "$SEARCH_FPATH"
+
+    # Delete this to prevent duplicates
+    rm -f "$RESULT_FPATH"
+
+    # Create the .input file
+    # use max_products_per_region to keep the result small
+    python -m geowatch.cli.stac_search \
+        --region_file "$REGION_FPATH" \
+        --search_json "$SEARCH_FPATH" \
+        --mode area \
+        --verbose 2 \
+        --max_products_per_region 10 \
+        --outfile "${RESULT_FPATH}"
+
+    cat "$RESULT_FPATH"
+
+    python -m geowatch.cli.baseline_framework_ingress \
+        --input_path="$RESULT_FPATH" \
+        --catalog_fpath="${CATALOG_FPATH}" \
+        --virtual=True \
+        --jobs=avail \
+        --aws_profile=iarpa \
+        --requester_pays=0
+
+    AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.stac_to_kwcoco \
+        --input_stac_catalog="${CATALOG_FPATH}" \
+        --outpath="$KWCOCO_FPATH" \
+        --jobs=8 \
+        --from_collated=False \
+        --ignore_duplicates=0
+
+    # Check that the resulting kwcoco has what you want in it
+    geowatch stats "$KWCOCO_FPATH"
+
+    # Use kwcoco info to dump a single image dictionary
+    kwcoco info "$KWCOCO_FPATH" -g 1 -i 0
+
+    # Prefetch header metadata from remote assets
+    AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_add_watch_fields \
+        --src="$KWCOCO_FPATH" \
+        --dst="$KWCOCO_FIELDED_FPATH" \
+        --overwrite=warp \
+        --workers=8 \
+        --enable_video_stats=False \
+        --target_gsd=10 \
+        --remove_broken=True \
+        --skip_populate_errors=False
+
+    # Use kwcoco info to see what info fielding added
+    kwcoco info "$KWCOCO_FPATH" -g 1 -i 0
+
+    # Perform the crop to create an aligned dataset with videos
+    AWS_DEFAULT_PROFILE=iarpa python -m geowatch.cli.coco_align \
+        --regions "$REGION_FPATH" \
+        --context_factor=1 \
+        --geo_preprop=auto \
+        --keep=img \
+        --force_nodata=None \
+        --include_channels="None" \
+        --exclude_channels="None" \
+        --visualize=False \
+        --debug_valid_regions=False \
+        --rpc_align_method orthorectify \
+        --sensor_to_time_window "None" \
+        --verbose=0 \
+        --aux_workers=0 \
+        --target_gsd=10 \
+        --force_min_gsd=None \
+        --workers=26 \
+        --tries=2 \
+        --asset_timeout=1hours \
+        --image_timeout=2hours \
+        --hack_lazy=False \
+        --src="$KWCOCO_FIELDED_FPATH" \
+        --dst="$KWCOCO_FIELDED_FPATH" \
+        --dst_bundle_dpath=$KWCOCO_ALIGNED_DPATH
+
+
+
 Notes:
     # Example invocation to create the full drop1 aligned dataset
 

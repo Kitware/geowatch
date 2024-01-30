@@ -3,6 +3,7 @@ import argparse
 import sys
 import os
 import re
+import ubelt as ub
 from collections import OrderedDict
 
 from configargparse import (
@@ -64,7 +65,7 @@ class ArgumentParser(configargparse.ArgumentParser):
             args=None,
             namespace=None,
             config_file_contents=None,
-            env_vars=os.environ,
+            env_vars=ub.NoParam,
             ignore_help_args=False,
             ignore_write_args=False,
     ):
@@ -78,6 +79,9 @@ class ArgumentParser(configargparse.ArgumentParser):
             ignore_help_args (bool): This flag determines behavior when user specifies --help or -h. If False,
                 it will have the default behavior - printing help and exiting. If True, it won't do either.
         """
+        if env_vars is ub.NoParam:
+            env_vars = os.environ
+
         if args is None:
             args = sys.argv[1:]
         elif isinstance(args, str):

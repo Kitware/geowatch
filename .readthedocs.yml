@@ -6,7 +6,6 @@
 # https://readthedocs.org/dashboard/geowatch/advanced/
 
 # Required
----
 version: 2
 build:
   os: "ubuntu-22.04"
@@ -17,8 +16,8 @@ sphinx:
 formats: all
 python:
   install:
-    - requirements: requirements/gdal.txt
-    - requirements: requirements/headless.txt
-    - requirements: requirements/docs.txt
-    - method: pip
-      path: .
+  - requirements: requirements/gdal.txt
+  - requirements: requirements/headless.txt
+  - requirements: requirements/docs.txt
+  - method: pip
+    path: .

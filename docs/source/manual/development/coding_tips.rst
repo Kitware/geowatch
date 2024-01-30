@@ -1,3 +1,6 @@
+Coding Tips
+-----------
+
 The following are guidelines and suggestion that might help produce code that
 is easier to integrate.  These are based on and may be biased by Jon Crall's
 opinions.

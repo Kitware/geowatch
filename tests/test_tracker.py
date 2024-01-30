@@ -160,7 +160,7 @@ def test_tracker_bas_with_boundary_region():
     import kwarray
 
     coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True,
-                                    dates=True, image_size=(96, 96))
+                                       dates=True, image_size=(96, 96))
     coco_dset.clear_annotations()
 
     rng = kwarray.ensure_rng(4329423)
@@ -376,3 +376,273 @@ def test_tracker_nan_params():
     bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
     assert len(bas_trackids) > len(set(bas_trackids)), (
         'should have multiple observations per track')
+
+
+def test_tracker_ac_refinement():
+    """
+    Generates random BAS predictions and a demo dataset with random AC
+    heatmaps. Then run AC tracking.
+
+    Quick Links:
+        ~/code/geowatch/geowatch/cli/run_tracker.py
+
+    CommandLine:
+        pytest tests/test_tracker.py -k test_tracker_ac_refinement -s
+    """
+    from geowatch.demo.smart_kwcoco_demodata import random_inscribed_polygon
+    import json
+    import ubelt as ub
+    from geowatch.cli import run_tracker
+    import geowatch
+    from geowatch.geoannots import geomodels
+    from geowatch.geoannots.geococo_objects import CocoGeoVideo
+    from geowatch.utils import util_gis
+    import kwimage
+    import kwarray
+    import kwcoco
+
+    coco_dset = geowatch.coerce_kwcoco(
+        'geowatch',
+        heatmap='No Activity|Site Preparation|Active Construction|Post Construction,ac_salient',
+        num_frames=12,
+        num_videos=1,
+        geodata=True, dates=True, image_size=(96, 96))
+    coco_dset.clear_annotations()
+
+    rng = kwarray.ensure_rng(4329423)
+
+    # Make some region models for this dataset
+    import geopandas as gpd
+    input_region_models = []
+    crs84 = util_gis.get_crs84()
+
+    video_name_to_crs84_bounds = {}
+
+    for video in coco_dset.videos().objs:
+        coco_video = CocoGeoVideo(video=video, dset=coco_dset)
+
+        dates = coco_video.images.lookup('date_captured')
+        start_time = min(dates)
+        end_time = max(dates)
+
+        utm_part = coco_video.wld_corners_gdf
+        utm_poly = kwimage.Polygon.coerce(utm_part.iloc[0]['geometry'])
+        # Make a random inscribed polygon to use as the test region
+        utm_region_poly = random_inscribed_polygon(utm_poly, rng=rng)
+
+        # Shrink it so we are more likely to remove annotations
+        utm_region_poly = utm_region_poly.scale(0.8, about='centroid')
+
+        crs84_region_poly = kwimage.Polygon.coerce(gpd.GeoDataFrame(
+            geometry=[utm_region_poly],
+            crs=utm_part.crs).to_crs(crs84).iloc[0]['geometry'])
+
+        video_name_to_crs84_bounds[coco_video['name']] = crs84_region_poly
+
+        region_model = geomodels.RegionModel.random(
+            region_id=coco_video['name'], region_poly=crs84_region_poly,
+            rng=rng, start_time=start_time, end_time=end_time)
+
+        for sitesum in region_model.site_summaries():
+            # Modify status of site summaries to simulate bas output
+            # sitesum['properties']['status'] = 'system_confirmed'
+            sitesum['properties']['status'] = 'Site Boundary'
+
+        input_region_models.append(region_model)
+
+    video0 = coco_dset.videos().objs[0]
+    video0_images = coco_dset.images(video_id=video0['id'])
+    assert len(video0_images) >= 10, 'should have a several frames'
+    assert len(set(video0_images.lookup('date_captured'))) > 5, (
+        'should be on different dates')
+
+    dpath = ub.Path.appdir('geowatch', 'test', 'tracking', 'ac_refine').ensuredir()
+    dpath.delete().ensuredir()
+
+    # Write region models to disk
+    in_region_models_dpath = (dpath / 'input_region_models').ensuredir()
+    for region_model in input_region_models:
+        region_fpath = in_region_models_dpath / (region_model.region_id + '.geojson')
+        region_fpath.write_text(region_model.dumps(indent=4))
+
+    track_kwargs = {
+        'thresh': 0.2,
+        'time_thresh': .4,
+        'polygon_simplify_tolerance': None,
+        'new_algo': 'crall',
+        # 'boundaries_as': 'bounds',
+        'boundaries_as': None,
+        # 'resolution': '8GSD',
+        # 'min_area_square_meters': None,
+        # 'max_area_square_meters': None,
+        # 'polygon_simplify_tolerance': 1,
+        # 'moving_window_size': 1,
+    }
+
+    # Run AC with polygon refinement
+    coco_dset.reroot(absolute=True)
+    in_coco_fpath = dpath / 'ac_heatmap.kwcoco.json'
+    coco_dset.dump(in_coco_fpath, indent=2)
+
+    out_coco_fpath = dpath / 'ac_tracked.kwcoco.json'
+    out_sitesum_dpath = dpath / 'out_site_summaries/'
+    out_sitesum_fpath = dpath / 'out_site_summaries.json'
+    out_site_fpath = dpath / 'out_sites.json'
+    out_sites_dir = dpath / 'out_sites'
+    ac_argv = [
+        '--input_kwcoco', in_coco_fpath,
+        '--in_site_summaries', in_region_models_dpath,
+        '--out_sites_dir', str(out_sites_dir),
+        '--out_sites_fpath', str(out_site_fpath),
+        '--out_site_summaries_dir', str(out_sitesum_dpath),
+        '--out_site_summaries_fpath',  str(out_sitesum_fpath),
+        '--out_kwcoco', str(out_coco_fpath),
+        '--track_fn', 'class_heatmaps',
+        # '--boundary_region', in_region_models_dpath,
+        '--track_kwargs', json.dumps(track_kwargs),
+        '--site_score_thresh', '0.2',
+        '--smoothing', '0.0',
+        '--sensor_warnings', '0',
+        '--viz_out_dir', ub.Path('~/testviz').expand(),
+    ]
+    run_tracker.main(ac_argv)
+    ac_coco_dset = kwcoco.CocoDataset(out_coco_fpath)
+
+    trackids = ac_coco_dset.annots().lookup('track_id', None)
+    print(f'trackids={trackids}')
+
+    DEVELOPER_SPACE_VIZ = 1
+    if DEVELOPER_SPACE_VIZ:
+        import kwplot
+        kwplot.autosns()
+
+        # Show via site summaries
+        print(out_sitesum_dpath.ls())
+        bas_region = geomodels.RegionModel.coerce(in_region_models_dpath / 'toy_video_1.geojson')
+        refined_region = geomodels.RegionModel.coerce(out_sitesum_dpath / 'toy_video_1.geojson')
+
+        fig = kwplot.figure(fnum=1, doclf=1)
+        ax = fig.gca()
+        gdf1 = bas_region.pandas_summaries()
+        gdf2 = refined_region.pandas_summaries()
+
+        gdf1.plot(ax=ax,  edgecolor='red', facecolor='none')
+        gdf2.plot(ax=ax,  edgecolor='blue', facecolor='none')
+
+        from shapely.ops import unary_union
+        big = unary_union([gdf1.unary_union, gdf2.unary_union])
+        poly = kwimage.MultiPolygon.coerce(big)
+        box = poly.box().scale(1.1, about='centroid')
+        ax.set_ylim(box.tl_y, box.br_y)
+        ax.set_xlim(box.tl_x, box.br_x)
+
+    DEVELOPER_SPACETIME_VIZ = 0
+    if DEVELOPER_SPACETIME_VIZ:
+        # --
+        # Show what the input regions looked like on heatmaps
+        bas_coco_fpath = dpath / 'input_sites.kwcoco.json'
+        _ = ub.cmd(ub.codeblock(
+            f'''
+            geowatch reproject \
+                --src "{in_coco_fpath}" \
+                --dst "{bas_coco_fpath}" \
+                --region_models "{in_region_models_dpath}" \
+                --status_to_catname "{{'system_confirmed': 'positive'}}"
+                "
+            '''), verbose=3, system=True)
+
+        _ = ub.cmd(f'geowatch visualize {bas_coco_fpath} --smart', verbose=3,
+                   system=True)
+
+        _ = ub.cmd(f'geowatch visualize {out_coco_fpath} --smart', verbose=3,
+                   system=True)
+
+    """
+    # Real Data Testing
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R001/sc-fusion/
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R002/sc-fusion/
+
+    VIZ_DPATH=/home/joncrall/testviz/real-old
+    python -m geowatch.cli.run_tracker \
+        --in_file=./sc_fusion_kwcoco.json \
+        --in_file_gt=None \
+        --out_kwcoco=./sc_fusion_kwcoco_tracked2.json \
+        --out_sites_dir=./sc_out_site_models2 \
+        --out_site_summaries_dir=./sc_out_region_models2 \
+        --out_sites_fpath=./site_models_manifest2.json \
+        --out_site_summaries_fpath=./sc_out_region_models_manifest.json \
+        --region_id=None \
+        --track_fn=None \
+        --default_track_fn=class_heatmaps \
+        --viz_out_dir="$VIZ_DPATH" \
+        --site_summary='./sv_out_region_models/*.geojson' \
+        --clear_annots=True \
+        --append_mode=False \
+        --boundary_region=None \
+        --sensor_warnings=True \
+        --time_pad_before=None \
+        --time_pad_after=None \
+        --smoothing=0.0 \
+        --site_score_thresh=0.3 \
+        --track_kwargs '
+        {
+            "boundaries_as": "bounds",
+            # "boundaries_as": "null",
+            "min_area_square_meters": 7200,
+            "new_algo": "crall",
+            "polygon_simplify_tolerance": 1,
+            "resolution": "8GSD",
+            "thresh": 0.3
+        }'
+
+    cd "$VIZ_DPATH"
+    kwimage stack_images "$VIZ_DPATH"/*/*final_labels.png --out "$VIZ_DPATH"/all_final_labels.png
+    kwimage stack_images "$VIZ_DPATH"/*/*agg_cube.png --out "$VIZ_DPATH"/all_agg_cube.png
+    kwimage stack_images "$VIZ_DPATH"/*/*cubes.png --out "$VIZ_DPATH"/cubes.png
+    kwimage stack_images "$VIZ_DPATH"/*/*step_007_volume_labels_bounds.png --out "$VIZ_DPATH"/all_step_007_volume_labels_bounds.png
+
+
+
+    # Real Data Testing
+    cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval18_batch_v136/KR_R002/sc-fusion/
+    VIZ_DPATH=/home/joncrall/testviz/kr2-real-new
+    python -m geowatch.cli.run_tracker \
+        --in_file=./sc_fusion_kwcoco.json \
+        --out_kwcoco=./sc_fusion_kwcoco_tracked2.json \
+        --out_sites_dir=./sc_out_site_models2 \
+        --out_site_summaries_dir=./sc_out_region_models2 \
+        --out_sites_fpath=./site_models_manifest2.json \
+        --out_site_summaries_fpath=./sc_out_region_models_manifest.json \
+        --in_file_gt=None \
+        --region_id=None \
+        --track_fn=None \
+        --default_track_fn=class_heatmaps \
+        --viz_out_dir="$VIZ_DPATH" \
+        --site_summary='./sv_out_region_models/*.geojson' \
+        --clear_annots=True \
+        --append_mode=False \
+        --boundary_region=None \
+        --sensor_warnings=True \
+        --time_pad_before=None \
+        --time_pad_after=None \
+        --smoothing=0.0 \
+        --site_score_thresh=0.3 \
+        --track_kwargs '
+        {
+            # "boundaries_as": "bounds",
+            "boundaries_as": "null",
+            "min_area_square_meters": 7200,
+            "new_algo": "crall",
+            "polygon_simplify_tolerance": 1,
+            "resolution": "8GSD",
+            "thresh": 0.3
+        }'
+
+    cd "$VIZ_DPATH"
+    VIZ_DPATH="."
+    kwimage stack_images "$VIZ_DPATH"/*/*final_labels.png --out "$VIZ_DPATH"/all_final_labels.png
+    kwimage stack_images "$VIZ_DPATH"/*/*agg_cube.png --out "$VIZ_DPATH"/all_agg_cube.png
+    kwimage stack_images "$VIZ_DPATH"/*/*cubes.png --out "$VIZ_DPATH"/cubes.png
+
+
+    """

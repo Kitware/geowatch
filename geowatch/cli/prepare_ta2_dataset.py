@@ -61,7 +61,7 @@ CommandLine:
         --visualize=True \
         --max_products_per_region=10 \
         --backend=serial \
-        --run=1
+        --run=0
 
     geowatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
@@ -183,6 +183,18 @@ class PrepareTA2Config(CMDQueueConfig):
             '''
             The maximum number of times to retry failed gdal warp
             commands before stopping.
+            '''))
+
+    image_timeout = scfg.Value('8hours', help=ub.paragraph(
+            '''
+            The maximum amount of time to spend pulling down a all image
+            assets before giving up
+            '''))
+
+    asset_timeout = scfg.Value('4hours', help=ub.paragraph(
+            '''
+            The maximum amount of time to spend pulling down a single
+            image asset before giving up
             '''))
 
     ignore_duplicates = scfg.Value(1, help='workers for align script')
@@ -527,6 +539,7 @@ def main(cmdline=False, **kwargs):
                 'name': ub.Path(s3_fpath).stem,
                 'inputs_fpath': s3_fpath,
                 'region_globstr': config.regions,
+                'site_globstr': config.sites,
                 'collated': collated,
             })
 
@@ -583,10 +596,11 @@ def main(cmdline=False, **kwargs):
             },
             group_dname=uncropped_bundle_name,
         )
-        try:
-            grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
-        except KeyError:
-            grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
+        if grab_node is not None:
+            try:
+                grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
+            except KeyError:
+                grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
 
@@ -705,10 +719,12 @@ def main(cmdline=False, **kwargs):
                     --sensor_to_time_window "{sensor_to_time_window}" \
                     --verbose={config.verbose} \
                     --aux_workers={config.align_aux_workers} \
-                    --target_gsd={config.target_gsd} \
-                    --force_min_gsd={config.force_min_gsd} \
+                    --target_gsd="{config.target_gsd}" \
+                    --force_min_gsd="{config.force_min_gsd}" \
                     --workers={config.align_workers} \
-                    --tries={config.align_tries} \
+                    --tries="{config.align_tries}" \
+                    --asset_timeout="{config.asset_timeout}" \
+                    --image_timeout="{config.image_timeout}" \
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths=_justkeys({

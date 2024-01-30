@@ -22,12 +22,10 @@ Submodules
    geowatch.cli.cluster_sites
    geowatch.cli.coco_add_watch_fields
    geowatch.cli.coco_align
-   geowatch.cli.coco_align_geotiffs
    geowatch.cli.coco_average_features
    geowatch.cli.coco_clean_geotiffs
    geowatch.cli.coco_combine_features
    geowatch.cli.coco_crop_tracks
-   geowatch.cli.coco_intensity_histograms
    geowatch.cli.coco_reformat_channels
    geowatch.cli.coco_remove_bad_images
    geowatch.cli.coco_spectra

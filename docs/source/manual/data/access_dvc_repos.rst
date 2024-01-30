@@ -2,12 +2,14 @@
 Accessing GEOWATCH DVC Repos
 ****************************
 
+NOTE (2024-01-23): See the `new Phase 3 DVC repo docs <./access_internal_phase3_dvc_repos.rst>`_ for the latest data.
+
 This document outlines how to access the GEOWATCH DVC repos for internal
 collaberators.
 
 DVC stands for Data Version Control, and is a layer on top of git that helps
 manage larger data files. For more information on DVC see
-`getting started with dvc <getting_started_dvc.rst>_`.
+`getting started with dvc <getting_started_dvc.rst>`_.
 
 .. note: As the system expands these docs should also expand to detail how to use public DVC repos.
 
@@ -30,10 +32,10 @@ relevant data from them.
 Prerequistes
 ------------
 
-To clone the DVC repos you must have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`.
+To clone the DVC repos you must have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>`_.
 If you do not have permission please contact someone at Kitware to gain access and have them add you to the smart group.
 
-Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>_`, ensure that you
+Once you have access to `gitlab.kitware.com/smart <https://gitlab.kitware.com/smart>`_, ensure that you
 have ssh keys setup and registered with gitlab. More details on generating ssh
 keys and registering them with gitlab can be found in the
 `ssh setup instructions <../environment/getting_started_ssh_keys.rst>`_.
@@ -215,4 +217,4 @@ After this downloads, any of the kwcoco files in the directory can be used.
 
 
 We recommend using ``geowatch_dvc`` tool to register the path you cloned
-these repos to as illustrated in ../environment/getting_started_dvc.rst
+these repos to as illustrated in `using_geowatch_dvc <./using_geowatch_dvc.rst>`_.

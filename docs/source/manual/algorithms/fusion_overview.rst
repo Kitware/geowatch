@@ -1,6 +1,6 @@
 
 GEOWATCH System
-------------
+---------------
 
 Kitware's GEOWATCH Python module is deep-learning segmentation tool for single
 or multi-frame data of a region over time with multiple sensors, modalities,

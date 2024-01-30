@@ -17,7 +17,10 @@ Notes:
     # need to edit the conf.py
 
     cd ~/code/geowatch/docs
-    sphinx-apidoc --private -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch --separate
+    sphinx-apidoc --private --separate -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch
+
+    # Note: the module should importable before running this
+    # (e.g. install it in developer mode or munge the PYTHONPATH)
     make html
 
     git add source/auto/*.rst
@@ -50,15 +53,38 @@ Notes:
             https://readthedocs.org/dashboard/geowatch/integrations/create/
 
         Then add gitlab incoming webhook and copy the URL (make sure
-        you copy the real url and not the text so https is included).
+        you copy the real url and not the text so https is included),
+        specifically:
+
+            In the "Integration type:" dropdown menu, select
+            "Gitlab incoming webhook"
+
+            Click "Add integration"
+
+            Copy the text in the "Webhook URL" box to be used later.
+
+            Copy the text in the "Secret" box to be used later.
 
         Then go to
 
             https://gitlab.kitware.com/computer-vision/geowatch/hooks
 
-        and add the URL
+            Click "Add new webhook".
 
-        select push, tag, and merge request
+            Copy the text previously saved from the "Webhook URL" box
+            in the readthedocs form into the "URL" box in the gitlab
+            form.
+
+            Copy the text previously saved from the "Secret" box
+            in the readthedocs form into the "Secret token" box in the
+            gitlab form.
+
+            For trigger permissions select the following checkboxes:
+                push events,
+                tag push events,
+                merge request events
+
+            Click the "Add webhook" button.
 
         See Docs for more details https://docs.readthedocs.io/en/stable/integrations.html
 
@@ -110,14 +136,19 @@ def parse_version(fpath):
     return visitor.version
 
 project = 'geowatch'
-copyright = '2023, GEOWATCH developers Kitware Inc. Jon Crall'
+copyright = '2024, GEOWATCH developers Kitware Inc. Jon Crall'
 author = 'GEOWATCH developers Kitware Inc. Jon Crall'
 modname = 'geowatch'
 
-modpath = join(dirname(dirname(dirname(__file__))), 'geowatch', '__init__.py')
+repo_dpath = dirname(dirname(dirname(__file__)))
+mod_dpath = join(repo_dpath, 'geowatch')
+src_dpath = dirname(mod_dpath)
+modpath = join(mod_dpath, '__init__.py')
 release = parse_version(modpath)
 version = '.'.join(release.split('.')[0:2])
 
+# Hack to ensure the module is importable
+# sys.path.insert(0, os.path.abspath(src_dpath))
 
 # -- General configuration ---------------------------------------------------
 
@@ -136,8 +167,8 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
-    # 'myst_parser',  # TODO
-
+    'myst_parser',  # For markdown docs
+    'sphinx.ext.imgconverter',  # For building latexpdf
     'sphinx.ext.githubpages',
     # 'sphinxcontrib.redirects',
     'sphinx_reredirects',
@@ -148,8 +179,12 @@ napoleon_google_docstring = True
 napoleon_use_param = False
 napoleon_use_ivar = True
 
+#autoapi_type = 'python'
+#autoapi_dirs = [mod_dpath]
+
 autodoc_inherit_docstrings = False
 
+# Hack for geowatch, todo configure
 autosummary_mock_imports = [
     'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_24_and_lt_4_xx',
     'geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_22_and_lt_4_24',
@@ -268,6 +303,7 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme_options = {
     'collapse_navigation': False,
     'display_version': True,
+    'navigation_depth': -1,
     # 'logo_only': True,
 }
 # html_logo = '.static/geowatch.svg'
@@ -296,6 +332,21 @@ htmlhelp_basename = project + 'doc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
+
+# References:
+# https://tex.stackexchange.com/questions/546246/centos-8-the-font-freeserif-cannot-be-found
+
+"""
+# https://www.sphinx-doc.org/en/master/usage/builders/index.html#sphinx.builders.latex.LaTeXBuilder
+# https://tex.stackexchange.com/a/570691/83399
+sudo apt install fonts-freefont-otf texlive-luatex texlive-latex-extra texlive-fonts-recommended texlive-latex-recommended tex-gyre latexmk
+make latexpdf LATEXMKOPTS="-shell-escape --synctex=-1 -src-specials -interaction=nonstopmode"
+make latexpdf LATEXMKOPTS="-lualatex -interaction=nonstopmode"
+make LATEXMKOPTS="-lualatex -interaction=nonstopmode"
+
+"""
+# latex_engine = 'lualatex'
+# latex_engine = 'xelatex'
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
@@ -351,9 +402,14 @@ from sphinx.domains.python import PythonDomain  # NOQA
 # from sphinx.application import Sphinx  # NOQA
 from typing import Any, List  # NOQA
 
-import ubelt  # NOQA
-TIMER = ubelt.Timer()
-TIMER.tic()
+
+# HACK TO PREVENT EXCESSIVE TIME.
+# TODO: FIXME FOR REAL
+MAX_TIME_MINUTES = 1
+if MAX_TIME_MINUTES:
+    import ubelt  # NOQA
+    TIMER = ubelt.Timer()
+    TIMER.tic()
 
 
 class PatchedPythonDomain(PythonDomain):
@@ -362,19 +418,9 @@ class PatchedPythonDomain(PythonDomain):
         https://github.com/sphinx-doc/sphinx/issues/3866
     """
     def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
-        if 0:
-            import ubelt as ub
-            print('----')
-            print('contnode = {}'.format(ub.urepr(contnode, nl=1)))
-            print('node = {}'.format(ub.urepr(node, nl=1)))
-            print('target = {}'.format(ub.urepr(target, nl=1)))
-            print('typ = {}'.format(ub.urepr(typ, nl=1)))
-            # print('builder = {}'.format(ub.urepr(builder, nl=1)))
-            print('fromdocname = {}'.format(ub.urepr(fromdocname, nl=1)))
-            # print('env = {}'.format(ub.urepr(env, nl=1)))
-            print('----')
-
-        # TODO: can use this to resolve references nicely
+        """
+        Helps to resolves cross-references
+        """
         if target.startswith('ub.'):
             target = 'ubelt.' + target[3]
         if target.startswith('xdoc.'):
@@ -445,7 +491,7 @@ class GoogleStyleDocstringProcessor:
             redone = new_text.split('\n')
             new_lines.extend(redone)
             # import ubelt as ub
-            # print('new_lines = {}'.format(ub.repr2(new_lines, nl=1)))
+            # print('new_lines = {}'.format(ub.urepr(new_lines, nl=1)))
             # new_lines.append('')
             return new_lines
 
@@ -572,7 +618,7 @@ class GoogleStyleDocstringProcessor:
         # print(f'name={name}')
         # print('BEFORE:')
         # import ubelt as ub
-        # print('lines = {}'.format(ub.repr2(lines, nl=1)))
+        # print('lines = {}'.format(ub.urepr(lines, nl=1)))
 
         self.process(lines)
 
@@ -585,11 +631,10 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 1  # FIXME too slow on RTD
-        # HACK TO PREVENT EXCESSIVE TIME.
-        # TODO: FIXME FOR REAL
-        if TIMER.toc() > 60 * 5:
-            render_doc_images = 0  # FIXME too slow on RTD
+        render_doc_images = 1
+
+        if MAX_TIME_MINUTES and TIMER.toc() > (60 * MAX_TIME_MINUTES):
+            render_doc_images = False  # FIXME too slow on RTD
 
         if render_doc_images:
             # DEVELOPING
@@ -653,7 +698,7 @@ class GoogleStyleDocstringProcessor:
                     lines[edit_slice] = new_lines
 
         # print('AFTER:')
-        # print('lines = {}'.format(ub.repr2(lines, nl=1)))
+        # print('lines = {}'.format(ub.urepr(lines, nl=1)))
 
         # if name == 'kwimage.Affine.translate':
         #     import sys
@@ -756,11 +801,11 @@ def create_doctest_figure(app, obj, name, lines):
     # HACK: write to the srcdir
     doc_outdir = pathlib.Path(app.outdir)
     doc_srcdir = pathlib.Path(app.srcdir)
-    doc_static_srcdir = doc_srcdir / '_static'
     doc_static_outdir = doc_outdir / '_static'
+    doc_static_srcdir = doc_srcdir / '_static'
     src_fig_dpath = (doc_static_srcdir / 'images')
-    out_fig_dpath = (doc_static_outdir / 'images')
     src_fig_dpath.mkdir(exist_ok=True, parents=True)
+    out_fig_dpath = (doc_static_outdir / 'images')
     out_fig_dpath.mkdir(exist_ok=True, parents=True)
 
     # fig_dpath = (doc_outdir / 'autofigs' / name).mkdir(exist_ok=True)
@@ -908,29 +953,32 @@ def create_doctest_figure(app, obj, name, lines):
 
 
 def postprocess_hyperlinks(app, doctree, docname):
+    """
+    Extension to fixup hyperlinks.
+    This should be connected to the Sphinx application's
+    "autodoc-process-docstring" event.
+    """
     # Your hyperlink postprocessing logic here
     from docutils import nodes
-    import ubelt as ub
+    import pathlib
     for node in doctree.traverse(nodes.reference):
         if 'refuri' in node.attributes:
             refuri = node.attributes['refuri']
             if '.rst' in refuri:
                 if 'source' in node.document:
-                    fpath = ub.Path(node.document['source'])
+                    fpath = pathlib.Path(node.document['source'])
                     parent_dpath = fpath.parent
                     if (parent_dpath / refuri).exists():
                         node.attributes['refuri'] = refuri.replace('.rst', '.html')
                 else:
                     raise AssertionError
-        # if 'http' in node['refuri']:
-        #     # Modify the hyperlink attributes or perform other actions
-        #     node['class'] = 'custom-link'
 
 
 def setup(app):
     import sphinx
     app : sphinx.application.Sphinx = app
     app.add_domain(PatchedPythonDomain, override=True)
+
     app.connect("doctree-resolved", postprocess_hyperlinks)
 
     docstring_processor = GoogleStyleDocstringProcessor()

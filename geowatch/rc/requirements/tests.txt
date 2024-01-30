@@ -1,5 +1,5 @@
 # Testing libraries
-pytest >= 6.2.5
+pytest >= 6.2.5, <8.0
 xdoctest >= 1.1.1
 pytest-cov>=3.0.0
 coverage>=6.1.1

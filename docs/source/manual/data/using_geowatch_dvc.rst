@@ -1,3 +1,6 @@
+Using GeoWATCH DVC
+------------------
+
 In order to make reproducing results as easy as copy/pasting commands into a
 terminal, we provide the ``geowatch_dvc`` tool to register the paths to their
 DVC repos as follows:
@@ -9,7 +12,7 @@ lives on an HDD or SSD is also useful.
 
 
 .. code:: bash
-    
+
    # Register the path you cloned the smart_data_dvc and smart_expt_dvc repositories to.
    geowatch_dvc add my_drop4_data --path=$HOME/Projects/SMART/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
    geowatch_dvc add my_drop4_expt --path=$HOME/Projects/SMART/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt

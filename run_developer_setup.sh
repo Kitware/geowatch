@@ -178,6 +178,61 @@ EXTRAS=$(python -c "if 1:
 
 python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
 
+
+install_pytorch(){
+    __doc__='
+    TODO: handle the appropriate torch version here
+    Make this robust over multiple operating systems
+
+    References:
+        https://pytorch.org/
+    '
+
+    pip install ubelt parse packaging
+
+    # Find the appropriate torch version for the devices available on this
+    # machine
+    TARGET_TORCH_DEVICE=$(python -c "if 1:
+    from packaging.version import Version
+    import ubelt as ub
+    import parse
+
+    available_versions = [
+        Version('11.8'),
+        Version('12.1'),
+    ]
+
+    nvcc_path = ub.find_exe('nvcc')
+    if nvcc_path is None:
+        print('CPU')
+    else:
+        parser = parse.Parser('{}, release {ver},{}')
+        stdout = ub.cmd('nvcc --version').stdout
+        result = parser.parse(stdout)
+
+        cuda_version = Version(result.named['ver'])
+
+        best = None
+        for cand in available_versions:
+            if cuda_version < cand:
+                break
+            best = cand
+        print(best)
+    ")
+    echo "TARGET_TORCH_DEVICE = $TARGET_TORCH_DEVICE"
+    if [[ "$TARGET_TORCH_DEVICE" == "cpu" ]]; then
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+    elif [[ "$TARGET_TORCH_DEVICE" == "11.8" ]]; then
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+    elif [[ "$TARGET_TORCH_DEVICE" == "12.1" ]]; then
+        pip install torch torchvision torchaudio # --index-url https://download.pytorch.org/whl/cu121
+    fi
+
+}
+
+
+
+
 # Install the geowatch module in development mode
 python -m pip install --prefer-binary -e ".$EXTRAS"
 

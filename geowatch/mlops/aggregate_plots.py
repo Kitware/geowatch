@@ -152,6 +152,7 @@ class ParamPlotter:
 
     def plot_requested(plotter):
         plot_config = plotter.plot_config
+        plotter.plot_dpath.ensuredir()
 
         if plot_config.get('plot_resources', 1):
             plotter.plot_resources()
@@ -228,6 +229,7 @@ class ParamPlotter:
         main_metric = y
         roi_attr = plotter.roi_attr
 
+        plotter.plot_dpath.ensuredir()
         finalize_figure = util_kwplot.FigureFinalizer(
             dpath=plotter.plot_dpath,
             size_inches=np.array([6.4, 4.8]) * 1.0,

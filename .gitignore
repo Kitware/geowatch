@@ -103,3 +103,6 @@ emissions.csv
 requirements-strict
 
 .aider*
+
+docs/source/images/
+docs/source/_static/
