@@ -230,7 +230,7 @@ install_pytorch(){
 
 }
 
-
+install_pytorch
 
 
 # Install the geowatch module in development mode
