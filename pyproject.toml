@@ -74,12 +74,14 @@ omit = [
     #"geowatch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
 
     # Not covered, because these will likely be refactored or factored out
-    "geowatch/tasks/change_detection/*",
-    "geowatch/tasks/rutgers_material_seg/*",
-    "geowatch/tasks/rutgers_material_seg_v2/*",
-    "geowatch/tasks/rutgers_material_change_detection/*",
-    "geowatch/tasks/super_res/*",
-
+    "*geowatch/tasks/change_detection/*",
+    "*geowatch/tasks/rutgers_material_seg/*",
+    "*geowatch/tasks/rutgers_material_seg_v2/*",
+    "*geowatch/tasks/rutgers_material_change_detection/*",
+    "*geowatch/tasks/super_res/*",
+    "*geowatch/utils/lightning_ext/_jsonargparse_ext_ge_4_21_and_lt_4_22.py",
+    "*geowatch/utils/lightning_ext/_jsonargparse_ext_ge_4_22_and_lt_4_24.py",
+    "*geowatch/utils/lightning_ext/_jsonargparse_ext_ge_4_24_and_lt_4_xx.py",
 ]
 
 [tool.coverage.report]
@@ -89,3 +91,4 @@ exclude_lines = [
     ".*  # nocover",
     "def __repr__", 
 ]
+

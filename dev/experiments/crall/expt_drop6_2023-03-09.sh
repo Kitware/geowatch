@@ -9491,3 +9491,17 @@ geowatch schedule --params="
     --backend=tmux --queue_name "_instill_cold_finetune_test" \
     --skip_existing=1 \
     --run=1
+
+python -m geowatch.cli.run_tracker \
+    --input_kwcoco "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_pxl/bas_pxl_id_efb95b18/pred.kwcoco.zip" \
+    --default_track_fn saliency_heatmaps \
+    --track_kwargs '{"agg_fn": "probs", "thresh": 0.35, "inner_window_size": "1y", "inner_agg_fn": "mean", "norm_ord": "inf", "polygon_simplify_tolerance": 1, "time_thresh": 0.8, "resolution": "10GSD", "moving_window_size": null, "poly_merge_method": "v2", "min_area_square_meters": 7200, "max_area_square_meters": 8000000}' \
+    --clear_annots=True \
+    --out_site_summaries_fpath "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_poly/bas_poly_id_47e6bffb/site_summaries_manifest.json" \
+    --out_site_summaries_dir "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_poly/bas_poly_id_47e6bffb/site_summaries" \
+    --out_sites_fpath "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_poly/bas_poly_id_47e6bffb/sites_manifest.json" \
+    --out_sites_dir "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_poly/bas_poly_id_47e6bffb/sites" \
+    --out_kwcoco "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/_instill_cold_finetune_test/pred/flat/bas_poly/bas_poly_id_47e6bffb/poly.kwcoco.zip" \
+    --boundary_region=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc-ssd/annotations/drop7/region_models \
+    --site_summary=None
+
