@@ -106,6 +106,7 @@ ____ ____ ____ _ _ _ ____ ___ ____ _  _
 
 Environment configuration:
 
+DEV_TRACE=$DEV_TRACE
 WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
@@ -229,8 +230,7 @@ install_pytorch(){
     fi
 
 }
-
-install_pytorch
+# install_pytorch
 
 
 # Install the geowatch module in development mode

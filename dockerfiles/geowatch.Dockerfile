@@ -48,6 +48,8 @@ ARG BUILD_STRICT=0
 
 #SHELL ["/bin/bash", "--login", "-c"]
 
+ARG DEV_TRACE=""
+
 # Setup primary dependencies
 # Note: special syntax for caching deps
 # https://pythonspeed.com/articles/docker-cache-pip-downloads/
@@ -68,7 +70,7 @@ pwd
 ls -altr
 
 echo "Run GEOWATCH developer setup:"
-WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 bash run_developer_setup.sh
+WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF
 
@@ -110,7 +112,7 @@ echo "
     # Build the pyenv image
     cd $HOME/code/geowatch
     DOCKER_BUILDKIT=1 docker build --progress=plain \
-        -t pyenv:311 \
+        -t pyenv:3.11.2 \
         --build-arg PYTHON_VERSION=3.11.2 \
         -f ./dockerfiles/pyenv.Dockerfile .
 
@@ -118,8 +120,8 @@ echo "
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "geowatch:311-strict" \
         --build-arg BUILD_STRICT=1 \
-        --build-arg BASE_IMAGE=pyenv:311 \
-        -f ./dockerfiles/watch.Dockerfile .
+        --build-arg BASE_IMAGE=pyenv:3.11.2 \
+        -f ./dockerfiles/geowatch.Dockerfile .
 
     docker run \
         --volume "$HOME/code/geowatch":/host-geowatch:ro \
