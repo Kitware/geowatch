@@ -302,7 +302,6 @@ if __name__ == '__main__':
                 # 'egm96_15.gtx' do we want to include this?
             ],
             'geowatch.rc.requirements': [
-                'job.schema.json',
                 'aws.txt',
                 'cold.txt',
                 'development.txt',

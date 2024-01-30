@@ -34,12 +34,13 @@ EOF
 WORKDIR /root
 RUN mkdir -p /root/code
 
-# Stage the geowatch source
+# Stage just enough of the geowatch source to run the build
+# (this lets us modify supporting scripts while maintaining docker caches)
 COPY setup.py               /root/code/geowatch/
 COPY pyproject.toml         /root/code/geowatch/
 COPY run_developer_setup.sh /root/code/geowatch/
 COPY dev/make_strict_req.sh /root/code/geowatch/dev/make_strict_req.sh
-#COPY requirements           /root/code/geowatch/requirements
+COPY requirements           /root/code/geowatch/requirements
 COPY geowatch               /root/code/geowatch/geowatch
 
 #RUN echo $(pwd)
@@ -89,6 +90,10 @@ EAGER_IMPORT=1 python -c "import geowatch; print(geowatch.__version__)"
 EAGER_IMPORT=1 python -m geowatch --help
 EOF
 
+
+# Remove the requirements folder we added so we can checkout the symlink
+RUN rm -rf /root/code/geowatch/requirements
+
 # Copy over the rest of the repo
 COPY . /root/code/geowatch
 
@@ -120,6 +125,7 @@ echo "
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "geowatch:311-strict" \
         --build-arg BUILD_STRICT=1 \
+        --build-arg DEV_TRACE=1 \
         --build-arg BASE_IMAGE=pyenv:3.11.2 \
         -f ./dockerfiles/geowatch.Dockerfile .
 
@@ -129,6 +135,6 @@ echo "
 
    # Will need to bake in a model
    # For futher instructions see: 
-   # ../docs/smartflow_running_the_system.rst
+   # ../docs/source/manual/smartflow/smartflow_running_the_system.rst
 "
 EOF
