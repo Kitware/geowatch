@@ -9418,3 +9418,12 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
 "
+
+
+
+### Package up Models
+
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
+cd $DVC_EXPT_DPATH
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"

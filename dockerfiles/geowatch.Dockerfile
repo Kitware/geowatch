@@ -34,13 +34,13 @@ EOF
 WORKDIR /root
 RUN mkdir -p /root/code
 
-# Stage the watch source
-COPY setup.py               /root/code/watch/
-COPY pyproject.toml         /root/code/watch/
-COPY run_developer_setup.sh /root/code/watch/
-COPY dev/make_strict_req.sh /root/code/watch/dev/make_strict_req.sh
-COPY requirements           /root/code/watch/requirements
-COPY watch                  /root/code/watch/watch
+# Stage the geowatch source
+COPY setup.py               /root/code/geowatch/
+COPY pyproject.toml         /root/code/geowatch/
+COPY run_developer_setup.sh /root/code/geowatch/
+COPY dev/make_strict_req.sh /root/code/geowatch/dev/make_strict_req.sh
+COPY requirements           /root/code/geowatch/requirements
+COPY geowatch               /root/code/geowatch/geowatch
 
 #RUN echo $(pwd)
 
@@ -55,7 +55,7 @@ RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
-echo "Preparing to pip install watch"
+echo "Preparing to pip install geowatch"
 
 which python
 which pip
@@ -63,7 +63,7 @@ python --version
 pip --version
 pwd
 ls -altr
-cd /root/code/watch
+cd /root/code/geowatch
 pwd
 ls -altr
 
@@ -74,7 +74,7 @@ EOF
 
 
 #### Copy over the rest of the repo structure
-COPY .git          /root/code/watch/.git
+COPY .git          /root/code/geowatch/.git
 
 
 # Run simple tests
@@ -83,14 +83,14 @@ RUN <<EOF
 #source $HOME/activate
 
 echo "Start simple tests"
-EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
+EAGER_IMPORT=1 python -c "import geowatch; print(geowatch.__version__)"
 EAGER_IMPORT=1 python -m geowatch --help
 EOF
 
 # Copy over the rest of the repo
-COPY . /root/code/watch
+COPY . /root/code/geowatch
 
-WORKDIR /root/code/watch
+WORKDIR /root/code/geowatch
 
 RUN <<EOF
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
@@ -108,7 +108,7 @@ echo "
     # An invocation for basic end-to-end building is:
 
     # Build the pyenv image
-    cd $HOME/code/watch
+    cd $HOME/code/geowatch
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t pyenv:311 \
         --build-arg PYTHON_VERSION=3.11.2 \
@@ -116,14 +116,14 @@ echo "
 
     # Build the watch image
     DOCKER_BUILDKIT=1 docker build --progress=plain \
-        -t "watch:311-strict" \
+        -t "geowatch:311-strict" \
         --build-arg BUILD_STRICT=1 \
         --build-arg BASE_IMAGE=pyenv:311 \
         -f ./dockerfiles/watch.Dockerfile .
 
     docker run \
-        --volume "$HOME/code/watch":/host-watch:ro \
-        --runtime=nvidia -it watch:311-strict bash
+        --volume "$HOME/code/geowatch":/host-geowatch:ro \
+        --runtime=nvidia -it geowatch:311-strict bash
 
    # Will need to bake in a model
    # For futher instructions see: 
