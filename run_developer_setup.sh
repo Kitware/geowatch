@@ -149,9 +149,9 @@ fi
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
-    REQUIREMENTS_DPATH=requirements-strict
+    REQUIREMENTS_DPATH=geowatch/rc/requirements-strict
 else
-    REQUIREMENTS_DPATH=requirements
+    REQUIREMENTS_DPATH=geowatch/rc/requirements
 fi
 
 # Small python script to compute the extras tag for the pip install
