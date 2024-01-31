@@ -9429,7 +9429,7 @@ export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
 export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 cd "$DVC_EXPT_DPATH"
 python -m geowatch.mlops.manager "status" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"
-python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"
+#python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"
 python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"
 python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop7-MedianNoWinter10GSD-V2"
 
@@ -9443,30 +9443,36 @@ geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V01/Drop7_finetune_COLD_phase3_V01_epoch226_step4994.pt
-
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch45_step1012.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch60_step1342.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch63_step1408.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch79_step1760.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch214_step4730.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch45_step1012.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch88_step1958.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch120_step2662.pt
-
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch63_step1408.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V01/Drop7_finetune_COLD_phase3_V01_epoch226_step4994.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch208_step4598.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch226_step4994.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch209_step4620.pt
+
+
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
+            - 0.275
+            - 0.30
+            - 0.325
             - 0.35
             - 0.375
             - 0.4
+            - 0.425
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
@@ -9490,7 +9496,7 @@ geowatch schedule --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_instill_cold_finetune_test" \
-    --devices="0,1" --tmux_workers=4 \
+    --devices="0,1,2,3" --tmux_workers=8 \
     --backend=tmux --queue_name "_instill_cold_finetune_test" \
     --skip_existing=1 \
     --run=1
@@ -9516,7 +9522,7 @@ python -m geowatch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 11
+        top_k: 1100
         per_group: 1
         macro_analysis: 0
         analyze: 0
@@ -9525,5 +9531,6 @@ python -m geowatch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002"
-    #,CN_C000,KW_C001,CO_C001
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+
+    #--rois="KR_R002"

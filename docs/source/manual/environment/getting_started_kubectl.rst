@@ -8,7 +8,7 @@ Prerequisites
 
 This assumes you have aws setup.
 
-* `get started with aws <getting_started_aws.rst>`
+* `get started with aws <getting_started_aws.rst>`_.
 
 Install Kubernetes CLI
 ----------------------
@@ -44,4 +44,4 @@ Test that the install worked:
 Next Steps
 ----------
 
-* `get started with smartflow <../smartflow/getting_started_smartflow.rst>`
+* `get started with smartflow <../smartflow/getting_started_smartflow.rst>`_.

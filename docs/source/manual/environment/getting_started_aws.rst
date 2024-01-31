@@ -269,6 +269,6 @@ See detailed **internal** instructions for rotating keys:
 Next Steps
 ----------
 
-* `getting started with kubectl <getting_started_kubectl.rst>`
+* `getting started with kubectl <getting_started_kubectl.rst>`_.
 
-* `getting started with dvc <getting_started_dvc.rst>`
+* `getting started with dvc <getting_started_dvc.rst>`_.
