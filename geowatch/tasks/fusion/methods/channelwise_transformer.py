@@ -1934,6 +1934,28 @@ def slice_to_agree(a1, a2, axes=None):
 def perterb_params(optimizer, std):
     """
     Given an optimizer, perterb all parameters with Gaussian noise
+
+    From: [ShrinkAndPerterb]_.
+
+    While the presented conventional approaches do not remedy the warm-start
+    problem, we have identified a remarkably simple trick that efficiently
+    closes the generalization gap. At each round of training t, when new
+    samples are appended to the training set, we propose initializing the
+    network’s parameters by shrinking the weights found in the previous round
+    of optimization towards zero, then adding a small amount of parameter
+    noise.
+
+    Specifically, we initialize each learnable parameter
+
+    Math:
+
+        θ[i, t] = λ * θ[i, t - 1] + p[t]
+
+        where p[t] ∼ N (0, (σ ** 2)) and 0 < λ < 1.
+
+
+    References:
+        .. [ShrinkAndPerterb] https://arxiv.org/pdf/1910.08475.pdf
     """
     # Gether unique parameters
     id_to_params = {}

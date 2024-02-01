@@ -9454,8 +9454,6 @@ geowatch schedule --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch208_step4598.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch226_step4994.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch209_step4620.pt
-
-
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
