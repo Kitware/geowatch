@@ -13,6 +13,8 @@ class FinishInstallCLI(scfg.DataConfig):
     """
     __command__ = 'finish_install'
 
+    with_gdal = scfg.Value(True, isflag=True, help='if True, ensure osgeo / gdal is installed')
+
     strict = scfg.Value(False, isflag=True, help='if True, use strict versions')
 
     @classmethod
@@ -26,28 +28,31 @@ class FinishInstallCLI(scfg.DataConfig):
             >>> main(cmdline=cmdline, **kwargs)
         """
         import rich
+        import sys
         config = FinishInstallCLI.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + ub.urepr(config, nl=1))
 
         try:
             from geowatch.rc.registry import requirement_path
         except Exception:
+            raise
             requirement_path = None
+
+        # Might want to add mmcv, tensorflow, and aws-v2-cli
 
         if requirement_path is not None:
             # New experimental logic
-            gdal_req_path = requirement_path('gdal.txt')
-            requirements = parse_requirements(gdal_req_path, versions='strict' if config.strict else 'loose')
-            requirements = [line for line in requirements if line.strip()]
-            import sys
-            # ub.cmd([sys.executable, '-m', 'pip', 'install'] + requirements)
-            options = [
-                '--prefer-binary',
-                '--find-links',
-                'https://girder.github.io/large_image_wheels',
-            ]
-            print(f'requirements = {ub.urepr(requirements, nl=1)}')
-            ub.cmd([sys.executable, '-m', 'pip', 'install'] + options + requirements, verbose=3)
+            if config.with_gdal:
+                gdal_req_path = requirement_path('gdal.txt')
+                requirements = parse_requirements(gdal_req_path, versions='strict' if config.strict else 'loose')
+                requirements = [line for line in requirements if line.strip()]
+                options = [
+                    '--prefer-binary',
+                    '--find-links',
+                    'https://girder.github.io/large_image_wheels',
+                ]
+                print(f'requirements = {ub.urepr(requirements, nl=1)}')
+                ub.cmd([sys.executable, '-m', 'pip', 'install'] + options + requirements, verbose=3)
         else:
             # Old initial code, remove if possible
             command = 'pip install --prefer-binary GDAL>=3.4.1 --find-links https://girder.github.io/large_image_wheels'

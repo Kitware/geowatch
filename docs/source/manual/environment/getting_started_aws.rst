@@ -12,7 +12,7 @@ Installing AWS CLI
 This section provides instructions to install the AWS CLI tool.
 
 For more details or troubleshooting, please refer to the the
-`official instructions for installing the AWS CLI <https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html>`_.
+`official instructions for installing the AWS CLI <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>`_.
 
 We attempt to summarize the above with a series of commands that should "just
 work" and install the `aws` tool on your machine. This does assume a Linux
@@ -37,8 +37,8 @@ We recommend running the following in a temporary directory.
 
 .. code:: bash
 
-    mkdir -p $HOME/tmp
-    cd $HOME/tmp
+    mkdir -p "$HOME/tmp/setup-aws"
+    cd "$HOME/tmp/setup-aws"
 
 
 The first step is to download the aws cli tool.
@@ -68,25 +68,25 @@ be skipped, but it is usually a good idea to do this.
         fYVN+en3Zwbt97kcgZDwqbuykNt64oZWc4XKCa3mprEGC3IbJTBFqglXmZ7l9ywG
         EEUJYOlb2XrSuPWml39beWdKM8kzr1OjnlOm6+lpTRCBfo0wa9F8YZRhHPAkwKkX
         XDeOGpWRj4ohOx0d2GWkyV5xyN14p2tQOCdOODmz80yUTgRpPVQUtOEhXQARAQAB
-        tCFBV1MgQ0xJIFRlYW0gPGF3cy1jbGlAYW1hem9uLmNvbT6JAlQEEwEIAD4WIQT7
-        Xbd/1cEYuAURraimMQrMRnJHXAUCXYKvtQIbAwUJB4TOAAULCQgHAgYVCgkICwIE
-        FgIDAQIeAQIXgAAKCRCmMQrMRnJHXJIXEAChLUIkg80uPUkGjE3jejvQSA1aWuAM
-        yzy6fdpdlRUz6M6nmsUhOExjVIvibEJpzK5mhuSZ4lb0vJ2ZUPgCv4zs2nBd7BGJ
-        MxKiWgBReGvTdqZ0SzyYH4PYCJSE732x/Fw9hfnh1dMTXNcrQXzwOmmFNNegG0Ox
-        au+VnpcR5Kz3smiTrIwZbRudo1ijhCYPQ7t5CMp9kjC6bObvy1hSIg2xNbMAN/Do
-        ikebAl36uA6Y/Uczjj3GxZW4ZWeFirMidKbtqvUz2y0UFszobjiBSqZZHCreC34B
-        hw9bFNpuWC/0SrXgohdsc6vK50pDGdV5kM2qo9tMQ/izsAwTh/d/GzZv8H4lV9eO
-        tEis+EpR497PaxKKh9tJf0N6Q1YLRHof5xePZtOIlS3gfvsH5hXA3HJ9yIxb8T0H
-        QYmVr3aIUes20i6meI3fuV36VFupwfrTKaL7VXnsrK2fq5cRvyJLNzXucg0WAjPF
-        RrAGLzY7nP1xeg1a0aeP+pdsqjqlPJom8OCWc1+6DWbg0jsC74WoesAqgBItODMB
-        rsal1y/q+bPzpsnWjzHV8+1/EtZmSc8ZUGSJOPkfC7hObnfkl18h+1QtKTjZme4d
-        H17gsBJr+opwJw/Zio2LMjQBOqlm3K1A4zFTh7wBC7He6KPQea1p2XAMgtvATtNe
-        YLZATHZKTJyiqA==
-        =vYOk
+        tCFBV1MgQ0xJIFRlYW0gPGF3cy1jbGlAYW1hem9uLmNvbT6JAlQEEwEIAD4CGwMF
+        CwkIBwIGFQoJCAsCBBYCAwECHgECF4AWIQT7Xbd/1cEYuAURraimMQrMRnJHXAUC
+        ZMKcEgUJCSEf3QAKCRCmMQrMRnJHXCilD/4vior9J5tB+icri5WbDudS3ak/ve4q
+        XS6ZLm5S8l+CBxy5aLQUlyFhuaaEHDC11fG78OduxatzeHENASYVo3mmKNwrCBza
+        NJaeaWKLGQT0MKwBSP5aa3dva8P/4oUP9GsQn0uWoXwNDWfrMbNI8gn+jC/3MigW
+        vD3fu6zCOWWLITNv2SJoQlwILmb/uGfha68o4iTBOvcftVRuao6DyqF+CrHX/0j0
+        klEDQFMY9M4tsYT7X8NWfI8Vmc89nzpvL9fwda44WwpKIw1FBZP8S0sgDx2xDsxv
+        L8kM2GtOiH0cHqFO+V7xtTKZyloliDbJKhu80Kc+YC/TmozD8oeGU2rEFXfLegwS
+        zT9N+jB38+dqaP9pRDsi45iGqyA8yavVBabpL0IQ9jU6eIV+kmcjIjcun/Uo8SjJ
+        0xQAsm41rxPaKV6vJUn10wVNuhSkKk8mzNOlSZwu7Hua6rdcCaGeB8uJ44AP3QzW
+        BNnrjtoN6AlN0D2wFmfE/YL/rHPxU1XwPntubYB/t3rXFL7ENQOOQH0KVXgRCley
+        sHMglg46c+nQLRzVTshjDjmtzvh9rcV9RKRoPetEggzCoD89veDA9jPR2Kw6RYkS
+        XzYm2fEv16/HRNYt7hJzneFqRIjHW5qAgSs/bcaRWpAU/QQzzJPVKCQNr4y0weyg
+        B8HCtGjfod0p1A==
+        =gdMc
         -----END PGP PUBLIC KEY BLOCK-----
-    " | sed -e 's|^ *||' > aws.pub
-    cat aws.pub
-    gpg --import aws.pub
+    " | sed -e 's|^ *||' > aws2.pub
+    cat aws2.pub
+    gpg --import aws2.pub
 
     # Download the signature and verify the CLI tool is signed by amazon
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip.sig" -o "awscli-exe-linux-x86_64.zip.sig"
@@ -109,8 +109,11 @@ PATH.
 
     # If you want to install somewhere else, change the PREFIX variable
     PREFIX="$HOME/.local"
-    mkdir -p $PREFIX/bin
-    ./aws/install --install-dir $PREFIX/aws-cli --bin-dir $PREFIX/bin --update
+    mkdir -p "$PREFIX"/bin
+    ./aws/install --install-dir "$PREFIX/aws-cli" --bin-dir "$PREFIX/bin" --update
+
+    # Check the version
+    "$PREFIX"/bin/aws --version
 
 
 Note the value of ``PREFIX`` in the above step. The directory ``$PREFIX/bin``

@@ -237,9 +237,9 @@ install_pytorch(){
 python -m pip install --prefer-binary -e ".$EXTRAS"
 
 # Post geowatch install requirements
+geowatch finish_install "--strict=$WATCH_STRICT"
 
-python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
-
+# python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
 #if [[ "$WITH_COLD" == "1" ]]; then
 #    # HACK FOR COLD ISSUE
 #    #curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
