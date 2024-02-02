@@ -13,6 +13,9 @@ NOTE:
 
     # IPFS folder containing all demo NITFs
     QmWApzbAX2W8cobWqKPjsM1kj82TvMGvyZ75PnbUeNHktW demo_nitf
+
+    ipfs pin add --progress --name demo_nitf_data QmWApzbAX2W8cobWqKPjsM1kj82TvMGvyZ75PnbUeNHktW
+    ipfs pin ls --type="recursive" --names
 """
 import ubelt as ub
 
