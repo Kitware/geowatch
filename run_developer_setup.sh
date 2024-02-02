@@ -237,7 +237,7 @@ install_pytorch(){
 python -m pip install --prefer-binary -e ".$EXTRAS"
 
 # Post geowatch install requirements
-geowatch finish_install "--strict=$WATCH_STRICT"
+python -m geowatch finish_install "--strict=$WATCH_STRICT"
 
 # python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
 #if [[ "$WITH_COLD" == "1" ]]; then

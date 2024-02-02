@@ -77,6 +77,13 @@ echo "
 cat aws2.pub
 gpg --import aws2.pub
 
+# Set the trust level of the key
+KEY_FPATH=aws2.pub
+#KEY_ID=$(gpg --list-packets <"$KEY_FPATH" | awk '$1=="keyid:"{print$2;exit}')
+KEY_ID=FB5DB77FD5C118B80511ADA8A6310ACC4672475C
+(echo 5; echo y; echo save) |
+  gpg --command-fd 0 --no-tty --no-greeting -q --edit-key "$KEY_ID" trust
+
 # Download the signature and verify the CLI tool is signed by amazon
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip.sig" -o "awscli-exe-linux-x86_64.zip.sig"
 
