@@ -30,7 +30,7 @@ EOF
 #pip install torch==1.11.0
 #EOF
 
-ENV PATH="${PATH}:/root/.local/bin"
+ENV PATH="/root/.local/bin:${PATH}"
 
 
 ### Install AWS CLI (This might be handled by run_developer_setup soon)
@@ -81,6 +81,7 @@ gpg --import aws2.pub
 KEY_FPATH=aws2.pub
 #KEY_ID=$(gpg --list-packets <"$KEY_FPATH" | awk '$1=="keyid:"{print$2;exit}')
 KEY_ID=FB5DB77FD5C118B80511ADA8A6310ACC4672475C
+echo "KEY_ID = $KEY_ID"
 (echo 5; echo y; echo save) |
   gpg --command-fd 0 --no-tty --no-greeting -q --edit-key "$KEY_ID" trust
 
@@ -141,7 +142,7 @@ pwd
 ls -altr
 
 echo "Run GEOWATCH developer setup:"
-WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
+WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF
 
