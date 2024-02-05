@@ -154,10 +154,11 @@ class SmartTrainer(pl.Trainer):
                 ### --- Train Batch Prediction --- ###
 
                 # Predict on the validation set
+                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
                 python -m geowatch.tasks.fusion.predict \
                     --package_fpath "$PACKAGE_FPATH" \
                     --test_dataset "{train_coco_path}" \
-                    --pred_dataset="$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
+                    --pred_dataset "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
                     --window_overlap 0 \
                     --clear_annots=False \
                     --test_with_annot_info=True \
@@ -179,8 +180,9 @@ class SmartTrainer(pl.Trainer):
                 ### --- Validation Batch Prediction --- ###
 
                 # Predict on the validation set
+                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
                 python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
+                    --package_fpath "$PACKAGE_FPATH" \
                     --test_dataset "{vali_coco_fpath}" \
                     --pred_dataset "$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
                     --window_overlap 0 \
@@ -204,6 +206,7 @@ class SmartTrainer(pl.Trainer):
                 ### --- Train Full-Image Prediction (best run on a GPU) --- ###
 
                 # Predict on the training set
+                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
                 python -m geowatch.tasks.fusion.predict \
                     --package_fpath "$PACKAGE_FPATH" \
                     --window_overlap 0 \
@@ -227,10 +230,11 @@ class SmartTrainer(pl.Trainer):
                 ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
 
                 # Predict on the validation set
+                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
                 python -m geowatch.tasks.fusion.predict \
-                    --package_fpath $PACKAGE_FPATH \
-                    --test_dataset {vali_coco_fpath} \
-                    --pred_dataset=$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip \
+                    --package_fpath "$PACKAGE_FPATH" \
+                    --test_dataset "{vali_coco_fpath}" \
+                    --pred_dataset "$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
                     --window_overlap 0 \
                     --clear_annots=False \
                     --devices "$DEVICE"

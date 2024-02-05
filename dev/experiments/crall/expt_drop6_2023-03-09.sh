@@ -9517,7 +9517,7 @@ python -m geowatch.mlops.aggregate \
         #- bas_pxl_eval
     " \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         #params_of_interest:
@@ -9536,38 +9536,6 @@ python -m geowatch.mlops.aggregate \
     --rois="KR_R002,CN_C000,KW_C001,CO_C001"
 
     #--rois="KR_R002"
-    #
-DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
-python -m geowatch.mlops.aggregate \
-    --pipeline=bas \
-    --target "
-        - $DVC_EXPT_DPATH/_instill_cold_finetune_test
-    " \
-    --output_dpath="$DVC_EXPT_DPATH/_instill_cold_finetune_test/aggregate" \
-    --resource_report=0 \
-    --eval_nodes="
-        - bas_poly_eval
-        #- bas_pxl_eval
-    " \
-    --plot_params="
-        enabled: 0
-        stats_ranking: 0
-        min_variations: 1
-        #params_of_interest:
-        #    - params.bas_poly.thresh
-    " \
-    --stdout_report="
-        top_k: 1100
-        per_group: 1
-        macro_analysis: 0
-        analyze: 0
-        print_models: True
-        reference_region: final
-        concise: 1
-        show_csv: 0
-    " \
-    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)

@@ -224,7 +224,7 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
 
             # this is not complete...
 
-            Let N = the number of items
+            Let N = the number of candidate items
             Let W = the maximum weight allowed
             Let x[i] = be an indicator variable if the i-th item is taken
             Let w[i] = be the weight of the i-th item
@@ -239,9 +239,16 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
                 Take:
                     max_dist = max((j - i) for i, j in neighbs)
                     min_dist = min((j - i) for i, j in neighbs)
+                    total_chosen = sum(x[i] for i in range(N)
+                    diff_delta = max_dist - min_dist
 
                 Minimize:
-                    max_dist - min_dist
+                    # We want to choose as many points as possible such that
+                    # the difference between the furthest pair of neighbors and
+                    # closest pair of neighbors is minimized
+                    # q: does total_chosen need a multiplier
+                    #    such that its always the secondary objective?
+                    diff_delta - total_chosen
 
                 # todo: nicer formulation of objective.
                 # basic idea: distribute chosen points uniformly
@@ -251,9 +258,17 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
                 # Total weight is within allowance
                 sum(w[i] * x[i] for in range(N)) <= W
 
-                # Choose exactly N items
-                sum(x[i]) == N
+        #### The idea of these paragraphs is to motivate the restricted
+        #### version of the problem where this heuristic is optimal.
 
+        A specific variant of the above problem is the case where you only have
+        one shot to decide if you want to remove an item. We can keep as many
+        items as we want, but we can only query the weight of the item once,
+        and after you do you have to decide if you keep or delete everything
+        else.
+
+        Such a constraint minimizes the number of filesystem operations you
+        have to perform, which greatly speeds up the procedure.
 
         If we keep any of the images, we probably want to see what the network
         was doing at different points in the training process. If we can only
@@ -263,12 +278,11 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
         we can take three, then perhaps we should take the previous two and
         then one as far away from either of them as possible, so take the
         middle one if the number of items is odd, otherwise pick one of the two
-        equidistanct items.
+        equidistant items.
 
-
-        A specific variant of the above problem is the case where you only have
-        one shot to decide if you want to remove an item.
-
+        This motivates a heuristic to obtain a feasible solution to the above
+        objective. It will not optimize the original objective in all cases,
+        but in many cases it will.
 
     Example:
         >>> total = 10
