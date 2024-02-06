@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.14.0 - Unreleased
+## Version 0.14.4 - Released 2023-02-06
 
 ### Added
 
@@ -17,9 +17,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Sphinx documentation now includes all manual and auto-generated docs.
 
-* Tracker no longer splits / merges the kwcoco file and instead passes a video_id reference.
+* Tracker no longer splits / merges the kwcoco file and instead passes a `video_id` reference.
 
 * Removed a sizable amount of unused code.
+
+
+### Fixed
+
+* Docker scripts now work with the new repo name.
+
 
 
 ## Version 0.13.3 - Released 2023-12-xx

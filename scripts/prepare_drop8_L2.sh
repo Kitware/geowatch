@@ -76,12 +76,12 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=16 \
-    --sensor_to_time_window='
-        S2: 2 weeks
-        L8: 2 weeks
-        PD: 2 weeks
-    ' \
     --run=1
+    #--sensor_to_time_window='
+    #    S2: 2 weeks
+    #    L8: 2 weeks
+    #    PD: 2 weeks
+    #' \
 
 
 #export AWS_REQUEST_PAYER=requester

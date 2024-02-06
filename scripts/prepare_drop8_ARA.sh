@@ -16,6 +16,9 @@ DATASET_SUFFIX=Drop8-ARA
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/KR_R001.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/KR_R001*.geojson"
 
+
+# NOTE: Ensure the annotations/drop8.dvc data is pulled, otherwise there is an error.
+
 # All Regions
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*.geojson"
@@ -59,13 +62,13 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=16 \
-    --sensor_to_time_window='
-        S2: 2 weeks
-        L8: 2 weeks
-        PD: 2 weeks
-    ' \
-    --run=1
+    --tmux_workers=16
+    #--sensor_to_time_window='
+    #    S2: 2 weeks
+    #    L8: 2 weeks
+    #    PD: 2 weeks
+    #' \
+    #--run=1
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
