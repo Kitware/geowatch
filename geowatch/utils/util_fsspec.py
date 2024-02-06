@@ -733,6 +733,9 @@ class S3Path(RemotePath):
         self = S3Path.coerce('/vsis3/usgs-landsat-ard/collection02')
         self.ls()
 
+    SeeAlso:
+        geowatch.heuristics.register_known_fsspec_s3_buckets
+
     To work with different S3 filesystems,
 
     See [S3FS_Docs]_.

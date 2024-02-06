@@ -939,3 +939,24 @@ def extract_region_id(fname):
     found = pat.search(fname)
     name = found.groups()[0]
     return name
+
+
+def register_known_fsspec_s3_buckets():
+    """
+    A workaround to handle requester pays information for particular s3
+    endpoints. Ideally the user would be able to specify this mapping via the
+    CLI, but for now lets just hack it in.
+
+    We are not specifying the profile here, assuming that instead the user
+    will use the ``AWS_DEFAULT_PROFILE`` environ.
+
+    Ignore:
+        from geowatch import heuristics
+        heuristics.register_known_fsspec_s3_buckets()
+
+        from geowatch.utils.util_fsspec import S3Path
+        self = S3Path.coerce('/vsis3/usgs-landsat-ard/collection02')
+        self.ls()
+    """
+    from geowatch.utils import util_fsspec
+    util_fsspec.S3Path.register_bucket('s3://usgs-landsat-ard', requester_pays=True)

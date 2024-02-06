@@ -161,6 +161,10 @@ def populate_watch_fields(
         coco_dset.conform(pycocotools_info=False, workers=workers,
                           ensure_imgsize=False)
 
+    if 1:
+        from geowatch import heuristics
+        heuristics.register_known_fsspec_s3_buckets()
+
     if vidids is None:
         vidids = list(coco_dset.index.videos.keys())
         gids = list(coco_dset.index.imgs.keys())
@@ -292,10 +296,18 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 missing_paths = []
                 existing_paths = []
 
-                HACK_CHECK_EXISTS = 0
+                HACK_CHECK_EXISTS = 1
                 if HACK_CHECK_EXISTS:
-                    # Force this one to be current for fs
-                    # fs = util_fsspec.S3Path._new_fs(profile='iarpa', requester_pays=True)
+                    """
+                    NOTE:
+                        For L2 data, we need to assume the user called
+
+                        from geowatch import heuristics
+                        heuristics.register_known_fsspec_s3_buckets()
+
+                        And populated the appropriate mapping from s3-bucket to
+                        s3 configurations.
+                    """
                     for p in coco_img.iter_image_filepaths():
                         # Use fsspec to check if the files exist
                         fspath = util_fsspec.FSPath.coerce(p)
