@@ -194,7 +194,12 @@ class AggregateEvluationConfig(AggregateLoader):
 
     inspect = Value(None, help='param hashid to look at')
 
-    query = Value(None, type=str, help='a pandas query to restrict the rows of the table we consider')
+    query = Value(None, type=str, help=ub.paragraph(
+        '''
+        a pandas query to restrict the rows of the table we consider.
+        E.g. "df['param_hashid'] == 'blpiinmvwgng'"
+        '''
+    ))
 
     embed = Value(False, isflag=True, help='if True, embed into IPython.')
 

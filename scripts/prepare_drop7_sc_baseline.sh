@@ -811,8 +811,9 @@ python -m geowatch.mlops.aggregate \
     --eval_nodes="
         - sc_poly_eval
     " \
+    --query "df['param_hashid'] == 'blpiinmvwgng'" \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
