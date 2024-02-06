@@ -106,6 +106,7 @@ ____ ____ ____ _ _ _ ____ ___ ____ _  _
 
 Environment configuration:
 
+DEV_TRACE=$DEV_TRACE
 WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
@@ -149,9 +150,9 @@ fi
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
-    REQUIREMENTS_DPATH=requirements-strict
+    REQUIREMENTS_DPATH=geowatch/rc/requirements-strict
 else
-    REQUIREMENTS_DPATH=requirements
+    REQUIREMENTS_DPATH=geowatch/rc/requirements
 fi
 
 # Small python script to compute the extras tag for the pip install
@@ -229,17 +230,16 @@ install_pytorch(){
     fi
 
 }
-
-
+# install_pytorch
 
 
 # Install the geowatch module in development mode
 python -m pip install --prefer-binary -e ".$EXTRAS"
 
 # Post geowatch install requirements
+python -m geowatch finish_install "--strict=$WATCH_STRICT"
 
-python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
-
+# python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
 #if [[ "$WITH_COLD" == "1" ]]; then
 #    # HACK FOR COLD ISSUE
 #    #curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl

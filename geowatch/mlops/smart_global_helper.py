@@ -786,6 +786,8 @@ class SmartGlobalHelper:
                 sc_crop.sensor_to_time_window: S2: 1month
                 '''),
 
+
+            # FIXME: this might have been eval 142
             Yaml.loads(
                 '''
                 delivery: Eval18

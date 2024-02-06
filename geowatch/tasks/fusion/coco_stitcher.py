@@ -1108,7 +1108,10 @@ def _force_shape_agreement_by_cropping2d(data1, data2):
         dw = abs(w1 - w2)
 
         if dh > 10 or dw > 10:
-            if 1:
+
+            import kwutil
+            IGNORE_OFF_BY_ONE_STITCHING = kwutil.util_environ.envflag('IGNORE_OFF_BY_ONE_STITCHING', False)
+            if not IGNORE_OFF_BY_ONE_STITCHING:
                 raise AssertionError(
                     'This function is for hacking away off-by-one-errors, '
                     'but the difference in shapes was too large: '

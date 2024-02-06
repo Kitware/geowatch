@@ -1,3 +1,6 @@
+Installing Python With Conda
+****************************
+
 To install Miniconda3, follow the instructions below for Linux. For Windows 11
 users, the Windows Subsystem for Linux (WSL) allows you to run Linux within
 Windows.

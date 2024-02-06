@@ -495,7 +495,7 @@ class ExperimentState(ub.NiceRepr):
 
         # The expt_dvc_dpath and storage_dpath should be given as full paths
         # So we take those out of the template.
-        from geowatch.utils.partial_format import partial_format
+        from kwutil.partial_format import partial_format
         import os
         partialkw = {
             'expt_dvc_dpath': os.fspath(self.expt_dvc_dpath),

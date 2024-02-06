@@ -218,7 +218,6 @@ def load_input_stac_items(input_path, aws_base_command):
     """
     Load the stac input format from a file on disk or AWS
     """
-    import subprocess
     import tempfile
 
     if aws_base_command is None or not input_path.startswith('s3'):
@@ -229,9 +228,9 @@ def load_input_stac_items(input_path, aws_base_command):
     else:
         # Old method, remove once we can
         with tempfile.NamedTemporaryFile() as temporary_file:
-            subprocess.run(
+            ub.cmd(
                 [*aws_base_command, input_path, temporary_file.name],
-                check=True)
+                check=True, verbose=3)
 
             input_stac_items = read_input_stac_items(temporary_file.name)
 
