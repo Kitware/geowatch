@@ -792,6 +792,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         if with_legend:
             if classes is None:
                 classes = dataset.classes
+            utils.category_tree_ensure_color(classes)
             label_to_color = {
                 node: data['color']
                 for node, data in classes.graph.nodes.items()}
