@@ -98,6 +98,11 @@ class SCFusionConfig(scfg.DataConfig):
             config for SC tracking.
             '''))
 
+    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If true egress intermediate heatmaps, otherwise only egress the geojson
+        '''))
+
 
 def main(cmdline=1, **kwargs):
     config = SCFusionConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -300,7 +305,7 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
 
     # Add in intermediate outputs for debugging
-    EGRESS_INTERMEDIATE_OUTPUTS = True
+    EGRESS_INTERMEDIATE_OUTPUTS = config.egress_intermediate_outputs
     if EGRESS_INTERMEDIATE_OUTPUTS:
         # Reroot kwcoco files to make downloaded results easier to work with
         ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])

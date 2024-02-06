@@ -72,6 +72,11 @@ class BasFusionConfig(scfg.DataConfig):
             Use time_dense imagery. Defaults to False and uses time averaged data.
             '''))
 
+    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If true egress intermediate heatmaps, otherwise only egress the geojson
+        '''))
+
 
 __debug_notes__ = r"""
 config = {
@@ -347,7 +352,7 @@ def run_bas_fusion_for_baseline(config):
                                           cropped_site_models_outdir,
                                           ta2_s3_collation_bucket)
 
-    EGRESS_INTERMEDIATE_OUTPUTS = True
+    EGRESS_INTERMEDIATE_OUTPUTS = config.egress_intermediate_outputs
     if EGRESS_INTERMEDIATE_OUTPUTS:
         # Reroot kwcoco files to make downloaded results easier to work with
         ub.cmd(['kwcoco', 'reroot', f'--src={bas_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])

@@ -176,11 +176,10 @@ import scriptconfig as scfg
 import ubelt as ub
 import warnings
 
-DEBUG = 0
+DEBUG = 1
 
 try:
-    import xdev
-    profile = xdev.profile
+    from xdev import profile
 except Exception:
     profile = ub.identity
 
@@ -1964,6 +1963,8 @@ def extract_image_job(img,
         other_objs = [ub.dict_diff(obj, {'auxiliary'})
                       for obj in coco_other_img.iter_asset_objs()]
         for other_obj in other_objs:
+            import xdev
+            xdev.embed_if_requested()
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
     obj_groups = list(channels_to_objs.values())
