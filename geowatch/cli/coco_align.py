@@ -734,6 +734,8 @@ def main(cmdline=True, **kw):
     print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
     print('dst_fpath = {!r}'.format(dst_fpath))
 
+    ub.Path(dst_fpath).parent.ensuredir()
+
     region_df = None
     regions = config['regions']
     if regions in {'annots', 'images'}:

@@ -37,8 +37,8 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*.geojson"
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"
 
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR

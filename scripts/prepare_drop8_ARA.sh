@@ -62,7 +62,8 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=16
+    --tmux_workers=16 \
+    --run
     #--sensor_to_time_window='
     #    S2: 2 weeks
     #    L8: 2 weeks
