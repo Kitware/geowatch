@@ -950,6 +950,11 @@ def register_known_fsspec_s3_buckets():
     We are not specifying the profile here, assuming that instead the user
     will use the ``AWS_DEFAULT_PROFILE`` environ.
 
+    Note: the ``AWS_REQUEST_PAYER`` environ is only repsected by gdal, and this
+    function does not impact gdal at all, so this environ needs to be set as
+    well as calling this workaround.
+
+
     Ignore:
         from geowatch import heuristics
         heuristics.register_known_fsspec_s3_buckets()
@@ -960,3 +965,4 @@ def register_known_fsspec_s3_buckets():
     """
     from geowatch.utils import util_fsspec
     util_fsspec.S3Path.register_bucket('s3://usgs-landsat-ard', requester_pays=True)
+    util_fsspec.S3Path.register_bucket('s3://usgs-landsat', requester_pays=True)
