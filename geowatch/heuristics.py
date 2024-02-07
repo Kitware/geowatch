@@ -11,6 +11,10 @@ References:
 """
 import ubelt as ub
 
+# to make it easier to switch to "assets" when we finally deprecate auxiliary
+# COCO_ASSETS_KEY = 'assets'
+COCO_ASSETS_KEY = 'auxiliary'
+
 HEURISTIC_START_STATES = {
     'No Activity',
 }

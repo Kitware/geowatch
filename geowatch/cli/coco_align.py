@@ -1949,11 +1949,13 @@ def extract_image_job(img,
     for obj in objs:
         key = obj['channels']
         if key in channels_to_objs:
+            coco_channels = [o.get('channels', None) for o in objs]
             warnings.warn(ub.paragraph(
-                '''
+                f'''
                 It seems multiple auxiliary items in the parent image might
                 contain the same channel.  This script will try to work around
                 this, but that is not a valid kwcoco assumption.
+                coco_channels={coco_channels}.
                 '''))
         # assert key not in channels_to_objs
         channels_to_objs[key].append(obj)
@@ -1963,8 +1965,6 @@ def extract_image_job(img,
         other_objs = [ub.dict_diff(obj, {'auxiliary'})
                       for obj in coco_other_img.iter_asset_objs()]
         for other_obj in other_objs:
-            import xdev
-            xdev.embed_if_requested()
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
     obj_groups = list(channels_to_objs.values())

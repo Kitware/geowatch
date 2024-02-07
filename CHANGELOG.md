@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.15.0 - Unreleased
 
+### Fixed
+
+* Added workaround for issue in STAC to kwcoco, where channel names would be non-unique.
+
 
 ## Version 0.14.4 - Released 2023-02-06
 

@@ -193,6 +193,7 @@ def _determine_channels_collated(asset_name, asset_dict, platform):
         The term "collated" means that each band is its own asset and it has
         the eo:bands property. For more details see:
         https://smartgitlab.com/TE/standards/-/wikis/STAC-and-Storage-Specifications
+
     """
     sensor_coarse = SENSOR_COARSE_MAPPING.get(platform, platform)
 
@@ -399,15 +400,14 @@ def make_coco_aux_from_stac_asset(asset_name,
                                   force_affine=True,
                                   assume_relative=False,
                                   from_collated=False,
-                                  populate_watch_fields=True,
                                   verbose=0):
     """
     Converts a single STAC asset into an "auxiliary" item / asset that will
     belong to a kwcoco image.
     """
-    img = {}
+    asset = {}
     if name is not None:
-        img['name'] = name
+        asset['name'] = name
 
     asset_href = asset_dict['href']
 
@@ -511,27 +511,30 @@ def make_coco_aux_from_stac_asset(asset_name,
         if 'quality' not in roles:
             roles.append('quality')
 
-    img.update({
+    asset.update({
         'file_name': file_name,
         'channels': channels,
+        'stac_asset_key': asset_name,
         'roles': roles,
     })
-    if populate_watch_fields:
-        raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
-                                  'as a secondary step instead')
-    return img
+    return asset
 
 
 @profile
 def _stac_item_to_kwcoco_image(stac_item,
                                assume_relative=False,
                                from_collated=False,
-                               populate_watch_fields=False,
                                verbose=0):
+    """
+    Example:
+        >>> from geowatch.cli.stac_to_kwcoco import *  # NOQA
+        >>> stac_item = _demo_item()
+        >>> from_collated = True
+        >>> img = _stac_item_to_kwcoco_image(stac_item, from_collated=from_collated)
+        >>> import kwcoco
+        >>> coco_img = kwcoco.CocoImage(img)
+    """
     from kwutil import util_time
-    if populate_watch_fields:
-        raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
-                                  'as a secondary step instead')
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
@@ -558,18 +561,34 @@ def _stac_item_to_kwcoco_image(stac_item,
     }
     assets = []
     for asset_name, asset_dict in stac_item_dict.get('assets', {}).items():
-        aux = make_coco_aux_from_stac_asset(
+        coco_asset = make_coco_aux_from_stac_asset(
             asset_name,
             asset_dict,
             platform,
             force_affine=True,
             assume_relative=assume_relative,
             from_collated=from_collated,
-            populate_watch_fields=populate_watch_fields,
             verbose=verbose,
         )
-        if aux is not None:
-            assets.append(aux)
+        if coco_asset is not None:
+            assets.append(coco_asset)
+
+    DISAMBIGUATE_CHANNELS_HACK = 1
+    if DISAMBIGUATE_CHANNELS_HACK:
+        # Fixes some cases where the common names of multiple assets are
+        # duplicate.
+        orig_channel_names = [a['channels'] for a in assets]
+        dup_idxs = ub.find_duplicates(orig_channel_names)
+        if dup_idxs:
+            import warnings
+            warnings.warn('Data had duplicate channel names, attempting to resolve')
+            for k, idxs in dup_idxs.items():
+                for idx in idxs:
+                    asset = assets[idx]
+                    asset['channels'] = asset['stac_asset_key']
+            fixed_channel_names = [a['channels'] for a in assets]
+            if ub.find_duplicates(fixed_channel_names):
+                warnings.warn('Creating CocoImage with duplicate channel names. There will be no way to distinguish them.')
 
     if len(assets) == 0:
         print("* Warning * Empty auxiliary assets for "
@@ -579,7 +598,8 @@ def _stac_item_to_kwcoco_image(stac_item,
     if len(assets) == 0:
         img['failed'] = stac_item
 
-    img['auxiliary'] = assets
+    from geowatch import heuristics
+    img[heuristics.COCO_ASSETS_KEY] = assets
     img['stac_properties'] = stac_item_dict['properties']
     date = stac_item_dict['properties']['datetime']
     date = util_time.coerce_datetime(date).isoformat()
@@ -622,12 +642,12 @@ def stac_to_kwcoco(input_stac_catalog,
 
     if jobs == 1:
         jobs = 0
-    if not populate_watch_fields and jobs > 0:
+    if jobs > 0:
         import warnings
         warnings.warn(ub.paragraph(
             '''
-            When populate_watch_fields is False there is usually no benefit to
-            having jobs > 0, it often makes the process go (a lot) slower.
+            There is usually no benefit to having jobs > 0, here.
+            It often makes the process go (a lot) slower.
             '''))
 
     executor = ub.JobPool(mode='process', max_workers=jobs)
@@ -671,7 +691,6 @@ def stac_to_kwcoco(input_stac_catalog,
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
                         assume_relative=assume_relative,
                         from_collated=from_collated,
-                        populate_watch_fields=populate_watch_fields,
                         verbose=verbose > 1)
 
     output_dset = kwcoco.CocoDataset()
@@ -736,6 +755,144 @@ def summarize_stac_item(stac_item):
         'datetime': stac_item.get_datetime(),
     }
     return summary
+
+
+def _demo_item():
+    import pystac
+    feat = {
+        "type": "Feature",
+        "stac_version": "1.0.0",
+        "id": "S2B_18NTG_20200824_0_L2A",
+        "properties": {
+            "mgrs:utm_zone": 18,
+            "mgrs:latitude_band": "N",
+            "mgrs:grid_square": "TG",
+            "proj:epsg": 32618,
+            "proj:transform": [10, 0, 199980, 0, -10, 200040],
+            "proj:shape": [10980, 10980],
+            "eo:cloud_cover": 19.272,
+            "gsd": 10,
+            "platform": "Sentinel-2B",
+            "qa_percent:clouds": 19.21,
+            "qa_percent:aligned": 100,
+            "constellation": "sentinel-2",
+            "datetime": "2020-08-24T15:42:51.278000Z"
+        },
+        "bbox": [ -10.0, 0.31415, -10.0, 0.31415 ],
+        "geometry": None,
+        "links": [
+            { "rel": "self", "href": "https://foobar.com/items/S2B_18NTG_20200824_0_L2A", "type": "application/geo+json" },
+        ],
+        "assets": {
+            "quality": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_QA.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "Quality Assurance Band",
+                "description": "Quality assurance bitmask image"
+            },
+            "visual": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_TCI.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "True Color Image",
+                "description": "True color image (RGB), for visualization"
+            },
+            "B01": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B01.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B01 - CoastalAerosol",
+                "eo:bands": [ { "name": "B01", "center_wavelength": 442, "common_name": "coastal" } ]
+            },
+            "B09": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B09.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B09 - WaterVapor",
+                "eo:bands": [ { "name": "B09", "center_wavelength": 943 } ]
+            },
+            "B02": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B02.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B02 - Blue",
+                "eo:bands": [ { "name": "B02", "center_wavelength": 492, "common_name": "blue" } ]
+            },
+            "B03": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B03.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B03 - Green",
+                "eo:bands": [ { "name": "B03", "center_wavelength": 559, "common_name": "green" } ]
+            },
+            "B04": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B04.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B04 - Red",
+                "eo:bands": [ { "name": "B04", "center_wavelength": 665, "common_name": "red" } ]
+            },
+            "B08": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B08.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B08 - NIR",
+                "eo:bands": [ { "name": "B08", "center_wavelength": 833, "common_name": "nir" } ]
+            },
+            "B08A": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B08A.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B08A - NarrowNIR",
+                "eo:bands": [ { "name": "B08A", "center_wavelength": 864, "common_name": "rededge" } ]
+            },
+            "B11": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B11.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B11 - SWIR1",
+                "eo:bands": [ { "name": "B11", "center_wavelength": 1610, "common_name": "swir16" } ]
+            },
+            "B12": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B12.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B12 - SWIR2",
+                "eo:bands": [ { "name": "B12", "center_wavelength": 2186, "common_name": "swir22" } ]
+            },
+            "B05": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B05.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B05 - RedEdge1",
+                "eo:bands": [ { "name": "B05", "center_wavelength": 704, "common_name": "rededge" } ]
+            },
+            "B06": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B06.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B06 - RedEdge2",
+                "eo:bands": [ { "name": "B06", "center_wavelength": 739, "common_name": "rededge" } ]
+            },
+            "B07": {
+                "href": "s3://foobar/S2B_18NTG_20200824_0_L2A_B07.tif",
+                "type": "image/tiff; application=geotiff",
+                "title": "B07 - RedEdge3",
+                "eo:bands": [{ "name": "B07", "center_wavelength": 780, "common_name": "rededge" } ]
+            }
+        },
+        "stac_extensions": [
+            "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+            "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+            "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+            "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
+        ]
+
+    }
+    item = pystac.Item.from_dict(feat)
+    # catalog_dict = {
+    #     "type": "Catalog",
+    #     "id": "Baseline Framework ingress catalog",
+    #     "stac_version": "1.0.0",
+    #     "description": "STAC catalog of SMART search results",
+    #     'links': [{
+    #         # "rel": "root",
+    #         "href": os.fspath(fpath),
+    #         "type": "application/json",
+    #     }]
+    # }
+    # catalog = pystac.Catalog.from_dict(catalog_dict)
+    # catalog.to_dict()
+
+    return item
 
 
 if __name__ == "__main__":

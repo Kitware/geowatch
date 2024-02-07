@@ -103,13 +103,13 @@ Example:
 '''
 SENTINEL2 = [
     {'name': 'B01', 'common_name': 'coastal', 'gsd': 60,
-        'center_wavelength': 0.4439, 'full_width_half_max': 0.027},
+     'center_wavelength': 0.4439, 'full_width_half_max': 0.027},
     {'name': 'B02', 'common_name': 'blue', 'gsd': 10,
-        'center_wavelength': 0.4966, 'full_width_half_max': 0.098},
+     'center_wavelength': 0.4966, 'full_width_half_max': 0.098},
     {'name': 'B03', 'common_name': 'green', 'gsd': 10,
-        'center_wavelength': 0.56, 'full_width_half_max': 0.045},
+     'center_wavelength': 0.56, 'full_width_half_max': 0.045},
     {'name': 'B04', 'common_name': 'red', 'gsd': 10,
-        'center_wavelength': 0.6645, 'full_width_half_max': 0.038},
+     'center_wavelength': 0.6645, 'full_width_half_max': 0.038},
     {'name': 'B05',
      'gsd': 20,
      'center_wavelength': 0.7039,
@@ -123,7 +123,7 @@ SENTINEL2 = [
      'center_wavelength': 0.7825,
      'full_width_half_max': 0.028},
     {'name': 'B08', 'gsd': 10, 'common_name': 'nir',
-        'center_wavelength': 0.8351, 'full_width_half_max': 0.145},
+     'center_wavelength': 0.8351, 'full_width_half_max': 0.145},
     {'name': 'B8A',
      'gsd': 20,
      'center_wavelength': 0.8648,
@@ -133,11 +133,11 @@ SENTINEL2 = [
      'center_wavelength': 0.945,
      'full_width_half_max': 0.026},
     {'name': 'B10', 'gsd': 60, 'common_name': 'cirrus',
-        'center_wavelength': 1.3735, 'full_width_half_max': 0.075},
+     'center_wavelength': 1.3735, 'full_width_half_max': 0.075},
     {'name': 'B11', 'gsd': 20, 'common_name': 'swir16',
-        'center_wavelength': 1.6137, 'full_width_half_max': 0.143},
+     'center_wavelength': 1.6137, 'full_width_half_max': 0.143},
     {'name': 'B12', 'gsd': 20, 'common_name': 'swir22',
-        'center_wavelength': 2.22024, 'full_width_half_max': 0.242}
+     'center_wavelength': 2.22024, 'full_width_half_max': 0.242}
 ]
 
 

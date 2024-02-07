@@ -23,6 +23,9 @@ DATASET_SUFFIX=Drop8-ARA
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*.geojson"
 
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/CO_C009.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/CO_C009_*.geojson"
+
 # T&E Regions Only
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
@@ -63,7 +66,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=16 \
-    --run
+    --run=0
     #--sensor_to_time_window='
     #    S2: 2 weeks
     #    L8: 2 weeks
