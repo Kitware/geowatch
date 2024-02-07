@@ -70,7 +70,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
-    --align_tries=0 \
+    --align_tries=1 \
     --asset_timeout="10 minutes" \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
