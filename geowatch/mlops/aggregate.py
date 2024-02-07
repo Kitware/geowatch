@@ -1303,6 +1303,12 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             >>> assert subagg.table['context.demo_node.uuid'].str.startswith('c').all()
             >>> assert not agg.table['context.demo_node.uuid'].str.startswith('c').all()
             >>> print(subagg.table['context.demo_node.uuid'])
+
+        FIXME:
+            On 2024-02-12 CI failed this test with. Not sure where
+            non-determinisim came from.
+            assert len(subagg) > 0, 'query should return something'
+            AssertionError: query should return something
         """
         import numpy as np
         import kwarray

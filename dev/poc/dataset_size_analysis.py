@@ -8,15 +8,16 @@ def main():
     import watch
     import ubelt as ub
     import xdev
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    dvc_dpath = watch.find_dvc_dpath(tags='phase3_data', hardware='auto')
 
-    bundle_dpath = dvc_dpath / 'Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2'
+    # bundle_dpath = dvc_dpath / 'Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2'
+    bundle_dpath = dvc_dpath / 'Aligned-Drop8-ARA'
     # bundle_dpath = dvc_dpath / 'Drop4-BAS'
 
     subfolders = list(bundle_dpath.glob('*/*'))
     subfolders = [p for p in subfolders if 'json' not in p.name and not p.name.startswith('_')]
 
-    if 0:
+    if 1:
         jobs = ub.JobPool(mode='thread', max_workers=8)
         for dpath in subfolders:
             command = f'du -sL "{dpath}"'
@@ -39,7 +40,9 @@ def main():
             row['sensor'] = suffix.name
             row['size'] = xdev.byte_str(row['num_bytes'])
 
-        df = pd.DataFrame(rows)
+        dir_rows = [r for r in rows if r['dpath'].is_dir() and 'flat' not in r['dpath'].parts]
+
+        df = pd.DataFrame(dir_rows)
         piv = df.pivot(['region_id'], ['sensor'], ['num_bytes'])
         import rich
         rich.print(piv.applymap(lambda x: x if pd.isnull(x) else xdev.byte_str(x)).to_string())
@@ -51,7 +54,7 @@ def main():
         for dpath in frame_dpaths:
             suffix = dpath.relative_to(bundle_dpath)
             for fpath in dpath.ls():
-                fpath.name
+                print(f'fpath.name={fpath.name}')
                 stat = fpath.stat()
                 per_band_rows.append({
                     'fpath': fpath,

@@ -38,10 +38,21 @@ class ImageDirectory(ub.NiceRepr):
         return self
 
     def select_removers(self, max_size, keep_atleast=0):
+        """
+        Ignore:
+            dpath = ub.Path('/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_15GSD_multihead_perceiver_V008/lightning_logs/version_0/monitor/validate/batch')
+            self = imgdir = ImageDirectory(dpath).build()
+            max_size = 64 * ureg.megabytes
+            remove_fpaths, info = self.select_removers(max_size, keep_atleast=4)
+            for p in remove_fpaths:
+                p.delete()
+        """
         total = 0
         all_indexes = set(range(len(self.fpaths)))
         keep_idxs = []
-        for idx in generate_indexes(len(self.fpaths)):
+
+        # for idx in generate_indexes(len(self.fpaths)):
+        for idx in farthest_from_previous(0, len(self.fpaths)):
             total += self.sizes[idx]
             if total > max_size and len(keep_idxs) >= keep_atleast:
                 break
@@ -65,10 +76,20 @@ class ImageDirectory(ub.NiceRepr):
 def main():
     # dpath = '/data/projects/smart/smart_watch_dvc/training/horologic/jon.crall/Drop1-20201117/runs/SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41/lightning_logs/version_0/monitor/train/batch'
     dpath = '/data/projects/smart/smart_watch_dvc/training/horologic/jon.crall/Drop1-20201117/runs/SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41/lightning_logs/version_0/monitor/train/batch'
+    # training_dpath = ub.Path('/data/projects/smart/smart_watch_dvc/training')
+    training_dpath = ub.Path('/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/training')
+    training_dpath = ub.Path('/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_watch_dvc/training')
 
-    training_dpath = ub.Path('/data/projects/smart/smart_watch_dvc/training')
+    # run_dpaths = list(training_dpath.glob('*/*/*/runs'))
+    # lightning_root_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs'))
+    # lightning_ver_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*'))
 
-    batch_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/train/batch'))
+    sanity_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/sanity_check'))
+    for p in sanity_dpaths:
+        p.delete()
+    batch_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/*/batch'))
+
+    # batch_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/train/batch'))
     # batch_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/validate/batch'))
     # batch_dpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/monitor/validate/sanity_check'))
 
@@ -102,6 +123,25 @@ def main():
 
     for fpath in ub.ProgIter(all_remove_fpaths):
         fpath.delete()
+
+    # Checkpoint cleanup
+    to_remove = []
+    checkpoint_fpaths = list(training_dpath.glob('*/*/*/runs/*/lightning_logs/version_*/checkpoints/*.ckpt'))
+    groups = ub.group_items(checkpoint_fpaths, key=lambda x: x.parent)
+    for k, vs in groups.items():
+        vers = [p for p in vs if '-v' in p.stem]
+        if len(vers):
+            subgroups = ub.group_items(vers, lambda p: p.stem.split('-v')[0])
+            for _, subs in subgroups.items():
+                if len(subs) > 1:
+                    for s in sorted(subs)[1:]:
+                        to_remove.append(s)
+
+    remove_bytes = sum([p.stat().st_size for p in to_remove])
+    import xdev as xd
+    print('removing: ' + xd.byte_str(remove_bytes))
+    for p in to_remove:
+        p.delete()
 
 
 def generate_indexes(total):

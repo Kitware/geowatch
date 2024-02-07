@@ -1673,7 +1673,15 @@ class GetItemMixin(TruthMixin):
             target_ = self._augment_spacetime_target(target_)
 
         vidspace_box = resolution_info['vidspace_box']
-        final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        try:
+            final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        except Exception as ex:
+            import warnings
+            print(f'target_ = {ub.urepr(target_, nl=1)}')
+            msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
+            print(msg)
+            warnings.warn(msg)
+            raise FailedSample(msg)
 
         num_frames = len(final_gids)
         if num_frames == 0:

@@ -9028,14 +9028,16 @@ initializer:
 #
 
 # Hack
+wads2
+cd Drop7-MedianNoWinter10GSD-V2
 python -c "if 1:
-import kwcoco
-dset = kwcoco.CocoDataset('data_train_rawbands_split6.kwcoco.zip')
-to_remove = list(dset.videos(names=['CO_C011', 'VN_C003']))
-dset.remove_videos(to_remove)
-dset.fpath = 'data_train_rawbands_split6_hack.kwcoco.zip'
-dset.validate()
-dset.dump()
+    import kwcoco
+    dset = kwcoco.CocoDataset('data_train_rawbands_split6.kwcoco.zip')
+    to_remove = list(dset.videos(names=['CO_C011', 'VN_C003']))
+    dset.remove_videos(to_remove)
+    dset.fpath = 'data_train_rawbands_split6_hack.kwcoco.zip'
+    dset.validate()
+    dset.dump()
 "
 
 export CUDA_VISIBLE_DEVICES=0
@@ -9570,3 +9572,175 @@ python -m geowatch.mlops.aggregate \
     --output_dpath="$DVC_EXPT_DPATH/aggregate_results/mlops-2023-10-30/uconn/agg" \
     --rois="KR_R002,CN_C000,KW_C001,CO_C001"
     #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
+
+
+
+#### ----
+# Yardrat training from scratch
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='hdd')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD-V2
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_hack.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,WV,PD):(blue|green|red)"
+EXPERIMENT_NAME=Drop7_scratch_V04
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : 20
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_space_scale      : 10.0GSD
+  input_space_scale       : 10.0GSD
+  output_space_scale      : 10.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  neg_to_pos_ratio        : 1.0
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : true
+  verbose                 : 1
+  max_epoch_length        : 40960
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p16
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: true
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 0.000
+    global_saliency_weight: 1.00
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale: 1.0e-07
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights: auto
+    stream_channels: 16
+    tokenizer: linconv
+
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.1
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay: 3e-06
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: 19
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : gpu
+  devices              : 0,
+  #devices              : 0,1
+  #strategy             : ddp
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: 743
+  num_sanity_val_steps: 0
+  limit_val_batches: 4096
+  limit_train_batches: 40960
+  callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+              save_last: true
+"
+
+python -c "if 1:
+    import sympy
+    limit_train_batches, batch_size, accumulate_grad_batches, max_epochs, MAX_STEPS = sympy.symbols(
+        'limit_train_batches, batch_size, accumulate_grad_batches, max_epochs, MAX_STEPS')
+
+    import ubelt as ub
+
+    subs = {
+        limit_train_batches: 40960,
+        batch_size: 20,
+        accumulate_grad_batches: 19,
+        max_epochs: 743,
+        MAX_STEPS: 80000,
+    }
+
+    effective_batch_size = accumulate_grad_batches * batch_size
+    #steps_per_epoch = sympy.floor(limit_train_batches / effective_batch_size)
+    steps_per_epoch = limit_train_batches / effective_batch_size
+    total_steps = max_epochs * steps_per_epoch
+    total_steps.subs(subs)
+
+    # The training progress iterator should show this number as the total number
+    train_epoch_prog_iters = sympy.ceiling((limit_train_batches / batch_size).subs(subs).evalf())
+
+    diff = MAX_STEPS - total_steps
+    curr_diff = diff.subs(subs)
+    print(f'curr_diff={curr_diff.evalf()}')
+
+    if curr_diff > 0:
+        print('Not enough total steps to fill MAX_STEPS')
+    else:
+        print('MAX STEPS will stop training short')
+
+    for k, v in subs.items():
+        print('--- Possible Adjustment For ---')
+        print(k)
+        tmp_subs = (ub.udict(subs) - {k})
+        solutions = sympy.solve(diff.subs(tmp_subs), k)
+        solutions = [s.evalf() for s in solutions]
+        print(solutions)
+"

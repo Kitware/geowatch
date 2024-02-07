@@ -15,6 +15,7 @@ import pathlib
 import ubelt as ub
 import os
 import fsspec
+import types
 
 NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
@@ -40,7 +41,7 @@ class FSPath(str):
     """
     # Final subclasses must define this as a string to be passed to
     # fsspec.filesystem(__protocol__)
-    __protocol__ = NotImplemented
+    __protocol__ : str | types.NotImplementedType = NotImplemented
 
     @classmethod
     def _new_fs(cls, **kwargs):
@@ -133,6 +134,7 @@ class FSPath(str):
     def open(self, mode='rb', block_size=None, cache_options=None, compression=None):
         """
         Example:
+            >>> from geowatch.utils.util_fsspec import *  # NOQA
             >>> from geowatch.utils import util_fsspec
             >>> dpath = util_fsspec.LocalPath.appdir('geowatch/fsspec/tests/open').ensuredir()
             >>> fpath = dpath / 'file.txt'
@@ -148,6 +150,7 @@ class FSPath(str):
     def ls(self, detail=False, **kwargs):
         """
         Example:
+            >>> from geowatch.utils.util_fsspec import *  # NOQA
             >>> import ubelt as ub
             >>> dpath = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'ls').ensuredir()
             >>> (dpath / 'file1').touch()
@@ -157,7 +160,16 @@ class FSPath(str):
             >>> results = self.ls()
             >>> assert sorted(results) == sorted(map(str, dpath.ls()))
         """
-        return self.fs.ls(self.path, detail=detail, **kwargs)
+        cls = self.__class__
+        results = self.fs.ls(self.path, detail=detail, **kwargs)
+        if detail:
+            return results
+        else:
+            # Hack:
+            if self.__protocol__ == 'file':
+                return [cls(p, fs=self.fs) for p in results]
+            else:
+                return [cls(self.__protocol__ + '://' + p, fs=self.fs) for p in results]
 
     def touch(self, truncate=False, **kwargs):
         """
