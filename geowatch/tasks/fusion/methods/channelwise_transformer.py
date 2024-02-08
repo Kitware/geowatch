@@ -230,6 +230,12 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         test algorithm to encourage continual learning.
         '''))
 
+    predictable_classes = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        Subset of classes to perform predictions on (for the class head).
+        Specified as a comma delimited string.
+        '''))
+
     def __post_init__(self):
         super().__post_init__()
         from kwutil.util_yaml import Yaml
@@ -666,6 +672,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
 
         self.automatic_optimization = True
+
+        self.predictable_classes = self.hparams.predictable_classes.split(',') if self.hparams.predictable_classes is not None else None
 
         if 0:
             ...

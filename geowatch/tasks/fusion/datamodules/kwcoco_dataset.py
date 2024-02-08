@@ -2906,7 +2906,20 @@ class MiscMixin:
     def coco_dset(self):
         return self.sampler.dset
 
-    def _notify_about_tasks(self, requested_tasks=None, model=None):
+    def _setup_predictable_classes(self, predictable_classes: list):
+        self.predictable_classes = kwcoco.CategoryTree.coerce(predictable_classes)
+        self.num_classes = len(self.predictable_classes)
+
+        self.class_class_idx_map = {
+            self.classes.node_to_idx[class_name]: self.predictable_classes.node_to_idx[class_name]
+            for class_name in self.predictable_classes
+        }
+        self.class_class_idx_map_inv = {
+            val: key
+            for key, val in self.class_class_idx_map.items()
+        }
+
+    def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
         Hacky method. Given the multimodal model, tell all the datasets which
         tasks they will need to generate data for. (This helps make the
@@ -2916,6 +2929,8 @@ class MiscMixin:
             assert requested_tasks is None
             if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'predictable_classes'):
+                predictable_classes = model.predictable_classes
             else:
                 warnings.warn(ub.paragraph(
                     f'''
@@ -2924,9 +2939,18 @@ class MiscMixin:
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
-        print(f'dataset notified: requested_tasks={requested_tasks}')
+        print(f'dataset notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
         assert requested_tasks is not None
         self.requested_tasks.update(requested_tasks)
+
+        if ('class' in self.requested_tasks) and (predictable_classes is not None):
+            if set(predictable_classes).issubset(set(self.classes)):
+                self._setup_predictable_classes(predictable_classes)
+            else:
+                print("predictable classes does not intersect classes")
+                print('classes= {}'.format(ub.urepr(self.classes.category_names, nl=1)))
+                print('predictable_classes= {}'.format(ub.urepr(predictable_classes, nl=1)))
+                raise ValueError
 
     def _build_demo_outputs(self, item):
         """
@@ -3138,17 +3162,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             self.ignore_classes |
             self.undistinguished_classes)
 
-        self.predictable_classes = kwcoco.CategoryTree.coerce(list(self.background_classes | self.class_foreground_classes))
-        self.num_classes = len(self.predictable_classes)
-
-        self.class_class_idx_map = {
-            self.classes.node_to_idx[class_name]: self.predictable_classes.node_to_idx[class_name]
-            for class_name in self.predictable_classes
-        }
-        self.class_class_idx_map_inv = {
-            val: key
-            for key, val in self.class_class_idx_map.items()
-        }
+        self._setup_predictable_classes(list(self.background_classes | self.class_foreground_classes))
 
         channels = config['channels']
         max_epoch_length = config['max_epoch_length']
