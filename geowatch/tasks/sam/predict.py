@@ -35,7 +35,7 @@ Example:
     >>> cmdline = 0
     >>> sam_predict.main(cmdline=cmdline, **kwargs)
     >>> if 1:
-    >>>     ub.cmd(f'geowatch visualize {output_kwcoco_fpath} --stack=only --channels "r|g|b,sam.0:3,sam.3:6,sam.6:9"')
+    >>>     ub.cmd(f'geowatch visualize {output_kwcoco_fpath} --stack=only --channels "r|g|b,sam.0:3,sam.3:6,sam.6:9"', verbose=3)
 """
 import scriptconfig as scfg
 import ubelt as ub
