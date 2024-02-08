@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 """
+CommandLine:
+    # To Execute
+    export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    sdvc requrest $DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth
+    xdoctest geowatch.tasks.sam.predict __doc__:0
+
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
     >>> import geowatch
