@@ -487,7 +487,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         if model is not None:
             assert requested_tasks is None
-            if hasattr(model, 'global_head_weight'):
+            if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
             else:
                 import warnings
