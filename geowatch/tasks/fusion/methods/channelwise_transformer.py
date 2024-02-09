@@ -368,7 +368,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.input_norms = input_norms
 
-        if self.hparams.predictable_classes is not None:
+        self.predictable_classes = self.hparams.predictable_classes
+        if self.predictable_classes is not None:
             self.predictable_classes = [x.strip() for x in self.hparams.predictable_classes.split(',')]
             self.classes = kwcoco.CategoryTree.coerce(self.predictable_classes)
             self.num_classes = len(self.predictable_classes)
