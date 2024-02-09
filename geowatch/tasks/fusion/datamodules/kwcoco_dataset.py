@@ -943,11 +943,11 @@ class TruthMixin:
                 poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
                     class_sseg_groups['ignore'].append(poly)
-                elif new_class_catname in self.class_foreground_classes:
+                elif new_class_catname in self.class_foreground_classes.intersection(self.predictable_classes):
                     class_sseg_groups['foreground'].append(poly)
-                elif new_class_catname in self.background_classes:
+                elif new_class_catname in self.background_classes.intersection(self.predictable_classes):
                     class_sseg_groups['background'].append(poly)
-                elif new_class_catname in self.undistinguished_classes:
+                elif new_class_catname in self.undistinguished_classes.intersection(self.predictable_classes):
                     class_sseg_groups['undistinguished'].append(poly)
 
             if balance_areas:

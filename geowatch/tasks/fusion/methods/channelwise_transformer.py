@@ -368,8 +368,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.input_norms = input_norms
 
-        self.classes = kwcoco.CategoryTree.coerce(classes)
-        self.num_classes = len(self.classes)
+        if self.hparams.predictable_classes is not None:
+            self.predictable_classes = [x.strip() for x in self.hparams.predictable_classes.split(',')]
+            self.classes = kwcoco.CategoryTree.coerce(self.predictable_classes)
+            self.num_classes = len(self.predictable_classes)
+        else:
+            self.classes = kwcoco.CategoryTree.coerce(classes)
+            self.num_classes = len(self.classes)
 
         self.global_class_weight = self.hparams.global_class_weight
         self.global_change_weight = self.hparams.global_change_weight
@@ -386,7 +391,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # FIXME: case sensitivity
         hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
         if self.class_freq is not None:
-            all_keys = set(self.class_freq.keys())
+            if self.predictable_classes is not None:
+                all_keys = set(self.class_freq.keys()).intersection(self.predictable_classes)
+            else:
+                all_keys = set(self.class_freq.keys())
         else:
             all_keys = set(self.classes)
 
@@ -672,8 +680,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
 
         self.automatic_optimization = True
-
-        self.predictable_classes = self.hparams.predictable_classes.split(',') if self.hparams.predictable_classes is not None else None
 
         if 0:
             ...
