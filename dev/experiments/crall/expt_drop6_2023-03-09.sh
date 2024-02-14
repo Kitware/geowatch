@@ -9592,6 +9592,24 @@ EXPERIMENT_NAME=Drop7_scratch_V04
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 MAX_STEPS=80000
+
+# Find the most recent checkpoint (TODO add utility for this)
+PREV_CHECKPOINT=$(python -c "if 1:
+    import ubelt as ub
+    root_dir = ub.Path('$DEFAULT_ROOT_DIR')
+    checkpoints = list((root_dir / 'lightning_logs').glob('version_*/checkpoints/*.ckpt'))
+    if len(checkpoints) == 0:
+        print('None')
+    else:
+        version_to_checkpoints = ub.group_items(checkpoints, key=lambda x: int(x.parent.parent.name.split('_')[-1]))
+        max_version = max(version_to_checkpoints)
+        candidates = version_to_checkpoints[max_version]
+        checkpoints = sorted(candidates, key=lambda p: p.stat().st_mtime)
+        chosen = checkpoints[-1]
+        print(chosen)
+")
+echo "PREV_CHECKPOINT = $PREV_CHECKPOINT"
+
 WATCH_GRID_WORKERS=4 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : 20
@@ -9701,7 +9719,8 @@ trainer:
               save_top_k: 5
               filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
               save_last: true
-"
+" --ckpt_path="$PREV_CHECKPOINT"
+
 
 python -c "if 1:
     import sympy

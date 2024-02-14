@@ -19,6 +19,31 @@ CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
 
 Example:
+    >>> # Basic Data Sampling
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> import geowatch
+    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
+    >>>                           channels='r|g|b')
+    >>> self.disable_augmenter = True
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> item = self[index]
+    >>> # Summarize batch item in text
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> # Draw batch item
+    >>> canvas = self.draw_item(item)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
+
+Example:
     >>> # Demo toy data without augmentation
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import kwcoco
