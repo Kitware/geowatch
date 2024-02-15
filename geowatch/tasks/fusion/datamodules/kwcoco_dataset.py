@@ -764,11 +764,11 @@ class TruthMixin:
                 dets = frame_dets.scale(dets_scale)
 
         # Create truth masks
-        bg_idx = self.bg_idx
+        # bg_idx = self.bg_idx
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
         frame_cidxs = np.full(space_shape, dtype=np.int32,
-                              fill_value=bg_idx)
+                              fill_value=self.ignore_index)
 
         # A "Salient" class is anything that is a foreground class
         task_target_ohe = {}
@@ -1160,6 +1160,7 @@ class GetItemMixin(TruthMixin):
                 'sensor': sensor,
                 'modes': mode_to_imdata,
                 'change': None,
+                'class_idxs_ignore_index': self.ignore_index,
                 'class_idxs': None,
                 'class_ohe': None,
                 'saliency': None,
@@ -2124,7 +2125,7 @@ class IntrospectMixin:
             >>> anchors = np.array([[0.1, 0.1]])
             >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors)
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300))
-            >>> self._notify_about_tasks(predictable_classes=['star', 'eff', 'background'])
+            >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
             >>> from geowatch.tasks.fusion import utils
             >>> utils.category_tree_ensure_color(self.predictable_classes)
@@ -2912,10 +2913,10 @@ class MiscMixin:
 
         # Ensure that predictable classes updates bg_idx (which is a hacky
         # construct that should be removed)
-        predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
-        assert len(predictable_bg_classes) > 0, 'need to have at least 1 background predictable class'
-        bg_catname = ub.peek(sorted(predictable_bg_classes))
-        self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
+        # predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
+        # assert len(predictable_bg_classes) > 0, 'need to have at least 1 background predictable class'
+        # bg_catname = ub.peek(sorted(predictable_bg_classes))
+        # self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
 
     def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
@@ -3258,8 +3259,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self.new_sample_grid = new_sample_grid
 
-        bg_catname = ub.peek(sorted(self.background_classes))
-        self.bg_idx = self.classes.node_to_idx[bg_catname]
+        # bg_catname = ub.peek(sorted(self.background_classes))
+        # self.bg_idx = self.classes.node_to_idx[bg_catname]
+
+        # Used for mutex style losses where there is no data that can be used
+        # to label a pixel.
+        self.ignore_index = -100
 
         utils.category_tree_ensure_color(self.classes)
 
@@ -3726,7 +3731,6 @@ def more_demos():
         >>> kwplot.imshow(canvas, fnum=1)
         >>> kwplot.show_if_requested()
 
-
     Ignore:
         >>> self.disable_augmenter = True
         >>> self.normalize_peritem = None
@@ -3741,7 +3745,6 @@ def more_demos():
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
         >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
-
     """
 
 
