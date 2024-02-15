@@ -230,7 +230,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         test algorithm to encourage continual learning.
         '''))
 
-    predictable_classes = scfg.Value(None, type=str, help=ub.paragraph(
+    predictable_classes = scfg.Value(None, help=ub.paragraph(
         '''
         Subset of classes to perform predictions on (for the class head).
         Specified as a comma delimited string.

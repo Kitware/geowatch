@@ -338,11 +338,7 @@ class WatchModuleMixins:
                 if self.class_freq is None:
                     heuristic_weights = {}
                 else:
-                    class_freq = {
-                        key: val
-                        for key, val in self.class_freq.items()
-                        if key not in hueristic_ignore_keys
-                    }
+                    class_freq = ub.udict(self.class_freq) - hueristic_ignore_keys
                     total_freq = np.array(list(class_freq.values()))
                     cat_weights = _class_weights_from_freq(total_freq)
                     catnames = list(class_freq.keys())
@@ -350,7 +346,7 @@ class WatchModuleMixins:
                     print('cat_weights = {!r}'.format(cat_weights))
                     print('catnames = {!r}'.format(catnames))
                     heuristic_weights = ub.dzip(catnames, cat_weights)
-                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
+                #print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
                 print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
