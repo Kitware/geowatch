@@ -6,12 +6,39 @@ dataset length, accum grad batches, etc interact.
 import kwutil
 import pytorch_lightning as pl
 import rich
+import scriptconfig
 import torch
 import torch.nn
 import torch.utils.data
 import ubelt as ub
 import yaml
 from torch.utils.data import Dataset
+
+
+class RelevantConfig(scriptconfig.DataConfig):
+    # MAX_STEPS               = 101
+    # MAX_EPOCHS              = 197
+    # BATCH_SIZE              = 5
+    # ACCUMULATE_GRAD_BATCHES = 3
+    # TRAIN_ITEMS_PER_EPOCH         = 17
+
+    # Ideal divisibility variant
+    # MAX_STEPS               = 400
+    # MAX_EPOCHS              = 20
+    # BATCH_SIZE              = 5
+    # ACCUMULATE_GRAD_BATCHES = 3
+    # TRAIN_ITEMS_PER_EPOCH   = 15 * 20
+
+    if 1:
+        # Prime number variant
+        MAX_STEPS               = 907
+        MAX_EPOCHS              = 107
+        BATCH_SIZE              = 3
+        ACCUMULATE_GRAD_BATCHES = 11
+        TRAIN_ITEMS_PER_EPOCH   = 313
+
+    # EFFECTIVE_BATCH_SIZE = BATCH_SIZE * ACCUMULATE_GRAD_BATCHES
+    # STEPS_PER_EPOCH = int(TRAIN_ITEMS_PER_EPOCH / EFFECTIVE_BATCH_SIZE)
 
 # We will track the real number of steps used
 MEASURED_COUNTS = dict(
@@ -21,14 +48,8 @@ MEASURED_COUNTS = dict(
     NUM_VALI_STEPS=0,
     NUM_GETITEM_CALLS=0,
     NUM_BATCHES=0,
+    NUM_EPOCHS=0,
 )
-
-
-class CustomDataLoader(torch.utils.data.DataLoader):
-    def __iter__(self):
-        for batch in super().__iter__():
-            MEASURED_COUNTS['NUM_BATCHES'] += 1
-            yield batch
 
 
 def jsonargparse_yaml_workarounds():
@@ -44,6 +65,14 @@ def jsonargparse_yaml_workarounds():
 
     set_loader('yaml_unsafe_for_tuples', custom_yaml_load)
     set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
+
+
+class CustomDataLoader(torch.utils.data.DataLoader):
+    def __iter__(self):
+        MEASURED_COUNTS['NUM_EPOCHS'] += 1
+        for batch in super().__iter__():
+            MEASURED_COUNTS['NUM_BATCHES'] += 1
+            yield batch
 
 
 class CustomAdamW(torch.optim.AdamW):
@@ -139,7 +168,8 @@ def inspect_relevant_interactions(relevant):
     import sympy
     import ubelt as ub
     symbolic_names = 'TRAIN_ITEMS_PER_EPOCH, BATCH_SIZE, ACCUMULATE_GRAD_BATCHES, MAX_EPOCHS, MAX_STEPS'.split(', ')
-    symbolic_vars = sympy.symbols(symbolic_names, integer=True, positive=True)
+    # symbolic_vars = sympy.symbols(symbolic_names, integer=True, positive=True)
+    symbolic_vars = sympy.symbols(symbolic_names)
     TRAIN_ITEMS_PER_EPOCH, BATCH_SIZE, ACCUMULATE_GRAD_BATCHES, MAX_EPOCHS, MAX_STEPS = symbolic_vars
 
     rich.print('[white]---------------------------')
@@ -151,8 +181,10 @@ def inspect_relevant_interactions(relevant):
     subs = ub.dzip(symbolic_vars, ub.udict(relevant).take(symbolic_names))
 
     effective_batch_size = ACCUMULATE_GRAD_BATCHES * BATCH_SIZE
-    steps_per_epoch = sympy.floor(TRAIN_ITEMS_PER_EPOCH / effective_batch_size)
-    # steps_per_epoch = TRAIN_ITEMS_PER_EPOCH / effective_batch_size
+    steps_per_epoch = TRAIN_ITEMS_PER_EPOCH / effective_batch_size
+    # This next line is more correct, but prevents the symbolic solver from
+    # working. Can uncomment if we fixup the numeric solver to work better.
+    # steps_per_epoch = sympy.floor(TRAIN_ITEMS_PER_EPOCH / effective_batch_size)
     total_steps = MAX_EPOCHS * steps_per_epoch
     total_steps.subs(subs)
 
@@ -201,35 +233,22 @@ def inspect_relevant_interactions(relevant):
             if len(solutions) == 0:
                 raise Exception
             suggestion = solutions
+            method = 'symbolic'
         except Exception:
             numeric_solution = numeric_solve(to_zero, k)
             suggestion = numeric_solution
-        print(f' * {k}: {initial} -> {suggestion}')
+            method = 'numeric'
+        print(f' * {k}: {initial} -> {suggestion} ({method})')
 
 
 def main():
     dpath = ub.Path.appdir('geowatch/devcheck/lr_scheduler').delete().ensuredir()
-    import scriptconfig
-
-    class RelevantConfig(scriptconfig.DataConfig):
-        DEFAULT_ROOT_DIR        = dpath
-
-        TARGET_LR               = 1e-3
-        WEIGHT_DECAY            = TARGET_LR * 1e-2
-
-        # MAX_STEPS               = 101
-        # MAX_EPOCHS              = 197
-        # BATCH_SIZE              = 5
-        # ACCUMULATE_GRAD_BATCHES = 3
-        # TRAIN_ITEMS_PER_EPOCH         = 17
-
-        MAX_STEPS               = 400
-        MAX_EPOCHS              = 20
-        BATCH_SIZE              = 5
-        ACCUMULATE_GRAD_BATCHES = 3
-        TRAIN_ITEMS_PER_EPOCH   = 15 * 20
 
     relevant = RelevantConfig()
+    relevant_ = dict(relevant)
+    relevant_['DEFAULT_ROOT_DIR'] = dpath
+    relevant_['TARGET_LR'] = 1000
+    relevant_['WEIGHT_DECAY'] = relevant_['TARGET_LR'] * 1e-2
     argstr = kwutil.partial_format.subtemplate(
         '''
         data:
@@ -247,12 +266,29 @@ def main():
             # class_path: torch.optim.lr_scheduler.OneCycleLR
             init_args:
                 max_lr           : $TARGET_LR
-                total_steps      : $MAX_STEPS
+
+                # ---------
+                # FIXME
+
+                # total_steps      : $MAX_STEPS
+
+                # LightningCLI Weirdness.
+                # It seems to only step the scheduler every epoch,
+                # https://github.com/Lightning-AI/pytorch-lightning/issues/15340
+                total_steps      : $MAX_EPOCHS
+
+                # epochs           : $MAX_STEPS
+                # steps_per_epoch  : $STEPS_PER_EPOCH
+
+                # ---------
+
                 div_factor       : 25
                 final_div_factor : 1000
                 anneal_strategy  : cos
                 pct_start        : 0.3
-                verbose          : False
+
+                # verbose          : False
+                # verbose          : True
 
         optimizer:
             class_path: CustomAdamW
@@ -283,8 +319,8 @@ def main():
             #           save_top_k : 5
             #           filename   : '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
             #           save_last  : true
-        ''', **relevant)
-    assert '$' not in argstr
+        ''', **relevant_)
+    # assert '$' not in argstr
 
     # Oh LightningCLI, you are convinient, but also difficult.
     nested = kwutil.util_yaml.Yaml.coerce(argstr, backend='pyyaml')
@@ -348,8 +384,22 @@ def main():
         rich.print('[white] Finished Training')
         rich.print('[white]------------------')
         rich.print(f'relevant = {ub.urepr(relevant, nl=1, align=":")}')
+
         effective_num_batches = MEASURED_COUNTS['NUM_BATCHES'] // relevant.ACCUMULATE_GRAD_BATCHES
+
+        MEASURED_COUNTS['NUM_OPTIM_STEPS']
+
+        relevant.MAX_EPOCHS
+
         MEASURED_COUNTS['effective_num_batches'] = effective_num_batches
+        MEASURED_COUNTS['train_batches_per_epoch'] = MEASURED_COUNTS['effective_num_batches'] / MEASURED_COUNTS['NUM_EPOCHS']
+
+        MEASURED_COUNTS['batch_size'] = MEASURED_COUNTS['NUM_GETITEM_CALLS'] / MEASURED_COUNTS['NUM_BATCHES']
+        MEASURED_COUNTS['train_items_per_epoch'] = MEASURED_COUNTS['train_batches_per_epoch'] * MEASURED_COUNTS['batch_size']
+
+        if MEASURED_COUNTS['effective_num_batches'] != MEASURED_COUNTS['NUM_OPTIM_STEPS']:
+            print('The effective number of batches should be the same as the number of optimization steps')
+
         rich.print(f'MEASURED_COUNTS = {ub.urepr(MEASURED_COUNTS, nl=1, align=":")}')
         rich.print(f"\nTrainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
 
