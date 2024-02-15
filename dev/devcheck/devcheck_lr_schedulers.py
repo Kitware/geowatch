@@ -1,6 +1,13 @@
 """
 Exploratory script to gain understanding of excatly how things like batch size,
 dataset length, accum grad batches, etc interact.
+
+
+Q: When does lightning call "step" for the LR scheduler?
+A: It depends, by default it seems to be every epoch, but you can define a
+   custom configure_optimizers method on the LightningCLI that modifies this
+   behavior. We do this here because we want it to run every step and not every
+   epoch.
 """
 
 import kwutil
@@ -13,23 +20,18 @@ import torch.utils.data
 import ubelt as ub
 import yaml
 from torch.utils.data import Dataset
+from pytorch_lightning.cli import LightningCLI
 
 
 class RelevantConfig(scriptconfig.DataConfig):
-    # MAX_STEPS               = 101
-    # MAX_EPOCHS              = 197
-    # BATCH_SIZE              = 5
-    # ACCUMULATE_GRAD_BATCHES = 3
-    # TRAIN_ITEMS_PER_EPOCH         = 17
-
-    # Ideal divisibility variant
-    # MAX_STEPS               = 400
-    # MAX_EPOCHS              = 20
-    # BATCH_SIZE              = 5
-    # ACCUMULATE_GRAD_BATCHES = 3
-    # TRAIN_ITEMS_PER_EPOCH   = 15 * 20
-
-    if 1:
+    if 0:
+        # Ideal divisibility variant
+        MAX_STEPS               = 400
+        MAX_EPOCHS              = 20
+        BATCH_SIZE              = 5
+        ACCUMULATE_GRAD_BATCHES = 3
+        TRAIN_ITEMS_PER_EPOCH   = 15 * 20
+    else:
         # Prime number variant
         MAX_STEPS               = 907
         MAX_EPOCHS              = 107
@@ -45,7 +47,7 @@ MEASURED_COUNTS = dict(
     NUM_LR_STEPS=0,
     NUM_OPTIM_STEPS=0,
     NUM_TRAINING_STEPS=0,
-    NUM_VALI_STEPS=0,
+    # NUM_VALI_STEPS=0,
     NUM_GETITEM_CALLS=0,
     NUM_BATCHES=0,
     NUM_EPOCHS=0,
@@ -117,17 +119,18 @@ class SimpleModel(pl.LightningModule):
         return outputs
 
     def validation_step(self, batch, batch_idx=None):
+        raise NotImplementedError('this test does not use validation batches')
         MEASURED_COUNTS['NUM_VALI_STEPS'] += 1
         outputs = self.forward_step(batch)
         return outputs
 
 
 class SimpleDataset(Dataset):
-    def __init__(self, max_epoch_length=100):
-        self.max_epoch_length = max_epoch_length
+    def __init__(self, items_per_epoch=100):
+        self.items_per_epoch = items_per_epoch
 
     def __len__(self):
-        return self.max_epoch_length
+        return self.items_per_epoch
 
     def __getitem__(self, index):
         MEASURED_COUNTS['NUM_GETITEM_CALLS'] += 1
@@ -135,7 +138,7 @@ class SimpleDataset(Dataset):
 
 
 class SimpleDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size=1, num_workers=0, max_epoch_length=100):
+    def __init__(self, batch_size=1, num_workers=0, items_per_epoch=100):
         super().__init__()
         self.save_hyperparameters()
 
@@ -241,6 +244,47 @@ def inspect_relevant_interactions(relevant):
         print(f' * {k}: {initial} -> {suggestion} ({method})')
 
 
+class PatchedLightningCLI(LightningCLI):
+    @staticmethod
+    def configure_optimizers(
+        lightning_module, optimizer, lr_scheduler=None
+    ):
+        """
+        Override to customize the
+        :meth:`~pytorch_lightning.core.module.LightningModule.configure_optimizers`
+        method to use step-based intervals.
+
+        # LightningCLI Weirdness.
+        # It seems to only step the scheduler every epoch,
+        # https://github.com/Lightning-AI/pytorch-lightning/issues/15340
+
+        Args:
+            lightning_module: A reference to the model.
+            optimizer: The optimizer.
+            lr_scheduler: The learning rate scheduler (if used).
+        """
+        from torch import optim
+
+        if lr_scheduler is None:
+            return optimizer
+
+        if isinstance(lr_scheduler, pl.cli.ReduceLROnPlateau):
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": lr_scheduler, "monitor": lr_scheduler.monitor},
+            }
+
+        if isinstance(lr_scheduler, optim.lr_scheduler.OneCycleLR):
+            # This forces lightning to step the lr scheduler every step instead
+            # of every epoch.
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": lr_scheduler, 'interval': 'step'},
+            }
+
+        return [optimizer], [lr_scheduler]
+
+
 def main():
     dpath = ub.Path.appdir('geowatch/devcheck/lr_scheduler').delete().ensuredir()
 
@@ -255,7 +299,7 @@ def main():
             class_path: SimpleDataModule
             init_args:
                 num_workers      : 0
-                max_epoch_length : $TRAIN_ITEMS_PER_EPOCH
+                items_per_epoch  : $TRAIN_ITEMS_PER_EPOCH
                 batch_size       : $BATCH_SIZE
 
         model:
@@ -268,18 +312,9 @@ def main():
                 max_lr           : $TARGET_LR
 
                 # ---------
-                # FIXME
-
-                # total_steps      : $MAX_STEPS
-
-                # LightningCLI Weirdness.
-                # It seems to only step the scheduler every epoch,
-                # https://github.com/Lightning-AI/pytorch-lightning/issues/15340
-                total_steps      : $MAX_EPOCHS
-
-                # epochs           : $MAX_STEPS
-                # steps_per_epoch  : $STEPS_PER_EPOCH
-
+                # NOTE: This only works if we have a patched
+                # configure_optimizers in LightningCLI
+                total_steps      : $MAX_STEPS
                 # ---------
 
                 div_factor       : 25
@@ -287,7 +322,7 @@ def main():
                 anneal_strategy  : cos
                 pct_start        : 0.3
 
-                # verbose          : False
+                verbose          : False
                 # verbose          : True
 
         optimizer:
@@ -358,9 +393,8 @@ def main():
 
     jsonargparse_yaml_workarounds()
 
-    from pytorch_lightning.cli import LightningCLI
     try:
-        cli = LightningCLI(
+        cli = PatchedLightningCLI(
             args=config,
             subclass_mode_model=True,
             save_config_kwargs={
@@ -383,24 +417,47 @@ def main():
         rich.print('[white]------------------')
         rich.print('[white] Finished Training')
         rich.print('[white]------------------')
-        rich.print(f'relevant = {ub.urepr(relevant, nl=1, align=":")}')
 
-        effective_num_batches = MEASURED_COUNTS['NUM_BATCHES'] // relevant.ACCUMULATE_GRAD_BATCHES
+        R = dict(relevant)
+        M = MEASURED_COUNTS
 
-        MEASURED_COUNTS['NUM_OPTIM_STEPS']
+        # Note: LightningCLI seems to always step the scheduler one extra time
+        # at the end, even though no more optim steps will be done, do subtract
+        # 1 from this count to get a more estimate of the number of lr steps
+        # that impact the parameters.
+        MEASURED_COUNTS['NUM_USEFUL_LR_STEPS'] = MEASURED_COUNTS['NUM_LR_STEPS'] - 1
 
-        relevant.MAX_EPOCHS
+        # If the number of training steps is not the same as the number of
+        # optimization steps, then that means we accumulated gradients over
+        # multiple forward passes.
+        M['accumulate_grad_batches'] = M['NUM_TRAINING_STEPS'] / M['NUM_OPTIM_STEPS']
+        M['effective_num_batches'] = M['NUM_BATCHES'] // M['accumulate_grad_batches']
+        M['batch_size'] = M['NUM_GETITEM_CALLS'] / M['NUM_BATCHES']
 
-        MEASURED_COUNTS['effective_num_batches'] = effective_num_batches
-        MEASURED_COUNTS['train_batches_per_epoch'] = MEASURED_COUNTS['effective_num_batches'] / MEASURED_COUNTS['NUM_EPOCHS']
+        M['train_batches_per_epoch'] = M['NUM_BATCHES'] / M['NUM_EPOCHS']
+        M['train_items_per_epoch'] = M['train_batches_per_epoch'] * M['batch_size']
 
-        MEASURED_COUNTS['batch_size'] = MEASURED_COUNTS['NUM_GETITEM_CALLS'] / MEASURED_COUNTS['NUM_BATCHES']
-        MEASURED_COUNTS['train_items_per_epoch'] = MEASURED_COUNTS['train_batches_per_epoch'] * MEASURED_COUNTS['batch_size']
+        rich.print(f'[R] relevant = {ub.urepr(relevant, nl=1, align=":")}')
+        rich.print(f'[M] MEASURED_COUNTS = {ub.urepr(MEASURED_COUNTS, nl=1, align=":")}')
 
-        if MEASURED_COUNTS['effective_num_batches'] != MEASURED_COUNTS['NUM_OPTIM_STEPS']:
-            print('The effective number of batches should be the same as the number of optimization steps')
+        dicts = {'M': M, 'R': R}
+        compare = [
+            ('R', 'MAX_STEPS', 'M', 'NUM_OPTIM_STEPS'),
+            ('R', 'MAX_EPOCHS', 'M', 'NUM_EPOCHS'),
+            ('R', 'BATCH_SIZE', 'M', 'batch_size'),
+            ('R', 'ACCUMULATE_GRAD_BATCHES', 'M', 'accumulate_grad_batches'),
+            ('R', 'TRAIN_ITEMS_PER_EPOCH', 'M', 'train_items_per_epoch'),
+            ('M', 'NUM_USEFUL_LR_STEPS', 'M', 'NUM_OPTIM_STEPS'),
+            ('M', 'effective_num_batches', 'M', 'NUM_OPTIM_STEPS'),
+        ]
+        for dk1, k1, dk2, k2 in compare:
+            d1 = dicts[dk1]
+            d2 = dicts[dk2]
+            v1 = d1[k1]
+            v2 = d2[k2]
+            color = 'green' if v1 == v2 else 'red'
+            rich.print(f'{dk1}["{k1}"] should match {dk2}["{k2}"]: [{color}] {v1} == {v2}')
 
-        rich.print(f'MEASURED_COUNTS = {ub.urepr(MEASURED_COUNTS, nl=1, align=":")}')
         rich.print(f"\nTrainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
 
         scripts = list(dpath.glob('*/*/monitor/tensorboard/redraw.sh'))
@@ -408,54 +465,6 @@ def main():
         script = scripts[0]
         ub.cmd(str(script), verbose=3, system=True)
     return cli
-
-# Might be worth trying to do this manually, lightningcli has lots of overhead
-# kwargs = dict(
-#     max_lr=TARGET_LR,
-#     div_factor=25,
-#     final_div_factor=1000,
-#     total_steps=MAX_STEPS,
-#     anneal_strategy='cos',
-#     pct_start=0.3,
-#     verbose=True)
-
-
-# optim_cls, optim_kw = nh.api.Optimizer.coerce(
-#     optimizer='adam',
-#     lr=TARGET_LR,
-#     weight_decay=0)
-
-# model = torch.nn.Linear(10, 10)
-# params = list(model.parameters())
-# optim_kw['params'] = params
-# optimizer = optim_cls(**optim_kw)
-# lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, **kwargs)
-
-# rows = []
-
-# batch_counter = 0
-# accum_counter = 0
-
-# # Insepct what the LR curve will look like
-# for _ in range(max_epochs):
-
-#     accum_counter = 0
-#     for item_idx in range(ITEMS_PER_EPOCH):
-#         accum_counter += 1
-
-#         if accum_counter >= ACCUMULATE_GRAD_BATCHES:
-#             optimizer.zero_grad()
-#             optimizer.step()
-#             lr_scheduler.step()
-#             accum_counter = 0
-
-#         lr = lr_scheduler.get_last_lr()[0]
-#         rows.append({'lr': lr, 'last_epoch': lr_scheduler.last_epoch, 'step': lr_scheduler._step_count})
-
-# # xdoctest: +REQUIRES(--show)
-# data = pd.DataFrame(rows)
-# sns = kwplot.autosns()
-# sns.lineplot(data=data, y='lr', x='last_epoch')
 
 
 if __name__ == '__main__':

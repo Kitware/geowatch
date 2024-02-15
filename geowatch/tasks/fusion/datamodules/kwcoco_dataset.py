@@ -315,10 +315,19 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             applicable for dataset that contain videos. Requries the
             "jq" python library is installed.
             '''))
+
+    # FIXME:
+    # This needs to be reworked.
+    # It is really the "maximum number of items per epoch".
+    # Note: that is number of ITEMS, NOT number of BATCHES!
+    # The number of batches is this divided by batch size
+    # and the effective batch size is this divided by (batch size * accum)
+    # And we really shouldn't specify the maximum here, we should just force it
+    # to a specific length, and lean into sampling with replacement.
     max_epoch_length = scfg.Value(None, help=ub.paragraph(
             '''
-            If specified, restricts number of steps per epoch
-            '''))
+            If specified, restricts number of ITEMS per epoch
+            '''), alias=['max_items_per_epoch'])
 
     #######################
     # SAMPLING GRID OPTIONS
