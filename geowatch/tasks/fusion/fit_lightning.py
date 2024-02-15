@@ -490,6 +490,11 @@ def make_cli(config=None):
         from kwutil import util_yaml
         print('Passing string-based config:')
         print(ub.highlight_code(config, 'yaml'))
+
+        # Need to use pyyaml backend, otherwise jsonargparse will balk at the
+        # ruamel.yaml types. EVEN THOUGH THEY ARE DUCKTYPED!
+        # Rant: People see the mathematical value of typing, and then they take
+        # it too far.
         nested = util_yaml.Yaml.loads(config, backend='pyyaml')
         # print('nested = {}'.format(ub.urepr(nested, nl=1)))
         config = nested_to_jsonnest(nested)
