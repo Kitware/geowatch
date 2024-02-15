@@ -2126,13 +2126,22 @@ class IntrospectMixin:
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300))
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff', 'background'])
             >>> self.requested_tasks['change'] = False
+            >>> from geowatch.tasks.fusion import utils
+            >>> utils.category_tree_ensure_color(self.predictable_classes)
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> canvas = self.draw_item(item, draw_weights=False)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
+            >>> label_to_color = {
+            >>>     node: data['color']
+            >>>     for node, data in self.predictable_classes.graph.nodes.items()}
+            >>> label_to_color = ub.sorted_keys(label_to_color)
+            >>> legend_img = utils._memo_legend(label_to_color)
+            >>> legend_img = kwimage.imresize(legend_img, scale=4.0)
+            >>> show_canvas = kwimage.stack_images([canvas, legend_img], axis=1)
+            >>> kwplot.imshow(show_canvas)
             >>> kwplot.show_if_requested()
 
         Example:
