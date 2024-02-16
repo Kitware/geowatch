@@ -1588,11 +1588,28 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         loss_labels_ = loss_labels[valid_mask]
                     elif criterion.target_encoding == 'onehot':
                         # Note: 1HE is much easier to work with
+                        labels_ = labels.long()
+                        has_ignore = labels_.min() < 0
+                        if has_ignore:
+                            ignore_flags = labels_ < 0
+                            ohe_size = criterion.in_channels + 1
+                            labels_ = labels_.clone()
+                            labels_[ignore_flags] = criterion.in_channels
+                        else:
+                            ohe_size = criterion.in_channels
+
                         loss_labels = kwarray.one_hot_embedding(
-                            labels.long(),
-                            criterion.in_channels,
+                            labels_,
+                            ohe_size,
                             dim=0)
                         loss_labels_ = loss_labels[:, valid_mask]
+
+                        if has_ignore:
+                            # FIXME: inefficient to just drop these, but it
+                            # should work.
+                            # could improve kwarray.one_hot_embedding to
+                            # allow the user to specify an ignore_index
+                            loss_labels_ = loss_labels_[:-1, ...]
                     else:
                         raise KeyError(criterion.target_encoding)
 
@@ -1615,16 +1632,19 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()
                     )
-                    metric_values = self.head_metrics[f"{stage}_stage"][task_name](
-                        pred.argmax(dim=0).flatten(),
-                        # pred[None],
-                        labels.flatten().long(),
-                    )
-                    self.log_dict(
-                        metric_values,
-                        prog_bar=True,
-                        batch_size=batch_size,
-                    )
+
+                    LOG_METRICS = 0  # FIXME: recent update broke this, why?
+                    if LOG_METRICS:
+                        metric_values = self.head_metrics[f"{stage}_stage"][task_name](
+                            pred.argmax(dim=0).flatten(),
+                            # pred[None],
+                            labels.flatten().long(),
+                        )
+                        self.log_dict(
+                            metric_values,
+                            prog_bar=True,
+                            batch_size=batch_size,
+                        )
 
         outputs["loss"] = sum(frame_losses) / len(frame_losses)
         self.log(f"{stage}_loss", outputs["loss"], prog_bar=True, batch_size=batch_size)
