@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add experimental CLI for looking up recent checkpoints.
+* Add experimental CLI for looking up recommending train size adjustments.
 
 ### Fixed
 

@@ -885,11 +885,15 @@ def main(cmdline=True, **kw):
         # Execute the gdal jobs in a single super queue
         import cmd_queue
         # queue = cmd_queue.Queue.create('serial')
+        suffix = ub.hash_data(sorted([d['video_name'] for d in to_extract]))[0:8]
         queue = cmd_queue.Queue.create(
             'tmux',
             size=config.img_workers,
             # size=1,
-            name='hack_lazy_' + video_name,
+            # name='hack_lazy_' + video_name,
+
+            # fixme: can we make a more meaningful name here?
+            name='hack_lazy_' + suffix,
             environ={
                 k: v for k, v in os.environ.items()
                 if k.startswith('GDAL_') or

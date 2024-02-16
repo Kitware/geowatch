@@ -25,7 +25,7 @@ class FindRecentCheckpointCLI(scfg.DataConfig):
         """
         import ubelt as ub
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
-        root_dir = config.default_root_dir
+        root_dir = ub.Path(config.default_root_dir)
         checkpoints = list((root_dir / 'lightning_logs').glob('version_*/checkpoints/*.ckpt'))
         if len(checkpoints) == 0:
             print('None')
@@ -44,7 +44,6 @@ main = __cli__.main
 
 if __name__ == '__main__':
     """
-
     CommandLine:
         python -m geowatch.cli.experimental.find_recent_checkpoint
     """
