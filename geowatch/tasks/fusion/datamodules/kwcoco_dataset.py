@@ -3264,6 +3264,9 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         # Used for mutex style losses where there is no data that can be used
         # to label a pixel.
+        # TODO: need to communicate this value to the loss function, but we
+        # should probably design a clean method of communicating between the
+        # dataset and model first.
         self.ignore_index = -100
 
         utils.category_tree_ensure_color(self.classes)
