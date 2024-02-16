@@ -1633,7 +1633,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         self.global_head_weights[task_name] * loss.mean()
                     )
 
-                    LOG_METRICS = 0  # FIXME: recent update broke this, why?
+                    LOG_METRICS = 0  # FIXME: recent (30c8974d6d6) update broke this, why?
                     if LOG_METRICS:
                         metric_values = self.head_metrics[f"{stage}_stage"][task_name](
                             pred.argmax(dim=0).flatten(),
