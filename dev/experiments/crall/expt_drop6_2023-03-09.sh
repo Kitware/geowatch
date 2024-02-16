@@ -9593,6 +9593,9 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 MAX_STEPS=80000
 
+
+PREV_CHECKPOINT=$(python -m geowatch.cli.experimental.find_recent_checkpoint --default_root_dir="$DEFAULT_ROOT_DIR")
+
 # Find the most recent checkpoint (TODO add utility for this)
 PREV_CHECKPOINT=$(python -c "if 1:
     import ubelt as ub

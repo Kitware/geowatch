@@ -185,6 +185,50 @@ class FSPath(str):
         self.fs.touch(self.path, truncate=truncate, **kwargs)
 
     def move(self, path2, recursive='auto', maxdepth=None, verbose=1, **kwargs):
+        """
+        Note: this may work differently than ubelt.Path.move, ideally we should
+        rectify this. The difference case is what happens when you move:
+
+            ./path/to/dir -> ./path/to/other/dir
+
+        Does `./path/to/dir` merge into `./path/to/other/dir`, or do you get
+        all of the src contents in `./path/to/other/dir/dir`?
+
+        Ignore:
+            import ubelt as ub
+            root = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'move').delete().ensuredir()
+            dpath1 = (root / 'path/to/dir').ensuredir()
+            dpath2 = (root / 'path/to/other/dir').ensuredir()
+
+            # Add content to both dirs
+            (dpath1 / 'file1').write_text('a1')
+            (dpath1 / 'file2').write_text('a2')
+            (dpath2 / 'file1').write_text('b1')
+            (dpath2 / 'file3').write_text('b3')
+
+            dpath1.ls()
+            dpath2.ls()
+
+            # ubelt will complain moves are only allowed to locs that dont
+            # exist cool, that makes sense.
+            dpath1.move(dpath2)
+
+            dpath1_alt = FSPath.coerce(dpath1)
+            dpath2_alt = FSPath.coerce(dpath2)
+
+            if 0:
+                # This moves it into the directory, which is not the behavior I
+                # want.
+                dpath1_alt.move(dpath2_alt)
+                assert not dpath1.exists()
+                dpath2.ls()
+            else:
+                # This has the desired behavior, but requries an akward call
+                # sig
+                dpath1_alt.move(dpath2_alt.parent)
+                assert not dpath1.exists()
+                dpath2.ls()
+        """
         if recursive == 'auto':
             recursive = self.is_dir()
         if verbose:

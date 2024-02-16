@@ -49,7 +49,7 @@ To configure kubernetes to talk to the Kitware smartflow server run:
     "
 
     aws eks --profile iarpa --region $AWS_REGION update-kubeconfig \
-        --name "smartflow-${ENVIRONMENT_NAME}-eks" \
+        --name "smartflow-${ENVIRONMENT_NAME}" \
         --role-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:role/smartflow-${ENVIRONMENT_NAME}-${AWS_REGION}-eks-admin"
 
 Test that you can reach the service with:
