@@ -1511,7 +1511,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
                     probs['class'] = logits.sigmoid()[0]
-                elif criterion_encoding == "softmax":
+                elif criterion_encoding == "index":
                     probs['class'] = logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
@@ -1558,7 +1558,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
                     probs['class'] = logits.sigmoid()[0]
-                elif criterion_encoding == "softmax":
+                elif criterion_encoding == "index":
                     probs['class'] = logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
