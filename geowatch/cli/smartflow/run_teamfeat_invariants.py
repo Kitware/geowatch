@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
 from geowatch.cli.smartflow_ingress import smartflow_ingress

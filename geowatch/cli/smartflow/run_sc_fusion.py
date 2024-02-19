@@ -16,8 +16,6 @@ import ubelt as ub
 
 
 __debugging__ = r"""
-
-
 IMAGE_NAME=watch:0.11.0-431640169-strict-pyenv3.11.2-20231013T170828-0400-from-86ab77d4
 
 docker run \
