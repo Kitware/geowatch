@@ -278,6 +278,8 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             known_errors['has_404'] = remove_broken and "404" in repr(ex)
             known_errors['has_acc_problem'] = "not recognized as a supported file format" in repr(ex)
             known_errors['connection_reset'] = "Connection reset by peer" in repr(ex)
+            known_errors['failed_to_read'] = 'Failed to read' in repr(ex)
+
             print(f'known_errors = {ub.urepr(known_errors, nl=1)}')
             if any(known_errors.values()):
                 broken_image_ids.append(gid)
