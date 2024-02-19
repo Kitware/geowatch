@@ -422,6 +422,16 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             if True balance the weight of small and large polygons
             '''))
 
+    default_class_behavior = scfg.Value('background', group=WEIGHT_GROUP, help=ub.paragraph(
+            '''
+            Toggles between new and old behavior for what value to use
+            for the class truth index raster. Can be "background" for old
+            behavior, which ensures that there is a predictable background
+            class and initializes non-annotated areas with that value.
+            Alternatively, can be "ignore" which fills the index truth with a a
+            negative value indicating that those regions should be ignored.
+            '''))
+
     ##################################
     # DYNAMIC FILTER / MASKING OPTIONS
     ##################################
@@ -764,11 +774,15 @@ class TruthMixin:
                 dets = frame_dets.scale(dets_scale)
 
         # Create truth masks
-        # bg_idx = self.bg_idx
+        if self.config.default_class_behavior == 'background':
+            default_class_index = self.bg_idx
+        else:
+            default_class_index = self.ignore_index
+
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
         frame_cidxs = np.full(space_shape, dtype=np.int32,
-                              fill_value=self.ignore_index)
+                              fill_value=default_class_index)
 
         # A "Salient" class is anything that is a foreground class
         task_target_ohe = {}
@@ -2124,7 +2138,7 @@ class IntrospectMixin:
             >>> import geowatch
             >>> anchors = np.array([[0.1, 0.1]])
             >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors)
-            >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300))
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300), default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
             >>> from geowatch.tasks.fusion import utils
@@ -2911,12 +2925,13 @@ class MiscMixin:
             for class_name in self.predictable_classes
         }
 
-        # Ensure that predictable classes updates bg_idx (which is a hacky
-        # construct that should be removed)
-        # predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
-        # assert len(predictable_bg_classes) > 0, 'need to have at least 1 background predictable class'
-        # bg_catname = ub.peek(sorted(predictable_bg_classes))
-        # self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
+        if self.config.default_class_behavior == 'background':
+            # Ensure that predictable classes updates bg_idx (which is a hacky
+            # construct that should be removed)
+            predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
+            assert len(predictable_bg_classes) > 0, 'need to have at least 1 background predictable class'
+            bg_catname = ub.peek(sorted(predictable_bg_classes))
+            self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
 
     def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
@@ -3259,8 +3274,9 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self.new_sample_grid = new_sample_grid
 
-        # bg_catname = ub.peek(sorted(self.background_classes))
-        # self.bg_idx = self.classes.node_to_idx[bg_catname]
+        if self.config.default_class_behavior == 'background':
+            bg_catname = ub.peek(sorted(self.background_classes))
+            self.bg_idx = self.classes.node_to_idx[bg_catname]
 
         # Used for mutex style losses where there is no data that can be used
         # to label a pixel.
