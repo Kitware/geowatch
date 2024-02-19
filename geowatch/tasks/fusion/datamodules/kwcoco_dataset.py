@@ -428,8 +428,9 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             for the class truth index raster. Can be "background" for old
             behavior, which ensures that there is a predictable background
             class and initializes non-annotated areas with that value.
-            Alternatively, can be "ignore" which fills the index truth with a a
+            Alternatively, can be "ignore" which fills the index truth with a
             negative value indicating that those regions should be ignored.
+            The default of this param may change in the future.
             '''))
 
     ##################################
@@ -2141,8 +2142,6 @@ class IntrospectMixin:
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300), default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
-            >>> from geowatch.tasks.fusion import utils
-            >>> utils.category_tree_ensure_color(self.predictable_classes)
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> canvas = self.draw_item(item, draw_weights=False)
@@ -2933,6 +2932,8 @@ class MiscMixin:
             bg_catname = ub.peek(sorted(predictable_bg_classes))
             self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
 
+        utils.category_tree_ensure_color(self.predictable_classes)
+
     def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
         Hacky method. Given the multimodal model, tell all the datasets which
@@ -3158,6 +3159,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
 
         self.classes = kwcoco.CategoryTree(graph)
+        utils.category_tree_ensure_color(self.classes)
+
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
         self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
@@ -3176,7 +3179,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             self.ignore_classes |
             self.undistinguished_classes)
 
-        self._setup_predictable_classes(list(self.background_classes | self.class_foreground_classes))
+        self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
         channels = config['channels']
         max_epoch_length = config['max_epoch_length']
@@ -3274,18 +3277,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self.new_sample_grid = new_sample_grid
 
-        if self.config.default_class_behavior == 'background':
-            bg_catname = ub.peek(sorted(self.background_classes))
-            self.bg_idx = self.classes.node_to_idx[bg_catname]
-
         # Used for mutex style losses where there is no data that can be used
         # to label a pixel.
         # TODO: need to communicate this value to the loss function, but we
         # should probably design a clean method of communicating between the
         # dataset and model first.
         self.ignore_index = -100
-
-        utils.category_tree_ensure_color(self.classes)
 
         self.special_inputs = {}
 
