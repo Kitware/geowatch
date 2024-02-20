@@ -158,17 +158,9 @@ class DataRegistry:
             path = 'foo/bar'
             hardware = 'fake'
         """
-        # Hard coded fallback candidate DVC paths
+        # Hard coded fallback candidate DVC paths, we will remove this in the
+        # future.
         hardcoded_paths = [
-            # {'name': 'namek', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc')},
-            # {'name': 'ooo', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc')},
-            # {'name': 'rutgers', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/media/native/data/data/smart_watch_dvc')},
-            # {'name': 'uky', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc')},
-            # {'name': 'purri', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/data4/datasets/smart_watch_dvc')},
-            # {'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-ssd').expand()},
-            # {'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-hdd').expand()},
-            # {'name': 'phase1_standard', 'hardware': None, 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc').expand()},
-
             {'name': 'hack_data_hdd', 'hardware': 'hdd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc').expand()},
             {'name': 'hack_expt_hdd', 'hardware': 'hdd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc').expand()},
             {'name': 'hack_data_ssd', 'hardware': 'ssd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc-ssd').expand()},
