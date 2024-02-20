@@ -230,7 +230,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         test algorithm to encourage continual learning.
         '''))
 
-    predictable_classes = scfg.Value(None, type=str, help=ub.paragraph(
+    predictable_classes = scfg.Value(None, help=ub.paragraph(
         '''
         Subset of classes to perform predictions on (for the class head).
         Specified as a comma delimited string.
@@ -1511,7 +1511,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
                     probs['class'] = logits.sigmoid()[0]
-                elif criterion_encoding == "softmax":
+                elif criterion_encoding == "index":
                     probs['class'] = logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
@@ -1558,7 +1558,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
                     probs['class'] = logits.sigmoid()[0]
-                elif criterion_encoding == "softmax":
+                elif criterion_encoding == "index":
                     probs['class'] = logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
@@ -1755,11 +1755,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 ], item_shape=[0, 0])[None, ...]
 
             if self.global_head_weights['class']:
-                item_encoding['class'] = 'ohe'
-                # [B, C, T, H, W]
-                item_truths['class'] = torch.stack([
-                    frame['class_ohe'] for frame in item['frames']
-                ])[None, ...]
+                criterion_encoding = self.criterions["class"].target_encoding
+                if criterion_encoding == "onehot":
+                    item_encoding['class'] = 'ohe'
+                    # [B, C, T, H, W]
+                    item_truths['class'] = torch.stack([
+                        frame['class_ohe'] for frame in item['frames']
+                    ])[None, ...]
+                elif criterion_encoding == "index":
+                    item_encoding['class'] = 'index'
+                    # [B, T, H, W]
+                    item_truths['class'] = torch_safe_stack([
+                        frame['class_idxs'] for frame in item['frames']
+                    ])[None, ...]
+                else:
+                    raise NotImplementedError
 
             if self.global_head_weights['saliency']:
                 item_encoding['saliency'] = 'index'
