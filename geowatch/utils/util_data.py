@@ -234,7 +234,7 @@ class DataRegistry:
                     row['priority'] = (row.get('priority', 0) or 0) - min_ssd_priority + non_ssd_priority * 2
                 # print('hardware_to_results = {}'.format(ub.urepr(hardware_to_results, nl=2)))
 
-        HACK_JONS_REMOTE_PATTERN = 1
+        HACK_JONS_REMOTE_PATTERN = 0
         if HACK_JONS_REMOTE_PATTERN:
             # If we can detect the remote pattern that jon likes (where remote
             # machines are mounted via sshfs in the $HOME/remote/$REMOTENAME
