@@ -87,6 +87,7 @@ class SmartTrainer(pl.Trainer):
         script_fpaths[key] = fpath = dpath / f'{key}.sh'
         fpath.write_text(ub.codeblock(
             f'''
+            #!/usr/bin/env bash
             tensorboard --logdir {dpath}
             '''))
 
@@ -94,15 +95,20 @@ class SmartTrainer(pl.Trainer):
         script_fpaths[key] = fpath = dpath / f'{key}.sh'
         fpath.write_text(ub.codeblock(
             fr'''
-            #!/bin/bash
+            #!/usr/bin/env bash
+
+            # First update the main plots
             WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
                 {dpath}
+
+            # Then stack them into a nice figure
+            kwimage stack_images --out "{dpath}/monitor/tensorboard-stack.png" -- {dpath}/monitor/tensorboard/*.png
             '''
         ))
 
         checkpoint_header_part = ub.codeblock(
             fr'''
-            #!/bin/bash
+            #!/usr/bin/env bash
 
             # Device defaults to CPU, but the user can pass a GPU in
             # as the first argument.

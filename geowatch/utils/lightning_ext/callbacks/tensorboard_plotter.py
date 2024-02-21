@@ -22,6 +22,9 @@ from pytorch_lightning.callbacks import Callback
 __all__ = ['TensorboardPlotter']
 
 
+# TODO: can move the callback to its own file and have the CLI variant with
+# core logic live separately for faster response times when using the CLI (i.e.
+# avoid lightning import overhead).
 class TensorboardPlotter(Callback):
     """
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
@@ -187,6 +190,7 @@ def _write_helper_scripts(out_dpath, train_dpath):
 
     train_dpath_ = train_dpath.resolve().shrinkuser()
 
+    # TODO: make this a nicer python script that aranges figures nicely.
     stack_fpath = (out_dpath / 'stack.sh')
     stack_fpath.write_text(ub.codeblock(
         fr'''
@@ -423,6 +427,7 @@ def redraw_cli(train_dpath):
     """
     Create png plots for the tensorboard data in a training directory.
     """
+    from kwutil.util_yaml import Yaml
     train_dpath = ub.Path(train_dpath)
 
     expt_name = train_dpath.parent.parent.name
@@ -430,9 +435,7 @@ def redraw_cli(train_dpath):
     hparams_fpath = train_dpath / 'hparams.yaml'
     if hparams_fpath.exists():
         print('Found hparams')
-        import yaml
-        with open(hparams_fpath, 'r') as file:
-            hparams = yaml.load(file, yaml.Loader)
+        hparams = Yaml.load(hparams_fpath)
         if 'name' in hparams:
             title = hparams['name']
         else:
@@ -448,6 +451,33 @@ def redraw_cli(train_dpath):
     else:
         print('Did not find hparams')
         title = expt_name
+
+    if 1:
+        # Add in other relevant data
+        # ...
+        config_fpath = train_dpath / 'config.yaml'
+        if config_fpath.exists():
+
+            config = Yaml.load(config_fpath)
+            trainer_config = config.get('trainer', {})
+            optimizer_config = config.get('optimizer', {})
+            data_config = config.get('data', {})
+            optimizer_args = optimizer_config.get('init_args', {})
+
+            devices = trainer_config.get('devices', None)
+
+            batch_size = data_config.get('batch_size', None)
+            accum_batches = trainer_config.get('accumulate_grad_batches', None)
+            optim_lr = optimizer_args.get('lr', None)
+            decay = optimizer_args.get('weight_decay', None)
+            # optim_name = optimizer_config.get('class_path', '?').split('.')[-1]
+            learn_dynamics_str = ub.codeblock(
+                f'''
+                BS=({batch_size} x {accum_batches}), LR={optim_lr}, decay={decay}, devs={devices}
+                '''
+            )
+            title = title + '\n' + learn_dynamics_str
+            # print(learn_dynamics_str)
 
     print(f'train_dpath={train_dpath}')
     print(f'title={title}')
@@ -474,7 +504,7 @@ class TensorboardPlotterCLI(scfg.DataConfig):
 if __name__ == '__main__':
     """
     CommandLine:
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter --help
+        WATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
     """
     TensorboardPlotterCLI.main()
     # import fire
