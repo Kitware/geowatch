@@ -177,3 +177,151 @@ dvc pull -vvv -r aws -- */PD.dvc
 dvc pull -vvv -r aws -- */L8.dvc
 dvc pull -vvv -r aws -- */S2.dvc
 dvc pull -vvv -r aws -- */WV.dvc
+
+
+
+##########################
+# Build Cropped SC Dataset
+##########################
+
+# shellcheck disable=SC2155
+export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+# shellcheck disable=SC2155
+export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+
+export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Cropped2GSD-V1
+
+export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8
+export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8/region_models"
+
+echo "
+SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
+DST_DVC_DATA_DPATH=$DST_DVC_DATA_DPATH
+
+SRC_BUNDLE_DPATH=$SRC_BUNDLE_DPATH
+DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
+
+TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
+"
+
+REGION_IDS_STR=$(python -c "if 1:
+    import pathlib
+    import os
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
+    SRC_BUNDLE_DPATH = os.environ.get('SRC_BUNDLE_DPATH')
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
+    src_bundle = pathlib.Path(SRC_BUNDLE_DPATH)
+    region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
+    region_names = [p.stem for p in region_fpaths]
+    final_names = []
+    for region_name in region_names:
+        coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
+        if coco_fpath.exists():
+            final_names.append(region_name)
+    print(' '.join(sorted(final_names)))
+    ")
+#REGION_IDS_STR="CN_C000 KW_C001 SA_C001 CO_C001 VN_C002"
+
+echo "REGION_IDS_STR = $REGION_IDS_STR"
+# shellcheck disable=SC2206
+REGION_IDS_ARR=($REGION_IDS_STR)
+for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+done
+
+
+### Cluster and Crop Jobs
+python -m cmd_queue new "crop_for_sc_queue"
+for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+    REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
+    REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
+    SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+    if ! test -f "$DST_KWCOCO_FPATH"; then
+        cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
+            python -m geowatch.cli.cluster_sites \
+                --src "$REGION_GEOJSON_FPATH" \
+                --minimum_size "256x256@2GSD" \
+                --dst_dpath "$REGION_CLUSTER_DPATH" \
+                --draw_clusters True
+
+        python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- crop_for_sc_queue \
+            python -m geowatch.cli.coco_align \
+                --src "$SRC_KWCOCO_FPATH" \
+                --dst "$DST_KWCOCO_FPATH" \
+                --regions "$REGION_CLUSTER_DPATH/*.geojson" \
+                --rpc_align_method orthorectify \
+                --workers=10 \
+                --aux_workers=2 \
+                --force_nodata=-9999 \
+                --context_factor=1.0 \
+                --minimum_size="256x256@2GSD" \
+                --force_min_gsd=2.0 \
+                --convexify_regions=True \
+                --target_gsd=2.0 \
+                --geo_preprop=False \
+                --sensor_to_time_window "
+                    S2: 1month
+                    PD: 1month
+                    L8: 1month
+                " \
+                --keep img
+                #--exclude_sensors=L8 \
+    fi
+done
+python -m cmd_queue show "crop_for_sc_queue"
+python -m cmd_queue run --workers=8 "crop_for_sc_queue"
+
+
+### Reproject Annotation Jobs
+python -m cmd_queue new "reproject_for_sc"
+# shellcheck disable=SC3054
+for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+    if ! test -f "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip"; then
+        python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_sc \
+            geowatch reproject_annotations \
+                --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
+                --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
+                --io_workers="avail/2" \
+                --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+                --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+    fi
+done
+python -m cmd_queue show "reproject_for_sc"
+python -m cmd_queue run --workers=8 "reproject_for_sc"
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+python -m geowatch.cli.prepare_splits \
+    --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
+    --dst_dpath "$DST_BUNDLE_DPATH" \
+    --suffix=rawbands \
+    --backend=tmux --tmux_workers=6 \
+    --splits split6 \
+    --run=1
+
+#dvc add -vvv -- */clusters
+#
+dvc add -vvv -- \
+    */*/L8 \
+    */*/S2 \
+    */*/WV \
+    */*/PD
+
+dvc add -vvv -- \
+    */imgonly-*-rawbands.kwcoco.zip \
+    */imganns-*-rawbands.kwcoco.zip \
+
+dvc add -vvv -- \
+    *_rawbands_*.kwcoco.zip \
+    */imgonly-*-rawbands.kwcoco.zip \
+    */imganns-*-rawbands.kwcoco.zip \
+    */*/L8 \
+    */*/S2 \
+    */*/WV \
+    */*/PD && \
+git commit -m "Update Drop8 Crop SC" && \
+git push && \
+dvc push -r aws -R . -vvv

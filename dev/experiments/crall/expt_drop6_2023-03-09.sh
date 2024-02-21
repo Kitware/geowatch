@@ -9890,7 +9890,7 @@ initializer:
 
 
 # --------
-# ACC FineTune From xView2
+# ACC FineTune From xView2 (on namek)
 
 #export CUDA_VISIBLE_DEVICES="0,1,2,3"
 export CUDA_VISIBLE_DEVICES="0"
