@@ -11,6 +11,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add experimental CLI for looking up recent checkpoints.
 * Add experimental CLI for looking up recommending train size adjustments.
 * Add experimental CLI for looking up disk hardware information.
+* Add more helper scripts for tensorboard callbacks
+
+### Changed
+* Remove developer dependency on `fire`.
 
 ### Fixed
 

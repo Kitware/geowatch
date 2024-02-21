@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 r"""
 Parses an existing tensorboard event file and draws the plots as pngs on disk
 in the monitor/tensorboard directory.
@@ -12,19 +13,16 @@ CommandLine:
         /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
 
 """
-# from distutils.version import LooseVersion
+import scriptconfig as scfg
 import os
 import ubelt as ub
-import numpy as np
-import pandas as pd
-import pytorch_lightning as pl
-from geowatch.utils.lightning_ext import util_model
+from pytorch_lightning.callbacks import Callback
 
 
 __all__ = ['TensorboardPlotter']
 
 
-class TensorboardPlotter(pl.callbacks.Callback):
+class TensorboardPlotter(Callback):
     """
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
     exit
@@ -36,6 +34,8 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>> # xdoctest: +REQUIRES(module:tensorboard)
         >>> from geowatch.utils.lightning_ext import demo
         >>> from geowatch.monkey import monkey_lightning
+        >>> import pytorch_lightning as pl
+        >>> import pandas as pd
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TensorboardPlotter').ensuredir()
@@ -78,6 +78,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         if hasattr(model, 'get_cfgstr'):
             model_cfgstr = model.get_cfgstr()
         else:
+            from geowatch.utils.lightning_ext import util_model
             from kwutil.slugify_ext import smart_truncate
             hparams = util_model.model_hparams(model)
             model_config = {
@@ -212,6 +213,8 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     """
     import kwplot
     from kwplot.auto_backends import BackendContext
+    import pandas as pd
+    import numpy as np
 
     train_dpath = ub.Path(train_dpath).resolve()
     if not train_dpath.name.startswith('version_'):
@@ -390,6 +393,7 @@ def tensorboard_inlier_ylim(ydata):
     """
     outlier removal used by tensorboard
     """
+    import numpy as np
     q1 = 0.05
     q2 = 0.95
     low_, high_ = np.quantile(ydata, [q1, q2])
@@ -452,6 +456,25 @@ def redraw_cli(train_dpath):
     rich.print(f'[link={tensorboard_dpath}]{tensorboard_dpath}[/link]')
 
 
+class TensorboardPlotterCLI(scfg.DataConfig):
+    """
+    Helper CLI executable to redraw on demand.
+    """
+    train_dpath = scfg.Value('.', help='train_dpath', position=1)
+
+    @classmethod
+    def main(cls, cmdline=1, **kwargs):
+        import rich
+        config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+        rich.print('config = ' + ub.urepr(config, nl=1))
+        redraw_cli(config.train_dpath)
+
+
 if __name__ == '__main__':
-    import fire
-    fire.Fire(redraw_cli)
+    """
+    CommandLine:
+        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter --help
+    """
+    TensorboardPlotterCLI.main()
+    # import fire
+    # fire.Fire(redraw_cli)
