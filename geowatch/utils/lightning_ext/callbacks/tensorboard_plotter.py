@@ -368,6 +368,7 @@ def smooth_curve(ydata, beta):
     """
     Curve smoothing algorithm used by tensorboard
     """
+    import pandas as pd
     alpha = 1.0 - beta
     if alpha <= 0:
         return ydata
