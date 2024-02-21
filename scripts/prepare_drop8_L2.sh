@@ -20,9 +20,9 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 
 
 #SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
-#SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,planet-dove,worldview-nitf"
-SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,planet-dove"
-#SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,planet-dove,worldview-nitf"
+#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
+SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove"
+#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
 
 DATASET_SUFFIX=Drop8-L2
 
@@ -35,8 +35,8 @@ REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_*0*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_*0*_*.geojson"
 
 # T&E Regions Only
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"

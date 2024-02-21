@@ -88,17 +88,16 @@ Note this is for S2B; S2A has slightly different center_wavelength and full_widt
 
 References:
     https://www.element84.com/earth-search/
-    https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c/
+    https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c
 
 Example:
     >>> from pystac_client import Client
-    >>> cat = Client.open('https://earth-search.aws.element84.com/v0')
-    >>> search = cat.search(bbox=[-110, 39.5, -105, 40.5], max_items=1, collections=['sentinel-s2-l1c'])
+    >>> from geowatch.utils.util_bands import *
+    >>> cat = Client.open('https://earth-search.aws.element84.com/v1')
+    >>> search = cat.search(bbox=[-110, 39.5, -105, 40.5], max_items=1, collections=['sentinel-2-l1c'])
     >>> i = list(search.items())[0]
     >>> # one image per band
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B')]
-    >>>
-    >>> from geowatch.utils.util_bands import *
     >>> assert dicts_contain(SENTINEL2, bands)
 '''
 SENTINEL2 = [

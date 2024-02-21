@@ -28,7 +28,7 @@ CommandLine:
     mkdir -p "$DEMO_DPATH"
 
     # This is a string code indicating what STAC endpoint we will pull from
-    SENSORS="sentinel-s2-l2a-cogs"
+    SENSORS="sentinel-2-l2a"
 
     # Depending on the STAC endpoint, some parameters may need to change:
     # collated - True for IARPA endpoints, Usually False for public data

@@ -39,11 +39,11 @@ AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m geowatch.cli.c
 
 
 
-https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/NQ/2017/6/S2A_23KNQ_20170618_0_L2A/B05.tif
+https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/NQ/2017/6/S2A_23KNQ_20170618_0_L2A/B05.tif
 
-AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' gdalinfo /vsis3/sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/NQ/2017/6/S2A_23KNQ_20170618_0_L2A/B05.tif
+AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' gdalinfo /vsis3/sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/NQ/2017/6/S2A_23KNQ_20170618_0_L2A/B05.tif
 
-gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B09.tif
+gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B09.tif
 
 
 

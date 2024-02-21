@@ -33,7 +33,7 @@ CommandLine:
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
-        --sensors=sentinel-s2-l2a-cogs \
+        --sensors=sentinel-2-l2a \
         --out_fpath "$SEARCH_FPATH"
     cat "$SEARCH_FPATH"
 

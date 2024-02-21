@@ -33,7 +33,7 @@ SITE_GLOBSTR="$HOME/.cache/geowatch/demo/annotations/${REGION_ID}_sites/*.geojso
 mkdir -p "$DEMO_DPATH"
 
 # This is a string code indicating what STAC endpoint we will pull from
-SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,landsat-c2l2-bt"
+SENSORS="sentinel-2-l2a,landsat-c2l2-sr,landsat-c2l2-bt"
 
 # Depending on the STAC endpoint, some parameters may need to change:
 # collated - True for IARPA endpoints, Usually False for public data

@@ -572,7 +572,7 @@ prepare_qfabric_horologic(){
     source "$HOME"/code/watch/secrets/secrets
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")/public
-    SENSORS=worldview-nitf,smart-landsat-c2l2-sr,sentinel-s2-l2a-cogs
+    SENSORS=worldview-nitf,smart-landsat-c2l2-sr,sentinel-2-l2a
     #DATASET_SUFFIX=QFabric-c30-$SENSORS
     DATASET_SUFFIX=QFabric-wvs2l8-c80
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/wvs2l8/region_models/*.geojson"

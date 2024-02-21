@@ -36,8 +36,8 @@ mkdir -p "$DEMO_DPATH"
 # For options, see:
 
 # ~/code/watch/watch/stac/stac_search_builder.py
-#SENSORS="sentinel-s2-l2a-cogs"
-SENSORS="sentinel-s2-l1c"
+#SENSORS="sentinel-2-l2a"
+SENSORS="sentinel-2-l1c"
 
 echo "
 DVC_DATA_DPATH=$DVC_DATA_DPATH
@@ -184,8 +184,8 @@ geowatch visualize "$PREDICTION_DPATH/poly.kwcoco.zip" \
 ##    --workers=26 \
 ##    --hack_lazy="dry"
 
-###gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B09.tif
-###gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/52/S/DG/2021/7/S2A_52SDG_20210731_0_L2A/B08.tif
+###gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B09.tif
+###gdalinfo /vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/52/S/DG/2021/7/S2A_52SDG_20210731_0_L2A/B08.tif
 
 
 ###gdalwarp -overwrite -multi --debug off -t_srs epsg:32652 -of COG \
@@ -193,7 +193,7 @@ geowatch visualize "$PREDICTION_DPATH/poly.kwcoco.zip" \
 ###    -te_srs epsg:4326 -wm 1500 \
 ###    -co OVERVIEWS=AUTO -co BLOCKSIZE=256 -co COMPRESS=DEFLATE -co NUM_THREADS=2 \
 ###    --config GDAL_CACHEMAX 1500 \
-###    /vsicurl/https:/sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/52/S/DG/2021/7/S2A_52SDG_20210731_0_L2A/B08.tif \
+###    /vsicurl/https:/sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/52/S/DG/2021/7/S2A_52SDG_20210731_0_L2A/B08.tif \
 ###    /home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc-ssd/Tutorial5-Demo/Aligned-Tutorial5-Demo/KR_R001/S2/affine_warp/crop_20210731T020000Z_N37.643680E128.649453_N37.683356E128.734073_S2_0/.tmpwarp.crop_20210731T020000Z_N37.643680E128.649453_N37.683356E128.734073_S2_0_nir.tif
 
 

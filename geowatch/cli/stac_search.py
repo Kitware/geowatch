@@ -31,7 +31,7 @@ CommandLine:
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
-        --sensors=sentinel-s2-l2a-cogs \
+        --sensors=sentinel-2-l2a \
         --out_fpath "$SEARCH_FPATH"
     cat "$SEARCH_FPATH"
 
@@ -419,7 +419,7 @@ class StacSearcher:
         >>>                          [55.268326, 25.03516],
         >>>                          [55.268326, 24.782276],
         >>>                          [54.960669, 24.782276]]]}
-        >>> collections = ["sentinel-s2-l2a-cogs"]
+        >>> collections = ["sentinel-2-l2a"]
         >>> start = '2020-03-14'
         >>> end = '2020-05-04'
         >>> query = {}
