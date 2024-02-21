@@ -35,8 +35,8 @@ REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_*0*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_*0*_*.geojson"
 
 # T&E Regions Only
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R0*_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"
@@ -68,7 +68,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --target_gsd="10GSD" \
     --cache=0 \
     --verbose=100 \
-    --skip_existing=1 \
+    --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \

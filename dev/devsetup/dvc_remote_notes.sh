@@ -48,3 +48,20 @@ dvc remote add --local local_store /data/dvc-caches/smart_watch_dvc
 
 ### See ALso:
 "$HOME/data/dvc-repos/smart_data_dvc/Drop6/unpack.py"
+
+
+# Fixup permissions while avoiding DVC issues
+
+
+# Give all real directories (not symlinks) all group permissions and set the sticky bit
+sudo fdfind --hidden --no-ignore --type directory --exec chmod g+rwxs
+
+# Give all real files (not symlinks) group readwrite permission, exclude the
+# .dvc cache directory, which needs special permissions
+sudo fdfind --hidden --no-ignore --type file --exclude "**/cache/files/md5/*" --exec chmod g+rw
+
+
+
+# Give all real directories (not symlinks) all group permissions and set the sticky bit
+sudo fdfind -uu -t d -x chmod g+rwxs
+sudo fdfind -uu -t f -E "**/cache/files/md5/*" -x chmod g+rw
