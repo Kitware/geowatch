@@ -178,6 +178,34 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     return datas
 
 
+def _write_helper_scripts(out_dpath, train_dpath):
+    """
+    Writes scripts to let the user refresh data on the fly
+    """
+    from geowatch.utils import util_chmod
+
+    train_dpath_ = train_dpath.resolve().shrinkuser()
+
+    stack_fpath = (out_dpath / 'stack.sh')
+    stack_fpath.write_text(ub.codeblock(
+        fr'''
+        #!/usr/bin/env bash
+        kwimage stack_images --out "{train_dpath_}/monitor/tensorboard-stack.png" -- {train_dpath_}/monitor/tensorboard/*.png
+        '''))
+    util_chmod.new_chmod(stack_fpath, 'ug+x')
+
+    refresh_fpath = (out_dpath / 'redraw.sh')
+    refresh_fpath.write_text(ub.codeblock(
+        fr'''
+        #!/usr/bin/env bash
+        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            {train_dpath_}
+        '''))
+    util_chmod.new_chmod(refresh_fpath, 'ug+x')
+    # import stat
+    # refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
+
+
 def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outliers=True, verbose=0):
     """
     This is its own function in case we need to modify formatting
@@ -197,16 +225,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=verbose)
 
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
-    refresh_fpath = (out_dpath / 'redraw.sh')
-    train_dpath_ = train_dpath.resolve().shrinkuser()
-    refresh_fpath.write_text(ub.codeblock(
-        fr'''
-        #!/bin/bash
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            {train_dpath_}
-        '''))
-    import stat
-    refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
+    _write_helper_scripts(out_dpath, train_dpath)
 
     if isinstance(smoothing, str) and smoothing == 'auto':
         smoothing_values = [0.6, 0.95]
