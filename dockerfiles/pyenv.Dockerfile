@@ -167,7 +167,7 @@ echo '
 # docker login
 # docker pull docker/dockerfile:1.3.0-labs
 
-cd $HOME/code/watch
+cd $HOME/code/geowatch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t pyenv:311 \
     --build-arg PYTHON_VERSION=3.11.2 \
@@ -176,8 +176,8 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
 docker run --runtime=nvidia -it pyenv:311 bash
 
 #docker login gitlab.kitware.com:4567
-#docker tag pyenv:310 gitlab.kitware.com:4567/smart/watch/pyenv:310
-#docker push gitlab.kitware.com:4567/smart/watch/pyenv:310
+#docker tag pyenv:310 gitlab.kitware.com:4567/computer-vision/geowatch/pyenv:310
+#docker push gitlab.kitware.com:4567/computer-vision/geowatch/pyenv:310
 # docker buildx build -t "pyenv3.10" -f ./pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
 
 # SeeAlso:
