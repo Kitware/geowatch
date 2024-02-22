@@ -60,7 +60,8 @@ PROFILE_TASK="-m test.regrtest --pgo test_array test_base64 test_binascii test_b
 
 PYTHON_CONFIGURE_OPTS="--enable-shared --enable-optimizations --with-computed-gotos --with-lto"
 
-PYTHON_CFLAGS="-march=native -O2 -pipe" 
+#PYTHON_CFLAGS="-march=native -O2 -pipe" 
+PYTHON_CFLAGS="-O2 -pipe" 
 
 PROFILE_TASK=$PROFILE_TASK \
 PYTHON_CFLAGS="${PYTHON_CFLAGS}" \
