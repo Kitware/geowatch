@@ -567,6 +567,3 @@ if __name__ == '__main__':
         python ~/code/geowatch/geowatch/stac/stac_search_builder.py
     """
     main()
-
-
-dvc pull -r local_hdd -- *_T*/WV.dvc *_T*/S2.dvc *_T*/PD.dvc *_T*/L8.dvc
