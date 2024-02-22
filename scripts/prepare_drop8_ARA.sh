@@ -128,6 +128,7 @@ dvc push -r aws -R . -vvv
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+# shellcheck disable=SC2164
 cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
 python -c "
 import ubelt as ub
@@ -148,6 +149,7 @@ dvc_repo.add(to_add, verbose=3)
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
+# shellcheck disable=SC2164
 cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
 git pull
 git add -- */.gitignore
@@ -169,6 +171,7 @@ dvc push -vvv -r aws -- */WV.dvc
 #
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
+# shellcheck disable=SC2164
 cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
 dvc pull -vvv -r aws -- */*.kwcoco.zip.dvc
 
@@ -325,3 +328,84 @@ dvc add -vvv -- \
 git commit -m "Update Drop8 Crop SC" && \
 git push && \
 dvc push -r aws -R . -vvv
+
+
+####################
+# Median BAS Dataset
+####################
+
+# shellcheck disable=SC2155
+export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+# shellcheck disable=SC2155
+export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+
+export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Median10GSD-V1
+
+export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8
+export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8/region_models"
+
+echo "
+SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
+DST_DVC_DATA_DPATH=$DST_DVC_DATA_DPATH
+
+SRC_BUNDLE_DPATH=$SRC_BUNDLE_DPATH
+DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
+
+TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
+"
+
+REGION_IDS_STR=$(python -c "if 1:
+    import pathlib
+    import os
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
+    SRC_BUNDLE_DPATH = os.environ.get('SRC_BUNDLE_DPATH')
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
+    src_bundle = pathlib.Path(SRC_BUNDLE_DPATH)
+    region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
+    region_names = [p.stem for p in region_fpaths]
+    final_names = []
+    for region_name in region_names:
+        coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
+        if coco_fpath.exists():
+            final_names.append(region_name)
+    print(' '.join(sorted(final_names)))
+
+    # Also dump file
+    from kwutil.util_yaml import Yaml
+    import os
+    import ubelt as ub
+    dpath = ub.Path(os.environ['DST_BUNDLE_DPATH']).ensuredir()
+    tmp_fpath = dpath / 'tmp_region_names.yaml'
+    text = Yaml.dumps(final_names)
+    tmp_fpath.write_text(text)
+    ")
+#REGION_IDS_STR="CN_C000 KW_C001 SA_C001 CO_C001 VN_C002"
+
+
+#echo "REGION_IDS_STR = $REGION_IDS_STR"
+## shellcheck disable=SC2206
+#REGION_IDS_ARR=($REGION_IDS_STR)
+#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+#    echo "REGION_ID = $REGION_ID"
+#done
+
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
+    --regions="$DST_BUNDLE_DPATH/tmp_region_names.yaml" \
+    --reproject=False \
+    --input_bundle_dpath="$SRC_BUNDLE_DPATH" \
+    --output_bundle_dpath="$DST_BUNDLE_DPATH" \
+    --spatial_tile_size=1024 \
+    --merge_method=median \
+    --mask_low_quality=True \
+    --tmux_workers=4 \
+    --time_window=6months \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --skip_existing=1 \
+    --cache=1 \
+    --run=1 --print-commands
+
+#--remove_seasons=winter \

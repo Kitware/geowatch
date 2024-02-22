@@ -64,7 +64,7 @@ def main(cmdline=1, **kwargs):
     """
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
-    from geowatch.utils.partial_format import subtemplate
+    from kwutil.partial_format import subtemplate
     rich.print('config = ' + ub.urepr(config, nl=1))
     assert config.output_bundle_dpath is not None
     assert config.input_bundle_dpath is not None
