@@ -575,7 +575,9 @@ def gdal_single_warp(in_fpath,
     Example:
         >>> import kwimage
         >>> from geowatch.utils.util_gdal import gdal_single_warp
-        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
+        >>> # Note: this is a network test that depends on external resources
+        >>> # we may want to disable, or try to make more robust.
+        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
@@ -595,7 +597,7 @@ def gdal_single_warp(in_fpath,
         >>> # Test non-eager version
         >>> import kwimage
         >>> from geowatch.utils.util_gdal import gdal_single_warp
-        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
+        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
@@ -846,7 +848,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         >>> # xdoctest: +REQUIRES(--slow)
         >>> import kwimage
         >>> from geowatch.utils.util_gdal import gdal_single_warp
-        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
+        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
@@ -1328,7 +1330,7 @@ class GdalDataset(ub.NiceRepr):
 
         # Test 404 handling
         from geowatch.utils import util_gdal
-        gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-2-l2a/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
+        gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
         import geowatch
         meta = geowatch.gis.geotiff.geotiff_metadata(gpath)
         from geowatch.utils import util_gdal
