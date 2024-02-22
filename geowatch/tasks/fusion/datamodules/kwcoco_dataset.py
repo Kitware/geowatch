@@ -127,7 +127,7 @@ import ubelt as ub
 import warnings
 
 from os import getenv
-from kwutil import util_time
+from kwutil import util_time, util_pattern
 from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
@@ -2388,12 +2388,54 @@ class BalanceMixin:
     Helpers to build the sample grid and balance it
     """
 
+    def _setup_balance_dataframe(self, new_sample_grid):
+        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+
+        # extract video names
+        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
+        coco_dset = self.sampler.dset
+        try:
+            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        except KeyError:
+            # handle loose images
+            unique_vidnames = []
+            for video_id in unique_vidids:
+                if video_id in coco_dset.index.videos:
+                    vidname = coco_dset.index.videos[video_id]['name']
+                else:
+                    vidname = video_id
+                unique_vidnames.append(vidname)
+        vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
+
+        # associate targets with positive or negative
+        target_posbit = kwarray.boolmask(
+            new_sample_grid['positives_indexes'],
+            len(new_sample_grid['targets']))
+
+        # create mapping from video name to region name
+        pat = util_pattern.Pattern.coerce(r'\w+_[A-Z]\d+_.*', 'regex')
+        self.vidname_to_region_name = {}
+        for vidname in set(vidnames):
+            if pat.match(vidname):
+                self.vidname_to_region_name[vidname] = "_".join(vidname.split('_')[:2])
+            else:
+                self.vidname_to_region_name[vidname] = vidname
+
+        # build a dataframe with video attributes
+        df = pd.DataFrame({
+            'vidid': target_vidids,
+            'vidname': vidnames,
+            'is_positive': target_posbit,
+            'region': ub.take(self.vidname_to_region_name, vidnames)
+        }).reset_index(drop=False)
+        return df
+
     def _init_balance(self, new_sample_grid):
         """
         Build data structure used for balanced sampling.
 
         Helper for __init__ which constructs a NestedPool to balance sampling
-        across input domains.
+        acrgeowatch/tasks/fusion/datamodules/kwcoco_dataset.pyoss input domains.
 
         TODO:
             HELP WANTED: We would like to configure the distribution in some
@@ -2404,109 +2446,43 @@ class BalanceMixin:
             this hard because we need the notation of goodness, easiness, etc
             at the batch level, which can contain multiple annotations.
         """
-        # TODO: each video should be able to have some sort of group
-        # attribute we can use to balance over similar videos.
+
         print('Balancing over videos')
+        df_videos = self._setup_balance_dataframe(new_sample_grid)
 
+        # balance positive / negatives per region
         neg_to_pos_ratio = self.config['neg_to_pos_ratio']
+        region_to_pool = {}
+        for region in df_videos['region'].unique():
+            df_pos_frames = df_videos.query(f"region == '{region}' and is_positive == True")
+            df_neg_frames = df_videos.query(f"region == '{region}' and is_positive == False")
+            pos_frames_idxs = df_pos_frames['index']
+            neg_frames_idxs = df_neg_frames['index']
 
-        # Train time data balancing
-        n_pos = len(new_sample_grid['positives_indexes'])
-        n_neg = len(new_sample_grid['negatives_indexes'])
+            n_pos = len(df_pos_frames)
+            n_neg = len(df_neg_frames)
+            max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
 
-        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+            neg_region_pool_ = list(util_iter.chunks(neg_frames_idxs, nchunks=max_neg))
+            pos_region_pool_ = list(util_iter.chunks(pos_frames_idxs, nchunks=n_pos))
+            region_pool = pos_region_pool_ + neg_region_pool_
+            region_to_pool[region] = [p for p in region_pool if p]
 
-        # Hack: determine if videos should be grouped together
-        target_posbit = kwarray.boolmask(
-            new_sample_grid['positives_indexes'],
-            len(new_sample_grid['targets']))
-
-        # Do this for unique video ids otherwise SQLviews will take forever
-        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
-        coco_dset = self.sampler.dset
-        try:
-            unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
-        except KeyError:
-            # hack for loose images
-            unique_vidnames = []
-            for video_id in unique_vidids:
-                if video_id in coco_dset.index.videos:
-                    vidname = coco_dset.index.videos[video_id]['name']
-                else:
-                    vidname = video_id
-                unique_vidnames.append(vidname)
-
-        vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
-
-        # if 0:
-        #     # DEBUG postgres
-        #     # all_vidids = self.sampler.dset.videos()
-        #     # all_vidids = set(all_vidids)
-        #     # len(set(target_vidids) & all_vidids)
-        #     # len(set(target_vidids) - all_vidids)
-        #     # len(all_vidids - set(target_vidids))
-        #     vid_table = self.sampler.dset.raw_table('videos')
-
-        df = pd.DataFrame({
-            'vidid': target_vidids,
-            'vidname': vidnames,
-            'is_positive': target_posbit,
-        }).reset_index(drop=False)
-
-        # Hack, because we didn't encode the region in the cropped site
-        # (rookie move)
-        from kwutil import util_pattern
-        pat = util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
-        vidname_to_region_name = {}
-        for vidname in set(vidnames):
-            if pat.match(vidname):
-                vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
-
-        self.vidname_to_region_name = vidname_to_region_name
-
-        if vidname_to_region_name:
-            df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
-        else:
-            df['region'] = df['vidname']
-
-        key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
-        vidname_to_pool = {}
-        for key, group in key_to_group.items():
-            vidname, flag = key
-            if flag:
-                pos_vid_idxs = group['index']
-                other_key = (vidname, False)
-                if other_key in key_to_group:
-                    other = key_to_group[other_key]
-                    neg_vid_idxs = other['index']
-                else:
-                    neg_vid_idxs = []
-                    other = []
-                n_pos = len(group)
-                n_neg = len(other)
-                max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
-
-                if 0:
-                    # TODO: dataloader logger
-                    print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
-
-                # neg_vid_idxs = posneg_groups[False]['index'].values
-                neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
-                pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
-                vid_pool = pos_vid_pool_ + neg_vid_pool_
-                vidname_to_pool[vidname] = [p for p in vid_pool if p]
-
-        freqs = list(map(len, vidname_to_pool.values()))
+        # compute maximum to take per region
+        freqs = list(map(len, region_to_pool.values()))
         if len(freqs) == 0:
             max_per_vid = 100
             warnings.warn('Warning: no video pool')
         else:
             max_per_vid = int(np.median(freqs))
-        all_chunks = []
-        for vidname, vid_pool in vidname_to_pool.items():
-            rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
-            all_chunks.extend(rechunked_video_pool)
 
+        # balance across regions
+        all_chunks = []
+        for region, region_pool in region_to_pool.items():
+            rechunked_region_pool = list(util_iter.chunks(region_pool, nchunks=max_per_vid))
+            all_chunks.extend(rechunked_region_pool)
+
+        # initialize nested pool
         self.nested_pool = data_utils.NestedPool(all_chunks)
         if self.config['reseed_fit_random_generators']:
             self.reseed()
