@@ -15,6 +15,7 @@ import pathlib
 import ubelt as ub
 import os
 import fsspec
+import types
 
 NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
@@ -40,7 +41,7 @@ class FSPath(str):
     """
     # Final subclasses must define this as a string to be passed to
     # fsspec.filesystem(__protocol__)
-    __protocol__ = NotImplemented
+    __protocol__ : str | types.NotImplementedType = NotImplemented
 
     @classmethod
     def _new_fs(cls, **kwargs):
@@ -133,6 +134,7 @@ class FSPath(str):
     def open(self, mode='rb', block_size=None, cache_options=None, compression=None):
         """
         Example:
+            >>> from geowatch.utils.util_fsspec import *  # NOQA
             >>> from geowatch.utils import util_fsspec
             >>> dpath = util_fsspec.LocalPath.appdir('geowatch/fsspec/tests/open').ensuredir()
             >>> fpath = dpath / 'file.txt'
@@ -148,6 +150,7 @@ class FSPath(str):
     def ls(self, detail=False, **kwargs):
         """
         Example:
+            >>> from geowatch.utils.util_fsspec import *  # NOQA
             >>> import ubelt as ub
             >>> dpath = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'ls').ensuredir()
             >>> (dpath / 'file1').touch()
@@ -157,7 +160,16 @@ class FSPath(str):
             >>> results = self.ls()
             >>> assert sorted(results) == sorted(map(str, dpath.ls()))
         """
-        return self.fs.ls(self.path, detail=detail, **kwargs)
+        cls = self.__class__
+        results = self.fs.ls(self.path, detail=detail, **kwargs)
+        if detail:
+            return results
+        else:
+            # Hack:
+            if self.__protocol__ == 'file':
+                return [cls(p, fs=self.fs) for p in results]
+            else:
+                return [cls(self.__protocol__ + '://' + p, fs=self.fs) for p in results]
 
     def touch(self, truncate=False, **kwargs):
         """
@@ -173,6 +185,50 @@ class FSPath(str):
         self.fs.touch(self.path, truncate=truncate, **kwargs)
 
     def move(self, path2, recursive='auto', maxdepth=None, verbose=1, **kwargs):
+        """
+        Note: this may work differently than ubelt.Path.move, ideally we should
+        rectify this. The difference case is what happens when you move:
+
+            ./path/to/dir -> ./path/to/other/dir
+
+        Does `./path/to/dir` merge into `./path/to/other/dir`, or do you get
+        all of the src contents in `./path/to/other/dir/dir`?
+
+        Ignore:
+            import ubelt as ub
+            root = ub.Path.appdir('geowatch', 'tests', 'fsspec', 'move').delete().ensuredir()
+            dpath1 = (root / 'path/to/dir').ensuredir()
+            dpath2 = (root / 'path/to/other/dir').ensuredir()
+
+            # Add content to both dirs
+            (dpath1 / 'file1').write_text('a1')
+            (dpath1 / 'file2').write_text('a2')
+            (dpath2 / 'file1').write_text('b1')
+            (dpath2 / 'file3').write_text('b3')
+
+            dpath1.ls()
+            dpath2.ls()
+
+            # ubelt will complain moves are only allowed to locs that dont
+            # exist cool, that makes sense.
+            dpath1.move(dpath2)
+
+            dpath1_alt = FSPath.coerce(dpath1)
+            dpath2_alt = FSPath.coerce(dpath2)
+
+            if 0:
+                # This moves it into the directory, which is not the behavior I
+                # want.
+                dpath1_alt.move(dpath2_alt)
+                assert not dpath1.exists()
+                dpath2.ls()
+            else:
+                # This has the desired behavior, but requries an akward call
+                # sig
+                dpath1_alt.move(dpath2_alt.parent)
+                assert not dpath1.exists()
+                dpath2.ls()
+        """
         if recursive == 'auto':
             recursive = self.is_dir()
         if verbose:
@@ -732,6 +788,9 @@ class S3Path(RemotePath):
 
         self = S3Path.coerce('/vsis3/usgs-landsat-ard/collection02')
         self.ls()
+
+    SeeAlso:
+        geowatch.heuristics.register_known_fsspec_s3_buckets
 
     To work with different S3 filesystems,
 

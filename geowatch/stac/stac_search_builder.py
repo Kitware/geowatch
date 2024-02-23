@@ -232,9 +232,9 @@ _PUBLIC_L1_PRODUCTS = {
             }
         }
     },
-    'sentinel-s2-l1c': {
-        "collections": ["sentinel-s2-l1c"],
-        "endpoint": "https://earth-search.aws.element84.com/v0",
+    'sentinel-2-l1c': {
+        "collections": ["sentinel-2-l1c"],
+        "endpoint": "https://earth-search.aws.element84.com/v1",
     },
 }
 
@@ -242,12 +242,16 @@ _PUBLIC_L1_PRODUCTS = {
 # NOTE;
 # Info about QA bands:
 # https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/media/files/LSDS-1435%20Landsat%20C2%20US%20ARD%20Data%20Format%20Control%20Book-v3.pdf
+
+# Updated L2 Products
+# https://www.element84.com/geospatial/introducing-earth-search-v1-new-datasets-now-available/
+
 _PUBLIC_L2_PRODUCTS = {
     # Public L2 Products
     # https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l2a/
-    'sentinel-s2-l2a-cogs': {
-        "collections": ["sentinel-s2-l2a-cogs"],
-        "endpoint": "https://earth-search.aws.element84.com/v0",
+    'sentinel-2-l2a': {
+        "collections": ["sentinel-2-l2a"],
+        "endpoint": "https://earth-search.aws.element84.com/v1",
     },
 
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
@@ -384,14 +388,14 @@ CONVINIENCE_SENSOR_GROUPS = {
         'ta1-wv-kit',
     ],
     'L2-S2': [
-        'sentinel-s2-l2a-cogs',
+        'sentinel-2-l2a',
     ],
     'L2-L8': [
         'landsat-c2l2-sr',
         'landsat-c2l2-bt',
     ],
     'L2-S2-L8': [
-        'sentinel-s2-l2a-cogs',
+        'sentinel-2-l2a',
         'landsat-c2l2-sr',
         'landsat-c2l2-bt',
     ],
@@ -400,7 +404,7 @@ CONVINIENCE_SENSOR_GROUPS = {
         'landsat-c2ard-bt',
     ],
     'ARD-S2-L8': [
-        'sentinel-s2-l2a-cogs',
+        'sentinel-2-l2a',
         'landsat-c2ard-sr',
         'landsat-c2ard-bt',
     ],
@@ -473,8 +477,8 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
         search_json = {
             'stac_search': [
                 {
-                    'collections': ['sentinel-s2-l2a-cogs'],
-                    'endpoint': 'https://earth-search.aws.element84.com/v0',
+                    'collections': ['sentinel-2-l2a'],
+                    'endpoint': 'https://earth-search.aws.element84.com/v1',
                     'query': {
                         'eo:cloud_cover': {'lt': 20}
                     },

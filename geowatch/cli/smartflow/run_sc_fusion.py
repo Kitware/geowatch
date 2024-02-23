@@ -16,8 +16,6 @@ import ubelt as ub
 
 
 __debugging__ = r"""
-
-
 IMAGE_NAME=watch:0.11.0-431640169-strict-pyenv3.11.2-20231013T170828-0400-from-86ab77d4
 
 docker run \
@@ -97,6 +95,11 @@ class SCFusionConfig(scfg.DataConfig):
             Raw json/yaml or a path to a json/yaml file that specifies the
             config for SC tracking.
             '''))
+
+    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        If true egress intermediate heatmaps, otherwise only egress the geojson
+        '''))
 
 
 def main(cmdline=1, **kwargs):
@@ -300,7 +303,7 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
 
     # Add in intermediate outputs for debugging
-    EGRESS_INTERMEDIATE_OUTPUTS = True
+    EGRESS_INTERMEDIATE_OUTPUTS = config.egress_intermediate_outputs
     if EGRESS_INTERMEDIATE_OUTPUTS:
         # Reroot kwcoco files to make downloaded results easier to work with
         ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])

@@ -382,21 +382,21 @@ dvc push -r aws annotations/drop7-hard-v1 -vvv
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DST_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
 
-TRUE_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
 
-TRUE_REGION_DPATH="$TRUE_DPATH/region_models"
+TRUTH_REGION_DPATH="$TRUTH_DPATH/region_models"
 SRC_BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
 DST_BUNDLE_DPATH=$DST_DATA_DPATH/Drop7-Cropped2GSD-V2
 
 test -d "$DVC_DATA_DPATH" || echo "ERROR: DVC_DATA_DPATH DOES NOT EXIST"
 test -d "$DST_DATA_DPATH" || echo "ERROR: DST_DATA_DPATH DOES NOT EXIST"
-test -d "$TRUE_REGION_DPATH" || echo "ERROR: DVC_DATA_DPATH DOES NOT EXIST"
+test -d "$TRUTH_REGION_DPATH" || echo "ERROR: DVC_DATA_DPATH DOES NOT EXIST"
 test -d "$SRC_BUNDLE_DPATH" || echo "ERROR: SRC_BUNDLE_DPATH DOES NOT EXIST"
 
 # Find the region ids with annotations and data
-export TRUE_REGION_DPATH
+export TRUTH_REGION_DPATH
 export SRC_BUNDLE_DPATH
-echo "TRUE_REGION_DPATH = $TRUE_REGION_DPATH"
+echo "TRUTH_REGION_DPATH = $TRUTH_REGION_DPATH"
 echo "SRC_BUNDLE_DPATH = $SRC_BUNDLE_DPATH"
 
 
@@ -404,9 +404,9 @@ echo "SRC_BUNDLE_DPATH = $SRC_BUNDLE_DPATH"
 REGION_IDS_STR=$(python -c "if 1:
     import pathlib
     import os
-    TRUE_REGION_DPATH = os.environ.get('TRUE_REGION_DPATH')
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
     SRC_BUNDLE_DPATH = os.environ.get('SRC_BUNDLE_DPATH')
-    region_dpath = pathlib.Path(TRUE_REGION_DPATH)
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
     src_bundle = pathlib.Path(SRC_BUNDLE_DPATH)
     region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
     region_names = [p.stem for p in region_fpaths]
@@ -432,7 +432,7 @@ done
 ### Cluster and Crop Jobs
 python -m cmd_queue new "crop_for_sc_queue"
 for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-    REGION_GEOJSON_FPATH=$TRUE_REGION_DPATH/$REGION_ID.geojson
+    REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
     REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
     SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
     DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
@@ -478,18 +478,18 @@ python -m cmd_queue run --workers=8 "crop_for_sc_queue"
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DST_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
-TRUE_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
-TRUE_REGION_DPATH="$TRUE_DPATH/region_models"
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
+TRUTH_REGION_DPATH="$TRUTH_DPATH/region_models"
 BUNDLE_DPATH=$DST_DATA_DPATH/Drop7-Cropped2GSD-V2
 # Find the region ids with annotations and data
-export TRUE_REGION_DPATH
+export TRUTH_REGION_DPATH
 export BUNDLE_DPATH
 REGION_IDS_STR=$(python -c "if 1:
     import pathlib
     import os
-    TRUE_REGION_DPATH = os.environ.get('TRUE_REGION_DPATH')
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
     BUNDLE_DPATH = os.environ.get('BUNDLE_DPATH')
-    region_dpath = pathlib.Path(TRUE_REGION_DPATH)
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
     bundle_dpath = pathlib.Path(BUNDLE_DPATH)
     region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
     region_names = [p.stem for p in region_fpaths]
@@ -519,8 +519,8 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
             --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
             --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
             --io_workers="avail/2" \
-            --region_models="$TRUE_DPATH/region_models/${REGION_ID}.geojson" \
-            --site_models="$TRUE_DPATH/site_models/${REGION_ID}_*.geojson"
+            --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+            --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
 done
 python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=8 "reproject_for_sc"
@@ -550,6 +550,7 @@ dvc add -vvv -- \
     *_rawbands_*.kwcoco.zip \
     */imgonly-*-rawbands.kwcoco.zip \
     */imganns-*-rawbands.kwcoco.zip \
+    */*/L8 \
     */*/S2 \
     */*/WV \
     */*/PD \
@@ -626,18 +627,18 @@ python -m geowatch.cli.prepare_teamfeats \
 # Reproject onto feature kwcocos
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DST_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
-TRUE_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
-TRUE_REGION_DPATH="$TRUE_DPATH/region_models"
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
+TRUTH_REGION_DPATH="$TRUTH_DPATH/region_models"
 BUNDLE_DPATH=$DST_DATA_DPATH/Drop7-Cropped2GSD-V2
 # Find the region ids with annotations and data
-export TRUE_REGION_DPATH
+export TRUTH_REGION_DPATH
 export BUNDLE_DPATH
 REGION_IDS_STR=$(python -c "if 1:
     import pathlib
     import os
-    TRUE_REGION_DPATH = os.environ.get('TRUE_REGION_DPATH')
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
     BUNDLE_DPATH = os.environ.get('BUNDLE_DPATH')
-    region_dpath = pathlib.Path(TRUE_REGION_DPATH)
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
     bundle_dpath = pathlib.Path(BUNDLE_DPATH)
     region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
     region_names = [p.stem for p in region_fpaths]
@@ -666,8 +667,8 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
             --src "$BUNDLE_DPATH/$REGION_ID/combo_imgonly-${REGION_ID}_D.kwcoco.zip" \
             --dst "$BUNDLE_DPATH/$REGION_ID/combo_imganns-${REGION_ID}_D.kwcoco.zip" \
             --io_workers="avail/2" \
-            --region_models="$TRUE_DPATH/region_models/${REGION_ID}.geojson" \
-            --site_models="$TRUE_DPATH/site_models/${REGION_ID}_*.geojson"
+            --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+            --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
 done
 python -m cmd_queue show "reproject_for_feat_sc"
 python -m cmd_queue run --workers=16 "reproject_for_feat_sc"
@@ -696,7 +697,7 @@ dvc add -vvv -- data_train_D_split6.kwcoco.zip data_vali_D_split6.kwcoco.zip
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-TRUE_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
 
 TRAIN_FPATH=/home/a.dhakal/active/proj_smart/smart_dvc/smart_drop7/Drop7-Cropped2GSD-Features/invariant_splits/data_train_I2_split6.kwcoco.zip
 VALI_FPATH=/home/a.dhakal/active/proj_smart/smart_dvc/smart_drop7/Drop7-Cropped2GSD-Features/invariant_splits/data_vali_I2_split6.kwcoco.zip
@@ -704,12 +705,12 @@ geowatch reproject_annotations \
     --src "$TRAIN_FPATH" \
     --inplace=True \
     --io_workers="avail/2" \
-    --region_models="$TRUE_DPATH/region_models/*.geojson" \
-    --site_models="$TRUE_DPATH/site_models/*.geojson"
+    --region_models="$TRUTH_DPATH/region_models/*.geojson" \
+    --site_models="$TRUTH_DPATH/site_models/*.geojson"
 
 geowatch reproject_annotations \
     --src "$VALI_FPATH" \
     --inplace=True \
     --io_workers="avail/2" \
-    --region_models="$TRUE_DPATH/region_models/*.geojson" \
-    --site_models="$TRUE_DPATH/site_models/*.geojson"
+    --region_models="$TRUTH_DPATH/region_models/*.geojson" \
+    --site_models="$TRUTH_DPATH/site_models/*.geojson"

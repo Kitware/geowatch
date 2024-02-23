@@ -11,6 +11,10 @@ References:
 """
 import ubelt as ub
 
+# to make it easier to switch to "assets" when we finally deprecate auxiliary
+# COCO_ASSETS_KEY = 'assets'
+COCO_ASSETS_KEY = 'auxiliary'
+
 HEURISTIC_START_STATES = {
     'No Activity',
 }
@@ -939,3 +943,30 @@ def extract_region_id(fname):
     found = pat.search(fname)
     name = found.groups()[0]
     return name
+
+
+def register_known_fsspec_s3_buckets():
+    """
+    A workaround to handle requester pays information for particular s3
+    endpoints. Ideally the user would be able to specify this mapping via the
+    CLI, but for now lets just hack it in.
+
+    We are not specifying the profile here, assuming that instead the user
+    will use the ``AWS_DEFAULT_PROFILE`` environ.
+
+    Note: the ``AWS_REQUEST_PAYER`` environ is only repsected by gdal, and this
+    function does not impact gdal at all, so this environ needs to be set as
+    well as calling this workaround.
+
+
+    Ignore:
+        from geowatch import heuristics
+        heuristics.register_known_fsspec_s3_buckets()
+
+        from geowatch.utils.util_fsspec import S3Path
+        self = S3Path.coerce('/vsis3/usgs-landsat-ard/collection02')
+        self.ls()
+    """
+    from geowatch.utils import util_fsspec
+    util_fsspec.S3Path.register_bucket('s3://usgs-landsat-ard', requester_pays=True)
+    util_fsspec.S3Path.register_bucket('s3://usgs-landsat', requester_pays=True)

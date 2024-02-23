@@ -427,6 +427,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         _execute_gdal_command_with_checks(
             gdal_translate_command, tmp_fpath, tries=tries, cooldown=cooldown,
             verbose=verbose, timeout=timeout)
+        if not tmp_fpath.exists():
+            raise AssertionError('{tmp_fpath!r} does not exist!')
         os.rename(tmp_fpath, out_fpath)
     else:
         commands = [
@@ -573,6 +575,8 @@ def gdal_single_warp(in_fpath,
     Example:
         >>> import kwimage
         >>> from geowatch.utils.util_gdal import gdal_single_warp
+        >>> # Note: this is a network test that depends on external resources
+        >>> # we may want to disable, or try to make more robust.
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
@@ -923,6 +927,39 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         info = gdal.Info(os.fspath(out_fpath), format='json')
         [b['noDataValue'] for b in info['bands']]
         data = kwimage.imread(out_fpath, nodata_method='float')
+
+    Ignore:
+        from geowatch.utils.util_gdal import *  # NOQA
+        in_fpaths = [
+            '/vsis3/smart-data-ara/ta-1/ta1-s2-ara-4/18/N/TG/2020/02/11/S2A_18NTG_20200211_0_L2A_ARA/S2A_18NTG_20200211_0_L2A_ARA_B06.tif',
+            '/vsis3/smart-data-ara/ta-1/ta1-s2-ara-4/18/N/SG/2020/02/11/S2A_17NRB_20200211_0_L2A_ARA/S2A_17NRB_20200211_0_L2A_ARA_B06.tif',
+        ]
+        out_fpath = ub.Path('$HOME/tmp/gdal/foo.tif').expand()
+        out_fpath.parent.ensuredir()
+        space_box = kwimage.Boxes([[-77.324009,   1.15383 , -77.217579,   1.251655]], 'ltrb')
+        gdalkw = {
+            'space_box': space_box,
+            'local_epsg': 32618,
+            'rpcs': None,
+            'nodata': -9999,
+            'tries': 0,
+            'cooldown': 10,
+            'error_logfile': None,
+            'verbose': 110,
+            'force_spatial_res': None,
+            'warp_memory': '1500',
+            'gdal_cachemax': '1500',
+            'num_threads': '2',
+            'timeout': 600.0,
+            'overviews': 'AUTO',
+            'overview_resampling': 'CUBIC',
+        }
+        commands = gdal_multi_warp(in_fpaths, out_fpath, eager=0, **gdalkw)
+        for c in commands:
+            print(c)
+
+        gdal_multi_warp(in_fpaths, out_fpath, eager=1, **gdalkw)
+
     """
     # Warp then merge
     # Write to a temporary file and then rename the file to the final
@@ -1058,14 +1095,25 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
     """
     Given a gdal command and the expected file that it should produce
     try to execute a few times and check that it produced a valid result.
+
+    Args:
+        command (str): the gdal shell invocation to call
+        out_fpath (str | PathLike): where we expect the output to be written
     """
     timeout = _ShrinkingTimeout.coerce(timeout)
+
+    if tries == 0:
+        import warnings
+        warnings.warn('Tries should not be 0, chose 1 instead')
+        tries = 1
 
     def _execute_command():
         cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell,
                           timeout=timeout.remaining())
         if not ub.Path(out_fpath).exists():
-            raise FileNotFoundError(f'Error: gdal did not write {out_fpath}')
+            if not ub.Path(out_fpath).parent.exists():
+                raise FileNotFoundError(f'Error: gdal did not write {out_fpath}, likely because its parent directory does not exist.')
+            raise FileNotFoundError(f'Error: gdal did not write {out_fpath}. (its parent directory exists)')
         if check_after:
             try:
                 GdalOpen(out_fpath, mode='r')
@@ -1073,6 +1121,8 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
                 raise
         return cmd_info
     got = -1
+    if verbose > 100:
+        print(command)
     try:
         logger = DummyLogger()
         got = retry.api.retry_call(
@@ -1103,6 +1153,9 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
             print('got = {}'.format(ub.urepr(got, nl=1)))
             print(command)
         raise
+
+    if not ub.Path(out_fpath).exists():
+        raise AssertionError(f'Expected output file {out_fpath!r} does not exist!')
 
 
 def list_gdal_drivers():

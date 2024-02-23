@@ -94,6 +94,8 @@ class PrepareSplitsConfig(scfg.DataConfig):
     workers = scfg.Value(2, alias=['tmux_workers'], help='')
     splits = scfg.Value('*', help='restrict to only a specific split')
 
+    hash_datasets = scfg.Value(True, help='if True, add a hash to the result to disambiguate')
+
 
 imerit_vali_regions = {'CN_C000', 'KW_C001', 'SA_C001', 'CO_C001', 'VN_C002'}
 
@@ -140,13 +142,18 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
     split_pat = util_pattern.MultiPattern.coerce(config.splits)
 
     import shlex
-    partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
+    partitioned_fpaths = sorted(util_path.coerce_patterned_paths(base_fpath))
     print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))
 
     if dst_dpath is None:
         dst_dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
 
     full_fpath = dst_dpath / 'data.kwcoco.zip'
+
+    if config.hash_datasets:
+        path_to_hash = {}
+        for p in ub.ProgIter(partitioned_fpaths, desc='compute hashes'):
+            path_to_hash[p] = ub.hash_file(p)
 
     for split, vali_regions in VALI_REGIONS_SPLITS.items():
         if not split_pat.match(split):
@@ -170,6 +177,15 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
             else:
                 train_parts.append(fpath)
 
+        if config.hash_datasets:
+            train_hash = ub.hash_data(sorted([path_to_hash[p] for p in train_parts]))
+            vali_hash = ub.hash_data(sorted([path_to_hash[p] for p in vali_parts]))
+            vali_hashed_fpath = vali_split_fpath.augment(stemsuffix='_' + vali_hash[0:8], multidot=1)
+            train_hashed_fpath = train_split_fpath.augment(stemsuffix='_' + train_hash[0:8], multidot=1)
+        else:
+            vali_hashed_fpath = vali_split_fpath
+            train_hashed_fpath = train_split_fpath
+
         train_parts_str = ' '.join([shlex.quote(str(p)) for p in train_parts])
         vali_parts_str = ' '.join([shlex.quote(str(p)) for p in vali_parts])
 
@@ -179,9 +195,12 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
                 python -m kwcoco union \
                     --remember_parent=True \
                     --src {vali_parts_str} \
-                    --dst {vali_split_fpath}
+                    --dst {vali_hashed_fpath}
                 ''')
-            queue.submit(command, begin=1, depends=depends, log=False)
+            vali_job = queue.submit(command, begin=1, depends=depends, log=False)
+            if config.hash_datasets:
+                # Symlink to original locations
+                vali_job = queue.submit(f'ln -sf {vali_hashed_fpath} {vali_split_fpath}', begin=1, depends=vali_job, log=False)
 
         if len(train_parts):
             command = ub.codeblock(
@@ -189,9 +208,12 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
                 python -m kwcoco union \
                     --remember_parent=True \
                     --src {train_parts_str} \
-                    --dst {train_split_fpath}
+                    --dst {train_hashed_fpath}
                 ''')
-            queue.submit(command, depends=depends, log=False)
+            train_job = queue.submit(command, depends=depends, log=False)
+            if config.hash_datasets:
+                # Symlink to original locations
+                train_job = queue.submit(f'ln -sf {train_hashed_fpath} {train_split_fpath}', begin=1, depends=train_job, log=False)
 
     if 0:
         all_parts_str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])

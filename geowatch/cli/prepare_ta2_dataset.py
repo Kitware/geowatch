@@ -28,7 +28,7 @@ CommandLine:
     mkdir -p "$DEMO_DPATH"
 
     # This is a string code indicating what STAC endpoint we will pull from
-    SENSORS="sentinel-s2-l2a-cogs"
+    SENSORS="sentinel-2-l2a"
 
     # Depending on the STAC endpoint, some parameters may need to change:
     # collated - True for IARPA endpoints, Usually False for public data
@@ -303,7 +303,7 @@ class PrepareTA2Config(CMDQueueConfig):
         files after they are cropped / aligned.
         '''))
 
-    final_union = scfg.Value(True, isflag=True, help=ub.paragraph(
+    final_union = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         If True, union all regions into a single kwcoco file at the end
         to represent the entired dataset.
@@ -467,6 +467,16 @@ def main(cmdline=False, **kwargs):
         if config['max_regions'] is not None:
             region_file_fpaths = region_file_fpaths[:config['max_regions']]
 
+        region_to_site_pattern = {}
+        USE_TNE_NAME_HACK = True
+        if USE_TNE_NAME_HACK:
+            # fixes a scalability issue, but we require a better site
+            # referencing system to make this work efficiently in general.
+            # import kwutil
+            for region_id, site_fpaths in region_id_to_site_fpaths.items():
+                region_fpath = region_id_to_fpath[region_id]
+                region_to_site_pattern[region_id] = region_fpath.parent.parent / 'site_models' / region_id + '_*.geojson'
+
         print(f'region_file_fpaths={slugify_ext.smart_truncate(ub.urepr(sorted(region_file_fpaths), nl=1), max_length=1000)}')
         for region_id, region_fpath in region_id_to_fpath.items():
             if region_id in region_id_blocklist:
@@ -517,13 +527,17 @@ def main(cmdline=False, **kwargs):
             # sites = region_id_to_site_fpaths.get(region_id, None)
             # explicit_sites = Yaml.dumps(list(map(os.fspath, sites)))
 
+            site_globstr = region_to_site_pattern.get(region_id, None)
+            if site_globstr is None:
+                site_globstr = config.sites
+
             stac_jobs.append({
                 'name': region_id,
                 'node': stac_search_node,
                 'inputs_fpath': region_inputs_fpath,
                 'region_globstr': final_region_fpath,
                 # 'site_globstr': explicit_sites,
-                'site_globstr': config.sites,
+                'site_globstr': site_globstr,
                 'collated': default_collated,
             })
     else:
@@ -890,6 +904,11 @@ def main(cmdline=False, **kwargs):
         from geowatch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
             aligned_final_fpath, queue, depends=[aligned_final_nodes])
+
+        # TODO: use this instead
+        # prepare_splits._submit_constructive_split_jobs(
+        #     base_fpath, dst_dpath, suffix, queue, config
+        # )
 
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(

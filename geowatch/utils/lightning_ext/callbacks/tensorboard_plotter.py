@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 r"""
 Parses an existing tensorboard event file and draws the plots as pngs on disk
 in the monitor/tensorboard directory.
@@ -12,19 +13,19 @@ CommandLine:
         /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
 
 """
-# from distutils.version import LooseVersion
+import scriptconfig as scfg
 import os
 import ubelt as ub
-import numpy as np
-import pandas as pd
-import pytorch_lightning as pl
-from geowatch.utils.lightning_ext import util_model
+from pytorch_lightning.callbacks import Callback
 
 
 __all__ = ['TensorboardPlotter']
 
 
-class TensorboardPlotter(pl.callbacks.Callback):
+# TODO: can move the callback to its own file and have the CLI variant with
+# core logic live separately for faster response times when using the CLI (i.e.
+# avoid lightning import overhead).
+class TensorboardPlotter(Callback):
     """
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
     exit
@@ -36,6 +37,8 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>> # xdoctest: +REQUIRES(module:tensorboard)
         >>> from geowatch.utils.lightning_ext import demo
         >>> from geowatch.monkey import monkey_lightning
+        >>> import pytorch_lightning as pl
+        >>> import pandas as pd
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TensorboardPlotter').ensuredir()
@@ -78,6 +81,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         if hasattr(model, 'get_cfgstr'):
             model_cfgstr = model.get_cfgstr()
         else:
+            from geowatch.utils.lightning_ext import util_model
             from kwutil.slugify_ext import smart_truncate
             hparams = util_model.model_hparams(model)
             model_config = {
@@ -178,12 +182,43 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     return datas
 
 
+def _write_helper_scripts(out_dpath, train_dpath):
+    """
+    Writes scripts to let the user refresh data on the fly
+    """
+    from geowatch.utils import util_chmod
+
+    train_dpath_ = train_dpath.resolve().shrinkuser()
+
+    # TODO: make this a nicer python script that aranges figures nicely.
+    stack_fpath = (out_dpath / 'stack.sh')
+    stack_fpath.write_text(ub.codeblock(
+        fr'''
+        #!/usr/bin/env bash
+        kwimage stack_images --out "{train_dpath_}/monitor/tensorboard-stack.png" -- {train_dpath_}/monitor/tensorboard/*.png
+        '''))
+    util_chmod.new_chmod(stack_fpath, 'ug+x')
+
+    refresh_fpath = (out_dpath / 'redraw.sh')
+    refresh_fpath.write_text(ub.codeblock(
+        fr'''
+        #!/usr/bin/env bash
+        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            {train_dpath_}
+        '''))
+    util_chmod.new_chmod(refresh_fpath, 'ug+x')
+    # import stat
+    # refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
+
+
 def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outliers=True, verbose=0):
     """
     This is its own function in case we need to modify formatting
     """
     import kwplot
     from kwplot.auto_backends import BackendContext
+    import pandas as pd
+    import numpy as np
 
     train_dpath = ub.Path(train_dpath).resolve()
     if not train_dpath.name.startswith('version_'):
@@ -197,16 +232,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=verbose)
 
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
-    refresh_fpath = (out_dpath / 'redraw.sh')
-    train_dpath_ = train_dpath.resolve().shrinkuser()
-    refresh_fpath.write_text(ub.codeblock(
-        fr'''
-        #!/bin/bash
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            {train_dpath_}
-        '''))
-    import stat
-    refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
+    _write_helper_scripts(out_dpath, train_dpath)
 
     if isinstance(smoothing, str) and smoothing == 'auto':
         smoothing_values = [0.6, 0.95]
@@ -346,6 +372,7 @@ def smooth_curve(ydata, beta):
     """
     Curve smoothing algorithm used by tensorboard
     """
+    import pandas as pd
     alpha = 1.0 - beta
     if alpha <= 0:
         return ydata
@@ -371,6 +398,7 @@ def tensorboard_inlier_ylim(ydata):
     """
     outlier removal used by tensorboard
     """
+    import numpy as np
     q1 = 0.05
     q2 = 0.95
     low_, high_ = np.quantile(ydata, [q1, q2])
@@ -399,6 +427,7 @@ def redraw_cli(train_dpath):
     """
     Create png plots for the tensorboard data in a training directory.
     """
+    from kwutil.util_yaml import Yaml
     train_dpath = ub.Path(train_dpath)
 
     expt_name = train_dpath.parent.parent.name
@@ -406,9 +435,7 @@ def redraw_cli(train_dpath):
     hparams_fpath = train_dpath / 'hparams.yaml'
     if hparams_fpath.exists():
         print('Found hparams')
-        import yaml
-        with open(hparams_fpath, 'r') as file:
-            hparams = yaml.load(file, yaml.Loader)
+        hparams = Yaml.load(hparams_fpath)
         if 'name' in hparams:
             title = hparams['name']
         else:
@@ -425,6 +452,33 @@ def redraw_cli(train_dpath):
         print('Did not find hparams')
         title = expt_name
 
+    if 1:
+        # Add in other relevant data
+        # ...
+        config_fpath = train_dpath / 'config.yaml'
+        if config_fpath.exists():
+
+            config = Yaml.load(config_fpath)
+            trainer_config = config.get('trainer', {})
+            optimizer_config = config.get('optimizer', {})
+            data_config = config.get('data', {})
+            optimizer_args = optimizer_config.get('init_args', {})
+
+            devices = trainer_config.get('devices', None)
+
+            batch_size = data_config.get('batch_size', None)
+            accum_batches = trainer_config.get('accumulate_grad_batches', None)
+            optim_lr = optimizer_args.get('lr', None)
+            decay = optimizer_args.get('weight_decay', None)
+            # optim_name = optimizer_config.get('class_path', '?').split('.')[-1]
+            learn_dynamics_str = ub.codeblock(
+                f'''
+                BS=({batch_size} x {accum_batches}), LR={optim_lr}, decay={decay}, devs={devices}
+                '''
+            )
+            title = title + '\n' + learn_dynamics_str
+            # print(learn_dynamics_str)
+
     print(f'train_dpath={train_dpath}')
     print(f'title={title}')
     _dump_measures(train_dpath, title, verbose=1)
@@ -433,6 +487,25 @@ def redraw_cli(train_dpath):
     rich.print(f'[link={tensorboard_dpath}]{tensorboard_dpath}[/link]')
 
 
+class TensorboardPlotterCLI(scfg.DataConfig):
+    """
+    Helper CLI executable to redraw on demand.
+    """
+    train_dpath = scfg.Value('.', help='train_dpath', position=1)
+
+    @classmethod
+    def main(cls, cmdline=1, **kwargs):
+        import rich
+        config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+        rich.print('config = ' + ub.urepr(config, nl=1))
+        redraw_cli(config.train_dpath)
+
+
 if __name__ == '__main__':
-    import fire
-    fire.Fire(redraw_cli)
+    """
+    CommandLine:
+        WATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
+    """
+    TensorboardPlotterCLI.main()
+    # import fire
+    # fire.Fire(redraw_cli)

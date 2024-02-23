@@ -715,7 +715,19 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
                         raise AssertionError('more than 2 missing observation date, unhandled')
 
                     if site_end is not None and site_start is not None:
-                        raise AssertionError('Missing observation date is ambiguous when site start and end are defined')
+                        # import xdev
+                        # xdev.embed_if_requested()
+                        # raise AssertionError('Missing observation date is ambiguous when site start and end are defined')
+                        non_null_dates = obs_rows.loc[~has_null_date, 'observation_date']
+                        if len(non_null_dates) == 0:
+                            ...
+                        else:
+                            a = (non_null_dates.apply(util_time.coerce_datetime) - site_end).sum()
+                            b = (non_null_dates.apply(util_time.coerce_datetime) - site_start).sum()
+                            if a > b:
+                                obs_rows.loc[has_null_date, 'observation_date'] = region_end_date
+                            else:
+                                obs_rows.loc[has_null_date, 'observation_date'] = region_start_date
                     elif site_start is not None:
                         obs_rows.loc[has_null_date, 'observation_date'] = region_end_date
                     elif site_end is not None:

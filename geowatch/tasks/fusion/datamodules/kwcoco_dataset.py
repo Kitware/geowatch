@@ -19,6 +19,31 @@ CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
 
 Example:
+    >>> # Basic Data Sampling
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> import geowatch
+    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
+    >>>                           channels='r|g|b')
+    >>> self.disable_augmenter = True
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> item = self[index]
+    >>> # Summarize batch item in text
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> # Draw batch item
+    >>> canvas = self.draw_item(item)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
+
+Example:
     >>> # Demo toy data without augmentation
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import kwcoco
@@ -290,10 +315,19 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             applicable for dataset that contain videos. Requries the
             "jq" python library is installed.
             '''))
+
+    # FIXME:
+    # This needs to be reworked.
+    # It is really the "maximum number of items per epoch".
+    # Note: that is number of ITEMS, NOT number of BATCHES!
+    # The number of batches is this divided by batch size
+    # and the effective batch size is this divided by (batch size * accum)
+    # And we really shouldn't specify the maximum here, we should just force it
+    # to a specific length, and lean into sampling with replacement.
     max_epoch_length = scfg.Value(None, help=ub.paragraph(
             '''
-            If specified, restricts number of steps per epoch
-            '''))
+            If specified, restricts number of ITEMS per epoch
+            '''), alias=['max_items_per_epoch'])
 
     #######################
     # SAMPLING GRID OPTIONS
@@ -1673,7 +1707,15 @@ class GetItemMixin(TruthMixin):
             target_ = self._augment_spacetime_target(target_)
 
         vidspace_box = resolution_info['vidspace_box']
-        final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        try:
+            final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        except Exception as ex:
+            import warnings
+            print(f'target_ = {ub.urepr(target_, nl=1)}')
+            msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
+            print(msg)
+            warnings.warn(msg)
+            raise FailedSample(msg)
 
         num_frames = len(final_gids)
         if num_frames == 0:

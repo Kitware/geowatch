@@ -740,7 +740,10 @@ def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
 
     def _get_suffixed_basename(local_path):
         base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
+        if performer_suffix is not None and performer_suffix != '':
+            return "{}_{}{}".format(base, performer_suffix, ext)
+        else:
+            return "{}{}".format(base, ext)
 
     for region in glob(join(local_region_dir, '*.geojson')):
 

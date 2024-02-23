@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -42,6 +43,11 @@ class FixupConfig(scfg.DataConfig):
     site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
             '''
             Which site model assets to ingress and fix up
+            '''))
+
+    performer_suffix = scfg.Value('KIT', type=str, required=True, help=ub.paragraph(
+            '''
+            Performer suffix for output files
             '''))
 
 
@@ -117,7 +123,8 @@ def main():
         util_framework.ta2_collate_output(None,
                                           output_region_dpath,
                                           output_site_dpath,
-                                          config.ta2_s3_collation_bucket)
+                                          config.ta2_s3_collation_bucket,
+                                          performer_suffix=config.performer_suffix)
 
 
 if __name__ == '__main__':

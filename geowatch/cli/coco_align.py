@@ -52,7 +52,7 @@ CommandLine:
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
-        --sensors=sentinel-s2-l2a-cogs \
+        --sensors=sentinel-2-l2a \
         --out_fpath "$SEARCH_FPATH"
     cat "$SEARCH_FPATH"
 
@@ -176,11 +176,10 @@ import scriptconfig as scfg
 import ubelt as ub
 import warnings
 
-DEBUG = 0
+DEBUG = 1
 
 try:
-    import xdev
-    profile = xdev.profile
+    from xdev import profile
 except Exception:
     profile = ub.identity
 
@@ -734,6 +733,8 @@ def main(cmdline=True, **kw):
     print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
     print('dst_fpath = {!r}'.format(dst_fpath))
 
+    ub.Path(dst_fpath).parent.ensuredir()
+
     region_df = None
     regions = config['regions']
     if regions in {'annots', 'images'}:
@@ -884,11 +885,15 @@ def main(cmdline=True, **kw):
         # Execute the gdal jobs in a single super queue
         import cmd_queue
         # queue = cmd_queue.Queue.create('serial')
+        suffix = ub.hash_data(sorted([d['video_name'] for d in to_extract]))[0:8]
         queue = cmd_queue.Queue.create(
             'tmux',
             size=config.img_workers,
             # size=1,
-            name='hack_lazy_' + video_name,
+            # name='hack_lazy_' + video_name,
+
+            # fixme: can we make a more meaningful name here?
+            name='hack_lazy_' + suffix,
             environ={
                 k: v for k, v in os.environ.items()
                 if k.startswith('GDAL_') or
@@ -1948,11 +1953,13 @@ def extract_image_job(img,
     for obj in objs:
         key = obj['channels']
         if key in channels_to_objs:
+            coco_channels = [o.get('channels', None) for o in objs]
             warnings.warn(ub.paragraph(
-                '''
+                f'''
                 It seems multiple auxiliary items in the parent image might
                 contain the same channel.  This script will try to work around
                 this, but that is not a valid kwcoco assumption.
+                coco_channels={coco_channels}.
                 '''))
         # assert key not in channels_to_objs
         channels_to_objs[key].append(obj)
@@ -2277,6 +2284,14 @@ def _aligncrop(obj_group,
                asset_config=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_image_job`.
+
+    This functions contains the expensive calls to GDAL, which are abstracted
+    by :mod:`geowatch.utils.util_gdal`.
+
+    Args:
+        asset_config (AssetExtractConfig): main options
+            Note: the hack_lazy argument makes this function returns gdal
+            commands that would be executed.
     """
     import geowatch
     import kwcoco
@@ -2473,12 +2488,26 @@ def _aligncrop(obj_group,
         overview_resampling=overview_resampling,
     )
 
-    if len(input_gpaths) > 1:
-        in_fpaths = input_gpaths
-        commands = util_gdal.gdal_multi_warp(in_fpaths, out_fpath, **gdalkw)
-    else:
-        in_fpath = input_gpaths[0]
-        commands = util_gdal.gdal_single_warp(in_fpath, out_fpath, **gdalkw)
+    try:
+        if len(input_gpaths) > 1:
+            in_fpaths = input_gpaths
+            commands = util_gdal.gdal_multi_warp(in_fpaths, out_fpath, **gdalkw)
+        else:
+            in_fpath = input_gpaths[0]
+            commands = util_gdal.gdal_single_warp(in_fpath, out_fpath, **gdalkw)
+    except Exception as ex:
+        print('!!!!!!')
+        print('!!!!!!')
+        print(f'!!!Error when calling GDAL: ex={ex}')
+        print('!!!!!!')
+        print('!!!!!!')
+        print(f'input_gpaths = {ub.urepr(input_gpaths, nl=1)}')
+        print(f'out_fpath = {ub.urepr(out_fpath, nl=1)}')
+        print(f'gdalkw = {ub.urepr(gdalkw, nl=1)}')
+        print('!!!!!!')
+        print('!!!!!!')
+        raise
+
     if asset_config.hack_lazy:
         # The lazy hack means we are just building the commands
         dst['commands'] = commands
@@ -2492,7 +2521,9 @@ def _debug_valid_regions(cube, coco_dset, space_region_crs84,
                          sh_space_region_local, local_epsg, extract_dpath,
                          video_name, iso_time, space_str, sensor_coarse):
     """
-    Debugging helper
+    Debugging helper. Outputs images corresponding with crop regions
+    as well as code to help introspect internals of this file easier.
+    This can be removed if it's to bloaty.
     """
     import kwplot
     import shapely

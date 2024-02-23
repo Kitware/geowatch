@@ -4,6 +4,23 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
+## Version 0.15.0 - Unreleased
+
+
+### Added
+* Add experimental CLI for looking up recent checkpoints.
+* Add experimental CLI for looking up recommending train size adjustments.
+* Add experimental CLI for looking up disk hardware information.
+* Add more helper scripts for tensorboard callbacks
+
+### Changed
+* Remove developer dependency on `fire`.
+
+### Fixed
+
+* Added workaround for issue in STAC to kwcoco, where channel names would be non-unique.
+
+
 ## Version 0.14.4 - Released 2023-02-06
 
 ### Added

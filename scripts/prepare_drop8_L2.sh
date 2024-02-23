@@ -20,8 +20,9 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 
 
 #SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
-SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,planet-dove,worldview-nitf"
-#SENSORS="sentinel-s2-l2a-cogs,landsat-c2l2-sr,planet-dove,worldview-nitf"
+#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
+SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove"
+#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
 
 DATASET_SUFFIX=Drop8-L2
 
@@ -30,15 +31,15 @@ DATASET_SUFFIX=Drop8-L2
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/KR_R001*.geojson"
 
 # All Regions
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_*0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_*0*_*.geojson"
 
 # T&E Regions Only
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R0*_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T*_*.geojson"
 
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
@@ -70,18 +71,18 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
-    --align_tries=0 \
+    --align_tries=1 \
     --asset_timeout="10 minutes" \
     --image_timeout="30 minutes" \
-    --hack_lazy=False \
+    --hack_lazy=True \
     --backend=tmux \
-    --tmux_workers=16 \
+    --tmux_workers=4 \
+    --sensor_to_time_window='
+        S2: 2 weeks
+        L8: 2 weeks
+        PD: 2 weeks
+    ' \
     --run=1
-    #--sensor_to_time_window='
-    #    S2: 2 weeks
-    #    L8: 2 weeks
-    #    PD: 2 weeks
-    #' \
 
 
 #export AWS_REQUEST_PAYER=requester

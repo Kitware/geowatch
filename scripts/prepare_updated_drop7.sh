@@ -175,7 +175,7 @@ REGION_IDS="
 
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-TRUE_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop7-hard-v1
 
 python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --regions="
@@ -215,8 +215,8 @@ for REGION_ID in "${REGION_ID_ARR[@]}"; do
             --src "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
             --dst "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-V2/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
             --io_workers="avail/2" \
-            --region_models="$TRUE_DPATH/region_models/${REGION_ID}.geojson" \
-            --site_models="$TRUE_DPATH/site_models/${REGION_ID}_*.geojson"
+            --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+            --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
 done
 python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"

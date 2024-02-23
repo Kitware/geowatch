@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 TODO: rectify with run_teamfeat_acsc_landcover.py
 """

@@ -35,7 +35,11 @@ def disk_info_of_path(path):
     CommandLine:
         xdoctest -m geowatch.utils.util_hardware disk_info_of_path
 
+    Returns:
+        dict - dictionary of information
+
     Example:
+        >>> from geowatch.utils.util_hardware import *  # NOQA
         >>> path = '.'
         >>> x = disk_info_of_path(path)
         >>> import ubelt as ub

@@ -1073,6 +1073,8 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
     elif filtered_seasons is None:
         filtered_seasons = []
     elif isinstance(filtered_seasons, list):
+        # Remove nones to workaround cli issue
+        filtered_seasons = [f for f in filtered_seasons if f is not None]
         pass
     else:
         raise ValueError(f'Filtered seasons must be a list or string. Got "{type(filtered_seasons)}" type.')
