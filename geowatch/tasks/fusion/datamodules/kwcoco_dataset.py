@@ -2447,7 +2447,7 @@ class BalanceMixin:
             at the batch level, which can contain multiple annotations.
         """
 
-        print('Balancing over videos')
+        print('Balancing over regions')
         df_videos = self._setup_balance_dataframe(new_sample_grid)
 
         # balance positive / negatives per region
@@ -2471,15 +2471,15 @@ class BalanceMixin:
         # compute maximum to take per region
         freqs = list(map(len, region_to_pool.values()))
         if len(freqs) == 0:
-            max_per_vid = 100
-            warnings.warn('Warning: no video pool')
+            max_per_region = 100
+            warnings.warn('Warning: no region pool')
         else:
-            max_per_vid = int(np.median(freqs))
+            max_per_region = int(np.median(freqs))
 
         # balance across regions
         all_chunks = []
         for region, region_pool in region_to_pool.items():
-            rechunked_region_pool = list(util_iter.chunks(region_pool, nchunks=max_per_vid))
+            rechunked_region_pool = list(util_iter.chunks(region_pool, nchunks=max_per_region))
             all_chunks.extend(rechunked_region_pool)
 
         # initialize nested pool
