@@ -582,6 +582,21 @@ def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
         target_encoding = 'index'
         logit_shape = '(b t h w) c'
         target_shape = '(b t h w)'
+
+    elif loss_code == 'focal_multiclass':
+        from watch.utils.ext_monai import FocalLoss
+        # from monai.losses import FocalLoss
+        criterion = FocalLoss(
+            reduction='none',
+            to_onehot_y=True,
+            weight=weights,
+            ohem_ratio=ohem_ratio,
+            gamma=focal_gamma)
+
+        target_encoding = 'index'
+        logit_shape = '(b t h w) c'
+        target_shape = '(b t h w)'
+
     elif loss_code == 'focal':
         from geowatch.utils.ext_monai import FocalLoss
         # from monai.losses import FocalLoss

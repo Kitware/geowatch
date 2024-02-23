@@ -230,6 +230,12 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         test algorithm to encourage continual learning.
         '''))
 
+    predictable_classes = scfg.Value(None, help=ub.paragraph(
+        '''
+        Subset of classes to perform predictions on (for the class head).
+        Specified as a comma delimited string.
+        '''))
+
     def __post_init__(self):
         super().__post_init__()
         from kwutil.util_yaml import Yaml
@@ -270,7 +276,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
         >>>                              dataset_stats=dataset_stats,
-        >>>                              classes=datamodule.classes,
+        >>>                              classes=datamodule.predictable_classes,
         >>>                              decoder='segmenter',
         >>>                              change_loss='dicefocal',
         >>>                              #attention_impl='performer'
@@ -362,8 +368,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.input_norms = input_norms
 
-        self.classes = kwcoco.CategoryTree.coerce(classes)
-        self.num_classes = len(self.classes)
+        self.predictable_classes = self.hparams.predictable_classes
+        if self.predictable_classes is not None:
+            self.predictable_classes = [x.strip() for x in self.hparams.predictable_classes.split(',')]
+            self.classes = kwcoco.CategoryTree.coerce(self.predictable_classes)
+            self.num_classes = len(self.predictable_classes)
+        else:
+            self.classes = kwcoco.CategoryTree.coerce(classes)
+            self.num_classes = len(self.classes)
 
         self.global_class_weight = self.hparams.global_class_weight
         self.global_change_weight = self.hparams.global_change_weight
@@ -380,7 +392,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # FIXME: case sensitivity
         hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
         if self.class_freq is not None:
-            all_keys = set(self.class_freq.keys())
+            if self.predictable_classes is not None:
+                all_keys = set(self.class_freq.keys()).intersection(self.predictable_classes)
+            else:
+                all_keys = set(self.class_freq.keys())
         else:
             all_keys = set(self.classes)
 
@@ -1075,7 +1090,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
             >>>     decoder='segmenter',
             >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
-            >>>     classes=datamodule.classes, input_sensorchan=datamodule.input_sensorchan)
+            >>>     classes=datamodule.predictable_classes, input_sensorchan=datamodule.input_sensorchan)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_items=3, overlay_on_image=False)
@@ -1492,7 +1507,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if 'change' in resampled_logits:
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
-                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+                criterion_encoding = self.criterions["class"].target_encoding
+                logits = resampled_logits['class'].detach()
+                if criterion_encoding == "onehot":
+                    probs['class'] = logits.sigmoid()[0]
+                elif criterion_encoding == "index":
+                    probs['class'] = logits.softmax(dim=-1)[0]
+                else:
+                    raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
         else:
@@ -1532,7 +1554,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if 'change' in resampled_logits:
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
-                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+                criterion_encoding = self.criterions["class"].target_encoding
+                logits = resampled_logits['class'].detach()
+                if criterion_encoding == "onehot":
+                    probs['class'] = logits.sigmoid()[0]
+                elif criterion_encoding == "index":
+                    probs['class'] = logits.softmax(dim=-1)[0]
+                else:
+                    raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
 
@@ -1651,6 +1680,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         EPS_F32 = 1.1920929e-07
         weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
         head_loss = global_head_weight * weighted_head_loss
+
         return head_loss
 
     def _build_item_loss_parts(self, item, resampled_logits):
@@ -1725,11 +1755,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 ], item_shape=[0, 0])[None, ...]
 
             if self.global_head_weights['class']:
-                item_encoding['class'] = 'ohe'
-                # [B, C, T, H, W]
-                item_truths['class'] = torch.stack([
-                    frame['class_ohe'] for frame in item['frames']
-                ])[None, ...]
+                criterion_encoding = self.criterions["class"].target_encoding
+                if criterion_encoding == "onehot":
+                    item_encoding['class'] = 'ohe'
+                    # [B, C, T, H, W]
+                    item_truths['class'] = torch.stack([
+                        frame['class_ohe'] for frame in item['frames']
+                    ])[None, ...]
+                elif criterion_encoding == "index":
+                    item_encoding['class'] = 'index'
+                    # [B, T, H, W]
+                    item_truths['class'] = torch_safe_stack([
+                        frame['class_idxs'] for frame in item['frames']
+                    ])[None, ...]
+                else:
+                    raise NotImplementedError
 
             if self.global_head_weights['saliency']:
                 item_encoding['saliency'] = 'index'

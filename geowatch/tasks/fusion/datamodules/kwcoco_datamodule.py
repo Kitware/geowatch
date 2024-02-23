@@ -278,6 +278,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # will only correspond to train
         self.classes = None
+        self.predictable_classes = None
         # self.input_channels = None
         self.input_sensorchan = None
 
@@ -372,6 +373,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             )
 
             self.classes = train_dataset.classes
+            self.predictable_classes = train_dataset.predictable_classes
             self.torch_datasets['train'] = train_dataset
 
             if self.input_sensorchan is None:
@@ -477,7 +479,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         )
         return loader
 
-    def _notify_about_tasks(self, requested_tasks=None, model=None):
+    def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
         Hacky method. Given the multimodal model, tell all the datasets which
         tasks they will need to generate data for. (This helps make the
@@ -485,8 +487,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         if model is not None:
             assert requested_tasks is None
-            if hasattr(model, 'global_head_weight'):
+            if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'predictable_classes'):
+                predictable_classes = model.predictable_classes
             else:
                 import warnings
                 warnings.warn(ub.paragraph(
@@ -496,11 +500,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
-        print(f'datamodule notified: requested_tasks={requested_tasks}')
+        print(f'datamodule notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks
             for dataset in self.torch_datasets.values():
-                dataset._notify_about_tasks(requested_tasks)
+                dataset._notify_about_tasks(requested_tasks, predictable_classes=predictable_classes)
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -790,6 +794,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         if with_legend:
             if classes is None:
                 classes = dataset.classes
+            utils.category_tree_ensure_color(classes)
             label_to_color = {
                 node: data['color']
                 for node, data in classes.graph.nodes.items()}

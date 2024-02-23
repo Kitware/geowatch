@@ -422,6 +422,17 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             if True balance the weight of small and large polygons
             '''))
 
+    default_class_behavior = scfg.Value('background', group=WEIGHT_GROUP, help=ub.paragraph(
+            '''
+            Toggles between new and old behavior for what value to use
+            for the class truth index raster. Can be "background" for old
+            behavior, which ensures that there is a predictable background
+            class and initializes non-annotated areas with that value.
+            Alternatively, can be "ignore" which fills the index truth with a
+            negative value indicating that those regions should be ignored.
+            The default of this param may change in the future.
+            '''))
+
     ##################################
     # DYNAMIC FILTER / MASKING OPTIONS
     ##################################
@@ -764,11 +775,15 @@ class TruthMixin:
                 dets = frame_dets.scale(dets_scale)
 
         # Create truth masks
-        bg_idx = self.bg_idx
+        if self.config.default_class_behavior == 'background':
+            default_class_index = self.bg_idx
+        else:
+            default_class_index = self.ignore_index
+
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
         frame_cidxs = np.full(space_shape, dtype=np.int32,
-                              fill_value=bg_idx)
+                              fill_value=default_class_index)
 
         # A "Salient" class is anything that is a foreground class
         task_target_ohe = {}
@@ -921,7 +936,7 @@ class TruthMixin:
         if wants_class_sseg:
             ### Build single frame CLASS target labels and weights
 
-            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
+            task_target_ohe['class'] = np.zeros((self.num_predictable_classes,) + space_shape, dtype=np.uint8)
             task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
             task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
 
@@ -940,11 +955,11 @@ class TruthMixin:
                 poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
                     class_sseg_groups['ignore'].append(poly)
-                elif new_class_catname in self.class_foreground_classes:
+                elif new_class_catname in self.class_foreground_classes.intersection(self.predictable_classes):
                     class_sseg_groups['foreground'].append(poly)
-                elif new_class_catname in self.background_classes:
+                elif new_class_catname in self.background_classes.intersection(self.predictable_classes):
                     class_sseg_groups['background'].append(poly)
-                elif new_class_catname in self.undistinguished_classes:
+                elif new_class_catname in self.undistinguished_classes.intersection(self.predictable_classes):
                     class_sseg_groups['undistinguished'].append(poly)
 
             if balance_areas:
@@ -962,17 +977,19 @@ class TruthMixin:
 
             for poly in class_sseg_groups['ignore']:
                 poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['background']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.dataset_class_idx_to_predictable_class_idx[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['undistinguished']:
                 task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.dataset_class_idx_to_predictable_class_idx[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['foreground']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.dataset_class_idx_to_predictable_class_idx[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
                 weight = poly.meta['weight']
 
                 if balance_areas:
@@ -1021,6 +1038,7 @@ class TruthMixin:
             for cidx, class_map in enumerate(task_target_ohe['class']):
                 # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
                 frame_cidxs[class_map > 0] = cidx
+
             task_frame_weight = (
                 (1 - task_target_ignore['class']) *
                 task_target_weight['class'] *
@@ -1033,6 +1051,7 @@ class TruthMixin:
             frame_item['class_idxs'] = frame_cidxs
             frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
             frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
+
         if wants_saliency_sseg:
             task_frame_weight = (
                 (1 - task_target_ignore['saliency']) *
@@ -1156,6 +1175,7 @@ class GetItemMixin(TruthMixin):
                 'sensor': sensor,
                 'modes': mode_to_imdata,
                 'change': None,
+                'class_idxs_ignore_index': self.ignore_index,
                 'class_idxs': None,
                 'class_ohe': None,
                 'saliency': None,
@@ -2066,7 +2086,7 @@ class IntrospectMixin:
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time='auto',
                   overlay_on_image=False, draw_weights=True, rescale='auto',
-                  classes=None, show_summary_text=True, **kw):
+                  classes=None, show_summary_text=True, **kwargs):
         """
         Visualize an item produced by this DataSet.
 
@@ -2106,10 +2126,37 @@ class IntrospectMixin:
                 if True, draw additional summary debug information.
                 Defaults to True.
 
+            **kwargs:
+                additional arguments to :class:`BatchVisualizationBuilder`.
+
         Note:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
 
+        Example:
+            >>> # Basic Data Sampling with lots of small objects
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import geowatch
+            >>> anchors = np.array([[0.1, 0.1]])
+            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors)
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300), default_class_behavior='ignore')
+            >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
+            >>> self.requested_tasks['change'] = False
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> item = self[index]
+            >>> canvas = self.draw_item(item, draw_weights=False)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> label_to_color = {
+            >>>     node: data['color']
+            >>>     for node, data in self.predictable_classes.graph.nodes.items()}
+            >>> label_to_color = ub.sorted_keys(label_to_color)
+            >>> legend_img = utils._memo_legend(label_to_color)
+            >>> legend_img = kwimage.imresize(legend_img, scale=4.0)
+            >>> show_canvas = kwimage.stack_images([canvas, legend_img], axis=1)
+            >>> kwplot.imshow(show_canvas)
+            >>> kwplot.show_if_requested()
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -2200,8 +2247,8 @@ class IntrospectMixin:
             norm_over_time=norm_over_time, max_dim=max_dim,
             max_channels=max_channels, overlay_on_image=overlay_on_image,
             draw_weights=draw_weights, combinable_extra=combinable_extra,
-            classes=self.classes, requested_tasks=self.requested_tasks,
-            rescale=rescale, **kw)
+            classes=self.predictable_classes, requested_tasks=self.requested_tasks,
+            rescale=rescale, **kwargs)
         canvas = builder.build()
 
         if show_summary_text:
@@ -2483,7 +2530,7 @@ class PreprocessMixin:
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=2, window_dims=(256, 256), channels='auto')
             >>> stats = self.compute_dataset_stats()
             >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
-            >>> assert stats['class_freq']['background'] > 0
+            >>> #assert stats['class_freq']['background'] > 0
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -2863,7 +2910,31 @@ class MiscMixin:
     def coco_dset(self):
         return self.sampler.dset
 
-    def _notify_about_tasks(self, requested_tasks=None, model=None):
+    def _setup_predictable_classes(self, predictable_classes: list):
+        """
+        Currently called twice, once on the original dataset construction, and
+        again if the dataset is notified about a model / tasks.
+        """
+        self.predictable_classes = kwcoco.CategoryTree.coerce(predictable_classes)
+        self.num_predictable_classes = len(self.predictable_classes)
+
+        # Map from the "dataset" classes to the "predictable" class indexes.
+        self.dataset_class_idx_to_predictable_class_idx = {
+            self.classes.node_to_idx[class_name]: self.predictable_classes.node_to_idx[class_name]
+            for class_name in self.predictable_classes
+        }
+
+        if self.config.default_class_behavior == 'background':
+            # Ensure that predictable classes updates bg_idx (which is a hacky
+            # construct that should be removed)
+            predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
+            assert len(predictable_bg_classes) > 0, 'need to have at least 1 background predictable class'
+            bg_catname = ub.peek(sorted(predictable_bg_classes))
+            self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
+
+        utils.category_tree_ensure_color(self.predictable_classes)
+
+    def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
         Hacky method. Given the multimodal model, tell all the datasets which
         tasks they will need to generate data for. (This helps make the
@@ -2871,8 +2942,10 @@ class MiscMixin:
         """
         if model is not None:
             assert requested_tasks is None
-            if hasattr(model, 'global_head_weight'):
+            if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            if hasattr(model, 'predictable_classes'):
+                predictable_classes = model.predictable_classes
             else:
                 warnings.warn(ub.paragraph(
                     f'''
@@ -2881,9 +2954,18 @@ class MiscMixin:
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
-        print(f'dataset notified: requested_tasks={requested_tasks}')
-        assert requested_tasks is not None
-        self.requested_tasks.update(requested_tasks)
+        print(f'dataset notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
+        if requested_tasks is not None:
+            self.requested_tasks.update(requested_tasks)
+
+        if ('class' in self.requested_tasks) and (predictable_classes is not None):
+            if set(predictable_classes).issubset(set(self.classes)):
+                self._setup_predictable_classes(predictable_classes)
+            else:
+                print("predictable classes does not intersect classes")
+                print('classes= {}'.format(ub.urepr(self.classes.category_names, nl=1)))
+                print('predictable_classes= {}'.format(ub.urepr(predictable_classes, nl=1)))
+                raise ValueError
 
     def _build_demo_outputs(self, item):
         """
@@ -3077,6 +3159,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
 
         self.classes = kwcoco.CategoryTree(graph)
+        utils.category_tree_ensure_color(self.classes)
+
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
         self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
@@ -3094,6 +3178,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             self.background_classes |
             self.ignore_classes |
             self.undistinguished_classes)
+
+        self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
         channels = config['channels']
         max_epoch_length = config['max_epoch_length']
@@ -3191,10 +3277,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self.new_sample_grid = new_sample_grid
 
-        bg_catname = ub.peek(sorted(self.background_classes))
-        self.bg_idx = self.classes.node_to_idx[bg_catname]
-
-        utils.category_tree_ensure_color(self.classes)
+        # Used for mutex style losses where there is no data that can be used
+        # to label a pixel.
+        # TODO: need to communicate this value to the loss function, but we
+        # should probably design a clean method of communicating between the
+        # dataset and model first.
+        self.ignore_index = -100
 
         self.special_inputs = {}
 
@@ -3659,7 +3747,6 @@ def more_demos():
         >>> kwplot.imshow(canvas, fnum=1)
         >>> kwplot.show_if_requested()
 
-
     Ignore:
         >>> self.disable_augmenter = True
         >>> self.normalize_peritem = None
@@ -3674,7 +3761,6 @@ def more_demos():
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
         >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
-
     """
 
 

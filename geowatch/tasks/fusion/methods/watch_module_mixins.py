@@ -338,17 +338,18 @@ class WatchModuleMixins:
                 if self.class_freq is None:
                     heuristic_weights = {}
                 else:
-                    total_freq = np.array(list(self.class_freq.values()))
+                    class_freq = ub.udict(self.class_freq) - hueristic_ignore_keys
+                    total_freq = np.array(list(class_freq.values()))
                     cat_weights = _class_weights_from_freq(total_freq)
-                    catnames = list(self.class_freq.keys())
+                    catnames = list(class_freq.keys())
                     print('total_freq = {!r}'.format(total_freq))
                     print('cat_weights = {!r}'.format(cat_weights))
                     print('catnames = {!r}'.format(catnames))
                     heuristic_weights = ub.dzip(catnames, cat_weights)
-                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
+                #print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                # print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
+                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
                 class_weights = []
                 for catname in self.classes:
                     w = heuristic_weights.get(catname, 1.0)
@@ -384,6 +385,7 @@ class WatchModuleMixins:
                 class_weights = [
                     using_class_weights.get(catname, 1.0)
                     for catname in self.classes
+                    if catname not in hueristic_ignore_keys
                 ]
                 class_weights = torch.FloatTensor(class_weights)
             else:

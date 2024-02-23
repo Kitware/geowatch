@@ -421,7 +421,7 @@ class SmartLightningCLI(LightningCLI_Extension):
         parser.link_arguments(
             "data",
             "model.init_args.classes",
-            compute_fn=_data_value_getter('classes'),
+            compute_fn=_data_value_getter('predictable_classes'),
             apply_on="instantiate")
 
         super().add_arguments_to_parser(parser)
