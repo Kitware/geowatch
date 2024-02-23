@@ -35,10 +35,10 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KW_C001_*.geojson"
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_C*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_C*_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KR_T001.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KR_T001_*.geojson"
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T0*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T0*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KR_T001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KR_T001_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T0*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T0*_*.geojson"
 
 # T&E Regions Only
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
@@ -69,7 +69,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
@@ -79,7 +79,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=1 \
+    --tmux_workers=4 \
     --sensor_to_time_window='
         S2: 2 weeks
         L8: 2 weeks

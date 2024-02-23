@@ -610,8 +610,7 @@ class BatchVisualizationBuilder:
             if overlay_key in truth_overlay_keys and builder.requested_tasks['class']:
                 class_idxs = frame_truth.get(overlay_key, None)
                 true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-                # overlay = true_heatmap.colorize('class_idx')
-                overlay = _temporary_class_idx_colorize(true_heatmap)
+                overlay = true_heatmap.colorize('class_idx')
                 overlay[..., 3] = 0.5
                 overlay_items.append({
                     'overlay': overlay,
@@ -1052,61 +1051,3 @@ def colorize_weights(weights):
         rs, cs = np.where(is_gt_one)
         canvas[rs, cs, :] = colors01
     return canvas
-
-
-def _temporary_class_idx_colorize(self, with_alpha=1.0):
-    """
-    Use until kwimage 0.9.24 is released, at which point
-    Heatmap.colorize('class_idxs') will handle this.
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> import kwimage
-        >>> classes = ['A', 'C', 'C']
-        >>> C = len(classes)
-        >>> class_idxs = np.random.randint(0, C, size=(10, 10))
-        >>> class_idxs[0:3] = -100
-        >>> self = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-        >>> overlay = _temporary_class_idx_colorize(self)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(overlay)
-    """
-    import kwarray
-    # Ignore cases where index is negative?
-    cidxs = kwarray.ArrayAPI.numpy(self.data['class_idx']).astype(int, copy=True)
-
-    is_negative = cidxs < 0
-
-    import networkx as nx
-    import kwimage
-
-    classes = self.meta['classes']
-
-    if is_negative.any():
-        # hack to force a new visualizable class that encompases any
-        # negative indexes. TODO: some mechanism for controlling
-        # what color this will be. Should we differentiate between
-        # different negative indexes?
-        classes = list(classes) + ['__unknown__']
-        cidxs[is_negative] = (len(classes) - 1)
-
-    backup_colors = iter(kwimage.Color.distinct(len(classes)))
-
-    name_to_color = {}
-
-    if hasattr(classes, 'graph'):
-        name_to_color = nx.get_node_attributes(classes.graph, 'color')
-        for node in classes.graph.nodes:
-            color = classes.graph.nodes[node].get('color', None)
-            if color is None:
-                color = next(backup_colors)
-            name_to_color[node] = kwimage.Color(color).as01()
-    else:
-        name_to_color = ub.dzip(classes, backup_colors)
-
-    cx_to_color = np.array([name_to_color[cname] for cname in classes])
-    colorized = cx_to_color[cidxs]
-    colormask = kwimage.ensure_alpha_channel(colorized, with_alpha)
-    return colormask
