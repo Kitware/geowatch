@@ -243,9 +243,11 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
 
     CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
     DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-    if ! test -f "$DST_KWCOCO_FPATH"; then
+    if test -f "$CRP_KWCOCO_FPATH"; then
+    #if ! test -f "$DST_KWCOCO_FPATH"; then
 
-        if ! test -f "$REGION_CLUSTER_DPATH"; then
+        if ! test -d "$REGION_CLUSTER_DPATH/_viz_clusters/"; then
+            # TODO: need a ".done" file instead of using _viz_clusters as the check
             CLUSTER_JOBNAME="cluster-$REGION_ID"
             cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
                 python -m geowatch.cli.cluster_sites \
@@ -288,19 +290,39 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
 
         # Cleanup the data, remove bad images.
         if ! test -f "$DST_KWCOCO_FPATH"; then
+            # Remove images that are nearly all nan
             python -m cmd_queue submit --jobname="removebad-$REGION_ID" --depends="$CROP_JOBNAME" -- crop_for_sc_queue \
-                # Remove images that are nearly all nan
                 geowatch remove_bad_images \
                     --src "$CRP_KWCOCO_FPATH" \
                     --dst "$DST_KWCOCO_FPATH" \
+                    --delete_assets False \
+                    --interactive False \
                     --channels "red|green|blue|pan" \
-                    --workers "avail/2" \
+                    --workers "0" \
                     --overview 0
+                    #--workers "avail/2" \
         fi
     fi
 done
 python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run --workers=8 "crop_for_sc_queue"
+
+
+## Hack fixup
+#python -m cmd_queue new "crop_for_sc_queue"
+## sdvc unprotect -- */*.kwcoco*.zip
+#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+#    REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
+#    REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
+#    SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+
+#    CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
+#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+#    if test -f "$DST_KWCOCO_FPATH"; then
+#        mv "$DST_KWCOCO_FPATH" "$CRP_KWCOCO_FPATH"
+#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
+#    fi
+#done
 
 
 ### Reproject Annotation Jobs
