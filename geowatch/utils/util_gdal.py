@@ -305,11 +305,22 @@ class GDalCommandBuilder:
             self.options['-co'].pop('OVERVIEW_RESAMPLING', None)
 
 
-def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
-                          compress='DEFLATE', tries=1, cooldown=1, verbose=0,
-                          eager=True, gdal_cachemax=None, num_threads=None,
-                          use_tempfile=True, timeout=None,
-                          overviews='AUTO', overview_resampling='CUBIC'):
+def gdal_single_translate(in_fpath,
+                          out_fpath,
+                          pixel_box=None,
+                          blocksize=256,
+                          compress='DEFLATE',
+                          tries=1,
+                          cooldown=1,
+                          backoff=1.0,
+                          verbose=0,
+                          eager=True,
+                          gdal_cachemax=None,
+                          num_threads=None,
+                          use_tempfile=True,
+                          timeout=None,
+                          overviews='AUTO',
+                          overview_resampling='CUBIC'):
     """
     Crops geotiffs using pixels
 
@@ -327,6 +338,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         verbose (int): verbosity level
 
         cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
+
+        backoff (float): multiplier applied to cooldown between attempts. default: 1 (no backoff)
 
         eager (bool):
             if True, executes the command, if False returns a list of all the
@@ -426,7 +439,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_translate_command, tmp_fpath, tries=tries, cooldown=cooldown,
-            verbose=verbose, timeout=timeout)
+            backoff=backoff, verbose=verbose, timeout=timeout)
         if not tmp_fpath.exists():
             raise AssertionError('{tmp_fpath!r} does not exist!')
         os.rename(tmp_fpath, out_fpath)
@@ -502,6 +515,7 @@ def gdal_single_warp(in_fpath,
                      eager=True,
                      timeout=None,
                      cooldown=1,
+                     backoff=1.0,
                      use_tempfile=True,
                      gdal_cachemax=None,
                      num_threads=None,
@@ -556,6 +570,8 @@ def gdal_single_warp(in_fpath,
 
         cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
 
+        backoff (float): multiplier applied to cooldown between attempts. default: 1 (no backoff)
+
         timeout (None | float):
             number of seconds allowed to run gdal before giving up
 
@@ -609,53 +625,6 @@ def gdal_single_warp(in_fpath,
 
     References:
         https://gdal.org/programs/gdalwarp.html
-
-    Ignore:
-        import xdev
-        import sys, ubelt
-        from geowatch.utils.util_gdal import *  # NOQA
-        globals().update(xdev.get_func_kwargs(gdal_single_warp))
-
-    Ignore:
-        from kwcoco.util import util_archive
-        sample_zip_fpath = ub.grabdata('https://maxar-marketing.s3.amazonaws.com/product-samples/Rome_Colosseum_2022-03-22_WV03_HD.zip')
-        util_archive.Archive.extractall(sample_zip_fpath)
-
-
-    Ignore:
-        import os
-        import kwimage
-        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
-        in_fpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/14/T/QL/2014/9/29/14SEP29174805-M1BS-014484503010_01_P003_ACC/14SEP29174805-M1BS-014484503010_01_P003_ACC_B05.tif'
-
-        gdal_multi_warp([in_fpath], out_fpath)
-        --config CPL_LOG image.log
-
-    Ignore:
-        # Debug cropping out nodata regions with good nodat inputs
-        from geowatch.utils.util_gdal import gdal_single_warp
-        import os
-        import kwimage
-        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
-        os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
-        in_fpath = '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/43/R/FM/2017/9/20/LC08_L1TP_147040_20170920_20200903_02_T1_ACC/LC08_L1TP_147040_20170920_20200903_02_T1_ACC_B04.tif'
-
-        poly = kwimage.Polygon.from_geojson({'type': 'Polygon',
-            'coordinates': [[[77.27218762135243, 28.70482485539147],
-            [77.2657637374316, 28.405355530761582],
-            [77.58047165321304, 28.399754342998616],
-            [77.58778551938957, 28.699153840660728]]],
-            'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-            'auth': ['EPSG', '4326']}}})
-        space_box = poly.bounding_box()
-        out_fpath = ub.Path.appdir('geowatch/test/gdal-warp/').ensuredir() / 'acc_red_nodata.tif'
-        gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3)
-
-        info = gdal.Info(os.fspath(out_fpath), format='json')
-        [b['noDataValue'] for b in info['bands']]
-
-        data = kwimage.imread(out_fpath, nodata_method='float')
-
     """
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpwarp.')
 
@@ -770,7 +739,7 @@ def gdal_single_warp(in_fpath,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_warp_command, dst_fpath, tries=tries, verbose=verbose,
-            cooldown=cooldown, timeout=timeout)
+            cooldown=cooldown, backoff=backoff, timeout=timeout)
         if use_tempfile:
             os.rename(tmp_out_fpath, out_fpath)
     else:
@@ -784,7 +753,7 @@ def gdal_single_warp(in_fpath,
 
 def gdal_multi_warp(in_fpaths, out_fpath,
                     space_box=None, local_epsg=4326, box_epsg=4326,
-                    nodata=None, tries=1, cooldown=1,
+                    nodata=None, tries=1, cooldown=1, backoff=1.0,
                     blocksize=256, compress='DEFLATE',
                     overviews='AUTO',
                     overview_resampling='CUBIC',
@@ -894,74 +863,6 @@ def gdal_multi_warp(in_fpaths, out_fpath,
 
     References:
         .. [SO187522] https://gis.stackexchange.com/questions/187522/keep-nodata-values-when-using-gdal-merge
-
-    Ignore:
-        import os
-        import kwimage
-        raw_in_fpaths = [
-            '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/17/S/QD/2017/4/9/S2A_17SQD_20170409_0_L1C_ACC/S2A_17SQD_20170409_0_L1C_ACC_B02.tif',
-            '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/18/S/TJ/2017/4/9/S2A_18STJ_20170409_0_L1C_ACC/S2A_18STJ_20170409_0_L1C_ACC_B02.tif',
-        ]
-        from geowatch.utils.util_gdal import *  # NOQA
-        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
-        os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
-        poly = kwimage.Polygon.from_geojson({
-            'type': 'Polygon',
-            'coordinates': [[[-77.60220173397242, 39.11233656244506],
-                             [-77.59458000000001, 38.904157000000005],
-                             [-77.3686613232846, 38.90896183926332],
-                             [-77.375621, 39.117177000000005]]],
-            'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-                                        'auth': ['EPSG', '4326']}}})
-        space_box = poly.bounding_box()
-        dpath = ub.Path.appdir('geowatch/test/gdal-warp/')
-        out_fpath = dpath.ensuredir() / 'acc_multi_data.tif'
-
-        # Put data on disk for faster debug iteration
-        crop_in_fpath1 = dpath / 'part1.tif'
-        crop_in_fpath2 = dpath / 'part2.tif'
-        gdal_single_warp(raw_in_fpaths[0], crop_in_fpath1, verbose=3, space_box=space_box)
-        gdal_single_warp(raw_in_fpaths[1], crop_in_fpath2, verbose=3, space_box=space_box)
-
-        in_fpaths = [crop_in_fpath1, crop_in_fpath2]
-        gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
-        gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
-        info = gdal.Info(os.fspath(out_fpath), format='json')
-        [b['noDataValue'] for b in info['bands']]
-        data = kwimage.imread(out_fpath, nodata_method='float')
-
-    Ignore:
-        from geowatch.utils.util_gdal import *  # NOQA
-        in_fpaths = [
-            '/vsis3/smart-data-ara/ta-1/ta1-s2-ara-4/18/N/TG/2020/02/11/S2A_18NTG_20200211_0_L2A_ARA/S2A_18NTG_20200211_0_L2A_ARA_B06.tif',
-            '/vsis3/smart-data-ara/ta-1/ta1-s2-ara-4/18/N/SG/2020/02/11/S2A_17NRB_20200211_0_L2A_ARA/S2A_17NRB_20200211_0_L2A_ARA_B06.tif',
-        ]
-        out_fpath = ub.Path('$HOME/tmp/gdal/foo.tif').expand()
-        out_fpath.parent.ensuredir()
-        space_box = kwimage.Boxes([[-77.324009,   1.15383 , -77.217579,   1.251655]], 'ltrb')
-        gdalkw = {
-            'space_box': space_box,
-            'local_epsg': 32618,
-            'rpcs': None,
-            'nodata': -9999,
-            'tries': 0,
-            'cooldown': 10,
-            'error_logfile': None,
-            'verbose': 110,
-            'force_spatial_res': None,
-            'warp_memory': '1500',
-            'gdal_cachemax': '1500',
-            'num_threads': '2',
-            'timeout': 600.0,
-            'overviews': 'AUTO',
-            'overview_resampling': 'CUBIC',
-        }
-        commands = gdal_multi_warp(in_fpaths, out_fpath, eager=0, **gdalkw)
-        for c in commands:
-            print(c)
-
-        gdal_multi_warp(in_fpaths, out_fpath, eager=1, **gdalkw)
-
     """
     # Warp then merge
     # Write to a temporary file and then rename the file to the final
@@ -979,6 +880,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     single_warp_kwargs['blocksize'] = blocksize
     single_warp_kwargs['tries'] = tries
     single_warp_kwargs['cooldown'] = cooldown
+    single_warp_kwargs['backoff'] = backoff
     single_warp_kwargs['nodata'] = nodata
     single_warp_kwargs['verbose'] = verbose
     single_warp_kwargs['error_logfile'] = error_logfile
@@ -1062,7 +964,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_merge_cmd, tmp_out_fpath, tries=tries, cooldown=cooldown,
-            verbose=verbose, timeout=timeout)
+            backoff=backoff, verbose=verbose, timeout=timeout)
     else:
         commands.append(gdal_merge_cmd)
 
@@ -1073,6 +975,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
                                  compress=compress, blocksize=blocksize,
                                  verbose=verbose, eager=eager, tries=tries,
                                  cooldown=cooldown,
+                                 backoff=backoff,
                                  gdal_cachemax=gdal_cachemax,
                                  overviews=overviews,
                                  overview_resampling=overview_resampling,
@@ -1093,9 +996,15 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         return commands
 
 
-def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
-                                      shell=False, check_after=True,
-                                      verbose=0, timeout=None):
+def _execute_gdal_command_with_checks(command,
+                                      out_fpath,
+                                      tries=1,
+                                      cooldown=1,
+                                      backoff=1.0,
+                                      shell=False,
+                                      check_after=True,
+                                      verbose=0,
+                                      timeout=None):
     """
     Given a gdal command and the expected file that it should produce
     try to execute a few times and check that it produced a valid result.
@@ -1130,13 +1039,18 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
     got = -1
     if verbose > 100:
         print(command)
+
+    retryable_exceptions = (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        RuntimeError)
     try:
         logger = DummyLogger()
         got = retry.api.retry_call(
             _execute_command,
-            tries=tries, delay=cooldown, exceptions=(
-                subprocess.CalledProcessError, FileNotFoundError,
-                RuntimeError),
+            tries=tries,
+            delay=cooldown,
+            exceptions=retryable_exceptions,
             logger=logger)
     except subprocess.CalledProcessError as ex:
         if verbose:
@@ -1318,34 +1232,6 @@ class GdalDataset(ub.NiceRepr):
         >>> ref = GdalDataset.open(path)
         >>> data = ref.GetRasterBand(1).ReadAsArray()
         >>> assert data.sum() == 37109758
-
-    Ignore:
-        gpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/14/T/QL/2014/9/29/14SEP29174805-M1BS-014484503010_01_P003_ACC/14SEP29174805-M1BS-014484503010_01_P003_ACC_B05.tif'
-
-        from geowatch.utils import util_gdal
-        import sys, ubelt
-        from geowatch.utils.util_gdal import *  # NOQA
-        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
-        gpath = '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/23/K/PQ/2017/9/6/S2A_23KPQ_20170906_0_L1C_ACC/S2A_23KPQ_20170906_0_L1C_ACC_B10.tif'
-        ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
-        with GdalErrorHandler() as handler:
-            ref.GetMetadataDomainList()
-
-        from geowatch.gis.geotiff import *  # NOQA
-        _ = geotiff_metadata(gpath)
-
-
-        # Test 404 handling
-        from geowatch.utils import util_gdal
-        gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
-        import geowatch
-        meta = geowatch.gis.geotiff.geotiff_metadata(gpath)
-        from geowatch.utils import util_gdal
-        infos = {}
-        try:
-            util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
-        except Exception as e:
-            ex = e
     """
 
     def __init__(self, __ref, _path='?', _str_mode='?'):

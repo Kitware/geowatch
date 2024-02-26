@@ -246,6 +246,8 @@ class AssetExtractConfig(scfg.DataConfig):
 
     cooldown = scfg.Value(10, help='seconds between tries after a failed attempt')
 
+    backoff = scfg.Value(1.0, help='factor to multiply cooldown by after a failed attempt')
+
     asset_timeout = scfg.Value('4hours', help=ub.paragraph(
             '''
             The maximum amount of time to spend pulling down a single
@@ -2466,7 +2468,6 @@ def _aligncrop(obj_group,
             # what GDAL computes at the time of warping
             force_spatial_res = asset_config.force_min_gsd
 
-    cooldown = asset_config.cooldown
     gdal_verbose = 0 if verbose < 2 else verbose
 
     if 'quality' in roles:
@@ -2479,7 +2480,8 @@ def _aligncrop(obj_group,
         local_epsg=local_epsg,
         rpcs=rpcs, nodata=nodata,
         tries=asset_config.tries,
-        cooldown=cooldown,
+        cooldown=asset_config.cooldown,
+        backoff=asset_config.backoff,
         error_logfile=error_logfile,
         verbose=gdal_verbose,
         force_spatial_res=force_spatial_res,
