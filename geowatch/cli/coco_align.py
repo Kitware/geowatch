@@ -246,7 +246,7 @@ class AssetExtractConfig(scfg.DataConfig):
 
     cooldown = scfg.Value(10, help='seconds between tries after a failed attempt')
 
-    backoff = scfg.Value(1.0, help='factor to multiply cooldown by after a failed attempt')
+    backoff = scfg.Value(3.0, help='factor to multiply cooldown by after a failed attempt')
 
     asset_timeout = scfg.Value('4hours', help=ub.paragraph(
             '''
