@@ -438,12 +438,16 @@ python -m geowatch.cli.prepare_splits \
     --run=1
 
 
-dvc add -vv -- */raw_bands
-
-dvc add -vvv -- \
+dvc add -v -- \
+    */raw_bands \
     */imgonly-*-rawbands.kwcoco.zip \
-    */imganns-*-rawbands.kwcoco.zip
+    */imganns-*-rawbands.kwcoco.zip \
+    data_train_rawbands_split6_*.kwcoco.zip \
+    data_vali_rawbands_split6_*.kwcoco.zip
 
-git commit -m "Update Drop8 Median BAS" && \
+git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
+
+/flash/smart_phase3_data/Drop8-Median10GSD-V1/data_train_rawbands_split6_n041_ef065bc6.kwcoco.zip
+/flash/smart_phase3_data/Drop8-Median10GSD-V1/data_vali_rawbands_split6_n004_e95ff033.kwcoco.zip
