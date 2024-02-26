@@ -217,12 +217,12 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     import rich
 
     gid_to_infos = {}
-    pool = ub.JobPool(mode=mode, max_workers=workers)
     all_gids = list(dset.index.imgs.keys())
 
+    pool = ub.JobPool(mode=mode, max_workers=workers)
     pman = util_progress.ProgressManager()
 
-    with pman:
+    with pman, pool:
         for gid in pman.progiter(all_gids, desc='submit find empty image jobs',
                                  freq=1000, adjust=0):
             if gid not in gid_to_infos:

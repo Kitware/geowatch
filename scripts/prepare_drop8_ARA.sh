@@ -240,37 +240,63 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
     REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
     SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+
+    CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
     DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
     if ! test -f "$DST_KWCOCO_FPATH"; then
-        cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
-            python -m geowatch.cli.cluster_sites \
-                --src "$REGION_GEOJSON_FPATH" \
-                --minimum_size "256x256@2GSD" \
-                --dst_dpath "$REGION_CLUSTER_DPATH" \
-                --draw_clusters True
 
-        python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- crop_for_sc_queue \
-            python -m geowatch.cli.coco_align \
-                --src "$SRC_KWCOCO_FPATH" \
-                --dst "$DST_KWCOCO_FPATH" \
-                --regions "$REGION_CLUSTER_DPATH/*.geojson" \
-                --rpc_align_method orthorectify \
-                --workers=10 \
-                --aux_workers=2 \
-                --force_nodata=-9999 \
-                --context_factor=1.0 \
-                --minimum_size="256x256@2GSD" \
-                --force_min_gsd=2.0 \
-                --convexify_regions=True \
-                --target_gsd=2.0 \
-                --geo_preprop=False \
-                --sensor_to_time_window "
-                    S2: 1month
-                    PD: 1month
-                    L8: 1month
-                " \
-                --keep img
-                #--exclude_sensors=L8 \
+        if ! test -f "$REGION_CLUSTER_DPATH"; then
+            CLUSTER_JOBNAME="cluster-$REGION_ID"
+            cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
+                python -m geowatch.cli.cluster_sites \
+                    --src "$REGION_GEOJSON_FPATH" \
+                    --minimum_size "256x256@2GSD" \
+                    --dst_dpath "$REGION_CLUSTER_DPATH" \
+                    --draw_clusters True
+        else
+            CLUSTER_JOBNAME="None"
+        fi
+
+        if ! test -f "$CRP_KWCOCO_FPATH"; then
+            # TODO: should coco-align should have the option to remove nan images?
+            CROP_JOBNAME="crop-$REGION_ID"
+            python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="$CLUSTER_JOBNAME" -- crop_for_sc_queue \
+                python -m geowatch.cli.coco_align \
+                    --src "$SRC_KWCOCO_FPATH" \
+                    --dst "$CRP_KWCOCO_FPATH" \
+                    --regions "$REGION_CLUSTER_DPATH/*.geojson" \
+                    --rpc_align_method orthorectify \
+                    --workers=10 \
+                    --aux_workers=2 \
+                    --force_nodata=-9999 \
+                    --context_factor=1.0 \
+                    --minimum_size="256x256@2GSD" \
+                    --force_min_gsd=2.0 \
+                    --convexify_regions=True \
+                    --target_gsd=2.0 \
+                    --geo_preprop=False \
+                    --sensor_to_time_window "
+                        S2: 1month
+                        PD: 1month
+                        L8: 1month
+                    " \
+                    --keep img
+                    #--exclude_sensors=L8 \
+        else
+            CROP_JOBNAME="None"
+        fi
+
+        # Cleanup the data, remove bad images.
+        if ! test -f "$DST_KWCOCO_FPATH"; then
+            python -m cmd_queue submit --jobname="removebad-$REGION_ID" --depends="$CROP_JOBNAME" -- crop_for_sc_queue \
+                # Remove images that are nearly all nan
+                geowatch remove_bad_images \
+                    --src "$CRP_KWCOCO_FPATH" \
+                    --dst "$DST_KWCOCO_FPATH" \
+                    --channels "red|green|blue|pan" \
+                    --workers "avail/2" \
+                    --overview 0
+        fi
     fi
 done
 python -m cmd_queue show "crop_for_sc_queue"
@@ -303,6 +329,10 @@ python -m geowatch.cli.prepare_splits \
     --backend=tmux --tmux_workers=2 \
     --splits split6 \
     --run=0
+
+
+
+
 
 #dvc add -vvv -- */clusters
 #

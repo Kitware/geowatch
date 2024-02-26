@@ -170,6 +170,10 @@ Notes:
         --geo_preprop=False \
         --include_sensors=WV \
         --keep img
+
+TODO:
+    - [ ] Should this script have the option of calling "remove_bad_images" or
+          "clean_geotiffs" to prevent generating bad images in the first place?
 """
 import os
 import scriptconfig as scfg
