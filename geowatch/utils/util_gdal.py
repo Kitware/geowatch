@@ -658,7 +658,9 @@ def gdal_single_warp(in_fpath,
 
     """
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpwarp.')
-    timeout = _ShrinkingTimeout.coerce(timeout)
+
+    # Shrinking timeouts are too magic, disabling them for now
+    # timeout = _ShrinkingTimeout.coerce(timeout)
 
     # Coordinate Reference System of the "target" destination image
     # t_srs = target spatial reference for output image
@@ -965,7 +967,9 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     # Write to a temporary file and then rename the file to the final
     # Destination so ctrl+c doesn't break everything
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpmerge.')
-    timeout = _ShrinkingTimeout.coerce(timeout)
+
+    # Shrinking timeouts are too magic, disabling them for now
+    # timeout = _ShrinkingTimeout.coerce(timeout)
 
     single_warp_kwargs = kwargs.copy()
     single_warp_kwargs['space_box'] = space_box
@@ -1100,7 +1104,8 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
         command (str): the gdal shell invocation to call
         out_fpath (str | PathLike): where we expect the output to be written
     """
-    timeout = _ShrinkingTimeout.coerce(timeout)
+    # Shrinking timeouts are too magic, disabling them for now
+    # timeout = _ShrinkingTimeout.coerce(timeout)
 
     if tries == 0:
         import warnings
@@ -1108,8 +1113,10 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
         tries = 1
 
     def _execute_command():
+        # _timeout = timeout.remaining()
+        _timeout = timeout
         cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell,
-                          timeout=timeout.remaining())
+                          timeout=_timeout)
         if not ub.Path(out_fpath).exists():
             if not ub.Path(out_fpath).parent.exists():
                 raise FileNotFoundError(f'Error: gdal did not write {out_fpath}, likely because its parent directory does not exist.')
