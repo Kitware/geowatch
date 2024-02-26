@@ -303,6 +303,8 @@ def load_result_resolved(node_dpath):
         got = load_result_resolved(node_dpath)
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
+
+        node_dpath = '/home/joncrall/data/dvc-repos/smart_phase3_expt/_preeval20_bas_grid/eval/flat/bas_poly_eval/bas_poly_eval_id_61c063a6/.pred/bas_poly/bas_poly_id_ebb415e4/.pred/bas_pxl/bas_pxl_id_1a26e3ac'
     """
     # from geowatch.utils.util_dotdict import explore_nested_dict
     node_dpath = ub.Path(node_dpath)
@@ -321,6 +323,13 @@ def load_result_resolved(node_dpath):
         # Hack: we should recurse into the model itself to introspect this, but
         # this is fine for now.
         fit_node_type = node_type + '_fit'
+
+        # FIXME:
+        # the fit config parsed out here only contains information about the
+        # dataset, not any of the other train-time commands like model, or lr.
+        # This needs to be fixed in how package metadata is stored, how
+        # training logs metadata, and how pixel prediction logs it in its
+        # output.
         fit_config = proc_item['properties']['extra']['fit_config']
         fit_config = smart_result_parser.relevant_fit_config(fit_config, add_prefix=False)
         fit_nested = {

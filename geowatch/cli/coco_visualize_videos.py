@@ -349,6 +349,7 @@ def main(cmdline=True, **kwargs):
         # expanded_streams.append(fused_sensorchan.sensor.spec + ':' + chan)
         expanded_streams.append(chan)
     channels = (','.join(expanded_streams))
+    print(f'channels = {ub.urepr(channels, nl=1)}')
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0
@@ -562,6 +563,7 @@ def main(cmdline=True, **kwargs):
                 else:
                     _header_extra = ''
 
+                print(f'channels={channels}')
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
