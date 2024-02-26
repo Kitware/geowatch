@@ -21,8 +21,8 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 
 #SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
 #SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
-SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove"
-#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
+#SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove"
+SENSORS="sentinel-2-l2a,landsat-c2l2-sr,planet-dove,worldview-nitf"
 
 DATASET_SUFFIX=Drop8-L2
 
@@ -74,7 +74,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --align_tries=1 \
     --asset_timeout="10 minutes" \
     --image_timeout="30 minutes" \
-    --hack_lazy=True \
+    --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=4 \
     --sensor_to_time_window='

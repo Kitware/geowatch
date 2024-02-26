@@ -296,14 +296,13 @@ python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=2 "reproject_for_sc"
 
 
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 python -m geowatch.cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=2 \
     --splits split6 \
-    --run=1
+    --run=0
 
 #dvc add -vvv -- */clusters
 #
@@ -430,10 +429,9 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 python -m geowatch.cli.prepare_splits \
-    --src_kwcocos "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-V2/*/imganns*-rawbands.kwcoco.zip \
-    --dst_dpath "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-V2 \
+    --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
+    --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=6 \
     --splits split6 \

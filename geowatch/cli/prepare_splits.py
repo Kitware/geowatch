@@ -94,7 +94,11 @@ class PrepareSplitsConfig(scfg.DataConfig):
     workers = scfg.Value(2, alias=['tmux_workers'], help='')
     splits = scfg.Value('*', help='restrict to only a specific split')
 
-    hash_datasets = scfg.Value(True, help='if True, add a hash to the result to disambiguate')
+    add_detail_suffix = scfg.Value(True, help=ub.paragraph(
+        '''
+        if True, add a suffix info to the output paths to disambiguate splits
+        with different inputs
+        '''))
 
 
 imerit_vali_regions = {'CN_C000', 'KW_C001', 'SA_C001', 'CO_C001', 'VN_C002'}
@@ -150,7 +154,7 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
 
     full_fpath = dst_dpath / 'data.kwcoco.zip'
 
-    if config.hash_datasets:
+    if config.add_detail_suffix:
         path_to_hash = {}
         for p in ub.ProgIter(partitioned_fpaths, desc='compute hashes'):
             path_to_hash[p] = ub.hash_file(p)
@@ -177,14 +181,18 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
             else:
                 train_parts.append(fpath)
 
-        if config.hash_datasets:
-            train_hash = ub.hash_data(sorted([path_to_hash[p] for p in train_parts]))
-            vali_hash = ub.hash_data(sorted([path_to_hash[p] for p in vali_parts]))
-            vali_hashed_fpath = vali_split_fpath.augment(stemsuffix='_' + vali_hash[0:8], multidot=1)
-            train_hashed_fpath = train_split_fpath.augment(stemsuffix='_' + train_hash[0:8], multidot=1)
+        if config.add_detail_suffix:
+            train_hashid = ub.hash_data(sorted([path_to_hash[p] for p in train_parts]))[0:8]
+            vali_hashid = ub.hash_data(sorted([path_to_hash[p] for p in vali_parts]))[0:8]
+
+            train_detail_suffix = f'_n{len(train_parts):03d}_{train_hashid}'
+            vali_detail_suffix = f'_n{len(vali_parts):03d}_{vali_hashid}'
+
+            train_hashed_fpath = train_split_fpath.augment(stemsuffix=train_detail_suffix, multidot=1)
+            vali_hashed_fpath = vali_split_fpath.augment(stemsuffix=vali_detail_suffix, multidot=1)
         else:
-            vali_hashed_fpath = vali_split_fpath
             train_hashed_fpath = train_split_fpath
+            vali_hashed_fpath = vali_split_fpath
 
         train_parts_str = ' '.join([shlex.quote(str(p)) for p in train_parts])
         vali_parts_str = ' '.join([shlex.quote(str(p)) for p in vali_parts])
@@ -198,7 +206,7 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
                     --dst {vali_hashed_fpath}
                 ''')
             vali_job = queue.submit(command, begin=1, depends=depends, log=False)
-            if config.hash_datasets:
+            if config.add_detail_suffix:
                 # Symlink to original locations
                 vali_job = queue.submit(f'ln -sf {vali_hashed_fpath} {vali_split_fpath}', begin=1, depends=vali_job, log=False)
 
@@ -211,7 +219,7 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
                     --dst {train_hashed_fpath}
                 ''')
             train_job = queue.submit(command, depends=depends, log=False)
-            if config.hash_datasets:
+            if config.add_detail_suffix:
                 # Symlink to original locations
                 train_job = queue.submit(f'ln -sf {train_hashed_fpath} {train_split_fpath}', begin=1, depends=train_job, log=False)
 
