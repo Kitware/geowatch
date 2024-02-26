@@ -127,6 +127,18 @@ def preprocess_table_for_seaborn(agg, table):
     fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
     table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
     table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
+    from geowatch.utils import util_pandas
+    from geowatch.mlops.smart_global_helper import SMART_HELPER
+    table = util_pandas.DataFrame(table)
+    channel_cols = table.match_columns('*.channels')
+    unique_channels = sorted(set(ub.flatten(table[channel_cols].value_counts().index)))
+    channel_mapping = SMART_HELPER.custom_channel_relabel_mapping(unique_channels, coarsen=False)
+    for col in channel_cols:
+        table[col] = table[col].apply(channel_mapping.get)
+    # from geowatch.utils import util_pandas
+    # table = util_pandas.DataFrame(table)
+    # # table.match_columns('.channels')
     return table
 
 
@@ -368,6 +380,13 @@ class ParamPlotter:
         roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
 
     def plot_vantage_params(plotter, vantage, pman=None):
+        """
+        The main parameter inspection plots.
+
+        A vantage point specifies the metrics to visualize and analyze.  Makes
+        scatter plot, box plots, and attempts to draw legends useful for
+        communicating results.
+        """
         import numpy as np
         import kwplot
         import kwarray
@@ -377,6 +396,8 @@ class ParamPlotter:
         from geowatch.utils import util_pandas
         from geowatch.utils import util_kwplot
         from geowatch.utils.util_kwplot import scatterplot_highlight
+
+        rich.print(f'[white]### Plot Vantage Params: {vantage}')
 
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -406,6 +427,8 @@ class ParamPlotter:
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
+        import xdev
+        xdev.embed()
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
         resolved_params['param_hashid'] = macro_table['param_hashid']
         valid_cols = resolved_params.columns.difference(blocklist)
@@ -415,8 +438,8 @@ class ParamPlotter:
         params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
 
         if params_of_interest is not None:
+            print('params_of_interest is unspecified, automatically choosing')
             chosen_params = params_of_interest
-
             params_of_interest = set(params_of_interest)
             # if 'param_hashid' in params_of_interest:
             #     params_of_interest.remove(

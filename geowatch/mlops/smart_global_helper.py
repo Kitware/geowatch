@@ -872,6 +872,53 @@ class SmartGlobalHelper:
         new_columns = sub_macro_table['resolved_params.bas_pxl.channels'].apply(presentation_map.get)
         return new_columns
 
+    def custom_channel_relabel_mapping(self, unique_channels, coarsen=False):
+        channel_maps = {
+            'water|forest|field|impervious|barren|landcover_hidden:32': 'land',
+            'blue|green|red|nir': 'raw' if coarsen else 'BGRN',
+            'invariants:16': 'invar' if coarsen else 'invar1',
+            'invariants:17': 'invar' if coarsen else 'invar1',
+            'blue|green|red': 'raw' if coarsen else 'BGR',
+            'pan': 'raw' if coarsen else 'pan',
+            'mae:16': 'mae',
+            'sam:64': 'SAM',
+            'mat_feats:16|materials:9|mtm': 'mat',
+        }
+        cold_maps = {}
+        presentation_map = {}
+
+        import kwcoco
+        for c in unique_channels:
+            if c is not None:
+                new_streams = []
+                sensorchan = kwcoco.SensorChanSpec.coerce(c)
+                for stream in sensorchan.normalize().streams():
+                    stream.sensor
+                    concise_chans = stream.chans.concise().spec
+                    if 'COLD' in concise_chans:
+                        if coarsen:
+                            cold_maps[concise_chans] = 'COLD'
+                        else:
+                            # cold_maps[concise_chans] = 'COLD{}'.format(len(cold_maps) + 1)
+                            cold_maps[concise_chans] = 'COLD.{}'.format(concise_chans.count('|') + 1)
+                        channel_maps[concise_chans] = cold_maps[concise_chans]
+
+                    if concise_chans in channel_maps:
+                        concise_chans = channel_maps[concise_chans]
+                    else:
+                        print('warning concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
+
+                    new_streams.append(f'{stream.sensor.spec}:{concise_chans}')
+                new_sensorchan = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise()
+
+                if coarsen:
+                    new_sensorchan = kwcoco.ChannelSpec.coerce(','.join(sorted(set(sc.chans.spec for sc in new_sensorchan.streams()))))
+                    new_c = new_sensorchan.spec
+                else:
+                    new_c = new_sensorchan.spec
+                presentation_map[c] = new_c
+        return presentation_map
+
     def print_minmax_times(self, table):
         import pandas as pd
         from geowatch.utils.util_pandas import DotDictDataFrame

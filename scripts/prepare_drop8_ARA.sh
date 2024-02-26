@@ -243,8 +243,7 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
 
     CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
     DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-    if test -f "$CRP_KWCOCO_FPATH"; then
-    #if ! test -f "$DST_KWCOCO_FPATH"; then
+    if ! test -f "$DST_KWCOCO_FPATH"; then
 
         if ! test -d "$REGION_CLUSTER_DPATH/_viz_clusters/"; then
             # TODO: need a ".done" file instead of using _viz_clusters as the check
@@ -288,9 +287,8 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
             CROP_JOBNAME="None"
         fi
 
-        # Cleanup the data, remove bad images.
         if ! test -f "$DST_KWCOCO_FPATH"; then
-            # Remove images that are nearly all nan
+            # Cleanup the data, remove bad images that are nearly all nan.
             python -m cmd_queue submit --jobname="removebad-$REGION_ID" --depends="$CROP_JOBNAME" -- crop_for_sc_queue \
                 geowatch remove_bad_images \
                     --src "$CRP_KWCOCO_FPATH" \
@@ -331,13 +329,15 @@ python -m cmd_queue new "reproject_for_sc"
 for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     echo "REGION_ID = $REGION_ID"
     if ! test -f "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip"; then
-        python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_sc \
-            geowatch reproject_annotations \
-                --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
-                --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
-                --io_workers="avail/2" \
-                --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
-                --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+        if test -f "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip"; then
+            python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_sc \
+                geowatch reproject_annotations \
+                    --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
+                    --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
+                    --io_workers="avail/2" \
+                    --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+                    --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+        fi
     fi
 done
 python -m cmd_queue show "reproject_for_sc"
@@ -350,23 +350,21 @@ python -m geowatch.cli.prepare_splits \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=2 \
     --splits split6 \
-    --run=0
+    --run=1
 
 
 
 
 
 #dvc add -vvv -- */clusters
-#
-dvc add -vvv -- \
-    */*/L8 \
-    */*/S2 \
-    */*/WV \
-    */*/PD
-
-dvc add -vvv -- \
-    */imgonly-*-rawbands.kwcoco.zip \
-    */imganns-*-rawbands.kwcoco.zip
+#dvc add -vvv -- \
+#    */*/L8 \
+#    */*/S2 \
+#    */*/WV \
+#    */*/PD
+#dvc add -vvv -- \
+#    */imgonly-*-rawbands.kwcoco.zip \
+#    */imganns-*-rawbands.kwcoco.zip
 
 dvc add -vvv -- \
     *_rawbands_*.kwcoco.zip \

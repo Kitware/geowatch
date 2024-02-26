@@ -1787,14 +1787,15 @@ python -m geowatch.mlops.aggregate \
         #- bas_pxl_eval
     " \
     --plot_params="
-        enabled: 0
+        enabled: 1
         stats_ranking: 0
         min_variations: 1
         #params_of_interest:
         #    - params.bas_poly.thresh
+        #    - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
-        top_k: 1100
+        top_k: 10111
         per_group: 1
         macro_analysis: 0
         analyze: 0
