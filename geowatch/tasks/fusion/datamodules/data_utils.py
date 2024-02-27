@@ -330,7 +330,7 @@ def _boxes_snap_to_edges(given_box, snap_target):
     return adjusted_box
 
 
-class NestedPool():
+class NestedPool(ub.NiceRepr):
     """
     Manages a sampling from a tree of indexes. Helps with balancing
     samples over multiple criteria.
@@ -395,12 +395,14 @@ class NestedPool():
         >>> print('hist3 (color) = {}'.format(ub.urepr(hist2, nl=1)))
     """
     def __init__(self, sample_grid, rng=None):
+        super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
 
         # validate input
         if isinstance(sample_grid, list) and sample_grid:
             if isinstance(sample_grid[0], (dict, int, float)):
                 self.graph = self._create_graph(sample_grid)
+                self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
                 return
         raise ValueError("""NestedPool only supports input in the
             form of a flat list or list of dicts.""")
@@ -421,10 +423,6 @@ class NestedPool():
             graph.add_edge(root_node, index)
         return graph
 
-    def _get_leafs(self):
-        """ Return sink nodes for the graph """
-        return (n for n in self.graph.nodes if self.graph.out_degree[n] == 0)
-
     def _get_parent(self, n):
         """ Get the parent of a node (assume a tree). None if it doesnt exist """
         preds = self.graph.pred[n]
@@ -440,7 +438,7 @@ class NestedPool():
         add_nodes = []
 
         # Group all leaf nodes by their direct parents
-        parent_to_leafs = ub.group_items(self._get_leafs(), key=lambda n: self._get_parent(n))
+        parent_to_leafs = ub.group_items(self._leaf_nodes, key=lambda n: self._get_parent(n))
         for parent, children in parent_to_leafs.items():
             # Group children by the new attribute
             val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
@@ -471,20 +469,15 @@ class NestedPool():
         self.graph.add_nodes_from(add_nodes, weights=None)
         self.graph.add_edges_from(add_edges)
 
-    def _sample_many(self, num, return_attributes=False):
+    def _sample_many(self, num):
         for _ in range(num):
             idx = self.sample()
-            if return_attributes:
-                node = dict(self.graph.nodes[idx])
-                node.pop("label")
-                yield node
-            else:
-                yield idx
+            yield idx
 
     def sample(self):
         current = '__root__'
         while self.graph.out_degree(current) > 0:
-            children = list(self.graph.neighbors(current))
+            children = list(self.graph.successors(current))
             num = len(children)
 
             weights = self.graph.nodes[current]['weights']
@@ -497,10 +490,14 @@ class NestedPool():
         return current
 
     def __len__(self):
-        return len(list(self._get_leafs()))
+        return len(list(self._leaf_nodes))
 
-    def __str__(self):
-        return "\n".join(x for x in nx.generate_network_text(self.graph))
+    def __nice__(self):
+        n_nodes = self.graph.number_of_nodes()
+        n_edges = self.graph.number_of_edges()
+        n_leafs = self.__len__()
+        n_depth = len(nx.algorithms.dag.dag_longest_path(self.graph))
+        return f'nodes={n_nodes}, edges={n_edges}, leafs={n_leafs}, depth={n_depth}'
 
 
 def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
