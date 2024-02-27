@@ -396,7 +396,14 @@ class NestedPool():
     """
     def __init__(self, sample_grid, rng=None):
         self.rng = rng = kwarray.ensure_rng(rng)
-        self.graph = self._create_graph(sample_grid)
+
+        # validate input
+        if isinstance(sample_grid, list) and sample_grid:
+            if isinstance(sample_grid[0], (dict, int, float)):
+                self.graph = self._create_graph(sample_grid)
+                return
+        raise ValueError("""NestedPool only supports input in the
+            form of a flat list or list of dicts.""")
 
     def _create_graph(self, sample_grid):
         graph = nx.DiGraph()
