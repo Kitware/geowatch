@@ -127,7 +127,7 @@ import ubelt as ub
 import warnings
 
 from os import getenv
-from kwutil import util_time, util_pattern
+from kwutil import util_time
 from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
@@ -2413,6 +2413,7 @@ class BalanceMixin:
             len(new_sample_grid['targets']))
 
         # create mapping from video name to region name
+        from kwutil import util_pattern
         pat = util_pattern.Pattern.coerce(r'\w+_[A-Z]\d+_.*', 'regex')
         self.vidname_to_region_name = {}
         for vidname in set(vidnames):
@@ -2426,7 +2427,7 @@ class BalanceMixin:
             'vidid': target_vidids,
             'vidname': vidnames,
             'is_positive': target_posbit,
-            'region': ub.take(self.vidname_to_region_name, vidnames)
+            'region': list(ub.take(self.vidname_to_region_name, vidnames))
         }).reset_index(drop=False)
         return df
 
