@@ -1638,94 +1638,144 @@ python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-Median10
 python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-Median10GSD-V1"
 
 
+# Broken, why?
+#- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch1_step16.pt
+
+
+
+
+
+__initial_model_list="
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
+- $DVC_EXPT_DPATH/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch0_step1.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch245_step3444.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch261_step3668.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch270_step3794.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch320_step4494.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch328_step4606.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch30_step434.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch58_step826.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch59_step840.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch61_step868.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch64_step910.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch0_step14.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch1_step14.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch390_step5474.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch391_step5488.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch397_step5572.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch441_step6188.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch478_step6706.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch714_step10001.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch33_step476.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch43_step616.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch44_step630.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch51_step728.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch60_step854.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch21_step308.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch24_step350.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch26_step378.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch44_step630.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch51_step728.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V01/Drop7_finetune_COLD_phase3_V01_epoch226_step4994.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch120_step2662.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch214_step4730.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch45_step1012.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch60_step1342.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch63_step1408.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch79_step1760.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch88_step1958.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch208_step4598.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch209_step4620.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch226_step4994.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch15_step1712.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch16_step1819.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch17_step1926.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch18_step2033.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch18_step2052.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch19_step2140.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch20_step2268.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch26_step2916.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch32_step3564.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch35_step3888.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch36_step3996.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch40_step4428.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch41_step4536.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch43_step4752.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch45_step4968.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch35_step3888.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch40_step4428.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch47_step5184.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch5_step648.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch86_step9396.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch167_step2352.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch172_step2422.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch177_step2492.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch180_step2534.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch182_step2562.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch0_step14.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch168_step2366.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch172_step2422.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch179_step2520.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch184_step2590.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch110_step1554.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch133_step1876.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch142_step2002.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch185_step2604.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch97_step1372.pt
+"
 
 ### Evaluate
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop8
+MLOPS_DPATH=$DVC_EXPT_DPATH/_preeval20_bas_grid
+
+MODEL_SHORTLIST="
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch245_step3444.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch261_step3668.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch328_step4606.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch58_step826.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch64_step910.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch390_step5474.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch391_step5488.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch397_step5572.pt
+- $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch51_step728.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch45_step1012.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch79_step1760.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch88_step1958.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch208_step4598.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch209_step4620.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch226_step4994.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch172_step2422.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch180_step2534.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch182_step2562.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch172_step2422.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch179_step2520.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch110_step1554.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch185_step2604.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch97_step1372.pt
+- $DVC_EXPT_DPATH/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch35_step3888.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch40_step4428.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch47_step5184.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch86_step9396.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch41_step4536.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch43_step4752.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch45_step4968.pt
+"
+
+echo "$MODEL_SHORTLIST" > "$MLOPS_DPATH/shortlist.yaml"
+
+cat "$MLOPS_DPATH/shortlist.yaml"
+
 geowatch schedule --params="
     pipeline: bas
 
     matrix:
-        bas_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch0_step1.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch245_step3444.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch261_step3668.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch270_step3794.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch320_step4494.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V1/Drop8_allsensors_V1_epoch328_step4606.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch30_step434.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch58_step826.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch59_step840.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch61_step868.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V2/Drop8_allsensors_V2_epoch64_step910.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch0_step14.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch1_step14.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch390_step5474.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch391_step5488.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch397_step5572.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch441_step6188.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch478_step6706.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V3/Drop8_allsensors_V3_epoch714_step10001.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch33_step476.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch43_step616.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch44_step630.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch51_step728.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_V4/Drop8_allsensors_V4_epoch60_step854.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch21_step308.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch24_step350.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch26_step378.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch44_step630.pt
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop8-ARA/packages/Drop8_allsensors_scratch_V5/Drop8_allsensors_scratch_V5_epoch51_step728.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V01/Drop7_finetune_COLD_phase3_V01_epoch226_step4994.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch120_step2662.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch214_step4730.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch45_step1012.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch60_step1342.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch63_step1408.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch79_step1760.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V02/Drop7_finetune_COLD_phase3_V02_epoch88_step1958.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch208_step4598.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch209_step4620.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_finetune_COLD_phase3_V03/Drop7_finetune_COLD_phase3_V03_epoch226_step4994.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch15_step1712.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch16_step1819.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch17_step1926.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch18_step2033.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch18_step2052.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch19_step2140.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch20_step2268.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch26_step2916.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch32_step3564.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch35_step3888.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch36_step3996.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch40_step4428.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch41_step4536.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch43_step4752.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch45_step4968.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch35_step3888.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch40_step4428.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch47_step5184.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch5_step648.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V05/Drop7_scratch_V05_epoch86_step9396.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch167_step2352.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch172_step2422.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch177_step2492.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch180_step2534.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_V10/Drop8_Median10GSD_allsensors_V10_epoch182_step2562.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch0_step14.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch168_step2366.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch172_step2422.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch179_step2520.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch184_step2590.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch1_step16.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch110_step1554.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch133_step1876.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch142_step2002.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch185_step2604.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V8/Drop8_Median10GSD_allsensors_scratch_V8_epoch97_step1372.pt
+        bas_pxl.package_fpath: $MLOPS_DPATH/shortlist.yaml
+
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
@@ -1761,10 +1811,10 @@ geowatch schedule --params="
         bas_poly_eval.true_site_dpath: $TRUTH_DPATH/site_models
         bas_poly_eval.true_region_dpath: $TRUTH_DPATH/region_models
         bas_pxl.enabled: 1
-        bas_pxl_eval.enabled: 0
-        bas_poly.enabled: 1
-        bas_poly_eval.enabled: 1
+        bas_pxl_eval.enabled: 1
         bas_poly_viz.enabled: 0
+        bas_poly.enabled: 0
+        bas_poly_eval.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid" \
     --devices="1," --tmux_workers=8 \
@@ -1795,7 +1845,7 @@ python -m geowatch.mlops.aggregate \
         #    - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
-        top_k: 10
+        top_k: 1000
         per_group: 1
         macro_analysis: 0
         analyze: 0

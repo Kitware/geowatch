@@ -305,6 +305,8 @@ done
 python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run --workers=8 "crop_for_sc_queue"
 
+python ~/code/watch/dev/poc/find_and_remove_unregistered_images.py
+
 
 ## Hack fixup
 #python -m cmd_queue new "crop_for_sc_queue"
@@ -467,13 +469,17 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
 
 python -m cmd_queue new "reproject_for_bas"
 for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-    python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_bas \
-        geowatch reproject_annotations \
-            --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
-            --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
-            --io_workers="avail/2" \
-            --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
-            --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+    if test -f "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip"; then
+        python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_bas \
+            geowatch reproject_annotations \
+                --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
+                --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
+                --io_workers="avail/2" \
+                --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+                --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+    else
+        echo "Missing imgonly kwcoco for $REGION_ID"
+    fi
 done
 python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
@@ -498,6 +504,3 @@ dvc add -v -- \
 git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
-
-/flash/smart_phase3_data/Drop8-Median10GSD-V1/data_train_rawbands_split6_n041_ef065bc6.kwcoco.zip
-/flash/smart_phase3_data/Drop8-Median10GSD-V1/data_vali_rawbands_split6_n004_e95ff033.kwcoco.zip

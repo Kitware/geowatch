@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+TODO: add to kwcoco
+"""
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -11,6 +14,12 @@ class RemoveUnregisteredImagesConfig(scfg.DataConfig):
     src = scfg.Value(None, nargs='+', help='all kwcoco paths that register data in this bundle', position=1)
     io_workers = scfg.Value('avail', help='number of io workers')
     yes = scfg.Value(False, isflag=True, help='if True say yes to everything')
+    image_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        if specified, only the specified path(s) will have unregistered images
+        removed, otherwise this argument will be inferred as the bundle
+        directories belonging to the specified kwcoco files.
+        '''))
 
 
 def _check_registered(dset):
@@ -41,10 +50,10 @@ def _check_registered(dset):
     return registered_paths
 
 
-def _find_existing_images(bundle_dpath):
+def _find_existing_images(image_dpath):
     import kwimage
     existing_image_paths = []
-    for r, ds, fs in bundle_dpath.walk():
+    for r, ds, fs in image_dpath.walk():
         for f in fs:
             if f.lower().endswith(kwimage.im_io.IMAGE_EXTENSIONS):
                 existing_image_paths.append(r / f)
@@ -75,17 +84,22 @@ def main(cmdline=1, **kwargs):
     rich.print('Will read fpaths = {}'.format(ub.urepr(fpaths, nl=1)))
     datasets = list(kwcoco.CocoDataset.coerce_multiple(fpaths, workers=config.io_workers))
 
-    all_bundles = [ub.Path(d.bundle_dpath).resolve() for d in datasets]
-    if not ub.allsame(all_bundles):
-        raise ValueError('All input datasets must share the same bundle')
+    if config.image_dpath is None:
+        image_dpaths = [ub.Path(d.bundle_dpath).absolute() for d in datasets]
+        if not ub.allsame(image_dpaths):
+            raise ValueError('All input datasets must share the same bundle')
+    else:
+        image_dpaths = util_path.coerce_patterned_paths(config.image_dpath)
+        image_dpaths = [d.absolute() for d in image_dpaths]
+        assert len(image_dpaths) == 1, 'only one image dpath handled for now'
 
     all_registered_paths = []
     for dset in datasets:
         registered_paths = _check_registered(dset)
-        all_registered_paths += registered_paths
+        all_registered_paths.extend(registered_paths)
 
-    bundle_dpath = all_bundles[0]
-    existing_image_paths = _find_existing_images(bundle_dpath)
+    image_dpath = image_dpaths[0]
+    existing_image_paths = _find_existing_images(image_dpath)
 
     registered_paths = set(registered_paths)
     existing_image_paths = set(existing_image_paths)
@@ -93,16 +107,18 @@ def main(cmdline=1, **kwargs):
     missing_fpaths = registered_paths - existing_image_paths
     unregistered_fpaths = existing_image_paths - registered_paths
 
-    rich.print(f'{len(missing_fpaths)=}')
-    rich.print(f'{len(unregistered_fpaths)=}')
+    rich.print(f'len(existing_image_paths) = {len(existing_image_paths)}')
+    rich.print(f'len(registered_paths)     = {len(registered_paths)}')
+    rich.print(f'len(missing_fpaths)       = {len(missing_fpaths)}')
+    rich.print(f'len(unregistered_fpaths)  = {len(unregistered_fpaths)}')
 
     if len(unregistered_fpaths) > 0:
         import rich.prompt
         rich.print('unregistered_fpaths = {}'.format(ub.urepr([os.fspath(f) for f in unregistered_fpaths], nl=1)))
-        rich.print(f'{len(registered_paths)=}')
-        rich.print(f'{len(existing_image_paths)=}')
-        rich.print(f'{len(missing_fpaths)=}')
-        rich.print(f'{len(unregistered_fpaths)=}')
+        rich.print(f'len(existing_image_paths) = {len(existing_image_paths)}')
+        rich.print(f'len(registered_paths)     = {len(registered_paths)}')
+        rich.print(f'len(missing_fpaths)       = {len(missing_fpaths)}')
+        rich.print(f'len(unregistered_fpaths)  = {len(unregistered_fpaths)}')
         ans = config.yes or rich.prompt.Confirm.ask(f'Delete these {len(unregistered_fpaths)} unregistered files?')
 
         if ans:
@@ -111,18 +127,18 @@ def main(cmdline=1, **kwargs):
                 p.delete()
 
             # Find and remove empty directories
-            _remove_empty_dirs(bundle_dpath)
+            _remove_empty_dirs(image_dpath)
         else:
             raise RuntimeError('User abort')
     else:
         print('No unregistered files')
 
 
-def _remove_empty_dirs(bundle_dpath):
+def _remove_empty_dirs(dpath):
     empty_dpaths = True
     while empty_dpaths:
         empty_dpaths = []
-        for r, ds, fs in bundle_dpath.walk():
+        for r, ds, fs in dpath.walk():
             if not ds and not fs:
                 empty_dpaths.append(r)
         for d in empty_dpaths:
