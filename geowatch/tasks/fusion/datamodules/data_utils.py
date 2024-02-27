@@ -6,6 +6,7 @@ import numpy as np
 import ubelt as ub
 import kwimage
 import kwarray
+import networkx as nx
 
 
 def resolve_scale_request(request=None, data_gsd=None):
@@ -331,16 +332,13 @@ def _boxes_snap_to_edges(given_box, snap_target):
 
 class NestedPool():
     """
-    Manages a sampling from a tree of indexes (nodes are dictionaries, leafs are lists).
-
-    Helps with balancing samples over multiple criteria.
+    Manages a sampling from a tree of indexes. Helps with balancing
+    samples over multiple criteria.
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.data_utils import NestedPool
-        >>> # Lets say that you have a grid of sample locations with information
-        >>> # about them - say a source region and what category they contain.
-        >>> # In this case region1 occurs more often than region2 and there is
-        >>> # a rare category that only appears twice.
+        >>> # Given a grid of sample locations and attribute information
+        >>> # (e.g., region, category).
         >>> sample_grid = [
         >>>     { 'region': 'region1', 'category': 'background', 'color': "blue" },
         >>>     { 'region': 'region1', 'category': 'background', 'color': "purple" },
@@ -351,8 +349,8 @@ class NestedPool():
         >>>     { 'region': 'region1', 'category': 'background', 'color': "blue" },
         >>>     { 'region': 'region1', 'category': 'rare',       'color': "red" },
         >>>     { 'region': 'region1', 'category': 'rare',       'color': "green" },
-        >>>     { 'region': 'region2', 'category': 'background', 'color': "red" },
-        >>>     { 'region': 'region2', 'category': 'background', 'color': "green" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "red" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "green" },
         >>>     { 'region': 'region2', 'category': 'background', 'color': "blue" },
         >>>     { 'region': 'region2', 'category': 'background', 'color': "purple" },
         >>>     { 'region': 'region2', 'category': 'background', 'color': "red" },
@@ -363,202 +361,139 @@ class NestedPool():
         >>> #
         >>> # First we can just create a flat uniform sampling grid
         >>> # and inspect the imbalance that causes.
-        >>> sample_idxs = list(range(len(sample_grid)))
-        >>> self = NestedPool(sample_idxs)
+        >>> self = NestedPool(sample_grid)
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(self._sample_many(100, return_attributes=True))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
         >>> #
         >>> # We can subdivide the indexes based on region to improve balance.
-        >>> self.subdivide([g['region'] for g in sample_grid])
+        >>> self.subdivide('region')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(self._sample_many(100, return_attributes=True))
         >>> hist1 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
         >>> #
         >>> # We can further subdivide by category.
-        >>> self.subdivide([g['category'] for g in sample_grid])
+        >>> self.subdivide('category')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(self._sample_many(100, return_attributes=True))
         >>> hist2 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
         >>> #
-        >>> # We can further subdivide by color, using custom weights.
+        >>> # We can further subdivide by color, with custom weights.
         >>> weights = { 'red': .25, 'blue': .25, 'green': .4, 'purple': .1 }
-        >>> self.subdivide([g['color'] for g in sample_grid], weights=weights)
+        >>> self.subdivide('color', weights=weights)
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
-        >>> hist3 = ub.dict_hist([
+        >>> sampled = list(self._sample_many(100, return_attributes=True))
+        >>> hist2 = ub.dict_hist([
         >>>     (g['region'], g['category'], g['color']) for g in sampled
         >>> ])
-        >>> print('hist3 = {}'.format(ub.urepr(hist3, nl=1)))
-        >>> hist3_color = ub.dict_hist([(g['color']) for g in sampled])
+        >>> print('hist3 = {}'.format(ub.urepr(hist2, nl=1)))
+        >>> hist2 = ub.dict_hist([(g['color']) for g in sampled])
         >>> print('color weights = {}'.format(ub.urepr(weights, nl=1)))
-        >>> print('hist3 (color) = {}'.format(ub.urepr(hist3_color, nl=1)))
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
-        >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
-        >>> print({nested1.sample() for i in range(100)})
-        >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
-        >>> print({nested2.sample() for i in range(100)})
+        >>> print('hist3 (color) = {}'.format(ub.urepr(hist2, nl=1)))
     """
-    def __init__(self, pools, rng=None):
+    def __init__(self, sample_grid, rng=None):
         self.rng = rng = kwarray.ensure_rng(rng)
-        self.pools = self._convert_to_weighted(self._validate(pools))
+        self.graph = self._create_graph(sample_grid)
 
-    def _validate(self, _input):
-        # TODO: robustly validate the input to __init__
-        if not isinstance(_input, list):
-            raise ValueError('NestedPool requires a list as input.')
-        if len(_input) == 0:
-            raise ValueError('NestedPool received an empty list as input.')
+    def _create_graph(self, sample_grid):
+        graph = nx.DiGraph()
 
-        def remove_empty_leafs(nested):
-            if not isinstance(nested, list):
-                return nested
-            return list(filter(lambda x: x != [], (map(remove_empty_leafs, nested))))
-        return remove_empty_leafs(_input)
+        # make a special root node
+        root_node = '__root__'
+        graph.add_node(root_node, weights=None)
 
-    def _compute_depth(self, x):
-        return isinstance(x, list) and max(map(self._compute_depth, x)) + 1
+        for index, item in enumerate(sample_grid):
+            label = f'{index:02d} ' + ub.urepr(item, nl=0, compact=1, nobr=1)
+            if isinstance(item, dict):
+                graph.add_node(index, label=label, **item)
+            else:
+                graph.add_node(index, label=label)
+            graph.add_edge(root_node, index)
+        return graph
 
-    def _make_node(self, x):
-        return {"weights": None, "children": x}
+    def _get_leafs(self):
+        """ Return sink nodes for the graph """
+        return (n for n in self.graph.nodes if self.graph.out_degree[n] == 0)
 
-    def _convert_to_weighted(self, nested):
-        """
-        Convert from a tree (as a nested list of leaf values) to a representation
-        where nodes are dictionaries and children are lists. This allows specifying a
-        weight at every node to use when sampling.
-
-        Note: A single level is still just a flat list internally (a leaf).
-        """
-        if not isinstance(nested, list):
-            return nested
-
-        max_depth = self._compute_depth(nested)
-        if max_depth == 1:
-            return nested
-
-        if max_depth == 2 and len(nested) >= 2:
-            return self._make_node(nested)
+    def _get_parent(self, n):
+        """ Get the parent of a node (assume a tree). None if it doesnt exist """
+        preds = self.graph.pred[n]
+        if len(preds):
+            assert len(preds) == 1
+            return next(iter(preds))
         else:
-            collect = []
-            for o in nested:
-                collect.append(self._convert_to_weighted(o))
-            return self._make_node(collect)
+            return None
 
-    def _sample_many(self, num, items):
+    def subdivide(self, key, weights=None):
+        remove_edges = []
+        add_edges = []
+        add_nodes = []
+
+        # Group all leaf nodes by their direct parents
+        parent_to_leafs = ub.group_items(self._get_leafs(), key=lambda n: self._get_parent(n))
+        for parent, children in parent_to_leafs.items():
+            # Group children by the new attribute
+            val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
+            if len(val_to_subgroup) == 1:
+                # Dont need to do anything if no splits were made
+                ...
+            else:
+                # Otherwise, we have to subdivide the children
+                for value, subgroup in val_to_subgroup.items():
+                    # Use a dotted name to make unambiguous tree splits
+                    new_parent = f'{parent}.{key}={value}'
+                    # Mark edges to add / remove to implement the split
+                    remove_edges.extend([(parent, n) for n in subgroup])
+                    add_edges.extend([(parent, new_parent) for n in subgroup])
+                    add_edges.extend([(new_parent, n) for n in subgroup])
+                    add_nodes.append(new_parent)
+
+                # Add weights to the prior parent
+                if weights is not None:
+                    weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
+                    weights_group = weights_group / weights_group.sum()
+                    self.graph.nodes[parent]['weights'] = weights_group
+                else:
+                    self.graph.nodes[parent]["weights"] = None
+
+        # Modify the graph
+        self.graph.remove_edges_from(remove_edges)
+        self.graph.add_nodes_from(add_nodes, weights=None)
+        self.graph.add_edges_from(add_edges)
+
+    def _sample_many(self, num, return_attributes=False):
         for _ in range(num):
             idx = self.sample()
-            item = items[idx]
-            yield item
+            if return_attributes:
+                node = dict(self.graph.nodes[idx])
+                node.pop("label")
+                yield node
+            else:
+                yield idx
 
     def sample(self):
-        chosen = self.pools
-        while ub.iterable(chosen):
-            if isinstance(chosen, dict):
-                # processing a node, sample using weights
-                weights = chosen["weights"]
-                children = chosen["children"]
-                num = len(children)
-                if weights is None:
-                    idx = self.rng.randint(0, num)
-                else:
-                    idx = self.rng.choice(num, 1, p=weights)[0]
-                chosen = children[idx]
-            elif isinstance(chosen, list):
-                # processing a leaf, sample uniformly
-                num = len(chosen)
+        current = '__root__'
+        while self.graph.out_degree(current) > 0:
+            children = list(self.graph.neighbors(current))
+            num = len(children)
+
+            weights = self.graph.nodes[current]['weights']
+            if weights is None:
                 idx = self.rng.randint(0, num)
-                chosen = chosen[idx]
-        return chosen
-
-    def _subdivide_leaf(self, leaf, items, key=None, weights=None):
-        assert isinstance(leaf, list)
-        if len(leaf) == 1:
-            return leaf
-
-        if key is not None:
-            groupids = list(map(key, ub.take(items, leaf)))
-        else:
-            groupids = list(ub.take(items, leaf))
-
-        groups = ub.group_items(leaf, groupids)
-        group_keys = groups.keys()
-        group_values = list(groups.values())
-
-        if len(group_values) > 1:
-            if weights is not None:
-                group_weights = np.asarray(list(ub.take(weights, group_keys)))
-                weights = group_weights / group_weights.sum()
-            return {"weights": weights, "children": group_values}
-
-    def _subdivide_dict(self, nested, items, key=None, weights=None):
-        if not isinstance(nested, (list, dict)):
-            return nested
-        if isinstance(nested, dict):
-            if isinstance(nested["children"][0], list):
-                # children are leafs
-                nested["children"] = self._subdivide_dict(nested["children"], items, key=key, weights=weights)
-                return nested
             else:
-                # children are nodes
-                nested["children"] = [self._subdivide_dict(x, items, key=key, weights=weights) for x in nested["children"]]
-                return nested
-        else:
-            return [self._subdivide_leaf(o, items, key=key, weights=weights) for o in nested]
+                idx = self.rng.choice(num, 1, p=weights)[0]
 
-    def subdivide(self, items, key=None, weights=None):
-        """
-        Args:
-            items (List):
-                a list of items that the indexes index into.
-                If these are not the attributes to split nodes on, then
-                key must be specified:
-
-            key (None | Callable):
-                if specified, for each ``items[i]`` found transform it into
-                the group-id based on ``key(items[i])``.
-
-            weights (None | Dict):
-                a dictionary of weights for possible categories in items.
-        """
-        if isinstance(self.pools, list):
-            self.pools = self._subdivide_leaf(self.pools,
-                                              items,
-                                              key=key,
-                                              weights=weights)
-        else:
-            self.pools = self._subdivide_dict(self.pools,
-                                              items,
-                                              key=key,
-                                              weights=weights)
+            current = children[idx]
+        return current
 
     def __len__(self):
-        if isinstance(self.pools, list):
-            return len(self.pools)
-        else:
-            def nested_len(nested):
-                return sum(nested_len(x) if isinstance(x, list) else 1 for x in nested)
-            pool_list = self._traverse(self.pools)
-            return nested_len(pool_list)
+        return len(list(self._get_leafs()))
 
     def __str__(self):
-        if isinstance(self.pools, list):
-            return str(self.pools)
-        else:
-            return str(self._traverse(self.pools))
-
-    def _traverse(self, nested):
-        if not isinstance(nested, (list, dict)):
-            return nested
-        if isinstance(nested, dict):
-            return self._traverse(nested["children"])
-        else:
-            return [self._traverse(o) for o in nested]
+        return "\n".join(x for x in nx.generate_network_text(self.graph))
 
 
 def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
