@@ -2458,15 +2458,15 @@ class BalanceMixin:
         """
         Build data structure used for balanced sampling.
 
-        Helper for __init__ which constructs a NestedPool to balance sampling
+        Helper for __init__ which constructs a BalancedSampleTree to balance sampling
         across input domains.
         """
 
         print('Balancing over attributes')
         df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
 
-        # Initialize an instance of NestedPool
-        self.nested_pool = data_utils.NestedPool(df_sample_attributes.to_dict('records'))
+        # Initialize an instance of BalancedSampleTree
+        self.nested_pool = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
 
         # Compute weights for subdivide
         npr = self.config['neg_to_pos_ratio']

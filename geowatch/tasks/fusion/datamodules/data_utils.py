@@ -330,13 +330,13 @@ def _boxes_snap_to_edges(given_box, snap_target):
     return adjusted_box
 
 
-class NestedPool(ub.NiceRepr):
+class BalancedSampleTree(ub.NiceRepr):
     """
     Manages a sampling from a tree of indexes. Helps with balancing
     samples over multiple criteria.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.data_utils import NestedPool
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleTree
         >>> # Given a grid of sample locations and attribute information
         >>> # (e.g., region, category).
         >>> sample_grid = [
@@ -361,7 +361,7 @@ class NestedPool(ub.NiceRepr):
         >>> #
         >>> # First we can just create a flat uniform sampling grid
         >>> # and inspect the imbalance that causes.
-        >>> self = NestedPool(sample_grid)
+        >>> self = BalancedSampleTree(sample_grid)
         >>> print(f'self={self}')
         >>> sampled = list(self._sample_many(100, return_attributes=True))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
@@ -404,7 +404,7 @@ class NestedPool(ub.NiceRepr):
                 self.graph = self._create_graph(sample_grid)
                 self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
                 return
-        raise ValueError("""NestedPool only supports input in the
+        raise ValueError("""BalancedSampleTree only supports input in the
             form of a flat list or list of dicts.""")
 
     def _create_graph(self, sample_grid):
