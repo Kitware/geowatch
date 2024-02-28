@@ -363,21 +363,21 @@ class BalancedSampleTree(ub.NiceRepr):
         >>> # and inspect the imbalance that causes.
         >>> self = BalancedSampleTree(sample_grid)
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, return_attributes=True))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
         >>> #
         >>> # We can subdivide the indexes based on region to improve balance.
         >>> self.subdivide('region')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, return_attributes=True))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist1 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
         >>> #
         >>> # We can further subdivide by category.
         >>> self.subdivide('category')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, return_attributes=True))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist2 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
         >>> #
@@ -385,14 +385,14 @@ class BalancedSampleTree(ub.NiceRepr):
         >>> weights = { 'red': .25, 'blue': .25, 'green': .4, 'purple': .1 }
         >>> self.subdivide('color', weights=weights)
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, return_attributes=True))
-        >>> hist2 = ub.dict_hist([
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist3 = ub.dict_hist([
         >>>     (g['region'], g['category'], g['color']) for g in sampled
         >>> ])
-        >>> print('hist3 = {}'.format(ub.urepr(hist2, nl=1)))
-        >>> hist2 = ub.dict_hist([(g['color']) for g in sampled])
+        >>> print('hist3 = {}'.format(ub.urepr(hist3, nl=1)))
+        >>> hist3_color = ub.dict_hist([(g['color']) for g in sampled])
         >>> print('color weights = {}'.format(ub.urepr(weights, nl=1)))
-        >>> print('hist3 (color) = {}'.format(ub.urepr(hist2, nl=1)))
+        >>> print('hist3 (color) = {}'.format(ub.urepr(hist3_color, nl=1)))
     """
     def __init__(self, sample_grid, rng=None):
         super().__init__()
@@ -459,7 +459,10 @@ class BalancedSampleTree(ub.NiceRepr):
                 # Add weights to the prior parent
                 if weights is not None:
                     weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
-                    weights_group = weights_group / weights_group.sum()
+                    denom = weights_group.sum()
+                    if denom == 0:
+                        raise NotImplementedError('Zero weighted branches are not handled yet.')
+                    weights_group = weights_group / denom
                     self.graph.nodes[parent]['weights'] = weights_group
                 else:
                     self.graph.nodes[parent]["weights"] = None
