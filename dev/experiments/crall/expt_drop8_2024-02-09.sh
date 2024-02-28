@@ -1856,9 +1856,3 @@ python -m geowatch.mlops.aggregate \
     " \
     --rois="KR_R002"
     #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
-
-
-gid_to_category = {}
-images = dset.images()
-for gid, annots in zip(images.gids, images.annots):
-    gid_to_category[gid] = annots.category_names

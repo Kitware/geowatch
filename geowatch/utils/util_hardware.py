@@ -20,6 +20,15 @@ def get_cpu_info():
 
 
 def get_mem_info():
+    """
+    Memory info is returned in bytes.
+
+    TODO:
+        - [ ] Should we use pint to give these numbers units?
+
+    References:
+        https://psutil.readthedocs.io/en/latest/#psutil.virtual_memory
+    """
     import psutil
     svmem_info = psutil.virtual_memory()
     mem_info = dict(zip(svmem_info._fields, svmem_info))

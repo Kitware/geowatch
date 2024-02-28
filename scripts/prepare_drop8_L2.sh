@@ -289,6 +289,6 @@ dvc add -v -- \
     data_train_rawbands_split6_*.kwcoco.zip \
     data_vali_rawbands_split6_*.kwcoco.zip
 
-git commit -m "Update Drop8 Median 10mGSD BAS" && \
+git commit -m "Update Drop8-L2-Median10GSD-V1 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv

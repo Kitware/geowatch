@@ -67,7 +67,7 @@ class SVDatasetConfig(scfg.DataConfig):
             '''
             Output as simple newline separated STAC items
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='UNUSED AND WILL BE REMOVED')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Will not recompute if output_path already exists
@@ -97,7 +97,6 @@ def run_generate_sv_cropped_kwcoco(config):
     dryrun = config.dryrun
 
     # newline = config.newline
-    # jobs = config.jobs
 
     dont_recompute = config.dont_recompute
     sv_cropping_config = config.sv_cropping_config

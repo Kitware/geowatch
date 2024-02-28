@@ -173,7 +173,12 @@ def _demo_geoimg_with_nodata():
 
 class GDalCommandBuilder:
     """
-    Helper for templating out gdal commands
+    Helper for templating out gdal commands.
+
+    Usage is to give the builder the name of the main command, and then you can
+    add flags, single-value options, multi-value options, and positional
+    arguments. Convinience methods exist for common option profiles. When done
+    call finalize to get the final command string.
 
     Example:
         >>> from geowatch.utils.util_gdal import *  # NOQA
@@ -346,6 +351,9 @@ def gdal_single_translate(in_fpath,
             bash commands that would be executed, suitable for use in a command
             queue.
 
+        gdal_cachemax (int | None):
+            i/o block cache size in megabytes.
+
         timeout (None | float):
             number of seconds allowed to run gdal before giving up
 
@@ -421,6 +429,7 @@ def gdal_single_translate(in_fpath,
     # Use the new COG output driver
     # Perf options
     if gdal_cachemax is not None:
+        # TODO: allow pint-based arguments with units
         # TODO: these probably should be environment variables?
         # '1500'  # '15%'
         builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)

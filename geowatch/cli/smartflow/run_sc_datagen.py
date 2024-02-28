@@ -37,7 +37,7 @@ class ACSCDatasetConfig(scfg.DataConfig):
 
             UNUSED.
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='DO NOT USE. SET WORKERS IN acsc_align_config instead')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Will not recompute if output_path already exists
@@ -152,7 +152,7 @@ def run_generate_sc_cropped_kwcoco(config):
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
-        f'''
+        '''
         force_nodata: -9999
         include_channels: "red|green|blue|quality"
         site_summary: True
@@ -162,7 +162,7 @@ def run_generate_sc_cropped_kwcoco(config):
         target_gsd: 2
         context_factor: 1.5
         force_min_gsd: 4
-        img_workers: {str(config.jobs)}
+        img_workers: 1
         aux_workers: 2
         rpc_align_method: affine_warp
         image_timeout: 20minutes
