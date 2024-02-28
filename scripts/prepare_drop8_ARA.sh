@@ -293,7 +293,7 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
                 geowatch remove_bad_images \
                     --src "$CRP_KWCOCO_FPATH" \
                     --dst "$DST_KWCOCO_FPATH" \
-                    --delete_assets False \
+                    --delete_assets True \
                     --interactive False \
                     --channels "red|green|blue|pan" \
                     --workers "0" \
@@ -305,7 +305,19 @@ done
 python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run --workers=8 "crop_for_sc_queue"
 
-python ~/code/watch/dev/poc/find_and_remove_unregistered_images.py
+## FIXUP to remove the nan images
+#python -m cmd_queue new "fixup_remove_nan_images"
+#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+#    #echo "REGION_ID = $REGION_ID"
+#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
+#    if test -f "$DST_KWCOCO_FPATH"; then
+#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
+#        python -m cmd_queue submit --jobname="fixup-nan-$REGION_ID" -- fixup_remove_nan_images \
+#            python ~/code/watch/dev/poc/find_and_remove_unregistered_images.py --src "$DST_KWCOCO_FPATH" --yes=True
+#    fi
+#done
+#python -m cmd_queue show "fixup_remove_nan_images"
+#python -m cmd_queue run --workers=8 "fixup_remove_nan_images"
 
 
 ## Hack fixup
@@ -343,7 +355,7 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     fi
 done
 python -m cmd_queue show "reproject_for_sc"
-python -m cmd_queue run --workers=2 "reproject_for_sc"
+python -m cmd_queue run --workers=16 "reproject_for_sc"
 
 
 python -m geowatch.cli.prepare_splits \

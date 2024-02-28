@@ -166,3 +166,129 @@ dvc push -r aws -- */L8.dvc && \
 dvc push -r aws -- */S2.dvc && \
 dvc push -r aws -- */PD.dvc && \
 dvc push -r aws -- */WV.dvc
+
+
+
+##########################
+# Build Median BAS Dataset
+##########################
+
+# shellcheck disable=SC2155
+export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+# shellcheck disable=SC2155
+export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+
+export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-L2
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-L2-Median10GSD-V1
+
+export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8
+export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8/region_models"
+
+echo "
+SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
+DST_DVC_DATA_DPATH=$DST_DVC_DATA_DPATH
+
+SRC_BUNDLE_DPATH=$SRC_BUNDLE_DPATH
+DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
+
+TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
+"
+
+# shellcheck disable=SC2155
+export REGION_IDS_STR=$(python -c "if 1:
+    import pathlib
+    import os
+    TRUTH_REGION_DPATH = os.environ.get('TRUTH_REGION_DPATH')
+    SRC_BUNDLE_DPATH = os.environ.get('SRC_BUNDLE_DPATH')
+    region_dpath = pathlib.Path(TRUTH_REGION_DPATH)
+    src_bundle = pathlib.Path(SRC_BUNDLE_DPATH)
+    region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
+    region_names = [p.stem for p in region_fpaths]
+    final_names = []
+    for region_name in region_names:
+        coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
+        if coco_fpath.exists():
+            final_names.append(region_name)
+    print(' '.join(sorted(final_names)))
+    ")
+#export REGION_IDS_STR="CN_C000 KW_C001 CO_C001"
+
+# Dump regions to a file
+# FIXME: tmp_region_names.yaml is not a robust interchange.
+python -c "if 1:
+    from kwutil.util_yaml import Yaml
+    import os
+    import ubelt as ub
+    dpath = ub.Path(os.environ['DST_BUNDLE_DPATH']).ensuredir()
+    tmp_fpath = dpath / 'tmp_region_names.yaml'
+    REGION_IDS_STR = os.environ.get('REGION_IDS_STR')
+    final_names = [p.strip() for p in REGION_IDS_STR.split(' ') if p.strip()]
+    text = Yaml.dumps(final_names)
+    print(text)
+    tmp_fpath.write_text(text)
+"
+#REGION_IDS_STR="CN_C000 KW_C001 CO_C001 SA_C001 VN_C002"
+
+echo "REGION_IDS_STR = $REGION_IDS_STR"
+# shellcheck disable=SC2206
+REGION_IDS_ARR=($REGION_IDS_STR)
+for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+done
+
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
+    --regions="$DST_BUNDLE_DPATH/tmp_region_names.yaml" \
+    --reproject=False \
+    --input_bundle_dpath="$SRC_BUNDLE_DPATH" \
+    --output_bundle_dpath="$DST_BUNDLE_DPATH" \
+    --spatial_tile_size=1024 \
+    --merge_method=median \
+    --mask_low_quality=True \
+    --tmux_workers=1 \
+    --time_window=6months \
+    --combine_workers=1 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --skip_existing=1 \
+    --cache=1 \
+    --run=1 --print-commands
+
+
+python -m cmd_queue new "reproject_for_bas"
+for REGION_ID in "${REGION_IDS_ARR[@]}"; do
+    if test -f "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip"; then
+        python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_bas \
+            geowatch reproject_annotations \
+                --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
+                --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
+                --io_workers="avail/2" \
+                --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
+                --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+    else
+        echo "Missing imgonly kwcoco for $REGION_ID"
+    fi
+done
+python -m cmd_queue show "reproject_for_bas"
+python -m cmd_queue run --workers=8 "reproject_for_bas"
+
+
+python -m geowatch.cli.prepare_splits \
+    --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
+    --dst_dpath "$DST_BUNDLE_DPATH" \
+    --suffix=rawbands \
+    --backend=tmux --tmux_workers=6 \
+    --splits split6 \
+    --run=1
+
+
+dvc add -v -- \
+    */raw_bands \
+    */imgonly-*-rawbands.kwcoco.zip \
+    */imganns-*-rawbands.kwcoco.zip \
+    data_train_rawbands_split6_*.kwcoco.zip \
+    data_vali_rawbands_split6_*.kwcoco.zip
+
+git commit -m "Update Drop8 Median 10mGSD BAS" && \
+git push && \
+dvc push -r aws -R . -vvv

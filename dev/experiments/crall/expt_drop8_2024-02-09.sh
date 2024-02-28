@@ -1779,8 +1779,8 @@ geowatch schedule --params="
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto
@@ -1813,11 +1813,11 @@ geowatch schedule --params="
         bas_pxl.enabled: 1
         bas_pxl_eval.enabled: 1
         bas_poly_viz.enabled: 0
-        bas_poly.enabled: 0
-        bas_poly_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
     " \
     --root_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid" \
-    --devices="1," --tmux_workers=8 \
+    --devices="0,1," --tmux_workers=4 \
     --backend=tmux --queue_name "_preeval20_bas_grid" \
     --skip_existing=1 \
     --run=1
@@ -1856,3 +1856,9 @@ python -m geowatch.mlops.aggregate \
     " \
     --rois="KR_R002"
     #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
+
+
+gid_to_category = {}
+images = dset.images()
+for gid, annots in zip(images.gids, images.annots):
+    gid_to_category[gid] = annots.category_names
