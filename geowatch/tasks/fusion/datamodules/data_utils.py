@@ -6,6 +6,7 @@ import numpy as np
 import ubelt as ub
 import kwimage
 import kwarray
+import networkx as nx
 
 
 def resolve_scale_request(request=None, data_gsd=None):
@@ -329,134 +330,177 @@ def _boxes_snap_to_edges(given_box, snap_target):
     return adjusted_box
 
 
-class NestedPool(list):
+class BalancedSampleTree(ub.NiceRepr):
     """
-    Manages a sampling from a tree of indexes (represented as nested lists).
-
-    Helps with balancing samples over multiple criteria
+    Manages a sampling from a tree of indexes. Helps with balancing
+    samples over multiple criteria.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.data_utils import NestedPool
-        >>> # Lets say that you have a grid of sample locations with information
-        >>> # about them - say a source region and what category they contain.
-        >>> # In this case region1 occurs more often than region2 and there is
-        >>> # a rare category that only appears twice.
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleTree
+        >>> # Given a grid of sample locations and attribute information
+        >>> # (e.g., region, category).
         >>> sample_grid = [
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'rare'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region1', 'category': 'background'},
-        >>>     {'region': 'region2', 'category': 'background'},
-        >>>     {'region': 'region2', 'category': 'background'},
-        >>>     {'region': 'region2', 'category': 'rare'},
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "blue" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "purple" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "blue" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "red" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "green" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "purple" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "blue" },
+        >>>     { 'region': 'region1', 'category': 'rare',       'color': "red" },
+        >>>     { 'region': 'region1', 'category': 'rare',       'color': "green" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "red" },
+        >>>     { 'region': 'region1', 'category': 'background', 'color': "green" },
+        >>>     { 'region': 'region2', 'category': 'background', 'color': "blue" },
+        >>>     { 'region': 'region2', 'category': 'background', 'color': "purple" },
+        >>>     { 'region': 'region2', 'category': 'background', 'color': "red" },
+        >>>     { 'region': 'region2', 'category': 'background', 'color': "green" },
+        >>>     { 'region': 'region2', 'category': 'rare',       'color': "purple" },
+        >>>     { 'region': 'region2', 'category': 'rare',       'color': "blue" },
         >>> ]
         >>> #
         >>> # First we can just create a flat uniform sampling grid
-        >>> # And inspect the imbalance that causes.
-        >>> sample_idxs = list(range(len(sample_grid)))
-        >>> self = NestedPool(sample_idxs)
+        >>> # and inspect the imbalance that causes.
+        >>> self = BalancedSampleTree(sample_grid)
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
         >>> #
         >>> # We can subdivide the indexes based on region to improve balance.
-        >>> self.subdivide([g['region'] for g in sample_grid])
+        >>> self.subdivide('region')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist1 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
         >>> #
         >>> # We can further subdivide by category.
-        >>> self.subdivide([g['category'] for g in sample_grid])
+        >>> self.subdivide('category')
         >>> print(f'self={self}')
-        >>> sampled = list(self._sample_many(100, sample_grid))
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist2 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
-        >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
-        >>> list(nested1.leafs())
-
-        >>> print({nested1.sample() for i in range(100)})
-        >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
-        >>> print({nested2.sample() for i in range(100)})
-        >>> nested3 = NestedPool([nested1, nested2, [4, 59, 9, [], []]])
-        >>> print({nested3.sample() for i in range(100)})
-        >>> print(ub.urepr(ub.dict_hist(nested3.sample() for i in range(100))))
+        >>> #
+        >>> # We can further subdivide by color, with custom weights.
+        >>> weights = { 'red': .25, 'blue': .25, 'green': .4, 'purple': .1 }
+        >>> self.subdivide('color', weights=weights)
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist3 = ub.dict_hist([
+        >>>     (g['region'], g['category'], g['color']) for g in sampled
+        >>> ])
+        >>> print('hist3 = {}'.format(ub.urepr(hist3, nl=1)))
+        >>> hist3_color = ub.dict_hist([(g['color']) for g in sampled])
+        >>> print('color weights = {}'.format(ub.urepr(weights, nl=1)))
+        >>> print('hist3 (color) = {}'.format(ub.urepr(hist3_color, nl=1)))
     """
-    def __init__(self, pools, rng=None):
-        super().__init__(pools)
+    def __init__(self, sample_grid, rng=None):
+        super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
-        self.pools = pools
 
-    def _sample_many(self, num, items):
+        # validate input
+        if isinstance(sample_grid, list) and sample_grid:
+            if isinstance(sample_grid[0], (dict, int, float)):
+                self.graph = self._create_graph(sample_grid)
+                self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
+                return
+        raise ValueError("""BalancedSampleTree only supports input in the
+            form of a flat list or list of dicts.""")
+
+    def _create_graph(self, sample_grid):
+        graph = nx.DiGraph()
+
+        # make a special root node
+        root_node = '__root__'
+        graph.add_node(root_node, weights=None)
+
+        for index, item in enumerate(sample_grid):
+            label = f'{index:02d} ' + ub.urepr(item, nl=0, compact=1, nobr=1)
+            if isinstance(item, dict):
+                graph.add_node(index, label=label, **item)
+            else:
+                graph.add_node(index, label=label)
+            graph.add_edge(root_node, index)
+        return graph
+
+    def _get_parent(self, n):
+        """ Get the parent of a node (assume a tree). None if it doesnt exist """
+        preds = self.graph.pred[n]
+        if len(preds):
+            assert len(preds) == 1
+            return next(iter(preds))
+        else:
+            return None
+
+    def subdivide(self, key, weights=None):
+        remove_edges = []
+        add_edges = []
+        add_nodes = []
+
+        # Group all leaf nodes by their direct parents
+        parent_to_leafs = ub.group_items(self._leaf_nodes, key=lambda n: self._get_parent(n))
+        for parent, children in parent_to_leafs.items():
+            # Group children by the new attribute
+            val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
+            if len(val_to_subgroup) == 1:
+                # Dont need to do anything if no splits were made
+                ...
+            else:
+                # Otherwise, we have to subdivide the children
+                for value, subgroup in val_to_subgroup.items():
+                    # Use a dotted name to make unambiguous tree splits
+                    new_parent = f'{parent}.{key}={value}'
+                    # Mark edges to add / remove to implement the split
+                    remove_edges.extend([(parent, n) for n in subgroup])
+                    add_edges.extend([(parent, new_parent) for n in subgroup])
+                    add_edges.extend([(new_parent, n) for n in subgroup])
+                    add_nodes.append(new_parent)
+
+                # Add weights to the prior parent
+                if weights is not None:
+                    weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
+                    denom = weights_group.sum()
+                    if denom == 0:
+                        raise NotImplementedError('Zero weighted branches are not handled yet.')
+                    weights_group = weights_group / denom
+                    self.graph.nodes[parent]['weights'] = weights_group
+                else:
+                    self.graph.nodes[parent]["weights"] = None
+
+        # Modify the graph
+        self.graph.remove_edges_from(remove_edges)
+        self.graph.add_nodes_from(add_nodes, weights=None)
+        self.graph.add_edges_from(add_edges)
+
+    def _sample_many(self, num):
         for _ in range(num):
             idx = self.sample()
-            item = items[idx]
-            yield item
-
-    def subdivide(self, items, key=None):
-        """
-        Args:
-            items (List):
-                a list of items that the indexes index into.
-                If these are not the attributes to split nodes on, then
-                key must be specified:
-
-            key (None | Callable):
-                if specified, for each ``items[i]`` found transform it into
-                the group-id based on ``key(items[i])``.
-        """
-        for leaf in self.leafs():
-            if key is not None:
-                groupids = list(map(key, ub.take(items, leaf)))
-            else:
-                groupids = list(ub.take(items, leaf))
-            new_subleafs = list(ub.group_items(leaf, groupids).values())
-            if len(new_subleafs) > 1:
-                # Clear the current leaf and replace it with new subleafs
-                leaf[:] = new_subleafs
-
-    def leafs(self):
-        """
-        Iterate over the deepest index lists in this pool.
-        """
-        stack = [self]
-        while stack:
-            curr = stack.pop()
-            assert ub.iterable(curr)
-            if len(curr) == 0 or not ub.iterable(curr[0]):
-                # Found a leaf
-                yield curr
-            else:
-                for child in curr:
-                    stack.append(child)
+            yield idx
 
     def sample(self):
-        # Hack for empty lists
-        chosen = self
-        i = 0
-        while ub.iterable(chosen):
-            chosen = self
-            i += 1
-            while ub.iterable(chosen):
-                i += 1
-                num = len(chosen)
-                # Fixme: not robust
-                if i > 100000:
-                    raise Exception('Too many samples. Bad balance?')
-                if not num:
-                    break
+        current = '__root__'
+        while self.graph.out_degree(current) > 0:
+            children = list(self.graph.successors(current))
+            num = len(children)
+
+            weights = self.graph.nodes[current]['weights']
+            if weights is None:
                 idx = self.rng.randint(0, num)
-                chosen = chosen[idx]
-        return chosen
+            else:
+                idx = self.rng.choice(num, 1, p=weights)[0]
+
+            current = children[idx]
+        return current
+
+    def __len__(self):
+        return len(list(self._leaf_nodes))
+
+    def __nice__(self):
+        n_nodes = self.graph.number_of_nodes()
+        n_edges = self.graph.number_of_edges()
+        n_leafs = self.__len__()
+        n_depth = len(nx.algorithms.dag.dag_longest_path(self.graph))
+        return f'nodes={n_nodes}, edges={n_edges}, leafs={n_leafs}, depth={n_depth}'
 
 
 def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,

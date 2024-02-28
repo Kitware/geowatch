@@ -136,7 +136,6 @@ from typing import NamedTuple
 from geowatch import heuristics
 from geowatch.utils import kwcoco_extensions
 from geowatch.utils import util_bands
-from geowatch.utils import util_iter
 from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
 from geowatch.tasks.fusion import utils
@@ -2388,11 +2387,8 @@ class BalanceMixin:
     Helpers to build the sample grid and balance it
     """
 
-    def _setup_balance_dataframe(self, new_sample_grid):
-        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
-
-        # extract video names
-        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
+    def _get_video_names(self, vidids):
+        unique_vidids, _idx_to_unique_idx = np.unique(vidids, return_inverse=True)
         coco_dset = self.sampler.dset
         try:
             unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
@@ -2406,12 +2402,9 @@ class BalanceMixin:
                     vidname = video_id
                 unique_vidnames.append(vidname)
         vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
+        return vidnames
 
-        # associate targets with positive or negative
-        target_posbit = kwarray.boolmask(
-            new_sample_grid['positives_indexes'],
-            len(new_sample_grid['targets']))
-
+    def _get_region_names(self, vidnames):
         # create mapping from video name to region name
         from kwutil import util_pattern
         pat = util_pattern.Pattern.coerce(r'\w+_[A-Z]\d+_.*', 'regex')
@@ -2421,13 +2414,43 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = "_".join(vidname.split('_')[:2])
             else:
                 self.vidname_to_region_name[vidname] = vidname
+        return list(ub.take(self.vidname_to_region_name, vidnames))
 
-        # build a dataframe with video attributes
+    def _get_observed_annotations(self, targets):
+        gid_to_category = ub.AutoDict()
+        for gid in self.sampler.dset.annots().gids:
+            cats = self.sampler.dset.annots(image_id=gid).category_names
+            gid_to_category[gid] = cats
+
+        observed_annos = ub.AutoDict()
+        for idx, target in enumerate(targets):
+            observed_cats = gid_to_category[target["main_gid"]]
+            unique_cats = set(observed_cats)
+            observed_annos[idx] = unique_cats
+        return observed_annos
+
+    def _setup_attribute_dataframe(self, new_sample_grid):
+        """
+        Build a dataframe of attributes (for each sample) that can be used for balancing.
+        """
+        video_ids = [v['video_id'] for v in new_sample_grid['targets']]
+        video_names = self._get_video_names(video_ids)
+        region_names = self._get_region_names(video_names)
+        observed_annos = self._get_observed_annotations(new_sample_grid['targets'])
+        observed_phases = ub.util_dict.map_vals(lambda x: set(heuristics.PHASES).intersection(x), observed_annos)
+
+        # associate targets with positive or negative
+        contains_positive = ['positive' in v for (k, v) in observed_annos.items()]
+        contains_phase = [any(v) for (k, v) in observed_phases.items()]
+
+        # build a dataframe with target attributes
         df = pd.DataFrame({
-            'vidid': target_vidids,
-            'vidname': vidnames,
-            'is_positive': target_posbit,
-            'region': list(ub.take(self.vidname_to_region_name, vidnames))
+            'video_id': video_ids,
+            'video_name': video_names,
+            'region': region_names,
+            'contains_positive': contains_positive,
+            'contains_phase': contains_phase,
+            'phases': observed_phases.values(),
         }).reset_index(drop=False)
         return df
 
@@ -2435,56 +2458,25 @@ class BalanceMixin:
         """
         Build data structure used for balanced sampling.
 
-        Helper for __init__ which constructs a NestedPool to balance sampling
-        acrgeowatch/tasks/fusion/datamodules/kwcoco_dataset.pyoss input domains.
-
-        TODO:
-            HELP WANTED: We would like to configure the distribution in some
-            easy to specify way. We should be domain aware, or rather accept
-            some encoding of the domain. We want to oversample underrepresented
-            or important batch items and undersample overrepresented or
-            unimportant easy batch items. The "batch item" part is what makes
-            this hard because we need the notation of goodness, easiness, etc
-            at the batch level, which can contain multiple annotations.
+        Helper for __init__ which constructs a BalancedSampleTree to balance sampling
+        across input domains.
         """
 
-        print('Balancing over regions')
-        df_videos = self._setup_balance_dataframe(new_sample_grid)
+        print('Balancing over attributes')
+        df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
 
-        # balance positive / negatives per region
-        neg_to_pos_ratio = self.config['neg_to_pos_ratio']
-        region_to_pool = {}
-        for region in df_videos['region'].unique():
-            df_pos_frames = df_videos.query(f"region == '{region}' and is_positive == True")
-            df_neg_frames = df_videos.query(f"region == '{region}' and is_positive == False")
-            pos_frames_idxs = df_pos_frames['index']
-            neg_frames_idxs = df_neg_frames['index']
+        # Initialize an instance of BalancedSampleTree
+        self.nested_pool = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
 
-            n_pos = len(df_pos_frames)
-            n_neg = len(df_neg_frames)
-            max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
+        # Compute weights for subdivide
+        npr = self.config['neg_to_pos_ratio']
+        npr_dist = np.asarray([1, npr]) / (1 + npr)
+        weights_pos = dict(zip([True, False], npr_dist))
 
-            neg_region_pool_ = list(util_iter.chunks(neg_frames_idxs, nchunks=max_neg))
-            pos_region_pool_ = list(util_iter.chunks(pos_frames_idxs, nchunks=n_pos))
-            region_pool = pos_region_pool_ + neg_region_pool_
-            region_to_pool[region] = [p for p in region_pool if p]
+        self.nested_pool.subdivide('region')
+        self.nested_pool.subdivide('contains_positive', weights=weights_pos)
+        self.nested_pool.subdivide('contains_phase')
 
-        # compute maximum to take per region
-        freqs = list(map(len, region_to_pool.values()))
-        if len(freqs) == 0:
-            max_per_region = 100
-            warnings.warn('Warning: no region pool')
-        else:
-            max_per_region = int(np.median(freqs))
-
-        # balance across regions
-        all_chunks = []
-        for region, region_pool in region_to_pool.items():
-            rechunked_region_pool = list(util_iter.chunks(region_pool, nchunks=max_per_region))
-            all_chunks.extend(rechunked_region_pool)
-
-        # initialize nested pool
-        self.nested_pool = data_utils.NestedPool(all_chunks)
         if self.config['reseed_fit_random_generators']:
             self.reseed()
 
