@@ -104,12 +104,12 @@ def build_special_columns(agg):
         part1_ = [p for p in part1 if '_fit' in p]
         if len(part1_) == 1:
             part1 = part1_
-
     part2 = resolved_params.query_column('accumulate_grad_batches')
-    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
-    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
+    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 2)[0])
+    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 2)[0])
+    prefixes = set(prefix_to_batchsize) | set(prefix_to_accumbatch)
 
-    for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
+    for prefix in prefixes:
         cols1 = prefix_to_batchsize.get(prefix, None)
         cols2 = prefix_to_accumbatch.get(prefix, None)
         val_accum = 1
@@ -427,8 +427,6 @@ class ParamPlotter:
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
-        import xdev
-        xdev.embed()
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
         resolved_params['param_hashid'] = macro_table['param_hashid']
         valid_cols = resolved_params.columns.difference(blocklist)

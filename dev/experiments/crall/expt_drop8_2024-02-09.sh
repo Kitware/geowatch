@@ -1766,6 +1766,7 @@ MODEL_SHORTLIST="
 - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-V2/packages/Drop7_scratch_V04/Drop7_scratch_V04_epoch45_step4968.pt
 "
 
+mkdir -p "$MLOPS_DPATH"
 echo "$MODEL_SHORTLIST" > "$MLOPS_DPATH/shortlist.yaml"
 
 cat "$MLOPS_DPATH/shortlist.yaml"
@@ -1778,7 +1779,7 @@ geowatch schedule --params="
 
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
@@ -1786,8 +1787,8 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
-            - 0.10
-            - 0.20
+            #- 0.10
+            #- 0.20
             - 0.30
             - 0.325
             - 0.35
@@ -1817,7 +1818,7 @@ geowatch schedule --params="
         bas_poly_eval.enabled: 1
     " \
     --root_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid" \
-    --devices="0,1," --tmux_workers=4 \
+    --devices="0,1," --tmux_workers=8 \
     --backend=tmux --queue_name "_preeval20_bas_grid" \
     --skip_existing=1 \
     --run=1
@@ -1837,7 +1838,7 @@ python -m geowatch.mlops.aggregate \
         #- bas_pxl_eval
     " \
     --plot_params="
-        enabled: 0
+        enabled: 1
         stats_ranking: 0
         min_variations: 1
         #params_of_interest:

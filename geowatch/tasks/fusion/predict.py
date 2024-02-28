@@ -297,12 +297,19 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
     return stitch_managers
 
 
-def resolve_datamodule(config, model, datamodule_defaults):
+def resolve_datamodule(config, model, datamodule_defaults, fit_config):
     """
     TODO: refactor / cleanup.
 
     Breakup the sections that handle getting the traintime params, resolving
     the datamodule args, and building the datamodule.
+
+    Args:
+        ...
+
+        fit_config (dict):
+            nested train-time configuration provided by the model
+            This should have a "data" key for dataset params.
     """
     import rich
     # init datamodule from args
@@ -312,24 +319,6 @@ def resolve_datamodule(config, model, datamodule_defaults):
     parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
     need_infer = ub.udict({
         k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
-    # Try and infer what data we were given at train time
-    if hasattr(model, 'config_cli_yaml'):
-        traintime_params = model.config_cli_yaml["data"]
-    elif hasattr(model, 'fit_config'):
-        traintime_params = model.fit_config
-    elif hasattr(model, 'datamodule_hparams'):
-        traintime_params = model.datamodule_hparams
-    else:
-        traintime_params = {}
-        if datamodule_vars['channels'] in {None, 'auto'}:
-            print('Warning have to make assumptions. Might not always work')
-            raise NotImplementedError('TODO: needs to be sensorchan if we do this')
-            if hasattr(model, 'input_channels'):
-                # note input_channels are sometimes different than the channels the
-                # datamodule expects. Depending on special keys and such.
-                traintime_params['channels'] = model.input_channels.spec
-            else:
-                traintime_params['channels'] = list(model.input_norms.keys())[0]
 
     def get_scriptconfig_compatible(config_cls, other):
         """
@@ -345,11 +334,10 @@ def resolve_datamodule(config, model, datamodule_defaults):
         return resolved
 
     config_cls = datamodules.kwcoco_dataset.KWCocoVideoDatasetConfig
-    other = traintime_params
+    traintime_data_params = fit_config['data']
+    # Determine which train-time data options are compatible with predict-time.
     traintime_datavars = get_scriptconfig_compatible(
-        config_cls,
-        other
-    )
+        config_cls, traintime_data_params)
 
     # FIXME: Some of the inferred args seem to not have the right type here.
     able_to_infer = traintime_datavars & need_infer
@@ -377,6 +365,7 @@ def resolve_datamodule(config, model, datamodule_defaults):
             rich.print(f'    {key!r}: {f_val!r} -> {p_val!r}')
 
     HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
+    # TODO: can we remove this or move it out of this function?
     if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
         # There was an issue where we trained models and specified
         # r|g|b|mat:0.3 but we only passed data with r|g|b. At train time
@@ -446,23 +435,13 @@ def resolve_datamodule(config, model, datamodule_defaults):
     datamodule = datamodule_class(
         **datamodule_vars
     )
-    return config, traintime_params, datamodule
-    #### real diff part
+    return config, datamodule
 
 
-def _prepare_predict_data(config):
+def _prepare_model(config):
     """
-    Build the data needed to run prediction.
-
-    Args:
-        config (PredictConfig):
-
-    Returns:
-        Tuple[PredictConfig, LightningModule, LightningDataModule]:
-            modified config, network, and dataloader
+    Load the specified (ideally packaged) model
     """
-    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
-    datamodule_defaults = config.datamodule_defaults
     package_fpath = ub.Path(config['package_fpath']).expand()
 
     # try:
@@ -506,9 +485,60 @@ def _prepare_predict_data(config):
     model.eval()
     model.freeze()
 
-    # TODO: perhaps we should enforce that that packaged model
-    # knows how to construct the appropriate test dataset?
-    config, traintime_params, datamodule = resolve_datamodule(config, model, datamodule_defaults)
+    # Lookup the parameters used to fit the model (these should be stored in
+    # the model, if they are not, then the model packaging needs to be
+    # updated).
+    if hasattr(model, 'config_cli_yaml'):
+        # This should be a lightning nested dictionary
+        # with keys like "data", "model", "trainer", "optmizer", etc..
+        fit_config = model.config_cli_yaml
+    else:
+        raise AssertionError(
+            'model is missing config_cli_yaml, other mechanisms to get fit '
+            'params are commented and may need to be re-instanted')
+        # elif hasattr(model, 'fit_config'):
+        #     traintime_params = model.fit_config
+        # elif hasattr(model, 'datamodule_hparams'):
+        #     traintime_params = model.datamodule_hparams
+        # else:
+        #     # Not sure if code after is still needed for older models.
+        #     # if we hit this error, then we may need to rework this.
+        #     traintime_params = {}
+        #     if datamodule_vars['channels'] in {None, 'auto'}:
+        #         print('Warning have to make assumptions. Might not always work')
+        #         raise NotImplementedError('TODO: needs to be sensorchan if we do this')
+        #         if hasattr(model, 'input_channels'):
+        #             # note input_channels are sometimes different than the channels the
+        #             # datamodule expects. Depending on special keys and such.
+        #             traintime_params['channels'] = model.input_channels.spec
+        #         else:
+        #             traintime_params['channels'] = list(model.input_norms.keys())[0]
+
+    return model, fit_config
+
+
+def _prepare_predict_modules(config):
+    """
+    Build the modules (i.e. data / model) needed to run prediction.
+
+    Args:
+        config (PredictConfig):
+            the config for this script
+
+    Returns:
+        Tuple[PredictConfig, LightningModule, LightningDataModule]:
+            modified config, network, and dataloader
+    """
+    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
+    datamodule_defaults = config.datamodule_defaults
+
+    model, fit_config = _prepare_model(config)
+    config.fit_config = fit_config
+
+    # Determine how to construct the datamodule with correct params
+    # TODO: we should not be updating the config here
+    config, datamodule = resolve_datamodule(
+        config, model, datamodule_defaults, fit_config)
 
     # TODO: if TTA=True, disable deterministic time sampling
     datamodule.setup('test')
@@ -544,7 +574,6 @@ def _prepare_predict_data(config):
     if not config.draw_batches:
         test_torch_dataset.inference_only = True
 
-    config.traintime_params = traintime_params
     return config, model, datamodule
 
 
@@ -735,11 +764,10 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
 
     config_resolved = _jsonify(config.asdict())
-    traintime_params = _jsonify(config.traintime_params)
+    fit_config = _jsonify(config.fit_config)
 
     from kwcoco.util import util_json
     assert not list(util_json.find_json_unserializable(config_resolved))
-    assert not list(util_json.find_json_unserializable(traintime_params))
 
     if config['record_context']:
         from geowatch.utils import process_context
@@ -748,7 +776,13 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
             type='process',
             config=config_resolved,
             track_emissions=config['track_emissions'],
-            extra={'fit_config': traintime_params}
+            # Extra information was adjusted in 0.15.1 to ensure more relevant
+            # fit params are returned here. A script
+            # ~/code/geowatch/dev/oneoffs/fixup_predict_kwcoco_metadata.py
+            # exist to help update old results to use this new format.
+            extra={
+                'fit_config': fit_config
+            }
         )
         # assert not list(util_json.find_json_unserializable(proc_context.obj))
         info.append(proc_context.obj)
@@ -1276,7 +1310,7 @@ def predict(cmdline=False, **kwargs):
     # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
     rich.print('config = {}'.format(ub.urepr(config, nl=2)))
 
-    config, model, datamodule = _prepare_predict_data(config)
+    config, model, datamodule = _prepare_predict_modules(config)
 
     test_coco_dataset = datamodule.coco_datasets['test']
 
@@ -1293,12 +1327,6 @@ def predict(cmdline=False, **kwargs):
 
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
-    # Set the filepath for the prediction coco file
-    # (modifies the bundle_dpath)
-    # if config['pred_dataset'] is None:
-    #     pred_dpath = ub.Path(config['pred_dpath'])
-    #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
-    # else:
     if not config['pred_dataset']:
         raise ValueError(
             f'Must specify path to the output (predicted) kwcoco file. '
