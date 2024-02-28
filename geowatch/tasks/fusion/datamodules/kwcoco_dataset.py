@@ -2385,6 +2385,44 @@ class IntrospectMixin:
 class BalanceMixin:
     """
     Helpers to build the sample grid and balance it
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> num_samples = 50
+        >>> neg_to_pos_ratio = 0
+        >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> num_targets = len(self.new_sample_grid['targets'])
+        >>> positives_indexes = self.new_sample_grid['positives_indexes']
+        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
+        >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
+        >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
+        >>> sampled_indexes = [self[x]['resolved_index'] for x in range(num_samples)]
+        >>> num_positives = sum([x in positives_indexes for x in sampled_indexes])
+        >>> num_negatives = num_samples - num_positives
+        >>> print('sampled positive ratio:', num_positives / num_samples)
+        >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert all([x in positives_indexes for x in sampled_indexes])
+        >>> neg_to_pos_ratio = .5
+        >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> num_targets = len(self.new_sample_grid['targets'])
+        >>> positives_indexes = self.new_sample_grid['positives_indexes']
+        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
+        >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
+        >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
+        >>> sampled_indexes = [self[x]['resolved_index'] for x in range(num_samples)]
+        >>> num_positives = sum([x in positives_indexes for x in sampled_indexes])
+        >>> num_negatives = num_samples - num_positives
+        >>> print('sampled positive ratio:', num_positives / num_samples)
+        >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert num_positives > num_negatives
     """
 
     def _get_video_names(self, vidids):
