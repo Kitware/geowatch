@@ -2416,18 +2416,26 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = vidname
         return list(ub.take(self.vidname_to_region_name, vidnames))
 
-    def _get_observed_annotations(self, targets):
-        gid_to_category = ub.AutoDict()
-        for gid in self.sampler.dset.annots().gids:
-            cats = self.sampler.dset.annots(image_id=gid).category_names
-            gid_to_category[gid] = cats
+    def _load_target_annots(self, target):
+        """
+        TODO: need an ndsampler endpoint that just finds the annotations in a
+        sample quickly.
+        """
+        space_slice = target['space_slice']
+        space_box = kwimage.Box.from_slice(space_slice)
+        all_aids = []
+        for gid in target['gids']:
+            aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
+            all_aids.extend(aids)
+        return all_aids
 
-        observed_annos = ub.AutoDict()
-        for idx, target in enumerate(targets):
-            observed_cats = gid_to_category[target["main_gid"]]
-            unique_cats = set(observed_cats)
-            observed_annos[idx] = unique_cats
-        return observed_annos
+    def _get_observed_annotations(self, targets):
+        observed_cats = []
+        for target in targets:
+            aids = self._load_target_annots(target)
+            catnames = self.sampler.dset.annots(aids).category_names
+            observed_cats.append(ub.dict_hist(catnames))
+        return observed_cats
 
     def _setup_attribute_dataframe(self, new_sample_grid):
         """
@@ -2436,12 +2444,12 @@ class BalanceMixin:
         video_ids = [v['video_id'] for v in new_sample_grid['targets']]
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
-        observed_annos = self._get_observed_annotations(new_sample_grid['targets'])
-        observed_phases = ub.util_dict.map_vals(lambda x: set(heuristics.PHASES).intersection(x), observed_annos)
+        observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
+        observed_phases = list(map(lambda x: set(heuristics.PHASES).intersection(x), observed_annots))
 
         # associate targets with positive or negative
-        contains_positive = ['positive' in v for (k, v) in observed_annos.items()]
-        contains_phase = [any(v) for (k, v) in observed_phases.items()]
+        contains_positive = ['positive' in x for x in observed_annots]
+        contains_phase = [any(x) for x in observed_phases]
 
         # build a dataframe with target attributes
         df = pd.DataFrame({
@@ -2450,7 +2458,7 @@ class BalanceMixin:
             'region': region_names,
             'contains_positive': contains_positive,
             'contains_phase': contains_phase,
-            'phases': observed_phases.values(),
+            'phases': observed_phases,
         }).reset_index(drop=False)
         return df
 
