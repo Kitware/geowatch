@@ -2447,8 +2447,8 @@ class BalanceMixin:
         observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
         observed_phases = list(map(lambda x: set(heuristics.PHASES).intersection(x), observed_annots))
 
-        # associate targets with positive or negative
-        contains_positive = ['positive' in x for x in observed_annots]
+        # associate target window with positive / negative
+        target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
         contains_phase = [any(x) for x in observed_phases]
 
         # build a dataframe with target attributes
@@ -2456,7 +2456,7 @@ class BalanceMixin:
             'video_id': video_ids,
             'video_name': video_names,
             'region': region_names,
-            'contains_positive': contains_positive,
+            'target_type': target_type,
             'contains_phase': contains_phase,
             'phases': observed_phases,
         }).reset_index(drop=False)
@@ -2479,10 +2479,10 @@ class BalanceMixin:
         # Compute weights for subdivide
         npr = self.config['neg_to_pos_ratio']
         npr_dist = np.asarray([1, npr]) / (1 + npr)
-        weights_pos = dict(zip([True, False], npr_dist))
+        weights_target_type = dict(zip([True, False], npr_dist))
 
         self.balanced_sample_tree.subdivide('region')
-        self.balanced_sample_tree.subdivide('contains_positive', weights=weights_pos)
+        self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)
         self.balanced_sample_tree.subdivide('contains_phase')
 
         if self.config['reseed_fit_random_generators']:
