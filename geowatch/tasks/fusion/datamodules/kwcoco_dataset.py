@@ -2479,7 +2479,7 @@ class BalanceMixin:
         # Compute weights for subdivide
         npr = self.config['neg_to_pos_ratio']
         npr_dist = np.asarray([1, npr]) / (1 + npr)
-        weights_target_type = dict(zip([True, False], npr_dist))
+        weights_target_type = ub.odict(zip([True, False], npr_dist))
 
         self.balanced_sample_tree.subdivide('region')
         self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)

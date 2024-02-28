@@ -442,6 +442,7 @@ class BalancedSampleTree(ub.NiceRepr):
         for parent, children in parent_to_leafs.items():
             # Group children by the new attribute
             val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
+            val_to_subgroup = ub.odict(sorted(val_to_subgroup.items()))
             if len(val_to_subgroup) == 1:
                 # Dont need to do anything if no splits were made
                 ...
