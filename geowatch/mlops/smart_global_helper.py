@@ -253,6 +253,15 @@ class SmartGlobalHelper:
 
                     'objective1': 'maximize',
                 },
+                # {
+                #     'metric1': 'metrics.bas_pxl_eval.salient_AP',
+                #     'metric2': 'metrics.bas_poly_eval.bas_tpr',
+
+                #     'scale1': 'linear',
+                #     'scale2': 'linear',
+
+                #     'objective1': 'maximize',
+                # },
 
                 {
                     'metric1': 'metrics.bas_poly_eval.bas_tpr',
