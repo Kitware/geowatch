@@ -269,6 +269,8 @@ def run_sc_fusion_for_baseline(config):
 
             ub.cmd(f'kwcoco stats {tracked_sc_kwcoco_path}', verbose=3)
             ub.cmd(f'geowatch stats {tracked_sc_kwcoco_path}', verbose=3)
+    else:
+        print('Warning: No Videos in Ingress Dataset, Skipping Predict!')
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
