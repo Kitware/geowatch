@@ -1395,7 +1395,7 @@ class GetItemMixin(TruthMixin):
                 # In non-test-mode we discard the user index and randomly
                 # sample a grid location to achive balanced sampling.
                 try:
-                    resolved_index = self.nested_pool.sample()
+                    resolved_index = self.balanced_sample_tree.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
             target = self.new_sample_grid['targets'][resolved_index]
@@ -1404,7 +1404,7 @@ class GetItemMixin(TruthMixin):
         target['requested_index'] = requested_index
         target['resolved_index'] = resolved_index
         # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
-        # print(f'{LOCAL_RANK=}, {index=} {self.mode=}  {self.nested_pool.sample()} {target=}')
+        # print(f'{LOCAL_RANK=}, {index=} {self.mode=} {self.balanced_sample_tree.sample()} {target=}')
         if target is None:
             raise FailedSample('no target')
         return target
@@ -2385,6 +2385,44 @@ class IntrospectMixin:
 class BalanceMixin:
     """
     Helpers to build the sample grid and balance it
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> num_samples = 50
+        >>> neg_to_pos_ratio = 0
+        >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> num_targets = len(self.new_sample_grid['targets'])
+        >>> positives_indexes = self.new_sample_grid['positives_indexes']
+        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
+        >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
+        >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
+        >>> sampled_indexes = [self[x]['resolved_index'] for x in range(num_samples)]
+        >>> num_positives = sum([x in positives_indexes for x in sampled_indexes])
+        >>> num_negatives = num_samples - num_positives
+        >>> print('sampled positive ratio:', num_positives / num_samples)
+        >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert all([x in positives_indexes for x in sampled_indexes])
+        >>> neg_to_pos_ratio = .5
+        >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> num_targets = len(self.new_sample_grid['targets'])
+        >>> positives_indexes = self.new_sample_grid['positives_indexes']
+        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
+        >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
+        >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
+        >>> sampled_indexes = [self[x]['resolved_index'] for x in range(num_samples)]
+        >>> num_positives = sum([x in positives_indexes for x in sampled_indexes])
+        >>> num_negatives = num_samples - num_positives
+        >>> print('sampled positive ratio:', num_positives / num_samples)
+        >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert num_positives > num_negatives
     """
 
     def _get_video_names(self, vidids):
@@ -2416,18 +2454,26 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = vidname
         return list(ub.take(self.vidname_to_region_name, vidnames))
 
-    def _get_observed_annotations(self, targets):
-        gid_to_category = ub.AutoDict()
-        for gid in self.sampler.dset.annots().gids:
-            cats = self.sampler.dset.annots(image_id=gid).category_names
-            gid_to_category[gid] = cats
+    def _load_target_annots(self, target):
+        """
+        TODO: need an ndsampler endpoint that just finds the annotations in a
+        sample quickly.
+        """
+        space_slice = target['space_slice']
+        space_box = kwimage.Box.from_slice(space_slice)
+        all_aids = []
+        for gid in target['gids']:
+            aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
+            all_aids.extend(aids)
+        return all_aids
 
-        observed_annos = ub.AutoDict()
-        for idx, target in enumerate(targets):
-            observed_cats = gid_to_category[target["main_gid"]]
-            unique_cats = set(observed_cats)
-            observed_annos[idx] = unique_cats
-        return observed_annos
+    def _get_observed_annotations(self, targets):
+        observed_cats = []
+        for target in targets:
+            aids = self._load_target_annots(target)
+            catnames = self.sampler.dset.annots(aids).category_names
+            observed_cats.append(ub.dict_hist(catnames))
+        return observed_cats
 
     def _setup_attribute_dataframe(self, new_sample_grid):
         """
@@ -2436,21 +2482,21 @@ class BalanceMixin:
         video_ids = [v['video_id'] for v in new_sample_grid['targets']]
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
-        observed_annos = self._get_observed_annotations(new_sample_grid['targets'])
-        observed_phases = ub.util_dict.map_vals(lambda x: set(heuristics.PHASES).intersection(x), observed_annos)
+        observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
+        observed_phases = list(map(lambda x: set(heuristics.PHASES).intersection(x), observed_annots))
 
-        # associate targets with positive or negative
-        contains_positive = ['positive' in v for (k, v) in observed_annos.items()]
-        contains_phase = [any(v) for (k, v) in observed_phases.items()]
+        # associate target window with positive / negative
+        target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+        contains_phase = [any(x) for x in observed_phases]
 
         # build a dataframe with target attributes
         df = pd.DataFrame({
             'video_id': video_ids,
             'video_name': video_names,
             'region': region_names,
-            'contains_positive': contains_positive,
+            'target_type': target_type,
             'contains_phase': contains_phase,
-            'phases': observed_phases.values(),
+            'phases': observed_phases,
         }).reset_index(drop=False)
         return df
 
@@ -2466,16 +2512,16 @@ class BalanceMixin:
         df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
 
         # Initialize an instance of BalancedSampleTree
-        self.nested_pool = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
+        self.balanced_sample_tree = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
 
         # Compute weights for subdivide
         npr = self.config['neg_to_pos_ratio']
         npr_dist = np.asarray([1, npr]) / (1 + npr)
-        weights_pos = dict(zip([True, False], npr_dist))
+        weights_target_type = ub.odict(zip([True, False], npr_dist))
 
-        self.nested_pool.subdivide('region')
-        self.nested_pool.subdivide('contains_positive', weights=weights_pos)
-        self.nested_pool.subdivide('contains_phase')
+        self.balanced_sample_tree.subdivide('region')
+        self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)
+        self.balanced_sample_tree.subdivide('contains_phase')
 
         if self.config['reseed_fit_random_generators']:
             self.reseed()
@@ -2904,7 +2950,7 @@ class MiscMixin:
             could fix that.
         """
         # Randomize across DDP workers
-        if hasattr(self, 'nested_pool'):
+        if hasattr(self, 'balanced_sample_tree'):
             rng = kwarray.ensure_rng(rng=None)
             import secrets
             import time
@@ -2914,7 +2960,7 @@ class MiscMixin:
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
             rng = kwarray.ensure_rng(rng=seed)
-            self.nested_pool.rng = rng
+            self.balanced_sample_tree.rng = rng
         ...
 
     @property
@@ -3264,27 +3310,10 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             if 1:
                 self._init_balance(new_sample_grid)
 
-            self.length = len(self.nested_pool)
+            self.length = len(self.balanced_sample_tree)
 
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)
-
-        # x = list(ub.flatten(ub.flatten(all_chunks)))
-        # import networkx as nx
-        # def nested_tree(tree, nested, name='root'):
-        #     tree.add_node(name)
-        #     for idx, child in enumerate(nested):
-        #         key = f'{name}.{idx}'
-        #         if ub.iterable(child):
-        #             child = nested_tree(tree, child, key)
-        #         else:
-        #             tree.add_node(key)
-        #         tree.add_edge(name, key)
-        # nested = self.nested_pool
-        # tree = nx.DiGraph()
-        # xdev.fix_embed_globals()
-        # node = nested_tree(tree, nested)
-        # ub.dict_hist(list(map(len, nested)))
 
         self.new_sample_grid = new_sample_grid
 

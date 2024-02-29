@@ -4,7 +4,7 @@ import ubelt as ub
 
 class SMARTDataMixin:
 
-    def check_nested_pool(self, num=4096):
+    def check_balanced_sample_tree(self, num=4096):
         """
         Developer function to check statistics about how the nested pool is
         sampling regions.
@@ -32,7 +32,7 @@ class SMARTDataMixin:
             if 0:
                 infos = []
                 for num in [500, 1000, 2500, 5000, 7500, 10000, 20000]:
-                    row = self.check_nested_pool(num=num)
+                    row = self.check_balanced_sample_tree(num=num)
                     infos.append(row)
                 df = pd.DataFrame(infos)
                 import kwplot
@@ -53,7 +53,7 @@ class SMARTDataMixin:
         # Check the nested pool
         dset = self.sampler.dset
         vidid_to_name = dset.videos().lookup('name', keepid=True)
-        idx_hist = ub.dict_hist(self.nested_pool.sample() for _ in range(num))
+        idx_hist = ub.dict_hist(self.balanced_sample_tree.sample() for _ in range(num))
         targets = self.new_sample_grid['targets']
 
         gid_freq = ub.ddict(lambda: 0)
