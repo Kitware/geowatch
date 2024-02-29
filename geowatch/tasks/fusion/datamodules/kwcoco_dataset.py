@@ -2498,7 +2498,7 @@ class BalanceMixin:
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
         observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
-        observed_phases = list(map(lambda x: set(heuristics.PHASES).intersection(x), observed_annots))
+        observed_phases = list(map(lambda x: ub.dict_subset(x, set(heuristics.PHASES).intersection(x.keys())), observed_annots))
 
         # associate target window with positive / negative
         target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
@@ -2515,7 +2515,7 @@ class BalanceMixin:
         }).reset_index(drop=False)
         return df
 
-    def _init_balance(self, new_sample_grid):
+    def _init_balance(self, sample_grid_input):
         """
         Build data structure used for balanced sampling.
 
@@ -2524,10 +2524,14 @@ class BalanceMixin:
         """
 
         print('Balancing over attributes')
-        df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
+        df_sample_attributes = self._setup_attribute_dataframe(sample_grid_input)
+        sample_grid = df_sample_attributes.to_dict('records')
 
         # Initialize an instance of BalancedSampleTree
-        self.balanced_sample_tree = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
+        if not any([isinstance(v, dict) for (k, v) in sample_grid[0].items()]):
+            self.balanced_sample_tree = data_utils.BalancedSampleTree(sample_grid)
+        else:
+            self.balanced_sample_tree = data_utils.BalancedSampleForest(sample_grid)
 
         # Compute weights for subdivide
         npr = self.config['neg_to_pos_ratio']

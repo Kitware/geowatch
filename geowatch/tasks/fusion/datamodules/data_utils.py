@@ -504,6 +504,115 @@ class BalancedSampleTree(ub.NiceRepr):
         return f'nodes={n_nodes}, edges={n_edges}, leafs={n_leafs}, depth={n_depth}'
 
 
+class BalancedSampleForest(ub.NiceRepr):
+    """
+    Manages a sampling from a forest of BalancedSampleTree's. Helps with balancing
+    samples in the multi-label case.
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleForest
+        >>> sample_grid = [
+        >>>     { 'region': 'region1', 'color': {'blue': 10, 'red': 3}},
+        >>>     { 'region': 'region1', 'color': {'green': 3, 'purple': 2}},
+        >>>     { 'region': 'region1', 'color': {'blue': 1}},
+        >>>     { 'region': 'region1', 'color': {'green': 3, 'red': 5}},
+        >>>     { 'region': 'region1', 'color': {'purple': 1, 'blue': 1}},
+        >>>     { 'region': 'region2', 'color': {'blue': 5, 'red': 5}},
+        >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
+        >>> ]
+        >>> #
+        >>> self = BalancedSampleForest(sample_grid)
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
+        >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
+        >>> #
+        >>> self.subdivide('region')
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist1 = ub.dict_hist([g['region'] for g in sampled])
+        >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
+        >>> #
+        >>> self.subdivide('color')
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
+        >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
+    """
+    def __init__(self, sample_grid, rng=None, n_trees=16, scoring='inverse'):
+        super().__init__()
+        self.rng = rng = kwarray.ensure_rng(rng)
+
+        # TODO: validate input
+        self.n_trees = n_trees
+        self.forest = self._create_forest(sample_grid, n_trees, scoring)
+
+    def _create_forest(self, sample_grid, n_trees, scoring):
+        """ Generate N BalancedSampleTree's, producing a hard assignment for
+        each multi-label attribute. Expects a multi-label attribute to arrive
+        as a dictionary with possible values as keys and frequencies as values.
+
+        Example:
+        """
+        import copy
+        forest = []
+        for idx in range(n_trees):
+            local_sample_grid = copy.deepcopy(sample_grid)
+            for sample in local_sample_grid:
+                for key, val in sample.items():
+                    if isinstance(val, dict):
+                        if len(val) == 0:
+                            sample[key] = set()
+                            continue
+                        elif len(val) == 1:
+                            sample[key] = list(val.keys())[0]
+                            continue
+
+                        # two or more choices
+                        if scoring == 'inverse':
+                            labels = list(val.keys())
+                            freqs = np.asarray(list(val.values()))
+                            weights = 1 - (freqs / freqs.sum())
+                            weights = weights / weights.sum()
+                            idx = self.rng.choice(len(labels), 1, p=weights)[0]
+                            sample[key] = labels[idx]
+                        elif scoring == 'uniform':
+                            sample[key] = self.rng.choice(list(val.keys()))
+                        else:
+                            raise NotImplementedError
+
+            # initialize a BalancedSampleTree with this sample grid
+            bst = BalancedSampleTree(local_sample_grid)
+            forest.append(bst)
+        return forest
+
+    def subdivide(self, key, weights=None):
+        for tree in self.forest:
+            tree.subdivide(key, weights=weights)
+
+    def _sample_many(self, num):
+        for _ in range(num):
+            idx = self.sample()
+            yield idx
+
+    def sample(self):
+        """ Uniformly sample a tree from the forest, then sample from it. """
+        idx = self.rng.choice(self.n_trees)
+        return self.forest[idx].sample()
+
+    def __len__(self):
+        return len(self.forest[0])
+
+    def __nice__(self):
+        graph = self.forest[0].graph
+        n_trees = self.n_trees
+        n_nodes = graph.number_of_nodes()
+        n_edges = graph.number_of_edges()
+        n_leafs = self.__len__()
+        n_depth = len(nx.algorithms.dag.dag_longest_path(graph))
+        return f'trees={n_trees}, nodes={n_nodes}, edges={n_edges}, leafs={n_leafs}, depth={n_depth}'
+
+
 def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
                           samecolor_values=None):
     """
