@@ -562,7 +562,7 @@ class BalancedSampleForest(ub.NiceRepr):
                 for key, val in sample.items():
                     if isinstance(val, dict):
                         if len(val) == 0:
-                            sample[key] = set()
+                            sample[key] = None
                             continue
                         elif len(val) == 1:
                             sample[key] = list(val.keys())[0]
