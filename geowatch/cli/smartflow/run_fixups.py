@@ -51,9 +51,9 @@ class FixupConfig(scfg.DataConfig):
             '''))
 
 
-def main():
-    config = FixupConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+def main(cmdline=1, **kwargs):
+    config = FixupConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
 
     from geowatch.cli.smartflow_ingress import smartflow_ingress
     from geowatch.cli.smartflow_egress import smartflow_egress
@@ -64,13 +64,23 @@ def main():
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
 
+    input_path = config.input_path
+    assets = [
+        {'key': config.region_models_asset_name},
+        {'key': config.site_models_asset_name, 'missing_action': 'mkdir'},
+    ]
+    outdir = ingress_dir
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+    # show_progress = False
+    # dont_error_on_missing_asset = False
+
     ingressed_assets = smartflow_ingress(
-        config.input_path,
-        [config.region_models_asset_name,
-         config.site_models_asset_name],
-        ingress_dir,
-        config.aws_profile,
-        config.dryrun)
+        input_path,
+        assets,
+        outdir,
+        aws_profile,
+        dryrun)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")

@@ -246,6 +246,7 @@ def run_generate_sc_cropped_kwcoco(config):
                 'channels': 'red|green|blue|pan',
                 'workers': 'avail',
                 'interactive': False,
+                'delete_assets': True,
                 'overview': 0,
             },
             node_dpath='.'

@@ -295,6 +295,10 @@ def run_sc_fusion_for_baseline(config):
 
     node_state.print_current_state(ingress_dir)
 
+    # Ensure the directory is not empty
+    if len(cropped_site_models_outdir.ls()) == 0:
+        (cropped_site_models_outdir / '__emptydir__').write_text('empty file')
+
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)

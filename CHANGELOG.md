@@ -21,6 +21,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * Added workaround for issue in STAC to kwcoco, where channel names would be non-unique.
 * Issue in `geowatch visualize` where requested channels were not respected.
+* Issue in smartflow when SC predicts no site models.
 
 
 ## Version 0.14.4 - Released 2023-02-06
