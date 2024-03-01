@@ -54,6 +54,16 @@ class ACSCDatasetConfig(scfg.DataConfig):
         The configuration for the coco-align step
         '''))
 
+    input_region_models_asset_name = scfg.Value('sv_out_region_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('sv_out_site_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
+            '''))
+
 
 def main():
     config = ACSCDatasetConfig.cli(strict=True)
@@ -95,8 +105,8 @@ def run_generate_sc_cropped_kwcoco(config):
         input_path=config.input_path,
         assets=[
             'kwcoco_for_sc',
-            'sv_out_region_models',
-            'cropped_region_models_bas'
+            config.input_region_models_asset_name,  # 'sv_out_region_models',
+            # 'cropped_region_models_bas'
         ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
@@ -119,12 +129,13 @@ def run_generate_sc_cropped_kwcoco(config):
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    if 'sv_out_region_models' in ingressed_assets:
-        input_region_path = ub.Path(ingressed_assets['sv_out_region_models']) / f'{region_id}.geojson'
+    if config.input_region_models_asset_name in ingressed_assets:
+        input_region_path = ub.Path(ingressed_assets[config.input_region_models_asset_name]) / f'{region_id}.geojson'
     else:
-        print("* Didn't find region output from SV; using region output "
-              "from BAS *")
-        input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
+        raise AssertionError("Just pass the right key to input_region_models_asset_name")
+        # print("* Didn't find region output from SV; using region output "
+        #       "from BAS *")
+        # input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
     node_state.print_current_state(ingress_dir)
 

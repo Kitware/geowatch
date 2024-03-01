@@ -35,15 +35,15 @@ class FixupConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
-    region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
+    input_region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
             '''
             Which region model assets to ingress and fix up
-            '''))
+            '''), alias=['region_models_asset_name'])
 
-    site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to ingress and fix up
-            '''))
+    input_site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
+        '''
+        Which site model assets to ingress and fix up
+        '''), alias=['site_models_asset_name'])
 
     performer_suffix = scfg.Value('KIT', type=str, required=True, help=ub.paragraph(
             '''
@@ -66,8 +66,8 @@ def main(cmdline=1, **kwargs):
 
     input_path = config.input_path
     assets = [
-        {'key': config.region_models_asset_name},
-        {'key': config.site_models_asset_name, 'missing_action': 'mkdir'},
+        {'key': config.input_region_models_asset_name},
+        {'key': config.input_site_models_asset_name, 'missing_action': 'mkdir'},
     ]
     outdir = ingress_dir
     aws_profile = config.aws_profile
@@ -96,8 +96,8 @@ def main(cmdline=1, **kwargs):
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
-    input_region_dpath = ub.Path(ingressed_assets[config.region_models_asset_name])
-    input_site_dpath = ub.Path(ingressed_assets[config.site_models_asset_name])
+    input_region_dpath = ub.Path(ingressed_assets[config.input_region_models_asset_name])
+    input_site_dpath = ub.Path(ingressed_assets[config.input_site_models_asset_name])
 
     output_region_dpath = ingress_dir / 'cropped_region_models_fixed'
     output_site_dpath = ingress_dir / 'cropped_site_models_fixed'

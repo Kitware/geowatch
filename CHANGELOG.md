@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Remove developer dependency on `fire`.
 * Disable shrinking timeouts in `util_gdal`
+* Added keys to specify input keys to smartflow CLI scripts 
 
 ### Fixed
 
