@@ -34,7 +34,14 @@ def concat_kwcoco_datasets(src_kwcoco_datasets, dst):
     out_dset_videos_lookup = _build_video_lookup(out_dset)
 
     for dset_path in rest:
-        next_id = max(ubelt.flatten(out_dset.videos().images.lookup('id')))
+        out_dset_ids =\
+            list(ubelt.flatten(out_dset.videos().images.lookup('id')))
+
+        if len(out_dset_ids) > 0:
+            next_id = max(out_dset_ids)
+        else:
+            next_id = 1
+
         dset = kwcoco.CocoDataset(dset_path)
 
         dset_videos_lookup = _build_video_lookup(dset)
