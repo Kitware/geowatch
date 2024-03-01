@@ -11,6 +11,8 @@ import os
 import scriptconfig as scfg
 import shutil
 import ubelt as ub
+from datetime import datetime, timezone
+from dateutil import parser
 
 
 class BasFusionConfig(scfg.DataConfig):
@@ -44,6 +46,13 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
+    models_outbucket = scfg.Value(None, type=str, required=False, help=ub.paragraph(
+            '''
+            S3 Output directory for output region and site models (if
+            not specified, defaults to using the `outbucket`
+            parameter)
+            '''))
+
     ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             S3 Location for collated TA-2 output (bucket name should
@@ -65,6 +74,18 @@ class BasFusionConfig(scfg.DataConfig):
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
             config for bas tracking.
+            '''))
+
+    previous_interval_output = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Output path for previous interval BAS DatasetGen step
+            '''))
+
+    num_years_historical = scfg.Value(None, type=int, help=ub.paragraph(
+            '''
+            Number of years worth of historical data to consider; does
+            nothing if 'previous_interval_output' is not specified
+            (i.e. for incremental mode)
             '''))
 
     time_dense = scfg.Value(False, isflag=True, help=ub.paragraph(
@@ -100,6 +121,37 @@ def main():
     config = BasFusionConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_bas_fusion_for_baseline(config)
+
+
+def filter_kwcoco_images_by_datetime(input_kwcoco_fpath,
+                                     output_kwcoco_fpath,
+                                     date,
+                                     mode='remove-after'):
+    assert mode in {'remove-after', 'remove-before'}
+
+    import kwcoco
+    from operator import lt, ge
+
+    if mode == 'remove-before':
+        op = lt
+    elif mode == 'remove-after':
+        op = ge
+    else:
+        raise RuntimeError("Expecting kwarg `mode` to be one "
+                           "of: {'remove-before', 'remove-after'}")
+
+    input_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
+
+    image_ids_to_remove = []
+    for o in input_dset.images().objs:
+        odate = parser.parse(o['date_captured'])
+
+        if op(odate, date):
+            image_ids_to_remove.append(o['id'])
+
+    input_dset.remove_images(image_ids_to_remove)
+
+    input_dset.dump(output_kwcoco_fpath)
 
 
 def run_bas_fusion_for_baseline(config):
@@ -167,8 +219,32 @@ def run_bas_fusion_for_baseline(config):
         ensure_comments=True,
     )
 
+    from watch.geoannots.geomodels import RegionModel
+    region = RegionModel.coerce(local_region_path)
+
+    # Returned as datetime
+    current_interval_end_date = region.end_date
+
+    if current_interval_end_date.month == 1 and current_interval_end_date.day == 1:
+        # If current interval ends at the start of a year,
+        # consider the "current" year to be the previous one
+        current_interval_year = current_interval_end_date.year - 1
+    else:
+        current_interval_year = current_interval_end_date.year
+
+    # Granularity of filtering only by year currently since we're
+    # using data time-averaged over a year
+    if config.num_years_historical is None:
+        min_date = datetime(
+            current_interval_year,
+            1, 1, tzinfo=timezone.utc)
+    else:
+        min_date = datetime(
+            current_interval_year - (config.num_years_historical - 1),
+            1, 1, tzinfo=timezone.utc)
+
     # Determine the region_id in the region file.
-    region_id = determine_region_id(local_region_path)
+    region_id = region.region_id
 
     # 3. Run fusion
     print("* Running BAS fusion *")
@@ -198,6 +274,21 @@ def run_bas_fusion_for_baseline(config):
 
     ingress_kwcoco_path = ingressed_assets['enriched_bas_kwcoco_file']
 
+    incremental_assets_for_egress = {}
+    if config.previous_interval_output is None:
+        filtered_ingress_kwcoco_path = ingress_kwcoco_path
+    else:
+        filtered_ingress_kwcoco_path =\
+            ingress_dir / 'filtered_enriched_kwcoco.json'
+
+        filter_kwcoco_images_by_datetime(
+            ingress_kwcoco_path,
+            filtered_ingress_kwcoco_path,
+            min_date, mode='remove-before')
+
+        incremental_assets_for_egress['filtered_enriched_kwcoco'] =\
+            filtered_ingress_kwcoco_path
+
     if 0:
         import kwcoco
         src_dset = kwcoco.CocoDataset(ingress_kwcoco_path)
@@ -209,7 +300,7 @@ def run_bas_fusion_for_baseline(config):
             with_change=False,
             with_saliency=True,
             with_class=False,
-            test_dataset=ingress_kwcoco_path,
+            test_dataset=filtered_ingress_kwcoco_path,
             pred_dataset=bas_fusion_kwcoco_path,
             **bas_pxl_config)
 
@@ -253,6 +344,50 @@ def run_bas_fusion_for_baseline(config):
     else:
         combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
 
+    previous_ingressed_assets = None
+    if config.previous_interval_output is not None:
+        print('* Combining previous interval time combined kwcoco with '
+              'current *')
+        previous_ingress_dir = ub.Path('/tmp/ingress_previous')
+        try:
+            previous_ingressed_assets = smartflow_ingress(
+                config.previous_interval_output,
+                ['bas_pred_saliency_assets',
+                 'combined_bas_fusion_kwcoco_path'],
+                previous_ingress_dir,
+                config.aws_profile,
+                config.dryrun)
+        except FileNotFoundError:
+            print("** Warning: Couldn't ingress previous interval output; "
+                  "assuming this is the first interval **")
+            combined_kwcoco_path = combined_bas_fusion_kwcoco_path
+        else:
+            combined_kwcoco_path = ingress_dir / 'combined_bas_fusion_kwcoco.json'
+
+            filtered_previous_bas_fusion_kwcoco_path =\
+                previous_ingress_dir / 'filtered_bas_fusion_kwcoco.json'
+
+            filter_kwcoco_images_by_datetime(
+                previous_ingressed_assets['combined_bas_fusion_kwcoco_path'],
+                filtered_previous_bas_fusion_kwcoco_path,
+                min_date, mode='remove-after')
+
+            incremental_assets_for_egress['filtered_bas_fusion_kwcoco'] =\
+                filtered_previous_bas_fusion_kwcoco_path
+
+            from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+            concat_kwcoco_datasets(
+                (filtered_previous_bas_fusion_kwcoco_path,
+                 combined_bas_fusion_kwcoco_path),
+                combined_kwcoco_path)
+
+            # Copy saliency assets from previous bas fusion
+            shutil.copytree(previous_ingress_dir / 'pred_saliency',
+                            ingress_dir / '_assets' / 'pred_saliency',
+                            dirs_exist_ok=True)
+    else:
+        combined_kwcoco_path = combined_bas_fusion_kwcoco_path
+
     # 4. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
     bas_region_models_outdir = (ingress_dir / 'region_models').ensuredir()
@@ -283,10 +418,10 @@ def run_bas_fusion_for_baseline(config):
     time_pad_before = bas_tracking_config.pop('time_pad_before', None)
     # TODO: use smart_pipeline.BAS_PolygonPrediction
     tracked_bas_kwcoco_path = '_tracked'.join(
-        os.path.splitext(bas_fusion_kwcoco_path))
+        os.path.splitext(combined_kwcoco_path))
     ub.cmd([
         'python', '-m', 'geowatch.cli.run_tracker',
-        combined_bas_fusion_kwcoco_path,
+        combined_kwcoco_path,
         '--out_sites_dir', bas_site_models_outdir,
         '--out_sites_fpath', site_models_manifest_outpath,
         '--out_site_summaries_dir', bas_region_models_outdir,
@@ -360,18 +495,34 @@ def run_bas_fusion_for_baseline(config):
         # Add BAS saliency outputs to egressed attributes for debugging
         ingressed_assets['bas_pred_saliency_assets'] = ingress_dir / '_assets/pred_saliency'
         ingressed_assets['bas_fusion_kwcoco_path'] = bas_fusion_kwcoco_path
+        ingressed_assets['combined_bas_fusion_kwcoco_path'] = combined_kwcoco_path
         ingressed_assets['bas_original_site_models_outdir'] = bas_site_models_outdir
         ingressed_assets['bas_original_region_models_outdir'] = bas_region_models_outdir
         ingressed_assets['tracked_bas_kwcoco_path'] = tracked_bas_kwcoco_path
 
     node_state.print_current_state(ingress_dir)
 
+    models_to_egress = {'cropped_region_models_bas': cropped_region_models_outdir,
+                        'cropped_site_models_bas': cropped_site_models_outdir}
+    if config.models_outbucket is not None:
+        # Egress region models to a dedicated bucket
+        models_egressed = smartflow_egress(
+            models_to_egress,
+            local_region_path,
+            os.path.join(config.models_outbucket, 'models_only_items.jsonl'),
+            config.models_outbucket,
+            aws_profile=None,
+            dryrun=False,
+            newline=False)
+
+        ingressed_assets = {**ingressed_assets, **models_egressed}
+    else:
+        ingressed_assets = {**ingressed_assets, **models_to_egress}
+
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    ingressed_assets['cropped_region_models_bas'] = cropped_region_models_outdir
-    ingressed_assets['cropped_site_models_bas'] = cropped_site_models_outdir
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,
