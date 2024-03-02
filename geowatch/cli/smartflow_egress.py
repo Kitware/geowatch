@@ -213,7 +213,7 @@ def smartflow_egress(assetnames_and_local_paths,
     assert aws_profile is None, 'unhandled'
     outbucket = FSPath.coerce(outbucket)
 
-    PRE_DELETE_HACK = 1
+    PRE_DELETE_HACK = 0
     if PRE_DELETE_HACK:
         # HACK: delete everything in the outbucket to prevent conflicting
         # results and ensure the next step always gets exactly this output
