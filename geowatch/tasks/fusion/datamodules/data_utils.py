@@ -539,7 +539,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
     """
-    def __init__(self, sample_grid, rng=None, n_trees=16, scoring='inverse'):
+    def __init__(self, sample_grid, rng=None, n_trees=16, scoring='uniform'):
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
 
