@@ -928,6 +928,9 @@ class AggregatorAnalysisMixin:
         if plot_config is None:
             plot_config = {}
         from geowatch.mlops import aggregate_plots
+        if isinstance(rois, str):
+            # fixme: ensure rois are coerced before this point.
+            rois = agg._coerce_rois(rois)
         # agg.macro_key_to_regions
         plotter = aggregate_plots.build_plotter(agg, rois, plot_config)
         return plotter

@@ -1825,6 +1825,12 @@ geowatch schedule --params="
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+MLOPS_DPATH=$DVC_EXPT_DPATH/_preeval20_bas_grid
+python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata \
+    --coco_fpaths "$MLOPS_DPATH/pred/flat/bas_pxl/*/pred.kwcoco.zip"
+
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 python -m geowatch.mlops.aggregate \
     --pipeline=bas \
@@ -1855,5 +1861,6 @@ python -m geowatch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002"
+    --rois="KR_R002,CN_C000"
+    #--rois="KR_R002"
     #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
