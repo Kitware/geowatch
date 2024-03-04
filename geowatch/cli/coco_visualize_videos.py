@@ -349,6 +349,7 @@ def main(cmdline=True, **kwargs):
         # expanded_streams.append(fused_sensorchan.sensor.spec + ':' + chan)
         expanded_streams.append(chan)
     channels = (','.join(expanded_streams))
+    print(f'channels = {ub.urepr(channels, nl=1)}')
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0
@@ -398,15 +399,16 @@ def main(cmdline=True, **kwargs):
 
     if config['skip_missing'] and channels is not None:
         requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
+        print(f'requested_channels={requested_channels}')
         coco_images = coco_dset.images(selected_gids).coco_images
         keep = []
         for coco_img in coco_images:
-            channels = coco_img.channels
-            if channels is None:
+            img_channels = coco_img.channels
+            if img_channels is None:
                 if not config['skip_aggressive']:
                     keep.append(coco_img.img['id'])
             else:
-                code = coco_img.channels.fuse().as_set()
+                code = img_channels.fuse().as_set()
                 if config['skip_aggressive']:
                     if len(requested_channels & code) == len(requested_channels):
                         keep.append(coco_img.img['id'])
@@ -562,6 +564,7 @@ def main(cmdline=True, **kwargs):
                 else:
                     _header_extra = ''
 
+                print(f'channels={channels}')
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,

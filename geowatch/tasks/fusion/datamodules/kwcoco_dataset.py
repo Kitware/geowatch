@@ -2236,7 +2236,7 @@ class IntrospectMixin:
             >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
             >>> coco_fpath = data_dvc_dpath / 'KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
-            >>> from geowatch.tasks.fusion.predict import _prepare_predict_data, PredictConfig
+            >>> from geowatch.tasks.fusion.predict import _prepare_predict_modules, PredictConfig
             >>> config = PredictConfig(**{
             >>>     'key': 'set_cover_algo',
             >>>     'test_dataset': coco_fpath,
@@ -2245,7 +2245,7 @@ class IntrospectMixin:
             >>>     'package_fpath': expt_dvc_dpath / 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt',
             >>>     'devices': [0],
             >>> })
-            >>> config, model, datamodule = _prepare_predict_data(config)
+            >>> config, model, datamodule = _prepare_predict_modules(config)
             >>> self = datamodule.torch_datasets['test']
             >>> index = self.new_sample_grid['targets'][0]
             >>> # More controlled settings for debug

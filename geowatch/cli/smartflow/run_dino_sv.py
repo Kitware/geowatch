@@ -52,6 +52,16 @@ class DinoSVConfig(scfg.DataConfig):
             If an error occurs, pass through input region / sites unchanged.
             '''))
 
+    input_region_models_asset_name = scfg.Value('depth_filtered_regions', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('depth_filtered_sites', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
+            '''))
+
 
 def main():
     config = DinoSVConfig.cli(strict=True)
@@ -87,12 +97,10 @@ def run_dino_sv(config):
     ingressed_assets = smartflow_ingress(
         input_path=input_path,
         assets=[
-            'cropped_site_models_bas',
-            'cropped_region_models_bas',
-            {'key': 'depth_filtered_sites', 'allow_missing': True},
-            {'key': 'depth_filtered_regions', 'allow_missing': True},
             'cropped_kwcoco_for_sv',
-            'cropped_kwcoco_for_sv_assets'
+            'cropped_kwcoco_for_sv_assets',
+            config.input_region_models_asset_name,
+            config.input_site_models_asset_name,
         ],
         outdir=ingress_dir,
         aws_profile=aws_profile,
@@ -116,20 +124,8 @@ def run_dino_sv(config):
 
     dino_boxes_kwcoco_path = ingress_dir / 'dino_boxes_kwcoco.json'
 
-    # FIXME: these are hard coded to point at the output of DZYNE depth
-    # site validation, the path to the region / sites directories should be
-    # parameters passed to us from the DAG (so we can shift the order in
-    # which operations are applied at the DAG level)
-    input_region_dpath = ub.Path(ingressed_assets['depth_filtered_regions'])
-    input_sites_dpath = ub.Path(ingressed_assets['depth_filtered_sites'])
-
-    # Hack around the depth filter not populating its outputs
-    # as we would expect here
-    missing_inputs = not input_region_dpath.exists() or not input_sites_dpath.exists()
-    if missing_inputs:
-        # Fallback to pre-depth filter outputs if that is failing
-        input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_bas'])
-        input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
+    input_region_dpath = ub.Path(ingressed_assets[config.input_region_models_asset_name])
+    input_sites_dpath = ub.Path(ingressed_assets[config.input_site_models_asset_name])
 
     input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
     assert input_region_fpath.exists()

@@ -269,6 +269,8 @@ def run_sc_fusion_for_baseline(config):
 
             ub.cmd(f'kwcoco stats {tracked_sc_kwcoco_path}', verbose=3)
             ub.cmd(f'geowatch stats {tracked_sc_kwcoco_path}', verbose=3)
+    else:
+        print('Warning: No Videos in Ingress Dataset, Skipping Predict!')
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
@@ -294,6 +296,10 @@ def run_sc_fusion_for_baseline(config):
     )
 
     node_state.print_current_state(ingress_dir)
+
+    # Ensure the directory is not empty
+    if len(cropped_site_models_outdir.ls()) == 0:
+        (cropped_site_models_outdir / '__emptydir__').write_text('empty file')
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

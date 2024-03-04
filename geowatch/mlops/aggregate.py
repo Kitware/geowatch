@@ -271,6 +271,11 @@ def main(cmdline=True, **kwargs):
         if embedding_modpath is None:
             print('missing embed module')
         if embedding_modpath is not None:
+
+            print(f'eval_type_to_aggregator = {ub.urepr(eval_type_to_aggregator, nl=1)}')
+            for type, agg in eval_type_to_aggregator.items():
+                print(f'agg={agg}')
+
             embed_module = ub.import_module_from_name('xdev')
             embed_module.embed()
 
@@ -1392,6 +1397,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     @property
     def params(self):
+        ub.schedule_deprecation(None, migration='use requested_params instead')
         return self.subtables['params']
 
     @property
@@ -1429,7 +1435,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         import pandas as pd
         from geowatch.utils import util_pandas
         from geowatch.mlops.smart_global_helper import SMART_HELPER
-        params = self.params
+        params = self.requested_params
         effective_params = params.copy()
 
         HACK_FIX_JUNK_PARAMS = True
@@ -1452,6 +1458,33 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             condensed, mapper = util_pandas.pandas_condense_paths(colvals)
             mappings[colname] = mapper
             effective_params[colname] = condensed
+
+        # TODO: Give the user more customization and control over how effective
+        # params are built. I'm going to hard code my use-case for now,
+        # refactor later.
+        # Q: Do we need to be using "resolved parameters" here?
+        if 0:
+            resolved_params = util_pandas.DataFrame(self.subtables['resolved_params'])
+            channel_cols = resolved_params.match_columns('*.channels')
+            unique_channels = sorted(set(ub.flatten(resolved_params[channel_cols].value_counts().index)))
+
+            CHANNEL_LUT = {
+                'blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse': 'COLD.0:18',
+            }
+            import delayed_image
+            channel_mapping = {}
+            for orig_c in unique_channels:
+                c = orig_c
+                for k, v in CHANNEL_LUT.items():
+                    c = c.replace(k, v)
+                c = delayed_image.sensorchan_spec.SensorChanSpec.coerce(c)
+                print(c.normalize().concise())
+                channel_mapping[orig_c] = c
+
+            for col in channel_cols:
+                self.subtables['resolved_params'][col] = self.subtables['resolved_params'][col].apply(channel_mapping.get)
+
+            effective_params = util_pandas.DataFrame(effective_params)
 
         for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
             effective_params[colname] = 'ignore'
@@ -1634,11 +1667,18 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Builds a single macro table for a choice of regions.
 
+        A **macro table** is a table of paramters and metrics macro averaged
+        over multiple regions of interest.
+
         There is some hard-coded values in this function, but the core idea is
         general, and they just need to be parameterized correctly.
 
         Args:
+            rois (List[str]): names of regions to average together
             average (str): mean or gmean
+
+        Returns:
+            DataFrame | None:
         """
 
         import pandas as pd

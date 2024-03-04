@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.15.0 - Unreleased
+## Version 0.15.1 - Unreleased
 
 
 ### Added
@@ -15,10 +15,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Remove developer dependency on `fire`.
+* Disable shrinking timeouts in `util_gdal`
+* Added keys to specify input keys to smartflow CLI scripts 
 
 ### Fixed
 
 * Added workaround for issue in STAC to kwcoco, where channel names would be non-unique.
+* Issue in `geowatch visualize` where requested channels were not respected.
+* Issue in smartflow when SC predicts no site models.
+* Fusion.predict now correctly writes out the training config, mlops handles the fixed format. 
 
 
 ## Version 0.14.4 - Released 2023-02-06

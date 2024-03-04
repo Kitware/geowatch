@@ -67,7 +67,7 @@ class SVDatasetConfig(scfg.DataConfig):
             '''
             Output as simple newline separated STAC items
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='UNUSED AND WILL BE REMOVED')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Will not recompute if output_path already exists
@@ -76,6 +76,16 @@ class SVDatasetConfig(scfg.DataConfig):
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
             config for SV_Cropping.
+            '''))
+
+    input_region_models_asset_name = scfg.Value('cropped_region_models_bas', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('cropped_site_models_bas', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
             '''))
 
 
@@ -97,7 +107,6 @@ def run_generate_sv_cropped_kwcoco(config):
     dryrun = config.dryrun
 
     # newline = config.newline
-    # jobs = config.jobs
 
     dont_recompute = config.dont_recompute
     sv_cropping_config = config.sv_cropping_config
@@ -125,8 +134,9 @@ def run_generate_sv_cropped_kwcoco(config):
     ingressed_assets = smartflow_ingress(
         input_path,
         ['kwcoco_for_sc',
-         'cropped_region_models_bas',
-         'cropped_site_models_bas'],
+         config.input_region_models_asset_name,
+         config.input_site_models_asset_name,
+         ],
         ingress_dir,
         aws_profile,
         dryrun)
@@ -146,7 +156,7 @@ def run_generate_sv_cropped_kwcoco(config):
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
+    bas_region_path = ub.Path(ingressed_assets[config.input_region_models_asset_name]) / f'{region_id}.geojson'
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     node_state.print_current_state(ingress_dir)

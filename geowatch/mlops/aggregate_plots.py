@@ -104,12 +104,12 @@ def build_special_columns(agg):
         part1_ = [p for p in part1 if '_fit' in p]
         if len(part1_) == 1:
             part1 = part1_
-
     part2 = resolved_params.query_column('accumulate_grad_batches')
-    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
-    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
+    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 2)[0])
+    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 2)[0])
+    prefixes = set(prefix_to_batchsize) | set(prefix_to_accumbatch)
 
-    for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
+    for prefix in prefixes:
         cols1 = prefix_to_batchsize.get(prefix, None)
         cols2 = prefix_to_accumbatch.get(prefix, None)
         val_accum = 1
@@ -127,6 +127,18 @@ def preprocess_table_for_seaborn(agg, table):
     fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
     table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
     table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
+    from geowatch.utils import util_pandas
+    from geowatch.mlops.smart_global_helper import SMART_HELPER
+    table = util_pandas.DataFrame(table)
+    channel_cols = table.match_columns('*.channels')
+    unique_channels = sorted(set(ub.flatten(table[channel_cols].value_counts().index)))
+    channel_mapping = SMART_HELPER.custom_channel_relabel_mapping(unique_channels, coarsen=False)
+    for col in channel_cols:
+        table[col] = table[col].apply(channel_mapping.get)
+    # from geowatch.utils import util_pandas
+    # table = util_pandas.DataFrame(table)
+    # # table.match_columns('.channels')
     return table
 
 
@@ -368,6 +380,13 @@ class ParamPlotter:
         roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
 
     def plot_vantage_params(plotter, vantage, pman=None):
+        """
+        The main parameter inspection plots.
+
+        A vantage point specifies the metrics to visualize and analyze.  Makes
+        scatter plot, box plots, and attempts to draw legends useful for
+        communicating results.
+        """
         import numpy as np
         import kwplot
         import kwarray
@@ -377,6 +396,8 @@ class ParamPlotter:
         from geowatch.utils import util_pandas
         from geowatch.utils import util_kwplot
         from geowatch.utils.util_kwplot import scatterplot_highlight
+
+        rich.print(f'[white]### Plot Vantage Params: {vantage}')
 
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -415,8 +436,8 @@ class ParamPlotter:
         params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
 
         if params_of_interest is not None:
+            print('params_of_interest is unspecified, automatically choosing')
             chosen_params = params_of_interest
-
             params_of_interest = set(params_of_interest)
             # if 'param_hashid' in params_of_interest:
             #     params_of_interest.remove(

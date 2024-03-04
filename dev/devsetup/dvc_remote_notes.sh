@@ -61,7 +61,28 @@ sudo fdfind --hidden --no-ignore --type directory --exec chmod g+rwxs
 sudo fdfind --hidden --no-ignore --type file --exclude "**/cache/files/md5/*" --exec chmod g+rw
 
 
-
 # Give all real directories (not symlinks) all group permissions and set the sticky bit
 sudo fdfind -uu -t d -x chmod g+rwxs
 sudo fdfind -uu -t f -E "**/cache/files/md5/*" -x chmod g+rw
+
+
+# Ensure good permissions on new data drives
+MOUNT_OWNER=root
+MOUNT_GROUP=smart
+MOUNT_DPATH=/data2
+# Reset the owner on the mounted filesystem
+sudo chown "$MOUNT_OWNER":"$MOUNT_GROUP" "$MOUNT_DPATH"
+# Set group and user permissions to be permissive
+# Restrict other permissions
+sudo chmod ug+srwx $MOUNT_DPATH
+sudo chmod o-rwx $MOUNT_DPATH
+# Set file access control lists (ACL) so new directories and files are group read/write by default
+# https://unix.stackexchange.com/questions/12842/make-all-new-files-in-a-directory-accessible-to-a-group
+# Note: not all filesystems support ACL
+sudo setfacl -d -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
+sudo setfacl -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
+
+
+
+# Moving data to new directory
+rsync -avprRP /data/projects/smart/smart_phase3_data/.dvc/./cache /data2/projects/smart/smart_phase3_data/.dvc

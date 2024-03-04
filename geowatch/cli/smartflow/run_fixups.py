@@ -35,15 +35,15 @@ class FixupConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
-    region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
+    input_region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
             '''
             Which region model assets to ingress and fix up
-            '''))
+            '''), alias=['region_models_asset_name'])
 
-    site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to ingress and fix up
-            '''))
+    input_site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
+        '''
+        Which site model assets to ingress and fix up
+        '''), alias=['site_models_asset_name'])
 
     performer_suffix = scfg.Value('KIT', type=str, required=True, help=ub.paragraph(
             '''
@@ -51,9 +51,9 @@ class FixupConfig(scfg.DataConfig):
             '''))
 
 
-def main():
-    config = FixupConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+def main(cmdline=1, **kwargs):
+    config = FixupConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
 
     from geowatch.cli.smartflow_ingress import smartflow_ingress
     from geowatch.cli.smartflow_egress import smartflow_egress
@@ -64,13 +64,23 @@ def main():
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
 
+    input_path = config.input_path
+    assets = [
+        {'key': config.input_region_models_asset_name},
+        {'key': config.input_site_models_asset_name, 'missing_action': 'mkdir'},
+    ]
+    outdir = ingress_dir
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+    # show_progress = False
+    # dont_error_on_missing_asset = False
+
     ingressed_assets = smartflow_ingress(
-        config.input_path,
-        [config.region_models_asset_name,
-         config.site_models_asset_name],
-        ingress_dir,
-        config.aws_profile,
-        config.dryrun)
+        input_path,
+        assets,
+        outdir,
+        aws_profile,
+        dryrun)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -86,8 +96,8 @@ def main():
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
-    input_region_dpath = ub.Path(ingressed_assets[config.region_models_asset_name])
-    input_site_dpath = ub.Path(ingressed_assets[config.site_models_asset_name])
+    input_region_dpath = ub.Path(ingressed_assets[config.input_region_models_asset_name])
+    input_site_dpath = ub.Path(ingressed_assets[config.input_site_models_asset_name])
 
     output_region_dpath = ingress_dir / 'cropped_region_models_fixed'
     output_site_dpath = ingress_dir / 'cropped_site_models_fixed'

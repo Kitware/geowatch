@@ -24,25 +24,12 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
     io_workers = util_parallel.coerce_num_workers(io_workers)
     print(f'io_workers={io_workers}')
 
-    # patterns = {
-    #     'bas_pxl_id': '*',
-    #     'bas_poly_id': '*',
-    #     'bas_pxl_eval_id': '*',
-    #     'bas_poly_eval_id': '*',
-    #     'bas_poly_viz_id': '*',
-    # }
-
     # Hard coded nodes of interest to gather. Should abstract later.
     node_eval_infos = [
-        {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath',
-         'result_loader': smart_result_parser.load_pxl_eval},
-        {'name': 'sc_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_sc_poly_eval},
-        {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_bas_poly_eval},
-
-        {'name': 'sv_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_iarpa_poly_eval},
+        {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath'},
+        {'name': 'sc_poly_eval', 'out_key': 'eval_fpath'},
+        {'name': 'bas_poly_eval', 'out_key': 'eval_fpath'},
+        {'name': 'sv_poly_eval', 'out_key': 'eval_fpath'},
     ]
 
     if eval_nodes is None:
@@ -62,7 +49,6 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
         for node_eval_info in eval_node_prog:
             node_name = node_eval_info['name']
             out_key = node_eval_info['out_key']
-            # result_loader_fn = node_eval_info['result_loader']
 
             if node_name not in dag.nodes:
                 continue
@@ -127,33 +113,22 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
     return eval_type_to_results
 
 
-def _lookup_result_loader(node_name):
-    if node_name == 'bas_pxl_eval':
-        result_loader_fn = smart_result_parser.load_pxl_eval
-    elif node_name == 'bas_poly_eval':
-        result_loader_fn = smart_result_parser.load_bas_poly_eval
-    elif node_name == 'sv_poly_eval':
-        result_loader_fn = smart_result_parser.load_bas_poly_eval
-    elif node_name == 'sc_poly_eval':
-        result_loader_fn = smart_result_parser.load_sc_poly_eval
-    else:
-        raise KeyError(node_name)
-    return result_loader_fn
-
-
 def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
     """
+    Main driver for loading results
+
     Ignore:
         fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
         node_name = 'bas_poly_eval'
         out_node_key = 'bas_poly_eval.eval_fpath'
     """
     import json
-    from kwutil import util_json
     import safer
+    import rich
+    from kwutil import util_json
     fpath = ub.Path(fpath)
 
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v7.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v9.json'
 
     if use_cache and resolved_json_fpath.exists():
         # Load the cached row data
@@ -214,9 +189,9 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
             # Cache this resolved row data
             result = util_json.ensure_json_serializable(result)
         except Exception as ex:
-            print(f'Failed to load results for: {node_name}')
-            print(f'node_dpath={str(node_dpath)!r}')
-            print('ex = {}'.format(ub.urepr(ex, nl=1)))
+            rich.print(f'[red]Failed to load results for: {node_name}')
+            rich.print(f'node_dpath={str(node_dpath)!r}')
+            rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
             raise
 
         with safer.open(resolved_json_fpath, 'w') as file:
@@ -298,11 +273,59 @@ def load_result_resolved(node_dpath):
         of a given type.
 
     Ignore:
-        from geowatch.mlops.aggregate import *  # NOQA
+        >>> # To diagnose issues, construct a path to an evaluation node to get the
+        >>> # relevant project-specific entrypoint data.
+        >>> # TODO: need a demo pipeline that we can test for robustness here.
+        >>> from geowatch.mlops.aggregate_loader import *  # NOQA
+        >>> from geowatch.mlops.aggregate_loader import load_result_resolved
+        >>> import geowatch
+        >>> import rich
+        >>> expt_dpath = geowatch.find_dvc_dpath(tags='phase3_expt')
+        >>> # choose the location mlops schedule dumped results to
+        >>> mlops_dpath = expt_dpath / '_preeval20_bas_grid'
+        >>> # Search and pick a poly eval node, the specific path
+        >>> # will depend on the pipeline structure, which may be revised
+        >>> # in the future. At the start of SMART phase3, we keep all
+        >>> # eval nodes grouped in eval/flat, so enumerate those
+        >>> node_type_dpaths = list(mlops_dpath.glob('eval/flat/*'))
+        >>> node_type_dpaths += list(mlops_dpath.glob('pred/flat/*'))
+        >>> # For each eval type, choose a node in it.
+        >>> for node_type_dpath in node_type_dpaths:
+        >>>     for node_dpath in node_type_dpath.ls():
+        >>>         if len(node_dpath.ls()) > 2:
+        >>>             print(f'Found node_dpath={node_dpath}')
+        >>>             break
+        >>>     print(f'node_dpath={node_dpath}')
+        >>>     flat_resolved = load_result_resolved(node_dpath)
+        >>>     rich.print(f'flat_resolved = {ub.urepr(flat_resolved, nl=1)}')
+
+    Ignore:
+        ## OR If you know the type of node you want
+        from geowatch.mlops.aggregate_loader import *  # NOQA
+        import geowatch
+        import rich
+        expt_dpath = geowatch.find_dvc_dpath(tags='phase3_expt')
+        mlops_dpath = expt_dpath / '_preeval20_bas_grid'
+
+        node_group, node_type = 'eval', 'bas_poly_eval'
+        node_group, node_type = 'pred', 'sc_pxl'
+        node_group, node_type = 'pred', 'bas_pxl'
+        node_group, node_type = 'eval', 'bas_pxl_eval'
+
+        for node_dpath in mlops_dpath.glob(f'{node_group}/flat/{node_type}/*'):
+            if len(node_dpath.ls()) > 2:
+                print(f'Found node_dpath={node_dpath}')
+                break
+
+        flat_resolved = load_result_resolved(node_dpath)
+        rich.print(f'flat_resolved = {ub.urepr(flat_resolved, nl=1)}')
+
+    Ignore:
+        from geowatch.mlops.aggregate_loader import *  # NOQA
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc')
-        got = load_result_resolved(node_dpath)
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
         node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
+        got = load_result_resolved(node_dpath)
     """
     # from geowatch.utils.util_dotdict import explore_nested_dict
     node_dpath = ub.Path(node_dpath)
@@ -311,18 +334,34 @@ def load_result_resolved(node_dpath):
 
     if node_type in {'sc_pxl', 'bas_pxl'}:
         pat = util_pattern.Pattern.coerce(node_dpath / 'pred.kwcoco.*')
-        fpath = list(pat.paths())[0]
+        found = list(pat.paths())
+        if len(found) == 0:
+            raise FileNotFoundError(f'Unable to find expected kwcoco file in {node_type} node_dpath: {node_dpath}')
+        fpath = found[0]
         bas_pxl_info = smart_result_parser.parse_json_header(fpath)
         proc_item = smart_result_parser.find_pred_pxl_item(bas_pxl_info)
         nest_resolved = new_process_context_parser(proc_item)
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
         flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
 
-        # Hack: we should recurse into the model itself to introspect this, but
-        # this is fine for now.
+        # Record the train-time parameters
         fit_node_type = node_type + '_fit'
-        fit_config = proc_item['properties']['extra']['fit_config']
-        fit_config = smart_result_parser.relevant_fit_config(fit_config, add_prefix=False)
+        extra = proc_item['properties']['extra']
+        fit_config = extra['fit_config']
+        if 'data' not in fit_config:
+            raise Exception(ub.paragraph(
+                f'''
+                A kwcoco has an old fit-config that did not contain all
+                train-time params. To fix this run for a single file run:
+                ``python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata {fpath}``
+                ''') +
+                '\n\n' +
+                ub.paragraph(
+                    '''
+                    For more details see:
+                    ``python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata --help``
+                    '''))
+
         fit_nested = {
             'context': {'task': 'geowatch.tasks.fusion.fit'},
             'resolved_params': fit_config,
@@ -344,6 +383,7 @@ def load_result_resolved(node_dpath):
             pat = util_pattern.Pattern.coerce(node_dpath / '*_manifest.json')
             fpath = list(pat.paths())[0]
             bas_poly_info = smart_result_parser.parse_json_header(fpath)
+            raise
 
         proc_item = smart_result_parser.find_track_item(bas_poly_info)
         nest_resolved = new_process_context_parser(proc_item)

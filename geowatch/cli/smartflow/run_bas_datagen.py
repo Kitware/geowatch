@@ -215,7 +215,10 @@ def run_stac_to_cropped_kwcoco(config):
 
     align_config = align_config_default | Yaml.coerce(config.bas_align_config)
     if align_config['aux_workers'] == 'auto':
-        align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
+        # Auto gives each channel its own aux worker
+        num_channels = align_config['include_channels'].count('|') + 1
+        align_config['aux_workers'] = num_channels
+
     time_combine_config = time_combine_config_default | Yaml.coerce(config.time_combine_config)
 
     if time_combine_config['channels'] == 'auto':
@@ -403,8 +406,9 @@ def run_stac_to_cropped_kwcoco(config):
             '--src', ta1_kwcoco_path,
             '--dst', ta1_sc_kwcoco_path,
             '--absolute', 'False',
-            '--select_images',
-            '.sensor_coarse == "WV1" or .sensor_coarse == "WV" or .sensor_coarse == "S2"'],
+            # '--select_images',
+            # '.sensor_coarse == "WV1" or .sensor_coarse == "WV" or .sensor_coarse == "S2"'
+            ],
            check=True, verbose=3, capture=False)
 
     # 4. Crop ingress KWCOCO dataset to region for BAS

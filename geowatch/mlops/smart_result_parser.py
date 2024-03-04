@@ -183,189 +183,6 @@ def load_iarpa_evaluation(fpath):
     return iarpa_result
 
 
-def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
-    """
-    fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
-    expt_dvc_dpath = None
-    arg_prefix = ''
-    """
-    iarpa_result = load_iarpa_evaluation(fpath)
-    iarpa_json = iarpa_result['iarpa_json']
-    metrics = iarpa_result['metrics']
-
-    tracker_info = iarpa_json['parent_info']
-
-    if 0:
-        from geowatch.utils.util_dotdict import indexable_to_graph
-        data = tracker_info
-        graph = indexable_to_graph(data)
-        for n in graph.nodes:
-            name = n.split('.')[-1]
-            if name in {'args', 'config', 'machine', 'disk_info', 'device_info'}:
-                graph.nodes[n]['collapse'] = True
-        from cmd_queue.util.util_networkx import write_network_text
-        import rich
-        write_network_text(graph, path=rich.print, end='', max_depth=None)
-
-    # param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-
-    # extra_attrs = _add_prefix(arg_prefix + 'poly.metrics.', metrics)
-    info = {
-        'fpath': fpath,
-        'metrics': metrics,
-        # 'param_types': param_types,
-        # 'other': {
-        #     'extra_attrs': extra_attrs,
-        # },
-        'json_info': iarpa_json,
-    }
-    return info
-
-
-def load_iarpa_poly_eval(fpath):
-    metrics, iarpa_info = load_iarpa_evaluation(fpath)
-    info = {
-        'fpath': fpath,
-        'metrics': metrics,
-        'json_info': iarpa_info,
-    }
-    return info
-
-
-def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
-    metrics, iarpa_info = load_iarpa_evaluation(fpath)
-
-    # tracker_info = iarpa_info.get('parent_info', None)
-    # if tracker_info is not None:
-    #     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-    # else:
-    #     param_types = {}
-    # # Hack to grab information that we should have already had.
-    # HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
-    # if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
-    #     try:
-    #         trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
-    #     except Exception:
-    #         trk_param_types = {}
-    #         extra_attrs = {}
-    #     param_types.update(trk_param_types)
-    # else:
-    #     extra_attrs = {}
-    # extra_attrs.update(_add_prefix('act.poly.metrics.', metrics))
-
-    info = {
-        'fpath': fpath,
-        'metrics': metrics,
-        # 'param_types': param_types,
-        # 'other': {
-        #     'extra_attrs': extra_attrs,
-        # },
-        'json_info': iarpa_info,
-    }
-    return info
-
-
-def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
-    from geowatch.mlops import expt_manager
-    act_pxl_test_dset = param_types['act.pxl']['act.pxl.test_dataset']
-    state = expt_manager.ExperimentState('*', '*')
-
-    dset_source = None
-    try:
-        crop_attrs = ub.udict(state._parse_pattern_attrs(
-            state.templates['crop_fpath'], act_pxl_test_dset))
-    except RuntimeError:
-        # Probably because we used the truth
-        dset_source = 'truth'
-    else:
-        crop_attrs = {}
-        dset_source = 'tracker'
-
-    crop_dataset = _load_json(act_pxl_test_dset)
-    crop_item = list(find_info_items(
-        crop_dataset['info'],
-        {'process', 'process_context'},
-        {'coco_align_geotiffs', 'coco_align'}
-    ))[-1]
-    # This is the path to either truth or the tracks we cropped from
-    region_fpath = crop_item['properties']['args']['regions']
-
-    if dset_source == 'tracker':
-        # Our input was a bas tracking output
-        try:
-            trk_attrs = ub.udict(state._parse_pattern_attrs(
-                state.templates['pred_trk_poly_site_summaries_fpath'],
-                region_fpath))
-        except Exception:
-            trk_attrs = ub.udict(state._parse_pattern_attrs(
-                state.templates['pred_trk_poly_sites_fpath'],
-                region_fpath))
-    else:
-        trk_attrs = {}
-
-    extra_attrs = ub.udict(crop_attrs) | ub.udict(trk_attrs)
-
-    if dset_source == 'tracker':
-        trk_poly_data = _load_json(region_fpath)
-        trk_poly_info = trk_poly_data['info']
-        trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
-    else:
-        trk_param_types = {}
-    return trk_param_types, extra_attrs
-
-
-def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
-    """
-    Args:
-        tracker_info (List[Dict]):
-            This should be the "info" section of a tracker result (i.e. "info"
-            in the kwcoco json or geojson manifest file), which is a list of
-            process context dictionaries. One of these dictionaries will have a
-            process name "geowatch.cli.run_tracker" or
-            "geowatch.cli.run_tracker", and that item will contain the config used
-            to run the tracker. It may also contain an "extra.pred_info"
-            property containing the pixel prediction params, and that may
-            contain the training configuration.
-
-    Note:
-        This is tricky because we need to find a way to differentiate if this
-        was a trk or bas tracker.
-    """
-    track_item = find_track_item(tracker_info)
-
-    track_item = _handle_process_item(track_item)
-
-    if 0:
-        from geowatch.utils.util_dotdict import indexable_to_graph
-        graph = indexable_to_graph(track_item)
-        for n in graph.nodes:
-            name = n.split('.')[-1]
-            if name in {
-                    # 'args',
-                    # 'config',
-                    'machine', 'disk_info', 'device_info', 'fit_config', 'emissions'}:
-                graph.nodes[n]['collapse'] = True
-        from cmd_queue.util.util_networkx import write_network_text
-        import rich
-        write_network_text(graph, path=rich.print, end='', max_depth=None)
-
-    if 'extra' in track_item['properties']:
-        pred_info = track_item['properties']['extra']['pred_info']
-    else:
-        raise AssertionError
-
-    param_types = parse_pred_pxl_params(
-        pred_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-
-    poly_resources = parse_resource_item(track_item, arg_prefix=(arg_prefix + 'poly.'))
-    param_types[arg_prefix + 'poly.resource'] = poly_resources
-
-    track_args = track_item['properties']['config']
-    track_config = relevant_track_config(track_args, arg_prefix=arg_prefix)
-    param_types[arg_prefix + 'poly'] = track_config
-    return param_types
-
-
 def _handle_process_item(item):
     """
     Json data written by the process context has changed over time slightly.
@@ -411,10 +228,9 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_
     # from kwutil import util_time
     measure_info = _load_json(fpath)
 
-    meta = measure_info['meta']
-
-    pred_info = meta['info']
-    dvc_dpath = expt_dvc_dpath
+    # meta = measure_info['meta']
+    # pred_info = meta['info']
+    # dvc_dpath = expt_dvc_dpath
 
     salient_measures = measure_info['nocls_measures']
     class_measures = measure_info['ovr_measures']
@@ -463,35 +279,8 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_
     result = CocoSingleResult.from_json(measure_info)
     json_info = measure_info.copy()
 
-    if with_param_types:
-        param_types = parse_pred_pxl_params(pred_info, dvc_dpath, arg_prefix=arg_prefix, mode=mode)
-
-        if mode == 0:
-            predict_args = param_types[arg_prefix + 'pxl']
-        else:
-            predict_args = None
-
-        if predict_args is None:
-            raise Exception('no prediction metadata')
-
-        HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
-        if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
-            try:
-                trk_param_types, extra_attrs = _handle_crop_and_trk_params(
-                    param_types, expt_dvc_dpath)
-                param_types.update(trk_param_types)
-            except Exception:
-                extra_attrs = {}
-        else:
-            extra_attrs = {}
-        extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))
-        # quick and dirty way to get access to single-region results
-        # This is not robust, done because it wasnt clear how to get
-        # the equivalent test dataset for polygon eval variants.
-        json_info['region_ids'] = ub.Path(predict_args['pxl.test_dataset']).name.split('.')[0]
-    else:
-        extra_attrs = {}
-        param_types = None
+    extra_attrs = {}
+    param_types = None
 
     info = {
         'fpath': fpath,
@@ -651,54 +440,6 @@ def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     return pred_config
 
 
-def relevant_fit_config(fit_config, arg_prefix='', add_prefix=True):
-    ignore_params = {
-        'default_root_dir', 'enable_progress_bar'
-        'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
-        'detect_anomaly', 'gpus', 'terminate_on_nan', 'train_dataset',
-        'workdir', 'config', 'num_workers', 'amp_backend',
-        'enable_progress_bar', 'flush_logs_every_n_steps',
-        'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
-        'vali_dataset', 'test_dataset', 'package_fpath', 'num_draw',
-        'num_nodes', 'num_processes', 'num_sanity_val_steps',
-        'overfit_batches', 'process_position',
-        'reload_dataloaders_every_epoch', 'reload_dataloaders_every_n_epochs',
-        'replace_sampler_ddp', 'sync_batchnorm', 'torch_sharing_strategy',
-        'torch_start_method', 'val_check_interval', 'weights_summary',
-        'auto_lr_find', 'auto_select_gpus', 'auto_scale_batch_size', 'benchmark',
-        'check_val_every_n_epoch', 'draw_interval', 'eval_after_fit', 'fast_dev_run',
-        'limit_predict_batches', 'limit_test_batches', 'limit_train_batches',
-        'limit_val_batches', 'log_every_n_steps', 'logger',
-        'move_metrics_to_cpu', 'multiple_trainloader_mode',
-    }
-    from scriptconfig import smartcast
-    # hack, rectify different values of known parameters that mean the
-    # same thing
-    fit_config2 = ub.dict_diff(fit_config, ignore_params)
-    for k, v in fit_config2.items():
-        if k not in {'channels', 'init'}:
-            v2 = smartcast.smartcast(v)
-            if isinstance(v2, list):
-                # Dont coerce into a list
-                v2 = v
-            fit_config2[k] = v2
-        else:
-            fit_config2[k] = v
-
-    if 'init' in fit_config2:
-        # hack to make init only use the filename
-        fit_config2['init'] = fit_config2['init'].split('/')[-1]
-    if add_prefix:
-        fit_config2 = _add_prefix(arg_prefix + 'fit.', fit_config2)
-    return fit_config2
-
-
-def relevant_track_config(track_args, arg_prefix=''):
-    track_config = json.loads(track_args['track_kwargs'])
-    track_config = _add_prefix(arg_prefix + 'poly.', track_config)
-    return track_config
-
-
 def parse_resource_item(item, arg_prefix='', add_prefix=True):
     resources = {}
 
@@ -779,54 +520,6 @@ def find_info_items(info, query_type, query_name=None):
             name = item['properties']['name']
             if query_name_pattern.match(name):
                 yield item
-
-
-def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix='', mode=0):
-    """
-    Args:
-        pred_info (List[Dict]):
-            the info written to a heatmap prediction kwcoco
-    """
-    pred_item = find_pred_pxl_item(pred_info)
-    pred_item = _handle_process_item(pred_item)
-
-    # NOTE: the place where measure are stored has changed to be inside
-    # the pred item.
-    assert not list(find_info_items(pred_info, 'measure', None))
-
-    meta = {'start_time': None}
-    resources = {}
-    # New code should have measures inside the pred item
-    fit_config = pred_item['properties']['extra']['fit_config']
-    meta['start_time'] = pred_item['properties']['start_timestamp']
-    meta['end_time'] = pred_item['properties']['stop_timestamp']
-    meta['duration'] = pred_item['properties']['duration']
-    meta['uuid'] = pred_item['properties']['uuid']
-    # meta['start_timestamp'] = pred_item['properties']['start_timestamp']
-    # meta['stop_timestamp'] = pred_item['properties']['stop_timestamp']
-
-    resources = parse_resource_item(pred_item, arg_prefix=(arg_prefix + 'pxl.'))
-
-    pred_pxl_config = pred_item['properties']['config']
-    pred_pxl_config = relevant_pred_pxl_config(
-        pred_pxl_config, expt_dvc_dpath, arg_prefix=arg_prefix)
-    fit_config = relevant_fit_config(fit_config, arg_prefix=arg_prefix)
-
-    if mode:
-        param_types = {
-            arg_prefix + 'fit': fit_config,
-            arg_prefix + 'pxl': pred_pxl_config,
-            arg_prefix + 'pxl.resource': resources,
-            arg_prefix + 'pxl.meta': _add_prefix(arg_prefix + 'pxl.meta.', meta),
-        }
-    else:
-        param_types = {
-            arg_prefix + 'fit': fit_config,
-            arg_prefix + 'pxl': pred_pxl_config,
-            arg_prefix + 'pxl.resource': resources,
-            arg_prefix + 'pxl.meta': _add_prefix(arg_prefix + 'pxl.meta.', meta),
-        }
-    return param_types
 
 
 @ub.memoize

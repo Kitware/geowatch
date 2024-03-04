@@ -79,6 +79,16 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
             If an error occurs, pass through input region / sites unchanged.
             '''))
 
+    input_region_models_asset_name = scfg.Value('cropped_region_models_bas', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('cropped_site_models_bas', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
+            '''))
+
 
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
@@ -121,8 +131,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         assets=[
             'cropped_kwcoco_for_sv',
             'cropped_kwcoco_for_sv_assets',
-            'cropped_site_models_bas',
-            'cropped_region_models_bas'
+            config.input_site_models_asset_name,
+            config.input_region_models_asset_name,
         ],
         outdir=ingress_dir,
         aws_profile=aws_profile,
@@ -165,8 +175,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
     input_kwcoco_fpath = ub.Path(ingressed_assets['cropped_kwcoco_for_sv'])
-    input_sites_dpath = ub.Path(ingressed_assets['cropped_site_models_bas'])
-    input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_bas'])
+    input_sites_dpath = ub.Path(ingressed_assets[config.input_site_models_asset_name])
+    input_region_dpath = ub.Path(ingressed_assets[config.input_region_models_asset_name])
     input_region_fpath = input_region_dpath / f'{region_id}.geojson'
     # input_region_fpath = local_region_path  # is this right?
 

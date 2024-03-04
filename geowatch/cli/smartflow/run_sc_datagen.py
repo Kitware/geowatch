@@ -37,7 +37,7 @@ class ACSCDatasetConfig(scfg.DataConfig):
 
             UNUSED.
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='DO NOT USE. SET WORKERS IN acsc_align_config instead')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Will not recompute if output_path already exists
@@ -53,6 +53,16 @@ class ACSCDatasetConfig(scfg.DataConfig):
         '''
         The configuration for the coco-align step
         '''))
+
+    input_region_models_asset_name = scfg.Value('sv_out_region_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('sv_out_site_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
+            '''))
 
 
 def main():
@@ -95,8 +105,8 @@ def run_generate_sc_cropped_kwcoco(config):
         input_path=config.input_path,
         assets=[
             'kwcoco_for_sc',
-            'sv_out_region_models',
-            'cropped_region_models_bas'
+            config.input_region_models_asset_name,  # 'sv_out_region_models',
+            # 'cropped_region_models_bas'
         ],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
@@ -119,12 +129,13 @@ def run_generate_sc_cropped_kwcoco(config):
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    if 'sv_out_region_models' in ingressed_assets:
-        input_region_path = ub.Path(ingressed_assets['sv_out_region_models']) / f'{region_id}.geojson'
+    if config.input_region_models_asset_name in ingressed_assets:
+        input_region_path = ub.Path(ingressed_assets[config.input_region_models_asset_name]) / f'{region_id}.geojson'
     else:
-        print("* Didn't find region output from SV; using region output "
-              "from BAS *")
-        input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
+        raise AssertionError("Just pass the right key to input_region_models_asset_name")
+        # print("* Didn't find region output from SV; using region output "
+        #       "from BAS *")
+        # input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
     node_state.print_current_state(ingress_dir)
 
@@ -152,7 +163,7 @@ def run_generate_sc_cropped_kwcoco(config):
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
-        f'''
+        '''
         force_nodata: -9999
         include_channels: "red|green|blue|quality"
         site_summary: True
@@ -162,7 +173,7 @@ def run_generate_sc_cropped_kwcoco(config):
         target_gsd: 2
         context_factor: 1.5
         force_min_gsd: 4
-        img_workers: {str(config.jobs)}
+        img_workers: 1
         aux_workers: 2
         rpc_align_method: affine_warp
         image_timeout: 20minutes
@@ -246,6 +257,7 @@ def run_generate_sc_cropped_kwcoco(config):
                 'channels': 'red|green|blue|pan',
                 'workers': 'avail',
                 'interactive': False,
+                'delete_assets': True,
                 'overview': 0,
             },
             node_dpath='.'
