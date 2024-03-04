@@ -405,7 +405,7 @@ from typing import Any, List  # NOQA
 
 # HACK TO PREVENT EXCESSIVE TIME.
 # TODO: FIXME FOR REAL
-MAX_TIME_MINUTES = 1
+MAX_TIME_MINUTES = None
 if MAX_TIME_MINUTES:
     import ubelt  # NOQA
     TIMER = ubelt.Timer()
@@ -437,6 +437,7 @@ class GoogleStyleDocstringProcessor:
     """
 
     def __init__(self, autobuild=1):
+        self.debug = 0
         self.registry = {}
         if autobuild:
             self._register_builtins()
@@ -615,7 +616,9 @@ class GoogleStyleDocstringProcessor:
             https://www.sphinx-doc.org/en/1.5.1/_modules/sphinx/ext/autodoc.html
             https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
         """
-        # print(f'name={name}')
+        if self.debug:
+            print(f'ProcessDocstring: name={name}, what_={what_}, num_lines={len(lines)}')
+
         # print('BEFORE:')
         # import ubelt as ub
         # print('lines = {}'.format(ub.urepr(lines, nl=1)))
@@ -974,6 +977,13 @@ def postprocess_hyperlinks(app, doctree, docname):
                     raise AssertionError
 
 
+def fix_rst_todo_section(lines):
+    new_lines = []
+    for line in lines:
+        ...
+    ...
+
+
 def setup(app):
     import sphinx
     app : sphinx.application.Sphinx = app
@@ -985,14 +995,28 @@ def setup(app):
     # https://stackoverflow.com/questions/26534184/can-sphinx-ignore-certain-tags-in-python-docstrings
     app.connect('autodoc-process-docstring', docstring_processor.process_docstring_callback)
 
+    def copy(src, dst):
+        import shutil
+        print(f'Copy {src} -> {dst}')
+        assert src.exists()
+        if not dst.parent.exists():
+            dst.parent.mkdir()
+        shutil.copy(src, dst)
+
     ### Hack for kwcoco: TODO: figure out a way for the user to configure this.
     HACK_FOR_KWCOCO = 0
     if HACK_FOR_KWCOCO:
         import pathlib
-        import shutil
-        doc_outdir = pathlib.Path(app.outdir)
-        doc_srcdir = pathlib.Path(app.srcdir)
-        schema_src = (doc_srcdir / '../../kwcoco/coco_schema.json')
-        shutil.copy(schema_src, doc_outdir / 'coco_schema.json')
-        shutil.copy(schema_src, doc_srcdir / 'coco_schema.json')
+        doc_outdir = pathlib.Path(app.outdir) / 'auto'
+        doc_srcdir = pathlib.Path(app.srcdir) / 'auto'
+
+        mod_dpath = doc_srcdir / '../../../kwcoco'
+
+        src_fpath = (mod_dpath / 'coco_schema.json')
+        copy(src_fpath, doc_outdir / src_fpath.name)
+        copy(src_fpath, doc_srcdir / src_fpath.name)
+
+        src_fpath = (mod_dpath / 'coco_schema_informal.rst')
+        copy(src_fpath, doc_outdir / src_fpath.name)
+        copy(src_fpath, doc_srcdir / src_fpath.name)
     return app
