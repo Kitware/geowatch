@@ -1780,8 +1780,8 @@ geowatch schedule --params="
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
             - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop8-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto

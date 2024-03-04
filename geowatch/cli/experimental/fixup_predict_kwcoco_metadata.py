@@ -5,17 +5,24 @@ import ubelt as ub
 
 class FixupPredictKwcocoMetadata(scfg.DataConfig):
     """
-    Update old predicted kwcoco heatmap files to properly store train-time
-    parameters.
+    Update pre-0.15.1 kwcoco predictions to properly store train-time params.
 
-    Example:
+    The kwcoco info section of kwcoco files produced by geowatch.fusion.predict
+    only contained the "data" section of the fit configuration. This script is
+    able to fix one or more of those old predicted files as long as the path to
+    the model is available. Warnings that direct users to this help document
+    will typically give example usage that fixes one file, but multiple files
+    can be fixed at once by specifying a glob pattern. The following example
+    illustrates this.
+
+    CommandLine:
         # Say you have an old mlops directory of results
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
         MLOPS_DPATH=$DVC_EXPT_DPATH/_preeval20_bas_grid
 
         # Construct a glob pattern that matches the kwcoco files that need to
         # be fixed, and pass it to this script.
-        python ~/code/geowatch/dev/oneoffs/fixup_predict_kwcoco_metadata.py \
+        python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata \\
             --coco_fpaths "$MLOPS_DPATH/pred/flat/bas_pxl/*/pred.kwcoco.zip"
 
     Note:

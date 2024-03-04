@@ -352,10 +352,15 @@ def load_result_resolved(node_dpath):
             raise Exception(ub.paragraph(
                 f'''
                 A kwcoco has an old fit-config that did not contain all
-                train-time params. To fix this run:
-
-                python ~/code/geowatch/dev/oneoffs/fixup_predict_kwcoco_metadata.py {fpath}
-                '''))
+                train-time params. To fix this run for a single file run:
+                ``python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata {fpath}``
+                ''') +
+                '\n\n' +
+                ub.paragraph(
+                    '''
+                    For more details see:
+                    ``python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata --help``
+                    '''))
 
         fit_nested = {
             'context': {'task': 'geowatch.tasks.fusion.fit'},

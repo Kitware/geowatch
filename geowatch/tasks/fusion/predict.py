@@ -778,7 +778,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
             track_emissions=config['track_emissions'],
             # Extra information was adjusted in 0.15.1 to ensure more relevant
             # fit params are returned here. A script
-            # ~/code/geowatch/dev/oneoffs/fixup_predict_kwcoco_metadata.py
+            # ~/code/geowatch/geowatch/cli/experimental/fixup_predict_kwcoco_metadata.py
             # exist to help update old results to use this new format.
             extra={
                 'fit_config': fit_config
