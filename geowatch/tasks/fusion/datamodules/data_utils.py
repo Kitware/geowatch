@@ -450,6 +450,11 @@ class BalancedSampleTree(ub.NiceRepr):
             # remove this branch
             self.graph.remove_nodes_from([parent] + orphans)
 
+        # update leaf nodes
+        self._leaf_nodes = [n for n in self._leaf_nodes if self.graph.has_node(n)]
+        if len(self._leaf_nodes) == 0:
+            raise ValueError("Leaf nodes became empty.")
+
     def subdivide(self, key, weights=None):
         remove_nodes = []
         remove_edges = []
@@ -488,7 +493,6 @@ class BalancedSampleTree(ub.NiceRepr):
                 add_nodes.append(new_parent)
 
         # Modify the graph
-        #self.graph.remove_nodes_from(remove_nodes)
         self.graph.remove_edges_from(remove_edges)
         self.graph.add_nodes_from(add_nodes, weights=None)
         self.graph.add_edges_from(add_edges)
