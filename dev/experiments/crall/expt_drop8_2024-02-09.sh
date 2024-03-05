@@ -1841,7 +1841,7 @@ python -m geowatch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - bas_poly_eval
-        - bas_pxl_eval
+        #- bas_pxl_eval
     " \
     --plot_params="
         enabled: 1
@@ -1861,6 +1861,7 @@ python -m geowatch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002,CN_C000"
-    #--rois="KR_R002"
+    --rois="KR_R002"
     #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    #--rois="KR_R002,CN_C000"
+    #--rois="CN_C000"
