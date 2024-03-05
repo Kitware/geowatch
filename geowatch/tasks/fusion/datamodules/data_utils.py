@@ -432,23 +432,48 @@ class BalancedSampleTree(ub.NiceRepr):
         else:
             return None
 
+    def _reweight(self, node, idx_child):
+        if self.graph.nodes[node]['weights'] is not None:
+            _weights = self.graph.nodes[node]['weights']
+
+            # remove weight for this child
+            _weights = np.delete(_weights, idx_child)
+
+            # reweight
+            if _weights.sum() != 0:
+                _weights = _weights / _weights.sum()
+            else:
+                _weights = np.zeros(1)
+            self.graph.nodes[node]['weights'] = _weights
+
     def _prune_and_reweight(self, nodes):
         for parent, orphans in nodes:
-            # update the weights of the grandparent
             grandpa = self._get_parent(parent)
-            if self.graph.nodes[grandpa]['weights'] is not None:
-                idx_parent = list(self.graph.successors(grandpa)).index(parent)
+            if grandpa is None:
+                # already removed this branch
+                self.graph.remove_nodes_from([parent] + orphans)
+                continue
 
-                # remove weight for this parent
-                _weights = self.graph.nodes[grandpa]['weights']
-                _weights = np.delete(_weights, idx_parent)
-
-                # reweight
-                _weights = _weights / _weights.sum()
-                self.graph.nodes[grandpa]['weights'] = _weights
-
-            # remove this branch
+            # get parent index from grandpa, remove nodes
+            idx_parent = list(self.graph.successors(grandpa)).index(parent)
             self.graph.remove_nodes_from([parent] + orphans)
+
+            # update weights of grandpa, walking up the tree
+            queue = [(grandpa, idx_parent)]
+            while queue:
+                curr_grandpa, curr_idx_parent = queue.pop()
+
+                num_children = len(list(self.graph.successors(curr_grandpa)))
+                if num_children >= 1:
+                    self._reweight(curr_grandpa, curr_idx_parent)
+                else:
+                    # removed only child, remove the grandparent
+                    _parent = curr_grandpa
+                    _grandpa = self._get_parent(curr_grandpa)
+                    if _grandpa is not None:
+                        _idx_parent = list(self.graph.successors(_grandpa)).index(_parent)
+                        queue.append((_grandpa, _idx_parent))
+                        self.graph.remove_node(curr_grandpa)
 
         # update leaf nodes
         self._leaf_nodes = [n for n in self._leaf_nodes if self.graph.has_node(n)]
