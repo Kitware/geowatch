@@ -432,7 +432,26 @@ class BalancedSampleTree(ub.NiceRepr):
         else:
             return None
 
+    def _prune_and_reweight(self, nodes):
+        for parent, orphans in nodes:
+            # update the weights of the grandparent
+            grandpa = self._get_parent(parent)
+            if self.graph.nodes[grandpa]['weights'] is not None:
+                idx_parent = list(self.graph.successors(grandpa)).index(parent)
+
+                # remove weight for this parent
+                _weights = self.graph.nodes[grandpa]['weights']
+                _weights = np.delete(_weights, idx_parent)
+
+                # reweight
+                _weights = _weights / _weights.sum()
+                self.graph.nodes[grandpa]['weights'] = _weights
+
+            # remove this branch
+            self.graph.remove_nodes_from([parent] + orphans)
+
     def subdivide(self, key, weights=None):
+        remove_nodes = []
         remove_edges = []
         add_edges = []
         add_nodes = []
@@ -443,35 +462,37 @@ class BalancedSampleTree(ub.NiceRepr):
             # Group children by the new attribute
             val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
             val_to_subgroup = ub.odict(sorted(val_to_subgroup.items()))
-            if len(val_to_subgroup) == 1:
-                # Dont need to do anything if no splits were made
-                ...
-            else:
-                # Otherwise, we have to subdivide the children
-                for value, subgroup in val_to_subgroup.items():
-                    # Use a dotted name to make unambiguous tree splits
-                    new_parent = f'{parent}.{key}={value}'
-                    # Mark edges to add / remove to implement the split
-                    remove_edges.extend([(parent, n) for n in subgroup])
-                    add_edges.extend([(parent, new_parent) for n in subgroup])
-                    add_edges.extend([(new_parent, n) for n in subgroup])
-                    add_nodes.append(new_parent)
 
-                # Add weights to the prior parent
-                if weights is not None:
-                    weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
-                    denom = weights_group.sum()
-                    if denom == 0:
-                        raise NotImplementedError('Zero weighted branches are not handled yet.')
+            # Add weights to the prior parent
+            if weights is not None:
+                weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
+                denom = weights_group.sum()
+                if denom != 0:
                     weights_group = weights_group / denom
                     self.graph.nodes[parent]['weights'] = weights_group
                 else:
-                    self.graph.nodes[parent]["weights"] = None
+                    # All options have zero weight, schedule group for pruning
+                    remove_nodes.append((parent, children))
+                    continue
+            else:
+                self.graph.nodes[parent]["weights"] = None
+
+            # Create a node for each child
+            for value, subgroup in val_to_subgroup.items():
+                # Use a dotted name to make unambiguous tree splits
+                new_parent = f'{parent}.{key}={value}'
+                # Mark edges to add / remove to implement the split
+                remove_edges.extend([(parent, n) for n in subgroup])
+                add_edges.extend([(parent, new_parent) for n in subgroup])
+                add_edges.extend([(new_parent, n) for n in subgroup])
+                add_nodes.append(new_parent)
 
         # Modify the graph
+        #self.graph.remove_nodes_from(remove_nodes)
         self.graph.remove_edges_from(remove_edges)
         self.graph.add_nodes_from(add_nodes, weights=None)
         self.graph.add_edges_from(add_edges)
+        self._prune_and_reweight(remove_nodes)
 
     def _sample_many(self, num):
         for _ in range(num):
