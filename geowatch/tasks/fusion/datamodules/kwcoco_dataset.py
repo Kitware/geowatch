@@ -2540,8 +2540,10 @@ class BalanceMixin:
 
         self.balanced_sample_tree.subdivide('region')
         self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)
-        self.balanced_sample_tree.subdivide('contains_phase', weights={False: 0, True: 1})
-        self.balanced_sample_tree.subdivide('phases')
+
+        if df_sample_attributes['contains_phase'].any():
+            self.balanced_sample_tree.subdivide('contains_phase', weights={False: 0, True: 1})
+            self.balanced_sample_tree.subdivide('phases')
 
         if self.config['reseed_fit_random_generators']:
             self.reseed()
