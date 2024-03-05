@@ -501,7 +501,7 @@ def debug_single_cloudmask(coco_img, out_dpath):
 
     canvas = kwimage.stack_images([
         drawings['tci_canvas'],
-        drawings['used_mask'],
+        # drawings['used_mask'],
         drawings['qa_canvas'],
         drawings['legend']
     ], axis=1)
