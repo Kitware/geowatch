@@ -789,6 +789,10 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         proc_context.start()
         test_coco_dataset = datamodule.coco_datasets['test']
         proc_context.add_disk_info(test_coco_dataset.fpath)
+
+    memory_monitor_timer = ub.Timer().tic()
+    memory_monitor_interval_seconds = 60
+
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
@@ -872,9 +876,16 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
 
             MONITOR_MEMORY = 1
             if MONITOR_MEMORY:
-                # TODO: monitor memory usage and report if it looks like we are
-                # about to run out of memory, and maybe do something to handle it.
-                ...
+                # TODO: encapsulate this in a helper class that runs some
+                # user-specified function if the timer interval has ellapsed.
+                if memory_monitor_timer.toc() > memory_monitor_interval_seconds:
+                    # TODO: monitor memory usage and report if it looks like we
+                    # are about to run out of memory, and maybe do something to
+                    # handle it.
+                    from geowatch.utils import util_hardware
+                    mem_info = util_hardware.get_mem_info()
+                    print(f'\n\nmem_info = {ub.urepr(mem_info, nl=1)}\n\n')
+                    memory_monitor_timer.tic()
 
             # Predict on the batch: todo: rename to predict_step
             try:
