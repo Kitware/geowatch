@@ -96,6 +96,16 @@ class SCFusionConfig(scfg.DataConfig):
             config for SC tracking.
             '''))
 
+    input_region_models_asset_name = scfg.Value('sv_out_region_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which region model assets to use as input
+            '''))
+
+    input_site_models_asset_name = scfg.Value('sv_out_site_models', type=str, required=False, help=ub.paragraph(
+            '''
+            Which site model assets to to use as input
+            '''))
+
     egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
         If true egress intermediate heatmaps, otherwise only egress the geojson
@@ -104,7 +114,8 @@ class SCFusionConfig(scfg.DataConfig):
 
 def main(cmdline=1, **kwargs):
     config = SCFusionConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_sc_fusion_for_baseline(config)
 
 
@@ -121,6 +132,7 @@ def run_sc_fusion_for_baseline(config):
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
+        # TODO: use the new register_bucket API.
         from geowatch.utils import util_fsspec
         util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
@@ -137,8 +149,11 @@ def run_sc_fusion_for_baseline(config):
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=[
-            {'key': 'cropped_region_models_bas'},
-            {'key': 'sv_out_region_models', 'allow_missing': False},
+            # {'key': 'cropped_region_models_bas'},
+            # {'key': 'sv_out_region_models', 'allow_missing': False},
+
+            {'key': config.input_region_models_asset_name, 'allow_missing': False},
+
             # {'key': 'cropped_kwcoco_for_sc'},
             # {'key': 'cropped_kwcoco_for_sc_assets'}
             {'key': 'enriched_acsc_kwcoco_file'},
@@ -150,17 +165,7 @@ def run_sc_fusion_for_baseline(config):
         dryrun=config.dryrun
     )
 
-    # Get the first set of BAS site summaries that are available
-    region_model_key_priority = [
-        # Use filtered SV site summaries when possible
-        # Otherwise fallback to bas site summaries
-        'sv_out_region_models',
-        'cropped_region_models_bas',
-    ]
-    for key in region_model_key_priority:
-        input_site_summary_dpath = ingressed_assets[key]
-        if os.path.exists(input_site_summary_dpath):
-            break
+    input_site_summary_dpath = ingressed_assets[config.input_region_models_asset_name]
     assert os.path.exists(input_site_summary_dpath)
     print(f'Found input site summary dpath: {input_site_summary_dpath}')
 

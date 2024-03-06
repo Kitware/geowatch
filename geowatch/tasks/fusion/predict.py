@@ -870,6 +870,12 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
 
+            MONITOR_MEMORY = 1
+            if MONITOR_MEMORY:
+                # TODO: monitor memory usage and report if it looks like we are
+                # about to run out of memory, and maybe do something to handle it.
+                ...
+
             # Predict on the batch: todo: rename to predict_step
             try:
                 outputs = model.forward_step(batch, with_loss=False)
