@@ -2469,18 +2469,21 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = vidname
         return list(ub.take(self.vidname_to_region_name, vidnames))
 
-    def _load_target_annots(self, target):
+    def _load_target_annots(self, target, sequence=False):
         """
         TODO: need an ndsampler endpoint that just finds the annotations in a
         sample quickly.
         """
         space_slice = target['space_slice']
         space_box = kwimage.Box.from_slice(space_slice)
-        all_aids = []
-        for gid in target['gids']:
-            aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
-            all_aids.extend(aids)
-        return all_aids
+        if sequence:
+            all_aids = []
+            for gid in target['gids']:
+                aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
+                all_aids.extend(aids)
+            return all_aids
+        else:
+            return self.sampler.regions.overlapping_aids(target['main_gid'], space_box.boxes)
 
     def _get_observed_annotations(self, targets):
         observed_cats = []
