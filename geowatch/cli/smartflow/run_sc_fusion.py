@@ -114,8 +114,7 @@ class SCFusionConfig(scfg.DataConfig):
 
 def main(cmdline=1, **kwargs):
     config = SCFusionConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import rich
-    rich.print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_sc_fusion_for_baseline(config)
 
 
@@ -228,9 +227,6 @@ def run_sc_fusion_for_baseline(config):
         } | sc_pxl_config)
         command = sc_pxl.command()
 
-        ub.cmd(f'kwcoco stats {sc_fusion_kwcoco_path}', verbose=3)
-        ub.cmd(f'geowatch stats {sc_fusion_kwcoco_path}', verbose=3)
-
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
             node_state.print_current_state(ingress_dir)
@@ -241,6 +237,8 @@ def run_sc_fusion_for_baseline(config):
                   "(shown below) -- attempting to continue anyway")
             traceback.print_exception(*sys.exc_info())
         else:
+            ub.cmd(f'kwcoco stats {sc_fusion_kwcoco_path}', verbose=3)
+            ub.cmd(f'geowatch stats {sc_fusion_kwcoco_path}', verbose=3)
 
             # 4. Compute tracks (SC)
             print('*************************')
