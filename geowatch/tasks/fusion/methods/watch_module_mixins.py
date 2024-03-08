@@ -391,7 +391,7 @@ class WatchModuleMixins:
             else:
                 raise KeyError(class_weights)
         else:
-            raise NotImplementedError(class_weights)
+            raise NotImplementedError(f'{class_weights!r}')
         return class_weights
 
     def _coerce_saliency_weights(self, saliency_weights):
@@ -441,10 +441,10 @@ class WatchModuleMixins:
                     fg_weight = 1.0
             else:
                 bg_weight, fg_weight = saliency_weights.split(':')
-                fg_weight = float(fg_weight)
-                bg_weight = float(bg_weight)
+                fg_weight = float(fg_weight.strip())
+                bg_weight = float(bg_weight.strip())
         else:
-            raise NotImplementedError(saliency_weights)
+            raise NotImplementedError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
         print(f'bg_weight={bg_weight}')
         print(f'fg_weight={fg_weight}')
         fg_bg_weights = [bg_weight, fg_weight]

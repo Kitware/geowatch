@@ -18,6 +18,14 @@ DATASET_SUFFIX=Drop8-ARA
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/KR_R001*.geojson"
 
 
+todo(){
+# NOTE: If updating the dataset, unprotect the files
+dvc unprotect -- */*.kwcoco*.zip
+# also remove kwcoco files to regen them with cache?
+#ls -- */*.kwcoco*.zip
+}
+
+
 # NOTE: Ensure the annotations/drop8.dvc data is pulled, otherwise there is an error.
 
 # All Regions
@@ -69,9 +77,9 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=0 \
+    --cache=1 \
     --verbose=100 \
-    --skip_existing=0 \
+    --skip_existing=1 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \
@@ -95,35 +103,35 @@ cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
 
 git pull
 
-# Add a few files from KR_R001 to start with so people have data
-dvc add -vvv -- \
-    KR_R001/L8 \
-    KR_R001/S2 \
-    KR_R001/WV \
-    KR_R001/imganns-*-rawbands.kwcoco.zip \
-    KR_R001/imgonly-*-rawbands.kwcoco.zip
+## Add a few files from KR_R001 to start with so people have data
+#dvc add -vvv -- \
+#    KR_R001/L8 \
+#    KR_R001/S2 \
+#    KR_R001/WV \
+#    KR_R001/imganns-*-rawbands.kwcoco.zip \
+#    KR_R001/imgonly-*-rawbands.kwcoco.zip
 
-git commit -am "Add KR_R001"
-git push
-dvc push -r aws -R KR_R001 -vvv
+#git commit -am "Add KR_R001"
+#git push
+#dvc push -r aws -R KR_R001 -vvv
 
 
-# Add more select regions
-dvc add -vvv -- \
-    BR_R002/L8 \
-    BR_R002/S2 \
-    BR_R002/WV \
-    BR_R002/PD \
-    BR_R002/*.kwcoco.zip \
-    HK_T003/L8 \
-    HK_T003/S2 \
-    HK_T003/WV \
-    HK_T003/PD \
-    HK_T003/*.kwcoco.zip
+## Add more select regions
+#dvc add -vvv -- \
+#    BR_R002/L8 \
+#    BR_R002/S2 \
+#    BR_R002/WV \
+#    BR_R002/PD \
+#    BR_R002/*.kwcoco.zip \
+#    HK_T003/L8 \
+#    HK_T003/S2 \
+#    HK_T003/WV \
+#    HK_T003/PD \
+#    HK_T003/*.kwcoco.zip
 
-git commit -am "Add BR_R002 and HK_T003"
-git push
-dvc push -r aws -R . -vvv
+#git commit -am "Add BR_R002 and HK_T003"
+#git push
+#dvc push -r aws -R . -vvv
 
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
@@ -137,34 +145,35 @@ regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip
 to_add = []
 for dpath in regions_dpaths_with_kwcoco:
     to_add.extend(list(dpath.glob('*.kwcoco.zip')))
-    # to_add.extend(list(dpath.glob('S2')))
-    # to_add.extend(list(dpath.glob('WV')))
-    # to_add.extend(list(dpath.glob('PD')))
-    # to_add.extend(list(dpath.glob('L8')))
+    to_add.extend(list(dpath.glob('S2')))
+    to_add.extend(list(dpath.glob('WV')))
+    to_add.extend(list(dpath.glob('PD')))
+    to_add.extend(list(dpath.glob('L8')))
 
 import simple_dvc as sdvc
 dvc_repo = sdvc.SimpleDVC.coerce(root)
 dvc_repo.add(to_add, verbose=3)
 "
 
-
+# Commit the new DVC files
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 # shellcheck disable=SC2164
 cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
 git pull
-git add -- */.gitignore
-git commit -am "Add rest of drop8 regions"
+#git add -- */.gitignore
+git commit -am "Add more Drop8 data"
 git push
 
 
 # Push kwcoco files first
-dvc push -vvv -r aws -- */*.kwcoco.zip.dvc
+# Then push sensor data in a given order
+dvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
 
-# Push sensor data in a given order
-dvc push -vvv -r aws -- */PD.dvc && \
-dvc push -vvv -r aws -- */L8.dvc && \
-dvc push -vvv -r aws -- */S2.dvc && \
-dvc push -vvv -r aws -- */WV.dvc
+dvc push -r aws -- */*.kwcoco.zip.dvc \
+dvc push -r aws -- */PD.dvc && \
+dvc push -r aws -- */L8.dvc && \
+dvc push -r aws -- */S2.dvc && \
+dvc push -r aws -- */WV.dvc
 
 #
 # -- to pull
