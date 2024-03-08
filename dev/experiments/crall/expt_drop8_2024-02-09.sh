@@ -1890,7 +1890,7 @@ python -m geowatch.mlops.aggregate \
             #- params.bas_poly.thresh
             #- resolved_params.bas_pxl.channels
             - resolved_params.bas_pxl_fit.initializer.init
-            - normalized_params.bas_pxl_fit.initializer.init
+            #- normalized_params.bas_pxl_fit.initializer.init
             #- resolved_bas_pxl_fit.initializer.init
     " \
     --stdout_report="

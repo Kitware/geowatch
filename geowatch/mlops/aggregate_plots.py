@@ -121,8 +121,10 @@ def build_special_columns(agg):
             val_accum[val_accum == 'None'] = 1
         val_effective_bsize = val_bsize * val_accum
         agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
-        agg.table['normalized_params.bas_pxl_fit.initializer.init'] = agg.table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
-        # agg.table['normalized_params.bas_pxl_fit.initializer.init']
+
+    # agg.table['normalized_params.bas_pxl_fit.initializer.init'] = agg.table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
+    # HACK!!!
+    # agg.table['normalized_params.bas_pxl_fit.initializer.init']
 
 
 def preprocess_table_for_seaborn(agg, table):
@@ -142,6 +144,8 @@ def preprocess_table_for_seaborn(agg, table):
     channel_mapping = SMART_HELPER.custom_channel_relabel_mapping(unique_channels, coarsen=False)
     for col in channel_cols:
         table[col] = table[col].apply(channel_mapping.get)
+
+    table['resolved_params.bas_pxl_fit.initializer.init'] = table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
     # from geowatch.utils import util_pandas
     # table = util_pandas.DataFrame(table)
     # # table.match_columns('.channels')
