@@ -110,7 +110,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
         import xdev
         xdev.startfile(fpath)
     elif show:
-        raise KeyError(show)
+        raise KeyError(f'Show can be "imshow" or "eog", not {show!r}')
 
 
 def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=None,

@@ -21,19 +21,19 @@ DATASET_SUFFIX=Drop8-ARA
 # NOTE: Ensure the annotations/drop8.dvc data is pulled, otherwise there is an error.
 
 # All Regions
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_*0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_*0*_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/CO_C009.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/CO_C009_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KW_C001.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KW_C001_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KW_C001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KW_C001_*.geojson"
 
 
 # iMerit Regions Only
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_C*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_C*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_C*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_C*_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KR_T001.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KR_T001_*.geojson"
@@ -83,7 +83,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --sensor_to_time_window='
         S2: 2 weeks
         L8: 2 weeks
-        PD: 2 weeks
+        #PD: 2 weeks
         #WV: 2 weeks
     ' \
     --run=1

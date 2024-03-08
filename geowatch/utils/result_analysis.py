@@ -1460,7 +1460,16 @@ def varied_values(longform, min_variations=0, max_variations=None,
                     # References:
                     # .. [SO6441857] https://stackoverflow.com/questions/6441857/nans-as-key-in-dictionaries
                     value = cannonical_nan
-            varied[key].add(value)
+            try:
+                varied[key].add(value)
+            except TypeError as ex:
+                error_note = f'key={key}, {value}={value}'
+                if hasattr(ex, 'add_note'):
+                    # Requires python.311 PEP 678
+                    ex.add_note(error_note)
+                    raise
+                else:
+                    raise type(ex)(str(ex) + chr(10) + error_note)
 
     # Remove any column that does not have enough variation
     if min_variations > 0:

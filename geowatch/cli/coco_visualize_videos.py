@@ -564,7 +564,6 @@ def main(cmdline=True, **kwargs):
                 else:
                     _header_extra = ''
 
-                print(f'channels={channels}')
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,

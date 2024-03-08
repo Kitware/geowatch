@@ -216,6 +216,32 @@ class SmartGlobalHelper:
         palette = ub.dzip(unique_vals, unique_colors)
         return palette
 
+    def region_palette(self, rois=None):
+        if rois is None:
+            rois = [
+                'AE_R001',
+                'KR_R001',
+                'NZ_R001',
+                'CH_R001',
+                'BR_R002',
+
+                'KR_R002',
+
+                'CN_C000',
+                'CO_C001',
+                'KW_C001',
+                'SA_C001',
+                'VN_C002',
+            ]
+        from geowatch.utils import util_kwplot
+        roi_to_color = util_kwplot.Palette.coerce({
+            'KR_R002': (230,  76, 230),
+        })
+        # plotter = aggregate_plots.build_plotter(agg, rois, plot_config)
+        roi_to_color.update(rois)
+        roi_to_color = roi_to_color.reorder(rois)
+        return roi_to_color
+
     def label_modifier(self):
         """
         Build the label modifier for the SMART task.
@@ -795,12 +821,11 @@ class SmartGlobalHelper:
                 sc_crop.sensor_to_time_window: S2: 1month
                 '''),
 
-
             # FIXME: this might have been eval 142
             Yaml.loads(
                 '''
                 delivery: Eval18
-                dag: KIT_TA2_PREEVAL18_BATCH_V136.py
+                dag: KIT_TA2_PREEVAL18_BATCH_V142.py
 
                 bas_pxl.package_fpath: models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
                 bas_poly.thresh: 0.3875
@@ -819,7 +844,19 @@ class SmartGlobalHelper:
                 sc_poly.polygon_simplify_tolerance: 1
 
                 sc_crop.sensor_to_time_window: S2: 1month
-                ''')
+                '''),
+
+            Yaml.loads(
+                '''
+                delivery: Eval19
+                dag: KIT_TA2_PREEVAL18_BATCH_V136.py
+                '''),
+
+            Yaml.loads(
+                '''
+                delivery: Eval20
+                dag: KIT_TA2_PREEVAL18_BATCH_V136.py
+                '''),
         ]
 
         ## SC

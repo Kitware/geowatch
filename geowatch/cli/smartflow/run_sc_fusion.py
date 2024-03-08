@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-See Old Version:
-    ../../../scripts/run_sc_fusion_eval3_for_baseline.py
-
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """

@@ -132,7 +132,11 @@ def preprocess_table_for_seaborn(agg, table):
     from geowatch.mlops.smart_global_helper import SMART_HELPER
     table = util_pandas.DataFrame(table)
     channel_cols = table.match_columns('*.channels')
-    unique_channels = sorted(set(ub.flatten(table[channel_cols].value_counts().index)))
+    unique_channels = list(set(ub.flatten(table[channel_cols].value_counts().index)))
+    try:
+        unique_channels = sorted(unique_channels)
+    except TypeError:
+        ...
     channel_mapping = SMART_HELPER.custom_channel_relabel_mapping(unique_channels, coarsen=False)
     for col in channel_cols:
         table[col] = table[col].apply(channel_mapping.get)
