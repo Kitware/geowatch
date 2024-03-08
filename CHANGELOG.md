@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.16.0 - Unreleased
 
+### Added
+* Function `geowatch.tasks.fusion.utils.load_model_header` to read header info from a torch package
+
 
 ## Version 0.15.1 - Released 2024-03-04
 
