@@ -135,7 +135,10 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         of name*weight or name*weight+offset. E.g.
         `negative*0,background*0.001,No Activity*0.1+1`
         '''))
-    saliency_weights = scfg.Value('auto', type=str, help='saliency weighting strategy of form <fg>:<bg>')
+
+    # TODO: better encoding
+    saliency_weights = scfg.Value('auto', type=str, help='saliency weighting strategy. Can be None, "auto", or a string "<bg>:<fg>"')
+
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''
         number of channels to normalize each project stream to

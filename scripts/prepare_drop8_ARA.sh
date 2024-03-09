@@ -167,7 +167,7 @@ git push
 
 # Push kwcoco files first
 # Then push sensor data in a given order
-dvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
+sdvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
 
 dvc push -r aws -- */*.kwcoco.zip.dvc \
 dvc push -r aws -- */PD.dvc && \

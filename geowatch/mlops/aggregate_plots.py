@@ -121,6 +121,8 @@ def build_special_columns(agg):
             val_accum[val_accum == 'None'] = 1
         val_effective_bsize = val_bsize * val_accum
         agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
+        agg.table['normalized_params.bas_pxl_fit.initializer.init'] = agg.table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
+        # agg.table['normalized_params.bas_pxl_fit.initializer.init']
 
 
 def preprocess_table_for_seaborn(agg, table):

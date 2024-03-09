@@ -461,6 +461,7 @@ class FigureFinalizer(ub.NiceRepr):
         fig.savefig(final_fpath, **savekw)
         if self.cropwhite:
             cropwhite_ondisk(final_fpath)
+        return final_fpath
 
     def __call__(self, fig, fpath, **kwargs):
         """

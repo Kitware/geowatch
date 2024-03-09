@@ -1847,9 +1847,9 @@ python -m geowatch.mlops.aggregate \
         enabled: 1
         stats_ranking: 0
         min_variations: 1
-        #params_of_interest:
-        #    - params.bas_poly.thresh
-        #    - resolved_params.bas_pxl.channels
+        params_of_interest:
+            - params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
         top_k: 10
@@ -1886,9 +1886,12 @@ python -m geowatch.mlops.aggregate \
         enabled: 1
         stats_ranking: 0
         min_variations: 1
-        #params_of_interest:
-        #    - params.bas_poly.thresh
-        #    - resolved_params.bas_pxl.channels
+        params_of_interest:
+            #- params.bas_poly.thresh
+            #- resolved_params.bas_pxl.channels
+            - resolved_params.bas_pxl_fit.initializer.init
+            - normalized_params.bas_pxl_fit.initializer.init
+            #- resolved_bas_pxl_fit.initializer.init
     " \
     --stdout_report="
         top_k: 10

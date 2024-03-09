@@ -399,8 +399,13 @@ class WatchModuleMixins:
         Finds weights to balance saliency forward / background classes.
 
         Args:
-            saliency_weights (Tensor | str):
-                Can be a raw tensor, auto, or a string <fg>:<bg>.
+            saliency_weights (Tensor | str | None):
+                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
+                TODO: accept a self-describing encoding, maybe a yaml mapping?
+                `{'bg': <num>, 'fg': <num>}`?
+
+        Returns:
+            Tensor
 
         Example:
             >>> # xdoctest: +IGNORE_WANT
@@ -439,17 +444,24 @@ class WatchModuleMixins:
                 else:
                     bg_weight = 1.0
                     fg_weight = 1.0
+            elif saliency_weights.lower() in {'null', 'none'}:
+                bg_weight = 1.0
+                fg_weight = 1.0
             else:
                 bg_weight, fg_weight = saliency_weights.split(':')
                 fg_weight = float(fg_weight.strip())
                 bg_weight = float(bg_weight.strip())
+        if saliency_weights is None:
+            bg_weight = 1.0
+            fg_weight = 1.0
         else:
-            raise NotImplementedError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
+            raise TypeError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
         print(f'bg_weight={bg_weight}')
         print(f'fg_weight={fg_weight}')
-        fg_bg_weights = [bg_weight, fg_weight]
+        bg_fg_weights = [bg_weight, fg_weight]
+        # What is the motivation for having "saliency_num_classes" be not 2?
         _n = self.saliency_num_classes
-        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
+        _w = bg_fg_weights + ([0.0] * (_n - len(bg_fg_weights)))
         saliency_weights = torch.Tensor(_w)
         return saliency_weights
 

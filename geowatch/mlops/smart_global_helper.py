@@ -750,13 +750,15 @@ class SmartGlobalHelper:
                 'bas_poly.max_area_square_meters': 8000000.0,
                 'task': 'BAS',
             },
+        ]
 
-            Yaml.loads(
+        yamls_items = [
+            (
                 '''
                 delivery: Eval14
                 dag: KIT_TA2_PREEVAL14_BATCH_V27.py
                 bas_pxl.package_fpath: models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
-                sc_pxl.package_fpath: 'models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt',
+                sc_pxl.package_fpath: 'models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt'
 
                 bas_poly.thresh: 0.3875
                 bas_poly.time_thresh: 0.8
@@ -784,57 +786,56 @@ class SmartGlobalHelper:
                 sv_dino_filter.box_isect_threshold: 0.1
                 sv_dino_filter.box_score_threshold: 0.01
                 sv_dino_filter.start_max_score: 1
-                '''),
-
-            Yaml.loads(
+                '''
+            ),
+            (
                 '''
                 delivery: Eval16
                 dag: KIT_TA2_PREEVAL16_BATCH_V62.py
                 bas_pxl.package_fpath: 'models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt'
-                sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
-                bas_poly.thresh: 0.4,
-                bas_poly.time_thresh: 0.8,
-                sv_depth_filter.threshold: 0.1,
-                sv_dino_filter.end_min_score: 0.15,
-                sc_poly.smoothing: 0.66,
-                sc_poly.thresh: 0.1,
-                sc_poly.site_score_thresh: 0.35,
-                sc_crop.sensor_to_time_window: 'S2: 1month',
-                '''),
-
-            Yaml.loads(
+                sc_pxl.package_fpath: 'models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt'
+                bas_poly.thresh: 0.4
+                bas_poly.time_thresh: 0.8
+                sv_depth_filter.threshold: 0.1
+                sv_dino_filter.end_min_score: 0.15
+                sc_poly.smoothing: 0.66
+                sc_poly.thresh: 0.1
+                sc_poly.site_score_thresh: 0.35
+                sc_crop.sensor_to_time_window: 'S2: 1month'
+                '''
+            ),
+            (
                 '''
                 delivery: Eval17
                 dag: KIT_TA2_PREEVAL17_BATCH_V126.py
 
-                bas_pxl.package_fpath: models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
+                bas_pxl.package_fpath: 'models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt'
                 bas_poly.thresh: 0.3875
                 bas_poly.time_thresh: 0.8
                 sv_dino_filter.end_min_score: 0.15
                 sv_depth_score.model_fpath: models/depth_pcd/model4.h5
                 sv_depth_filter.threshold: 0.1
 
-                sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+                sc_pxl.package_fpath: 'models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt'
                 sc_poly.smoothing: 0.66
                 sc_poly.thresh: 0.1
                 sc_poly.site_score_thresh: 0.35
-                sc_crop.sensor_to_time_window: S2: 1month
-                '''),
-
-            # FIXME: this might have been eval 142
-            Yaml.loads(
+                # sc_crop.sensor_to_time_window: 'S2: 1month'
+                '''
+            ),
+            (
                 '''
                 delivery: Eval18
                 dag: KIT_TA2_PREEVAL18_BATCH_V142.py
 
-                bas_pxl.package_fpath: models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt
+                bas_pxl.package_fpath: 'models/fusion/uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt'
                 bas_poly.thresh: 0.3875
                 bas_poly.time_thresh: 0.8
                 sv_dino_filter.end_min_score: 0.15
                 sv_depth_score.model_fpath: models/depth_pcd/model4.h5
                 sv_depth_filter.threshold: 0.1
 
-                sc_pxl.package_fpath: models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+                sc_pxl.package_fpath: 'models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt'
 
                 sc_poly.thresh: 0.3
                 sc_poly.site_score_thresh: 0.3
@@ -842,22 +843,33 @@ class SmartGlobalHelper:
                 sc_poly.boundaries_as: bounds
                 sc_poly.new_algo: crall
                 sc_poly.polygon_simplify_tolerance: 1
+                # sc_crop.sensor_to_time_window: 'S2: 1month'
+                '''
+            ),
 
-                sc_crop.sensor_to_time_window: S2: 1month
-                '''),
-
-            Yaml.loads(
+            (
                 '''
                 delivery: Eval19
                 dag: KIT_TA2_PREEVAL18_BATCH_V136.py
-                '''),
+                '''
+            ),
 
-            Yaml.loads(
+            (
                 '''
                 delivery: Eval20
-                dag: KIT_TA2_PREEVAL18_BATCH_V136.py
-                '''),
+                dag: KIT_TA2_PREEVAL20_BATCH_V158.py
+                '''
+            ),
         ]
+
+        for idx, text in enumerate(yamls_items):
+            try:
+                delivered_model_params += [Yaml.loads(text)]
+            except Exception:
+                print('ERROR')
+                print(text)
+                print(f'idx = {ub.urepr(idx, nl=1)}')
+                raise
 
         ## SC
         # delivered_model_params += [
