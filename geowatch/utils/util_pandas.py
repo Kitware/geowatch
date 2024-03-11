@@ -148,6 +148,15 @@ class DataFrame(pd.DataFrame):
         varied = varied_values(self, **kwargs)
         return varied
 
+    def varied_value_counts(self, **kwargs):
+        """
+        SeeAlso:
+            :func:`geowatch.utils.result_analysis.varied_value_counts`
+        """
+        from geowatch.utils.result_analysis import varied_value_counts
+        varied = varied_value_counts(self, **kwargs)
+        return varied
+
 
 def pandas_reorder_columns(df, columns):
     # Use DataFrame.reorder instead

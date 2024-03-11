@@ -1386,8 +1386,12 @@ class SkillTracker:
         ratings.update(ub.dzip(ranking, new_ratings))
 
 
+class UnhashablePlaceholder(str):
+    ...
+
+
 def varied_values(longform, min_variations=0, max_variations=None,
-                  default=ub.NoParam, dropna=False):
+                  default=ub.NoParam, dropna=False, on_error='raise'):
     """
     Given a list of dictionaries, find the values that differ between them.
 
@@ -1412,6 +1416,11 @@ def varied_values(longform, min_variations=0, max_variations=None,
         default (VT | NoParamType):
             if specified, unspecified columns are given this value.
             Defaults to NoParam.
+
+        on_error (str):
+            Error policy when trying to add a non-hashable type.
+            Default to "raise". Can be "raise", "ignore", or "placeholder",
+            which will impute a hashable error message.
 
     Returns:
         Dict[KT, List[VT]] :
@@ -1463,13 +1472,20 @@ def varied_values(longform, min_variations=0, max_variations=None,
             try:
                 varied[key].add(value)
             except TypeError as ex:
-                error_note = f'key={key}, {value}={value}'
-                if hasattr(ex, 'add_note'):
-                    # Requires python.311 PEP 678
-                    ex.add_note(error_note)
-                    raise
+                if on_error == 'raise':
+                    error_note = f'key={key}, {value}={value}'
+                    if hasattr(ex, 'add_note'):
+                        # Requires python.311 PEP 678
+                        ex.add_note(error_note)
+                        raise
+                    else:
+                        raise type(ex)(str(ex) + chr(10) + error_note)
+                elif on_error == 'placeholder':
+                    varied[key].add(UnhashablePlaceholder(value))
+                elif on_error == 'ignore':
+                    ...
                 else:
-                    raise type(ex)(str(ex) + chr(10) + error_note)
+                    raise KeyError(on_error)
 
     # Remove any column that does not have enough variation
     if min_variations > 0:
@@ -1485,9 +1501,8 @@ def varied_values(longform, min_variations=0, max_variations=None,
     return varied
 
 
-def varied_value_counts(longform, min_variations=0,
-                        max_variations=None,
-                        default=ub.NoParam, dropna=False):
+def varied_value_counts(longform, min_variations=0, max_variations=None,
+                        default=ub.NoParam, dropna=False, on_error='raise'):
     """
     Given a list of dictionaries, find the values that differ between them.
 
@@ -1512,6 +1527,11 @@ def varied_value_counts(longform, min_variations=0,
         default (VT | NoParamType):
             if specified, unspecified columns are given this value.
             Defaults to NoParam.
+
+        on_error (str):
+            Error policy when trying to add a non-hashable type.
+            Default to "raise". Can be "raise", "ignore", or "placeholder",
+            which will impute a hashable error message.
 
     Returns:
         Dict[KT, Dict[VT, int]] :
@@ -1571,7 +1591,23 @@ def varied_value_counts(longform, min_variations=0,
                     # References:
                     # .. [SO6441857] https://stackoverflow.com/questions/6441857/nans-as-key-in-dictionaries
                     value = cannonical_nan
-            varied_counts[key][value] += 1
+            try:
+                varied_counts[key][value] += 1
+            except TypeError as ex:
+                if on_error == 'raise':
+                    error_note = f'key={key}, {value}={value}'
+                    if hasattr(ex, 'add_note'):
+                        # Requires python.311 PEP 678
+                        ex.add_note(error_note)
+                        raise
+                    else:
+                        raise type(ex)(str(ex) + chr(10) + error_note)
+                elif on_error == 'placeholder':
+                    varied_counts[key][UnhashablePlaceholder(value)] += 1
+                elif on_error == 'ignore':
+                    ...
+                else:
+                    raise KeyError(on_error)
 
     # Remove any column that does not have enough variation
     if min_variations > 0:
