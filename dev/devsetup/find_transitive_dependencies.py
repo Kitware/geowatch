@@ -25,6 +25,7 @@ class FindTransitiveDependenciesCLI(scfg.DataConfig):
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + ub.urepr(config, nl=2))
         req_fpaths = kwutil.util_path.coerce_patterned_paths(config.requirements)
+        print(f'req_fpaths = {ub.urepr(req_fpaths, nl=1)}')
         find_transitive_dependencies(req_fpaths)
 
 

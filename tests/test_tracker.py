@@ -387,6 +387,7 @@ def test_tracker_ac_refinement():
         ~/code/geowatch/geowatch/cli/run_tracker.py
 
     CommandLine:
+        WARN_WITH_TRACEBACK=1 xdoctest ~/code/geowatch/tests/test_tracker.py test_tracker_ac_refinement
         pytest tests/test_tracker.py -k test_tracker_ac_refinement -s
     """
     from geowatch.demo.smart_kwcoco_demodata import random_inscribed_polygon

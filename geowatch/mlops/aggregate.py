@@ -201,7 +201,9 @@ class AggregateEvluationConfig(AggregateLoader):
         '''
     ))
 
-    embed = Value(False, isflag=True, help='if True, embed into IPython.')
+    embed = Value(False, isflag=True, help='if True, embed into IPython. Prefer snapshot over embed.')
+
+    snapshot = Value(False, isflag=True, help='if True, make a snapshot suitable for IPython or a notebook. (requires xdev)')
 
     def __post_init__(self):
         super().__post_init__()
@@ -217,6 +219,11 @@ class AggregateEvluationConfig(AggregateLoader):
 
 def main(cmdline=True, **kwargs):
     """
+    Aggregate entry point.
+
+    Loads results for each evaluation type, constructs aggregator objects, and
+    then executes user specified commands that could include filtering,
+    macro-averaging, reporting, plotting, etc...
 
     Ignore:
         >>> from geowatch.mlops.aggregate import *  # NOQA
@@ -263,7 +270,7 @@ def main(cmdline=True, **kwargs):
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
 
-    if config.embed:
+    if config.embed or config.snapshot:
         # Sneaky way around linting filters, but also a more concise than
         # try/except, and perhaps we can generalize to people's favorite
         # shells?
@@ -277,7 +284,15 @@ def main(cmdline=True, **kwargs):
                 print(f'agg={agg}')
 
             embed_module = ub.import_module_from_name('xdev')
-            embed_module.embed()
+            if config.snapshot:
+                embed_module.snapshot()
+                # Exit after taking the snapshot
+                import sys
+                sys.exit(1)
+            elif config.embed:
+                embed_module.embed()
+            else:
+                raise AssertionError('unreachable')
 
     if config.query:
         print('Running query')
@@ -288,14 +303,14 @@ def main(cmdline=True, **kwargs):
             rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
         eval_type_to_aggregator = new_eval_type_to_aggregator
 
-    for type, agg in eval_type_to_aggregator.items():
+    for eval_type, agg in eval_type_to_aggregator.items():
         print(f'agg={agg}')
 
     timestamp = ub.timestamp()
     if config.export_tables:
         import platform
         hostname = platform.node()
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             num_results = len(agg)
             if num_results > 0:
                 agg.output_dpath.ensuredir()
@@ -309,7 +324,7 @@ def main(cmdline=True, **kwargs):
             report_config = Yaml.coerce(config.stdout_report)
         else:
             report_config = {}
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
 
                 if rois is not None:
@@ -323,24 +338,26 @@ def main(cmdline=True, **kwargs):
                     agg.macro_analysis()
 
     if config.symlink_results:
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 agg.make_result_node_symlinks()
 
     if config.resource_report:
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 agg.report_resources()
 
     if config.plot_params['enabled']:
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 plot_config = ub.udict(config.plot_params) - {'enabled'}
                 agg.plot_all(rois, plot_config)
+                # TODO: have text reports in a separate group
+                agg.dump_varied_parameter_report()
 
     if config.inspect:
         agg = eval_type_to_aggregator['bas_pxl_eval']
-        for type, agg in eval_type_to_aggregator.items():
+        for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 subagg = agg.filterto(param_hashids=config.inspect if ub.iterable(config.inspect) else [config.inspect])
                 if len(subagg):
@@ -421,29 +438,110 @@ class AggregatorAnalysisMixin:
         return analysis, table
 
     def varied_param_counts(agg, min_variations=2, dropna=False):
-        from geowatch.utils.result_analysis import varied_value_counts
-        params = agg.resolved_params
+        from geowatch.utils import util_pandas
+        params = util_pandas.DataFrame(agg.resolved_params)
         params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
-        varied_counts = varied_value_counts(params, dropna=dropna, min_variations=min_variations)
+        varied_counts = params.varied_value_counts(dropna=dropna, min_variations=min_variations)
         varied_counts = ub.udict(varied_counts).sorted_values(key=len)
         return varied_counts
+
+    def dump_varied_parameter_report(agg):
+        """
+        Write the varied parameter report to disk
+        """
+        from kwutil.util_yaml import Yaml
+        import rich
+        report = agg.varied_parameter_report()
+        yaml_text = Yaml.dumps(report)
+        agg.output_dpath.ensuredir()
+        report_fpath = agg.output_dpath / 'varied_param_report.yaml'
+        rich.print(f'Write varied parameter report to: {report_fpath}')
+        report_fpath.write_text(yaml_text)
+
+    def varied_parameter_report(agg, concise=True,
+                                concise_value_char_threshold=80):
+        """
+        Dump a machine and human readable varied parameter report.
+
+        Args:
+            concise (bool):
+                if True, sacrifice row homogeneity for shorter encodings
+        """
+        from geowatch.utils import util_pandas
+        concise_value_char_threshold = 80
+        report = {}
+
+        varied_counts = util_pandas.DataFrame(agg.effective_params).varied_value_counts()
+        # on_error='placeholder')
+
+        # from geowatch.utils import result_analysis
+        varied_counts = agg.table.varied_value_counts(on_error='placeholder')
+        param_summary = {}
+        for key, value_counts in varied_counts.items():
+            type_counts = ub.ddict(lambda: 0)
+            for value, count in value_counts.items():
+                type_counts[type(value).__name__] += count
+            type_counts = ub.odict(type_counts)
+            summary = {
+                'num_variations': len(value_counts),
+            }
+            if concise and len(type_counts) == 1:
+                # Just indicate what the type of all values was
+                summary['type'] = ub.peek(type_counts.keys())
+            else:
+                summary['type_counts'] = type_counts
+
+            if concise:
+                if len(ub.urepr(value_counts)) < concise_value_char_threshold:
+                    # Give the varied values if they are short
+                    summary['value_counts'] = value_counts
+            else:
+                summary['value_counts'] = value_counts
+            param_summary[key] = summary
+
+        param_summary = ub.udict(param_summary).sorted_values(lambda x: x['num_variations'])
+
+        # if 0:
+        #     from geowatch.utils import util_dotdict
+        #     nested = util_dotdict.dotdict_to_nested(varied_counts)
+        #     graph = util_dotdict.indexable_to_graph(nested)
+
+        top_level_descendants = ub.ddict(set)
+        for key in list(varied_counts.keys()):
+            parts = key.split('.')
+            top = parts[0]
+            top_level_descendants[top].add(tuple(parts[1:]))
+
+        column_summary = []
+        for top, parts in top_level_descendants.items():
+            partlens = list(map(len, parts))
+            length_hist = ub.dict_hist(partlens)
+            column_summary.append({
+                'top': top,
+                'num_subcolumns': len(parts),
+                'subcolcolumn_depth_hist': length_hist,
+            })
+
+        report['param_summary'] = param_summary
+        report['column_summary'] = column_summary
+        return report
 
     def analyze(agg, metrics_of_interest=None):
         """
         Does a stats analysis on each varied parameter. Note this makes
         independence assumptions that may not hold in general.
         """
+        from geowatch.utils import util_pandas
         from geowatch.utils import result_analysis
+        params = util_pandas.DataFrame(agg.resolved_params)
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
             # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
-        params = agg.resolved_params
         metrics = agg.metrics[metrics_of_interest]
         params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
-        from geowatch.utils.result_analysis import varied_value_counts
-        varied_counts = varied_value_counts(params, dropna=True)
+        varied_counts = params.varied_value_counts(dropna=True)
 
         if 1:
             # Only look at reasonable groupings
@@ -478,7 +576,7 @@ class AggregatorAnalysisMixin:
             top_k (int): number of top results for each region
 
             shorten (bool): if True, shorten the columns by removing
-                non-ambiguous prefixes wrt to a known node type.
+                non-ambiguous prefixes wrt to a known node eval_type.
 
             concise (bool):
                 if True, remove certain columns that communicate context for a
@@ -928,6 +1026,9 @@ class AggregatorAnalysisMixin:
         if plot_config is None:
             plot_config = {}
         from geowatch.mlops import aggregate_plots
+        if isinstance(rois, str):
+            # fixme: ensure rois are coerced before this point.
+            rois = agg._coerce_rois(rois)
         # agg.macro_key_to_regions
         plotter = aggregate_plots.build_plotter(agg, rois, plot_config)
         return plotter
@@ -1071,13 +1172,14 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     @classmethod
     def demo(cls, num=10, rng=None):
         """
-        Build a demo aggregator for testing.
+        Construct a demo aggregator for testing.
 
         This gives an example of the very particular column format that is
         expected as input the the aggregator.
 
         Args:
             num (int): number of rows
+            rng (int | None): random number generator / state
 
         Example:
             >>> from geowatch.mlops.aggregate import *  # NOQA

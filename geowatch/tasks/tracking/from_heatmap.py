@@ -412,7 +412,7 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
         >>> from geowatch.demo import demo_kwcoco_with_heatmaps
         >>> import geowatch
         >>> sub_dset = geowatch.coerce_kwcoco(
-        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(128, 128),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> video_id = list(sub_dset.videos())[0]
@@ -433,7 +433,7 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
         >>> from geowatch.demo import demo_kwcoco_with_heatmaps
         >>> import geowatch
         >>> sub_dset = geowatch.coerce_kwcoco(
-        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>>     'geowatch-msi', num_videos=1, num_frames=5, image_size=(128, 128),
         >>>     geodata=True, heatmap=True, dates=True)
         >>> video_id = list(sub_dset.videos())[0]
         >>> thresh = 0.01

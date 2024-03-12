@@ -140,8 +140,21 @@ class DataFrame(pd.DataFrame):
         return found
 
     def varied_values(self, **kwargs):
+        """
+        SeeAlso:
+            :func:`geowatch.utils.result_analysis.varied_values`
+        """
         from geowatch.utils.result_analysis import varied_values
         varied = varied_values(self, **kwargs)
+        return varied
+
+    def varied_value_counts(self, **kwargs):
+        """
+        SeeAlso:
+            :func:`geowatch.utils.result_analysis.varied_value_counts`
+        """
+        from geowatch.utils.result_analysis import varied_value_counts
+        varied = varied_value_counts(self, **kwargs)
         return varied
 
 
@@ -255,6 +268,21 @@ def pandas_condense_paths(colvals):
     """
     Condense a column of paths to keep only the shortest distinguishing
     suffixes
+
+    Args:
+        colvals (pd.Series): a column containing paths to condense
+
+    Returns:
+        Tuple: the condensed series and a mapping from old to new
+
+    Example:
+        >>> from geowatch.utils.util_pandas import *  # NOQA
+        >>> rows = [
+        >>>     {'path1': '/path/to/a/file1'},
+        >>>     {'path1': '/path/to/a/file2'},
+        >>> ]
+        >>> colvals = pd.DataFrame(rows)['path1']
+        >>> pandas_condense_paths(colvals)
     """
     is_valid = ~pd.isnull(colvals)
     valid_vals = colvals[is_valid].apply(os.fspath)

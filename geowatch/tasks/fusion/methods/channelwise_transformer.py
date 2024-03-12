@@ -135,7 +135,10 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         of name*weight or name*weight+offset. E.g.
         `negative*0,background*0.001,No Activity*0.1+1`
         '''))
-    saliency_weights = scfg.Value('auto', type=str, help='class weighting strategy')
+
+    # TODO: better encoding
+    saliency_weights = scfg.Value('auto', type=str, help='saliency weighting strategy. Can be None, "auto", or a string "<bg>:<fg>"')
+
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''
         number of channels to normalize each project stream to
@@ -421,6 +424,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if isinstance(class_weights, str) and class_weights == 'auto':
                 class_weights = class_weights + ':' + modulate_class_weights
 
+        print(f'self.hparams.saliency_weights={self.hparams.saliency_weights}')
         self.saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
         self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([

@@ -4,10 +4,10 @@ Developer notebook
 
 
 def dzyne_mwe():
-    import watch
+    import geowatch
     import ubelt as ub
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = dvc_dpath / 'Drop4-SC/yourdata.kwcoco.json'
     channels = 'red|green|blue,change'
     self = KWCocoVideoDataset(coco_fpath,
@@ -42,11 +42,11 @@ def dzyne_mwe():
 def visualize_cloudmask_batch():
     # import os
     # os.environ['XDEV_PROFILE'] = '1'
-    import watch
+    import geowatch
     import numpy as np  # NOQA
     import kwimage  # NOQA
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = dvc_dpath / 'Drop4-BAS/combo_vali_I2.kwcoco.json'
     # channels = 'red|green|blue,invariants.0:3,invariants.16,cloudmask'
     channels = 'red|green|blue,cloudmask'
@@ -137,7 +137,7 @@ def visualize_cloudmask_batch():
         kwplot.show_if_requested()
 
     if 0:
-        from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+        from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
         import kwarray
         import ubelt as ub
         plt = kwplot.autoplt()
@@ -257,23 +257,26 @@ def debug_cloudmasks():
     datasets.
     """
     import kwcoco
-    import watch
-    import kwimage
+    # import geowatch
+    # import kwimage
     import ubelt as ub
     import kwarray
 
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
-    bundle_dpath = dvc_dpath / 'Aligned-Drop7'
+    # dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    # bundle_dpath = dvc_dpath / 'Aligned-Drop7'
+    # dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    # bundle_dpath = dvc_dpath / 'Aligned-Drop7'
+
+    # coco_dataset_fpaths = [
+    #     # bundle_dpath / 'KR_R002/imgonly-KR_R002.kwcoco.zip',
+    #     # bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
+    #     bundle_dpath / 'CH_R001/imgonly-CH_R001.kwcoco.zip',
+    #     # bundle_dpath / 'NZ_R001/imgonly-NZ_R001.kwcoco.zip',
+    # ]
 
     coco_dataset_fpaths = [
-        # bundle_dpath / 'KR_R002/imgonly-KR_R002.kwcoco.zip',
-        # bundle_dpath / 'CN_C000/imgonly-CN_C000.kwcoco.zip',
-        bundle_dpath / 'CH_R001/imgonly-CH_R001.kwcoco.zip',
-        # bundle_dpath / 'NZ_R001/imgonly-NZ_R001.kwcoco.zip',
-    ]
-
-    coco_dataset_fpaths = [
-        '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
+        '/data2/projects/smart/smart_phase3_data/Aligned-Drop8-ARA/BR_T002/imgonly-BR_T002-rawbands.kwcoco.zip'
+        # '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/KHQ_Tutorial6_Data/Aligned-KHQ_Tutorial6_Data/KHQ_R001/imgonly-KHQ_R001-rawbands.kwcoco.zip'
     ]
 
     # Directory to write debugging visualizations to
@@ -286,8 +289,7 @@ def debug_cloudmasks():
     # Choose these names instead of choosing randomly
     interest_names = [
         # 'crop_20180105T020000Z_N37.734145E128.855484_N37.811709E128.946746_WV_0'
-
-        'crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1',
+        # 'crop_20181012T100000Z_N47.297216E008.420848_N47.467417E008.581097_WV_1',
     ]
 
     interest_names = []
@@ -321,8 +323,8 @@ def debug_cloudmasks():
         rng = kwarray.ensure_rng(48942398243, api='numpy')
 
         for sensor, imgs in group_to_images.items():
-            # if 'WV' not in sensor:
-            #     continue
+            if 'PD' not in sensor:
+                continue
             # Randomly pick one image for each sensor
             name_to_img = {g['name']: g for g in imgs}
             if not interest_names:
@@ -336,6 +338,9 @@ def debug_cloudmasks():
                 for n in found:
                     coco_img = name_to_img[n]
                     images_of_interest.append(coco_img)
+
+    # just pick one
+    images_of_interest = images_of_interest[0:1]
 
     for coco_img in ub.ProgIter(images_of_interest, desc='draw cloudmask debug image', verbose=3):
         ...
@@ -351,9 +356,9 @@ def debug_single_cloudmask(coco_img, out_dpath):
     """
     """
     import kwimage
-    from watch.utils import kwcoco_extensions
-    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-    from watch.utils import util_time
+    from geowatch.utils import kwcoco_extensions
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from kwutil import util_time
     import numpy as np
     import ubelt as ub
 
@@ -405,7 +410,7 @@ def debug_single_cloudmask(coco_img, out_dpath):
         print(len(np.unique(overview1)))
         print(len(np.unique(overview2)))
 
-    if 1:
+    if 0:
         import numpy as np
         canvas_size = np.array(qa_delayed.dsize)
         desired_max_canvas_size = np.array([4000, 4000])
@@ -431,9 +436,21 @@ def debug_single_cloudmask(coco_img, out_dpath):
         print('After optimize')
         qa_delayed.print_graph(fields=True)
 
-    quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False, optimize=False)
+    if 1:
+        # Hack: just take a crop of raster
+        qa_delayed = qa_delayed.scale(0.25)
+        tci_delayed = tci_delayed.scale(0.25)
+
+        # qa_delayed = qa_delayed[0:1024, 0:1024]
+        # tci_delayed = tci_delayed[0:1024, 0:1024]
+
+    quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False, optimize=True)
+    print('Read QA band')
     tci_raw = tci_delayed.finalize(nodata_method='float')
+    print('Read TCI bands')
     tci_canvas = kwimage.normalize_intensity(tci_raw)
+    tci_canvas = kwimage.fill_nans_with_checkers(tci_canvas)
+    print('Normalized TCI bands')
 
     sensor = coco_img.img.get('sensor_coarse')
     print(f'sensor={sensor}')
@@ -483,8 +500,8 @@ def debug_single_cloudmask(coco_img, out_dpath):
     print('fname = {}'.format(ub.urepr(fname, nl=1)))
 
     canvas = kwimage.stack_images([
-        # drawings['tci_canvas'],
-        drawings['used_mask'],
+        drawings['tci_canvas'],
+        # drawings['used_mask'],
         drawings['qa_canvas'],
         drawings['legend']
     ], axis=1)
@@ -510,7 +527,7 @@ def debug_single_cloudmask(coco_img, out_dpath):
 
 def debug_specific_qa_masks():
 
-    from watch.utils import util_fsspec
+    from geowatch.utils import util_fsspec
     util_fsspec.FSPath.coerce
     # fs = util_fsspec.S3Path._new_fs(profile='iarpa')
 
@@ -521,7 +538,7 @@ def debug_specific_qa_masks():
         "/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/52/S/DG/2018/1/5/18JAN05020545-P1BS-011778196010_01_P002/18JAN05020545-P1BS-011778196010_01_P002_ACC_QA.tif"
     ]]
     import ubelt as ub
-    dpath = ub.Path.appdir('watch/temp/').ensuredir()
+    dpath = ub.Path.appdir('geowatch/temp/').ensuredir()
 
     local_fpaths = []
     for p in s3_paths:
@@ -531,7 +548,7 @@ def debug_specific_qa_masks():
             p.copy(fpath)
 
     import kwimage
-    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     table = QA_SPECS.find_table('ACC-1', 'WV')
 
     for fpath in local_fpaths:

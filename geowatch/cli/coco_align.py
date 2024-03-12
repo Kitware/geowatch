@@ -554,6 +554,7 @@ def main(cmdline=True, **kw):
         >>> assert len(new_dset.images()) == 0
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # Confirm expected behavior of `force_min_gsd` keyword argument
         >>> from geowatch.cli.coco_align import *  # NOQA
         >>> from geowatch.demo.landsat_demodata import grab_landsat_product

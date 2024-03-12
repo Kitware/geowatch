@@ -1634,7 +1634,7 @@ class GetItemMixin(TruthMixin):
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import geowatch
-            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-dates-geodata-heatmap', num_frames=5, image_size=(256, 256), num_videos=1)
+            >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi-dates-geodata-heatmap', num_frames=5, image_size=(128, 128), num_videos=1)
             >>> # Remove two annotations to test new time weights
             >>> aids = coco_dset.images().take([0]).annots[0].lookup('id')
             >>> coco_dset.remove_annotations(aids)
@@ -1644,7 +1644,7 @@ class GetItemMixin(TruthMixin):
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=5,
             >>>                           window_resolution='0.09GSD',
             >>>                           input_resolution='0.09GSD',
-            >>>                           window_dims=(256, 256),
+            >>>                           window_dims=(128, 128),
             >>>                           channels=channels,
             >>>                           balance_areas=True,
             >>>                           weight_dilate=3,
@@ -2179,8 +2179,9 @@ class IntrospectMixin:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import geowatch
             >>> anchors = np.array([[0.1, 0.1]])
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors)
-            >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300), default_class_behavior='ignore')
+            >>> size = (96, 96)
+            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors, image_size=size)
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=size, default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]

@@ -789,6 +789,10 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         proc_context.start()
         test_coco_dataset = datamodule.coco_datasets['test']
         proc_context.add_disk_info(test_coco_dataset.fpath)
+
+    memory_monitor_timer = ub.Timer().tic()
+    memory_monitor_interval_seconds = 60
+
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
@@ -869,6 +873,19 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
             if 0:
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
+
+            MONITOR_MEMORY = 1
+            if MONITOR_MEMORY:
+                # TODO: encapsulate this in a helper class that runs some
+                # user-specified function if the timer interval has ellapsed.
+                if memory_monitor_timer.toc() > memory_monitor_interval_seconds:
+                    # TODO: monitor memory usage and report if it looks like we
+                    # are about to run out of memory, and maybe do something to
+                    # handle it.
+                    from geowatch.utils import util_hardware
+                    mem_info = util_hardware.get_mem_info()
+                    print(f'\n\nmem_info = {ub.urepr(mem_info, nl=1)}\n\n')
+                    memory_monitor_timer.tic()
 
             # Predict on the batch: todo: rename to predict_step
             try:
@@ -1128,8 +1145,8 @@ def predict(cmdline=False, **kwargs):
         >>> results_path.delete()
         >>> results_path.ensuredir()
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(64, 64))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(64, 64))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes2-gsize64-frames9-speed0.5-multispectral')
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes1-gsize64-frames9-speed0.5-multispectral')
         >>> root_dpath = ub.Path(test_dpath, 'train').ensuredir()
         >>> fit_config = kwargs = {
         ...     'subcommand': 'fit',
