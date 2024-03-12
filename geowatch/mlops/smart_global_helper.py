@@ -28,6 +28,17 @@ class SmartGlobalHelper:
             'Baseline2023-07': kwimage.Color('kitware_green').as01(),
         }
 
+    # BAA References
+    # https://sam.gov/opp/e56a9469354f4ffb9756b59a174fcdc2/view
+    TARGET_METRICS = {
+        'bas_tpr': 0.59,
+        'bas_ppv': 0.85,
+        'bas_fpr': 0.1,
+        'bas_f1': 0.7,
+        'cost_dollars_per_km2': 30,
+        'ac_time_delta': "5 days",
+    }
+
     VIZ_BLOCKLIST = {
         'resolved_params.bas_poly_eval.pred_sites',
         'resolved_params.bas_poly_eval.gt_dpath',
