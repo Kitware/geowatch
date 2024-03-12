@@ -401,8 +401,8 @@ class WatchModuleMixins:
         Args:
             saliency_weights (Tensor | str | None):
                 Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
-                TODO: accept a self-describing encoding, maybe a yaml mapping?
-                `{'bg': <num>, 'fg': <num>}`?
+                Can also accept a YAML mapping from the keys "bg" and "fg" to
+                their respective float weights.
 
         Returns:
             Tensor
@@ -431,8 +431,13 @@ class WatchModuleMixins:
             tensor([2., 1.])
             >>> self._coerce_saliency_weights('70:20')
             tensor([70., 20.])
+            >>> self._coerce_saliency_weights('{fg: 1, bg: 2}')
+            tensor([2., 1.])
         """
-        if isinstance(saliency_weights, str):
+        if saliency_weights is None:
+            bg_weight = 1.0
+            fg_weight = 1.0
+        elif isinstance(saliency_weights, str):
             if saliency_weights == 'auto':
                 class_freq = self.class_freq
                 if class_freq is not None:
@@ -448,12 +453,19 @@ class WatchModuleMixins:
                 bg_weight = 1.0
                 fg_weight = 1.0
             else:
-                bg_weight, fg_weight = saliency_weights.split(':')
-                fg_weight = float(fg_weight.strip())
-                bg_weight = float(bg_weight.strip())
-        if saliency_weights is None:
-            bg_weight = 1.0
-            fg_weight = 1.0
+                try:
+                    bg_weight, fg_weight = saliency_weights.split(':')
+                    fg_weight = float(fg_weight.strip())
+                    bg_weight = float(bg_weight.strip())
+                except Exception:
+                    from kwutil.util_yaml import Yaml
+                    saliency_weights_ = Yaml.coerce(saliency_weights)
+                    try:
+                        bg_weight = float(saliency_weights_['bg'])
+                        fg_weight = float(saliency_weights_['fg'])
+                    except Exception:
+                        # TODO better error message
+                        raise
         else:
             raise TypeError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
         print(f'bg_weight={bg_weight}')

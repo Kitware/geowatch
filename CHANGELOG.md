@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Aggregator can now output a varied parameter report.
 
 
+### Changed
+
+* Can now configure saliency weights as a YAML mapping
+
+
 ## Version 0.15.1 - Released 2024-03-04
 
 ### Added
