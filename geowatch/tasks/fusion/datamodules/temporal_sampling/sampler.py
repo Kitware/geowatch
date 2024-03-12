@@ -32,7 +32,7 @@ Example:
     >>> # Demo multiple different settings
     >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import geowatch
-    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
+    >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8), num_videos=1)
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -714,7 +714,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> import kwcoco
             >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
             >>> import geowatch
-            >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+            >>> dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32), num_videos=1)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,

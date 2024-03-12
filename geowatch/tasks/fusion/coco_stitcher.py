@@ -8,6 +8,9 @@ predictions should be stitched back together at.
 
 The following attempts to provide a minimal example with a visualization.
 
+CommandLine:
+    xdoctest -m geowatch.tasks.fusion.coco_stitcher __doc__:0
+
 Example:
     >>> from geowatch.tasks.fusion.coco_stitcher import *  # NOQA
     >>> from geowatch.tasks.fusion.coco_stitcher import demo_coco_stitching_manager
@@ -34,7 +37,7 @@ def demo_coco_stitching_manager():
     rng = kwarray.ensure_rng(0)
 
     # Given some kwcoco dataset
-    coco_dset = kwcoco.CocoDataset.demo('vidshapes', num_videos=1, num_frames=4)
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes', num_videos=1, num_frames=4, image_size=(128, 128))
 
     result_dataset = coco_dset.copy()
     result_dataset.reroot(absolute=True)
@@ -56,7 +59,7 @@ def demo_coco_stitching_manager():
     # We will use the :class:`KWCocoVideoDataset` to handle the sliding window
     # You don't have to, but it is handy.
     dataset = KWCocoVideoDataset(
-        coco_dset, time_dims=3, window_dims=(128, 128),
+        coco_dset, time_dims=3, window_dims=(96, 96),
         window_overlap=0.3,
         channels='r|g|b',
         mode='test',

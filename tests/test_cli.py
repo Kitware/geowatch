@@ -20,7 +20,7 @@ def test_top_level_cli_help_message():
 
 
 def test_subcommand_cli_help_message():
-    if not int(os.get('SLOW_TESTS', '0')):
+    if not int(os.environ.get('SLOW_TESTS', '0')):
         pytest.skip('skip slower test')
 
     verbose = 0

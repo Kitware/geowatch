@@ -1145,8 +1145,8 @@ def predict(cmdline=False, **kwargs):
         >>> results_path.delete()
         >>> results_path.ensuredir()
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(64, 64))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(64, 64))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes2-gsize64-frames9-speed0.5-multispectral')
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes1-gsize64-frames9-speed0.5-multispectral')
         >>> root_dpath = ub.Path(test_dpath, 'train').ensuredir()
         >>> fit_config = kwargs = {
         ...     'subcommand': 'fit',

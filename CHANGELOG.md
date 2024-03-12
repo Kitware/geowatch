@@ -12,8 +12,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Changed
-
 * Can now configure saliency weights as a YAML mapping
+* Updated coverage minimum version, which decreases CI time from >1 hour to 10-30 minutes.
 
 
 ## Version 0.15.1 - Released 2024-03-04
