@@ -81,6 +81,7 @@ stages:
   - ls -altr
   - '# Get the path to the installed package and run the tests'
   - export MOD_DPATH=$(python -c "import geowatch, os; print(os.path.dirname(geowatch.__file__))")
+  - export MOD_NAME=geowatch
   - |-
     echo "
     ---
@@ -90,8 +91,7 @@ stages:
     ---
     "
   - |-
-    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
-  - echo "pytest command finished, moving the coverage file to the repo root"
+    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="$MOD_NAME" "$MOD_DPATH" ../tests --durations=100
 .test_full-strict_template: &test_full-strict_template
   <<: *common_test_template
   before_script:
@@ -130,6 +130,7 @@ stages:
   - ls -altr
   - '# Get the path to the installed package and run the tests'
   - export MOD_DPATH=$(python -c "import geowatch, os; print(os.path.dirname(geowatch.__file__))")
+  - export MOD_NAME=geowatch
   - |-
     echo "
     ---
@@ -139,8 +140,7 @@ stages:
     ---
     "
   - |-
-    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="geowatch" "$MOD_DPATH" ../tests
-  - echo "pytest command finished, moving the coverage file to the repo root"
+    python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="$MOD_NAME" "$MOD_DPATH" ../tests --durations=100
 build/cp310-linux-x86_64:
   <<: *build_template
   image: python:3.10

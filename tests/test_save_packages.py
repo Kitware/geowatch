@@ -84,7 +84,7 @@ def test_save_heterogeneous_with_dataloader():
     )
     from geowatch.tasks.fusion import datamodules
     datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes8', chip_size=32,
+        train_dataset='special:vidshapes1', window_space_dims=32,
         batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
     datamodule.setup('fit')
     _save_package_with_trainer(model, datamodule)

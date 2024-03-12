@@ -4,14 +4,26 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.15.1 - Unreleased
+## Version 0.16.0 - Unreleased
 
+### Added
+* Function `geowatch.tasks.fusion.utils.load_model_header` to read header info from a torch package
+* Aggregator can now output a varied parameter report.
+
+
+### Changed
+* Can now configure saliency weights as a YAML mapping
+* Updated coverage minimum version, which decreases CI time from >1 hour to 10-30 minutes.
+
+
+## Version 0.15.1 - Released 2024-03-04
 
 ### Added
 * Add experimental CLI for looking up recent checkpoints.
 * Add experimental CLI for looking up recommending train size adjustments.
 * Add experimental CLI for looking up disk hardware information.
 * Add more helper scripts for tensorboard callbacks
+* New train-time sample balancing backend.
 
 ### Changed
 * Remove developer dependency on `fire`.

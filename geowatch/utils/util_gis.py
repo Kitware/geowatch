@@ -422,7 +422,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
         >>> rng = kwarray.ensure_rng(0)
         >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
         >>>     kwimage.Polygon.random(rng=rng).scale(2).translate((-1, -1)).scale(0.001, about='centroid').scale((180, 90)).to_shapely()
-        >>>     for _ in range(30)
+        >>>     for _ in range(5)
         >>> ]}, crs='crs84')
         >>> # Mode 1 uses a tolerance test instead
         >>> gdf_utm = project_gdf_to_local_utm(gdf_crs84, mode=1, tolerance=float('inf'))

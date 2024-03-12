@@ -123,6 +123,36 @@ def load_model_from_package(package_path):
     return model
 
 
+def load_model_header(package_path):
+    """
+    Only grabs header info from a packaged model.
+
+    Ignore:
+        >>> from geowatch.tasks.fusion.utils import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+        >>> package_path = dvc_dpath / 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt'
+        >>> model = load_model_header(package_path)
+    """
+    import zipfile
+    zfile = zipfile.ZipFile(package_path)
+    names = zfile.namelist()
+    relevant_names = {}
+    for name in names:
+        if name.endswith('package_header/package_header.json'):
+            relevant_names['header'] = name
+        if name.endswith('package_header/config.yaml'):
+            relevant_names['config'] = name
+
+    from kwutil.util_yaml import Yaml
+    relevant_data = {}
+    for key, name in relevant_names.items():
+        text = zfile.read(name).decode()
+        data = Yaml.coerce(text)
+        relevant_data[key] = data
+    return relevant_data
+
+
 def _try_fixed_package_import(package_path):
     from torch import package
     import torch

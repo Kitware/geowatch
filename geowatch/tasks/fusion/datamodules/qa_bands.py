@@ -876,6 +876,109 @@ QA_SPECS.append(QA_BitSpecTable({
 }))
 
 
+# ARA data
+QA_SPECS.append(QA_BitSpecTable({
+    'qa_spec_name': 'ARA-4',
+    'qa_spec_date': '2024-03-06',
+    'sensor': 'L8',
+    'dtype': {'kind': 'u', 'itemsize': 2},
+    'bits': [
+        {
+            'bit_number': 0,
+            'qa_name': 'TnE',
+            'qa_description': 'TnE Evaluate',
+            'bit_value': [{'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}]
+        },
+        {
+            'bit_number': 1,
+            'qa_name': 'dilated_cloud',
+            'qa_description': 'cloud',
+            'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]
+        },
+        {'bit_number': 2, 'qa_name': 'cirrus', 'qa_description': 'cirrus'},
+        {'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
+        {'bit_number': 4, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow'},
+        {'bit_number': 5, 'qa_name': 'snow', 'qa_description': 'snow'},
+        {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
+        {'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'},
+        {'bit_number': 8, 'qa_name': 'aligned', 'qa_description': 'image aligned'},
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
+    ]
+}))
+
+
+QA_SPECS.append(QA_BitSpecTable({
+    'qa_spec_name': 'ARA-4',
+    'qa_spec_date': '2024-03-06',
+    'sensor': 'S2',
+    'dtype': {'kind': 'u', 'itemsize': 2},
+    'bits': [
+        {'bit_number': 0, 'qa_name': 'TnE', 'qa_description': 'TnE Evaluate', 'bit_value': [{'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}]},
+        {'bit_number': 2, 'qa_name': 'cirrus', 'qa_description': 'cirrus'},
+        {'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
+        {'bit_number': 4, 'qa_name': 'cloud_shadow', 'qa_description': 'cloud shadow'},
+        {'bit_number': 5, 'qa_name': 'snow', 'qa_description': 'snow'},
+        {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
+        {'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'},
+        {'bit_number': 8, 'qa_name': 'aligned', 'qa_description': 'image aligned'},
+        {'bit_number': 10, 'qa_name': 'imputed', 'qa_description': 'cloud imputed'},
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
+    ]
+}))
+
+
+QA_SPECS.append(QA_BitSpecTable({
+    'qa_spec_name': 'ARA-4',
+    'qa_spec_date': '2024-03-06',
+    'sensor': 'PD',
+    'dtype': {'kind': 'u', 'itemsize': 2},
+    'bits': [
+        {'bit_number': 0, 'qa_name': 'TnE', 'qa_description': 'TnE Evaluate', 'bit_value': [{'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}]},
+        {'bit_number': 1, 'qa_name': 'dilated_cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
+        {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
+        {'bit_number': 8, 'qa_name': 'aligned', 'qa_description': 'image aligned'},
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
+    ]
+}))
+
+
+QA_SPECS.append(QA_BitSpecTable({
+    'qa_spec_name': 'ARA-4',
+    'qa_spec_date': '2024-03-06',
+    'sensor': 'WV',
+    'dtype': {'kind': 'u', 'itemsize': 2},
+    'bits': [
+        {'bit_number': 0, 'qa_name': 'TnE', 'qa_description': 'TnE Evaluate', 'bit_value': [{'value': 1, 'description': 'use-pixel'}, {'value': 0, 'description': 'ignore-pixel'}]},
+        {'bit_number': 1, 'qa_name': 'dilated_cloud', 'qa_description': 'cloud', 'bit_value': [{'value': 1, 'description': 'yes'}, {'value': 0, 'description': 'no'}]},
+        {'bit_number': 3, 'qa_name': 'cloud', 'qa_description': 'cloud'},
+        {'bit_number': 3, 'qa_name': 'terrain_shadow', 'qa_description': 'Terrain Shadow'},
+        {'bit_number': 5, 'qa_name': 'snow', 'qa_description': 'snow'},
+        {'bit_number': 6, 'qa_name': 'clear', 'qa_description': 'clear'},
+        {'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'},
+        {'bit_number': 8, 'qa_name': 'aligned', 'qa_description': 'image aligned'},
+        {'bit_number': 9, 'qa_name': 'orthorectified', 'qa_description': 'DSM Orthorectified'},
+        {'bit_number': 11, 'qa_description': 'reserved for future use'},
+        {'bit_number': 12, 'qa_description': 'reserved for future use'},
+        {'bit_number': 13, 'qa_description': 'reserved for future use'},
+        {'bit_number': 14, 'qa_description': 'reserved for future use'},
+        {'bit_number': 15, 'qa_description': 'reserved for future use'}
+    ]
+}))
+
+
 def demo():
     import sys
     fpath = sys.argv[1]

@@ -1825,6 +1825,12 @@ geowatch schedule --params="
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+MLOPS_DPATH=$DVC_EXPT_DPATH/_preeval20_bas_grid
+python -m geowatch.cli.experimental.fixup_predict_kwcoco_metadata \
+    --coco_fpaths "$MLOPS_DPATH/pred/flat/bas_pxl/*/pred.kwcoco.zip"
+
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 python -m geowatch.mlops.aggregate \
     --pipeline=bas \
@@ -1835,15 +1841,15 @@ python -m geowatch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - bas_poly_eval
-        - bas_pxl_eval
+        #- bas_pxl_eval
     " \
     --plot_params="
         enabled: 1
         stats_ranking: 0
         min_variations: 1
-        #params_of_interest:
-        #    - params.bas_poly.thresh
-        #    - resolved_params.bas_pxl.channels
+        params_of_interest:
+            - params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
         top_k: 10
@@ -1855,5 +1861,75 @@ python -m geowatch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002"
-    #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    #--rois="KR_R002"
+    #--rois="KR_R002,CN_C000"
+    #--rois="CN_C000"
+
+
+# Restrict
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+
+REMOTE_DVC_EXPT_DPATH=$HOME/remote/yardrat/data/dvc-repos/smart_phase3_expt
+python -m geowatch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $REMOTE_DVC_EXPT_DPATH/_preeval20_bas_grid
+    " \
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    --output_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid3/aggregate" \
+    --snapshot
+
+    #\
+    #--resource_report=0 \
+    #--eval_nodes="
+    #    - bas_poly_eval
+    #    #- bas_pxl_eval
+    #" \
+    #--plot_params="
+    #    enabled: 1
+    #    stats_ranking: 0
+    #    min_variations: 1
+    #    params_of_interest:
+    #        #- params.bas_poly.thresh
+    #        #- resolved_params.bas_pxl.channels
+    #        - resolved_params.bas_pxl_fit.initializer.init
+    #        #- normalized_params.bas_pxl_fit.initializer.init
+    #        #- resolved_bas_pxl_fit.initializer.init
+    #" \
+    #--stdout_report="
+    #    top_k: 10
+    #    per_group: 1
+    #    macro_analysis: 0
+    #    analyze: 0
+    #    print_models: True
+    #    reference_region: final
+    #    concise: 1
+    #    show_csv: 0
+    #" \
+
+    ##--query "df['resolved_params.bas_pxl_fit.initializer.init'] != 'noop'" \
+
+ipython -i -c "if 1:
+    fpath = '/home/joncrall/.cache/xdev/snapshot_states/state_2024-03-11T104255-5.pkl'
+    from xdev.embeding import load_snapshot
+    load_snapshot(fpath, globals())
+
+    rois = ['KR_R002', 'CN_C000', 'KW_C001', 'CO_C001']
+    agg.build_macro_tables(rois)
+
+    label_mappings = {
+        'packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt': 'D7-bgrn-V74',
+        'uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt': 'D7-COLD-Eval18',
+    }
+
+    plot_config = {
+        'min_variations': 1,
+        'params_of_interest': ['resolved_params.bas_pxl_fit.initializer.init'],
+        'label_mappings': label_mappings,
+    }
+
+
+
+"

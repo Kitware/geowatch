@@ -162,10 +162,10 @@ class WatchCocoStats(scfg.DataConfig):
         else:
             rich.print(summary_string)
 
-        print('Other helpful commands:')
-        for fpath in fpaths:
-            'geowatch visualize {fpath:!r} --channels='
-            pass
+        # print('Other helpful commands:')
+        # for fpath in fpaths:
+        #     'geowatch visualize {fpath:!r} --channels='
+        #     pass
 
 
 def coco_watch_stats(dset, with_video_info=False):

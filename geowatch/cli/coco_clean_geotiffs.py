@@ -146,7 +146,7 @@ def main(cmdline=1, **kwargs):
         >>> import kwarray
         >>> import numpy as np
         >>> # Create a copy of the test dataset to clean inplace
-        >>> orig_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, bad_nodata=True)
+        >>> orig_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, bad_nodata=True, num_videos=1, num_frames=2)
         >>> orig_dpath = ub.Path(orig_dset.bundle_dpath)
         >>> dpath = orig_dpath.augment(stemsuffix='_cleaned')
         >>> dpath.delete()

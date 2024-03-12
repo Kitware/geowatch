@@ -22,6 +22,7 @@ typed = 0  # todo
 render_doc_images = 1
 license = "Apache 2"
 dev_status = "beta"
+test_command = 'python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="$MOD_NAME" "$MOD_DPATH" ../tests --durations=100'
 
 [tool.xcookie.entry_points]
 # the console_scripts entry point creates the xdoctest executable

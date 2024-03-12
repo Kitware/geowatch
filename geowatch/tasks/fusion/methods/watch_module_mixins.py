@@ -391,7 +391,7 @@ class WatchModuleMixins:
             else:
                 raise KeyError(class_weights)
         else:
-            raise NotImplementedError(class_weights)
+            raise NotImplementedError(f'{class_weights!r}')
         return class_weights
 
     def _coerce_saliency_weights(self, saliency_weights):
@@ -399,8 +399,13 @@ class WatchModuleMixins:
         Finds weights to balance saliency forward / background classes.
 
         Args:
-            saliency_weights (Tensor | str):
-                Can be a raw tensor, auto, or a string <fg>:<bg>.
+            saliency_weights (Tensor | str | None):
+                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
+                Can also accept a YAML mapping from the keys "bg" and "fg" to
+                their respective float weights.
+
+        Returns:
+            Tensor
 
         Example:
             >>> # xdoctest: +IGNORE_WANT
@@ -426,8 +431,13 @@ class WatchModuleMixins:
             tensor([2., 1.])
             >>> self._coerce_saliency_weights('70:20')
             tensor([70., 20.])
+            >>> self._coerce_saliency_weights('{fg: 1, bg: 2}')
+            tensor([2., 1.])
         """
-        if isinstance(saliency_weights, str):
+        if saliency_weights is None:
+            bg_weight = 1.0
+            fg_weight = 1.0
+        elif isinstance(saliency_weights, str):
             if saliency_weights == 'auto':
                 class_freq = self.class_freq
                 if class_freq is not None:
@@ -439,17 +449,31 @@ class WatchModuleMixins:
                 else:
                     bg_weight = 1.0
                     fg_weight = 1.0
+            elif saliency_weights.lower() in {'null', 'none'}:
+                bg_weight = 1.0
+                fg_weight = 1.0
             else:
-                bg_weight, fg_weight = saliency_weights.split(':')
-                fg_weight = float(fg_weight)
-                bg_weight = float(bg_weight)
+                try:
+                    bg_weight, fg_weight = saliency_weights.split(':')
+                    fg_weight = float(fg_weight.strip())
+                    bg_weight = float(bg_weight.strip())
+                except Exception:
+                    from kwutil.util_yaml import Yaml
+                    saliency_weights_ = Yaml.coerce(saliency_weights)
+                    try:
+                        bg_weight = float(saliency_weights_['bg'])
+                        fg_weight = float(saliency_weights_['fg'])
+                    except Exception:
+                        # TODO better error message
+                        raise
         else:
-            raise NotImplementedError(saliency_weights)
+            raise TypeError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
         print(f'bg_weight={bg_weight}')
         print(f'fg_weight={fg_weight}')
-        fg_bg_weights = [bg_weight, fg_weight]
+        bg_fg_weights = [bg_weight, fg_weight]
+        # What is the motivation for having "saliency_num_classes" be not 2?
         _n = self.saliency_num_classes
-        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
+        _w = bg_fg_weights + ([0.0] * (_n - len(bg_fg_weights)))
         saliency_weights = torch.Tensor(_w)
         return saliency_weights
 
