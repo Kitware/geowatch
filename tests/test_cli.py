@@ -1,8 +1,9 @@
+import ubelt as ub
+import os
+import pytest
 
 
-def test_cli_help_message():
-    import ubelt as ub
-    import os
+def test_top_level_cli_help_message():
     verbose = 0
     exe = 'python -m geowatch'
 
@@ -16,6 +17,22 @@ def test_cli_help_message():
 
     info = ub.cmd(f'{exe} --help', **kwargs)
     assert info['ret'] == 0
+
+
+def test_subcommand_cli_help_message():
+    if not int(os.get('SLOW_TESTS', '0')):
+        pytest.skip('skip slower test')
+
+    verbose = 0
+    exe = 'python -m geowatch'
+
+    env = dict(os.environ)
+    env['WATCH_PREIMPORT'] = '0'
+
+    kwargs = {
+        'verbose': verbose,
+        'env': env,
+    }
 
     info = ub.cmd(f'{exe} align --help', **kwargs)
     assert info['ret'] == 0
