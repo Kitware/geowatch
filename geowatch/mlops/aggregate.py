@@ -352,6 +352,8 @@ def main(cmdline=True, **kwargs):
             if len(agg):
                 plot_config = ub.udict(config.plot_params) - {'enabled'}
                 agg.plot_all(rois, plot_config)
+                # TODO: have text reports in a separate group
+                agg.dump_varied_parameter_report()
 
     if config.inspect:
         agg = eval_type_to_aggregator['bas_pxl_eval']

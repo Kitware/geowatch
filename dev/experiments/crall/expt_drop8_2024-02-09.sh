@@ -1877,6 +1877,7 @@ python -m geowatch.mlops.aggregate \
     --target "
         - $REMOTE_DVC_EXPT_DPATH/_preeval20_bas_grid
     " \
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
     --output_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid3/aggregate" \
     --snapshot
 
@@ -1907,6 +1908,28 @@ python -m geowatch.mlops.aggregate \
     #    concise: 1
     #    show_csv: 0
     #" \
-    #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
 
     ##--query "df['resolved_params.bas_pxl_fit.initializer.init'] != 'noop'" \
+
+ipython -i -c "if 1:
+    fpath = '/home/joncrall/.cache/xdev/snapshot_states/state_2024-03-11T104255-5.pkl'
+    from xdev.embeding import load_snapshot
+    load_snapshot(fpath, globals())
+
+    rois = ['KR_R002', 'CN_C000', 'KW_C001', 'CO_C001']
+    agg.build_macro_tables(rois)
+
+    label_mappings = {
+        'packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt': 'D7-bgrn-V74',
+        'uconn/D7-V2-COLD-candidate/epoch=203-step=4488.pt': 'D7-COLD-Eval18',
+    }
+
+    plot_config = {
+        'min_variations': 1,
+        'params_of_interest': ['resolved_params.bas_pxl_fit.initializer.init'],
+        'label_mappings': label_mappings,
+    }
+
+
+
+"
