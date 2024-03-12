@@ -130,14 +130,17 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
     Example:
         >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
-        >>> num_frames = 10
-        >>> num_videos = 4
-        >>> dates=True
-        >>> geodata=True
-        >>> heatmap=True
+        >>> num_frames = 2
+        >>> num_videos = 1
+        >>> image_size = (128, 128)
+        >>> dates = True
+        >>> geodata = True
+        >>> heatmap = True
         >>> bad_nodata = True
         >>> kwargs = {}
-        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=True)
+        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata,
+        >>>                                     heatmap=heatmap, bad_nodata=True,
+        >>>                                     image_size=image_size)
     """
     dpath = kwargs.pop('dpath', None)
     if dpath is None:
