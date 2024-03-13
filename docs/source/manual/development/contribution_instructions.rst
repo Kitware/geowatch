@@ -53,7 +53,7 @@ gitlab namespace, make changes directly to that repo, and then submit a merge
 request (aka pull request using github terminology) from your fork to the main
 repo.
 
-This is done by clicking the `fork <https://gitlab.kitware.com/computer-vision/geowatch/-/forks/new>` button on
+This is done by clicking the `fork <https://gitlab.kitware.com/computer-vision/geowatch/-/forks/new>`_ button on
 the main repo page. Which then lets you select which namespace you want to fork
 the repo to. You should choose the one that corresponds to your user account.
 It will also ask you if you want to change the project name, project slug,
@@ -68,7 +68,7 @@ My gitlab username is ``jon.crall``, so my fork is populated as:
 
 On your local machine you want to setup your repo to access either the fork or
 the main project. This is done via setting up each endpoint as a
-`git remote <https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes>`.
+`git remote <https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes>`_.
 A git remote is simply a named pointer to a particular URL that stores a copy
 of the repo. You may have seen the common remote "origin", which is the default
 remote name, based on how you cloned the repo. There are many ways to configure
