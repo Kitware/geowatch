@@ -9,11 +9,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Function `geowatch.tasks.fusion.utils.load_model_header` to read header info from a torch package
 * Aggregator can now output a varied parameter report.
+* Added `loads` method to RegionModel and SiteModel
+* Added `coerce_multiple_paths` classmethod to RegionModel and SiteModel
 
 
 ### Changed
 * Can now configure saliency weights as a YAML mapping
 * Updated coverage minimum version, which decreases CI time from >1 hour to 10-30 minutes.
+* Allow "kit" as annotator in geomodel schemas
 
 
 ## Version 0.15.1 - Released 2024-03-04

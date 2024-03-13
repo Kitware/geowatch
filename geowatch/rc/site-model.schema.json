@@ -118,7 +118,7 @@
       "allOf": [
         {
           "if": {"properties": {"model_content": {"const": "annotation"}}},
-          "then": {"properties": {"originator":  {"enum": ["te", "iMERIT", "pmo"]}}}
+          "then": {"properties": {"originator":  {"enum": ["te", "iMERIT", "pmo", "kit"]}}}
         },
         {
           "if": {"properties": {"model_content": {"const": "annotation"}, "type": {"const": "site"}}},

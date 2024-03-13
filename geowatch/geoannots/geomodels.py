@@ -211,6 +211,20 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return json.dumps(self, **kw)
 
     @classmethod
+    def loads(cls, text, **kw):
+        data = json.loads(text, **kw)
+        self = cls(**data)
+        return self
+
+    @classmethod
+    def coerce_multiple_paths(cls, data):
+        """
+        Thin wrapper arround :func:`geowatch.util_gis.coerce_geojson_paths`
+        """
+        from geowatch.utils import util_gis
+        return util_gis.coerce_geojson_paths(data)
+
+    @classmethod
     def coerce_multiple(cls, data, allow_raw=False, workers=0, mode='thread',
                         verbose=1, desc=None, parse_float=None):
         """

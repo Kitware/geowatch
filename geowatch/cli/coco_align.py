@@ -1406,8 +1406,9 @@ class SimpleDataCube:
 
         # If specified, only choose a subset of images over time.
         sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
-        if isinstance(sensor_to_time_window, str) and not sensor_to_time_window.strip():
-            sensor_to_time_window = None
+        if isinstance(sensor_to_time_window, str):
+            if not sensor_to_time_window.strip():
+                sensor_to_time_window = None
 
         TIME_WINDOW_FILTER = 1
         import math
@@ -1416,6 +1417,9 @@ class SimpleDataCube:
 
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
+            if not isinstance(sensor_to_time_window, dict):
+                raise TypeError(f'sensor_to_time_window: {type(sensor_to_time_window)} = {sensor_to_time_window}')
+
             sensor_to_time_window = ub.udict(sensor_to_time_window)
             sensor_to_time_window = sensor_to_time_window.map_values(util_time.coerce_timedelta)
             if sensor_to_time_window is not None:
