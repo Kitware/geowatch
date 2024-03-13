@@ -20,7 +20,9 @@ DATASET_SUFFIX=Drop8-ARA
 
 todo(){
 # NOTE: If updating the dataset, unprotect the files
-dvc unprotect -- */*.kwcoco*.zip
+sdvc unprotect -- "$DVC_DATA_DPATH"/Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
+cd "$DVC_DATA_DPATH"
+dvc unprotect -- Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
 # also remove kwcoco files to regen them with cache?
 #ls -- */*.kwcoco*.zip
 }
@@ -89,8 +91,8 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --backend=tmux \
     --tmux_workers=4 \
     --sensor_to_time_window='
-        S2: 2 weeks
-        L8: 2 weeks
+        #S2: 2 weeks
+        #L8: 2 weeks
         #PD: 2 weeks
         #WV: 2 weeks
     ' \
@@ -167,8 +169,7 @@ git push
 
 # Push kwcoco files first
 # Then push sensor data in a given order
-sdvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
-
+#sdvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
 dvc push -r aws -- */*.kwcoco.zip.dvc \
 dvc push -r aws -- */PD.dvc && \
 dvc push -r aws -- */L8.dvc && \

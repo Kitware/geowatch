@@ -245,7 +245,7 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --spatial_tile_size=1024 \
     --merge_method=median \
     --mask_low_quality=True \
-    --tmux_workers=1 \
+    --tmux_workers=8 \
     --time_window=6months \
     --combine_workers=1 \
     --resolution=10GSD \
