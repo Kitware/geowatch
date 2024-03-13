@@ -211,7 +211,7 @@ def main(cmdline=True, **kwargs):
         >>> from geowatch.utils import kwcoco_extensions
         >>> from geowatch.cli.coco_visualize_videos import *  # NOQA
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('geowatch/test/viz_video1').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/viz_video1').delete().ensuredir()
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2, image_size=(64, 64), num_videos=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
@@ -231,7 +231,7 @@ def main(cmdline=True, **kwargs):
         >>> from geowatch.cli.coco_visualize_videos import *  # NOQA
         >>> import geowatch
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('geowatch/test/viz_video2').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/viz_video2').delete().ensuredir()
         >>> dset = geowatch.coerce_kwcoco('geowatch-msi', num_frames=5, image_size=(64, 64), num_videos=1)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])

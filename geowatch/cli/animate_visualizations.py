@@ -38,7 +38,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--ffmpeg-test')
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('geowatch/test/ani_video').delete().ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/ani_video').delete().ensuredir()
         >>> import kwcoco
         >>> from geowatch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=5)

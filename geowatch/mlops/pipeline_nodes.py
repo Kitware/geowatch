@@ -835,7 +835,7 @@ class ProcessNode(Node):
     Example:
         >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> from geowatch.mlops.pipeline_nodes import _classvar_init
-        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode')
+        >>> dpath = ub.Path.appdir('geowatch/tests/pipeline/TestProcessNode')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
         ...     '''
@@ -881,7 +881,7 @@ class ProcessNode(Node):
         >>> # First let's write a program to disk
         >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> import stat
-        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode2')
+        >>> dpath = ub.Path.appdir('geowatch/tests/pipeline/TestProcessNode2')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
                 '''

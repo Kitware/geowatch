@@ -95,7 +95,7 @@ def _demo_geoimg_with_nodata():
 
     # Make a dummy geotiff
     imdata = kwimage.grab_test_image('airport')
-    dpath = ub.Path.appdir('geowatch/test/geotiff').ensuredir()
+    dpath = ub.Path.appdir('geowatch/tests/geotiff').ensuredir()
     geo_fpath = dpath / 'dummy_geotiff.tif'
 
     # compute dummy values for a geotransform to CRS84
@@ -608,7 +608,7 @@ def gdal_single_warp(in_fpath,
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
         >>> crop_poly = bound_poly.scale(0.02, about='centroid')
         >>> space_box = crop_poly.to_boxes()
-        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> out_fpath = ub.Path.appdir('geowatch/doctests/util_gdal').ensuredir() / 'cropped.tif'
         >>> error_logfile = '/dev/null'
         >>> gdal_single_warp(in_fpath, out_fpath, space_box=space_box, error_logfile=error_logfile, verbose=3)
         >>> # xdoctest: +REQUIRES(--show)
@@ -628,7 +628,7 @@ def gdal_single_warp(in_fpath,
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
         >>> crop_poly = bound_poly.scale(0.02, about='centroid')
         >>> space_box = crop_poly.to_boxes()
-        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> out_fpath = ub.Path.appdir('geowatch/doctests/util_gdal').ensuredir() / 'cropped.tif'
         >>> commands = gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3, eager=False)
         >>> assert len(commands) == 2
 
@@ -787,7 +787,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        >>> dpath = ub.Path.appdir('geowatch/test/gdal_multi_warp').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/gdal_multi_warp').ensuredir()
         >>> out_fpath = ub.Path(dpath) / 'test_multi_warp.tif'
         >>> out_fpath.delete()
         >>> in_fpath1 = cube.coco_dset.get_image_fpath(2)

@@ -74,7 +74,7 @@ CommandLine:
 Example:
     >>> from geowatch.cli.prepare_ta2_dataset import *  # NOQA
     >>> import ubelt as ub
-    >>> dpath = ub.Path.appdir('geowatch/test/prep_ta2_dataset').delete().ensuredir()
+    >>> dpath = ub.Path.appdir('geowatch/tests/prep_ta2_dataset').delete().ensuredir()
     >>> from geowatch.geoannots import geomodels
     >>> # Write dummy regions / sites
     >>> for rng in [0, 1, 3]:

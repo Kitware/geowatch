@@ -1140,7 +1140,7 @@ def predict(cmdline=False, **kwargs):
         >>> args = None
         >>> cmdline = False
         >>> devices = None
-        >>> test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
+        >>> test_dpath = ub.Path.appdir('geowatch/tests/fusion/').ensuredir()
         >>> results_path = (test_dpath / 'predict').ensuredir()
         >>> results_path.delete()
         >>> results_path.ensuredir()
@@ -1228,7 +1228,7 @@ def predict(cmdline=False, **kwargs):
         >>> args = None
         >>> cmdline = False
         >>> devices = None
-        >>> test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
+        >>> test_dpath = ub.Path.appdir('geowatch/tests/fusion/').ensuredir()
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)

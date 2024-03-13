@@ -151,7 +151,7 @@ def write_demo_geotiff(img_fpath=None, imdata=None, wld_polygon=None,
     if img_fpath is None:
         import ubelt as ub
         import tempfile
-        dpath = ub.Path.appdir('geowatch/test/geotiff/demo').ensuredir()
+        dpath = ub.Path.appdir('geowatch/tests/geotiff/demo').ensuredir()
         img_fpath = tempfile.mktemp(dir=dpath, prefix='demo_geotiff_', suffix='.tif')
 
     # Generate unspecified data

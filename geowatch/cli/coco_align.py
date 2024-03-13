@@ -489,7 +489,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle1').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -533,7 +533,7 @@ def main(cmdline=True, **kw):
         >>> from geowatch.geoannots import geomodels
         >>> region = geomodels.RegionModel.random(region_poly=dummy_poly, start_time=dt.isoformat())
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle_timeout').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -582,7 +582,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -617,7 +617,7 @@ def main(cmdline=True, **kw):
         >>> import geojson
         >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align2').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
@@ -1324,7 +1324,7 @@ class SimpleDataCube:
             >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/tests/coco_align/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> to_extract = cube.query_image_overlaps(region_df)
@@ -1338,7 +1338,7 @@ class SimpleDataCube:
             >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps2').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/tests/coco_align/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()

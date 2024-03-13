@@ -143,7 +143,7 @@ class _InstanceLogger():
     instance of an object.
 
     Example:
-        >>> dpath = ub.Path.appdir('geowatch/test/logger').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/logger').ensuredir()
         >>> fpath = ub.Path(dpath) / 'mylog.log'
         >>> self = _InstanceLogger(fpath=fpath)
     """
