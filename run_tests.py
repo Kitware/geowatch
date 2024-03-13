@@ -12,7 +12,7 @@ if __name__ == '__main__':
     import ubelt as ub
     package_name = ub.argval('--cov', 'geowatch')
     pytest_args = [
-        '--cov-config', '.pyproject.toml',
+        '--cov-config', 'pyproject.toml',
         '--cov-report', 'html',
         '--cov-report', 'term',
         '--cov=' + package_name,
