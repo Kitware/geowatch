@@ -1406,6 +1406,8 @@ class SimpleDataCube:
 
         # If specified, only choose a subset of images over time.
         sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
+        if isinstance(sensor_to_time_window, str) and not sensor_to_time_window.strip():
+            sensor_to_time_window = None
 
         TIME_WINDOW_FILTER = 1
         import math
