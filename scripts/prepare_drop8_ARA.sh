@@ -21,8 +21,8 @@ DATASET_SUFFIX=Drop8-ARA
 todo(){
 # NOTE: If updating the dataset, unprotect the files
 sdvc unprotect -- "$DVC_DATA_DPATH"/Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
-cd "$DVC_DATA_DPATH"
-dvc unprotect -- Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
+#cd "$DVC_DATA_DPATH"
+#dvc unprotect -- Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
 # also remove kwcoco files to regen them with cache?
 #ls -- */*.kwcoco*.zip
 }
@@ -59,6 +59,11 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 export REQUESTER_PAYS=False
 #export SMART_STAC_API_KEY=""
 
+echo "
+DVC_DATA_DPATH=$DVC_DATA_DPATH
+DVC_DATA_DPATH=$DVC_DATA_DPATH
+"
+
 # Construct the TA2-ready dataset
 python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
@@ -79,9 +84,9 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
-    --skip_existing=1 \
+    --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \
