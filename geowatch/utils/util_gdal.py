@@ -778,7 +778,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     NOTE: it is important to set the nodata argument for gdalmerge [SO187522]_
     if you want to preserver them.
 
-    Example:
+    Ignore:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from geowatch.utils.util_gdal import *  # NOQA
