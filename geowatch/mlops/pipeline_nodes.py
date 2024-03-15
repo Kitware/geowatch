@@ -1051,6 +1051,12 @@ class ProcessNode(Node):
         This rebuilds the templates and formats them so the "final" variables
         take on directory names based on the given configuration. This a
 
+        FIXME:
+            Gotcha: Calling this twice with a new config will reset the
+            configuration. These nodes are stateful, so we should maintain and
+            update state, not reset it. If we need to reset to defaults, there
+            should be a method for that. Can work around by passing self.config
+            as the first argument.
         """
         self.cache = cache
         self._configured_cache.clear()  # Reset memoization caches

@@ -33,7 +33,13 @@ class TeamFeatColdConfig(scfg.DataConfig):
 
     expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
 
-    cold_workers = scfg.Value(4, type=int, help='Number of parallel workers that COLD will use')
+    cold_workers = scfg.Value(2, type=int, help='Number of parallel workers that COLD will use. DEPRECATED and IGNORED, pass workers in cold_config')
+
+    cold_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for cold teamfeats.
+            '''))
 
 
 def main():
@@ -111,11 +117,10 @@ def main():
     prepare_teamfeats.main(
         cmdline=0,
         with_cold=1,
+        cold_config=config.cold_config,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
-        cold_workers=config.cold_workers,
         assets_dname='_teamfeats',
-        cold_workermode='process',
         run=1,
         backend='serial',
     )
