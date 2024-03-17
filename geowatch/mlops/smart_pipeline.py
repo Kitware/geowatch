@@ -1051,6 +1051,8 @@ def bas_nodes():
         nodes['bas_pxl_eval'].inputs['true_dataset']
     )
 
+    # Implicit node-level connections. This only works because the output keys
+    # of one node are the same as input keys for the next node.
     nodes['bas_pxl'].connect(
         nodes['bas_pxl_eval'],
         nodes['bas_poly'],
