@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Aggregator can now output a varied parameter report.
 * Added `loads` method to RegionModel and SiteModel
 * Added `coerce_multiple_paths` classmethod to RegionModel and SiteModel
+* Experimental code to let the user specify custom pipelines in `geowatch.mlops.schedule_evaluation`.
 
 
 ### Changed
