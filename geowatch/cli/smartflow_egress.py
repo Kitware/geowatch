@@ -302,6 +302,15 @@ def fallback_copy(local_path, asset_s3_outpath):
     # from fsspec.callbacks import TqdmCallback
     # callback = TqdmCallback(tqdm_kwargs={"desc": "Copying"})
     if local_path.is_dir() and isinstance(asset_s3_outpath, util_fsspec.S3Path):
+
+        HACK_ENSURE_NON_EMPTY_DIRS = True
+        if HACK_ENSURE_NON_EMPTY_DIRS:
+            # If the directory is empty, write a dummy file to force it to
+            # upload to s3.
+            import os
+            if not any(os.scandir(local_path)):
+                (local_path  / '__dir__').write_text('Hack to ensure directory is non-empty')
+
         if DO_FALLBACK:
             try:
                 local_path.copy(asset_s3_outpath, verbose=3)
