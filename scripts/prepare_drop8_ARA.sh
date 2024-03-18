@@ -360,6 +360,8 @@ python -m geowatch.cli.prepare_splits \
 #    */imgonly-*-rawbands.kwcoco.zip \
 #    */imganns-*-rawbands.kwcoco.zip
 
+cd "$DST_BUNDLE_DPATH"
+
 dvc add -vvv -- \
     *_rawbands_*.kwcoco.zip \
     */imgonly-*-rawbands.kwcoco.zip \

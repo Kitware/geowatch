@@ -205,14 +205,69 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return gdf
 
     def deepcopy(self):
+        """
+        Create a copy of this and all nested items
+
+        Returns:
+            Self
+        """
         return copy.deepcopy(self)
 
-    def dumps(self, **kw):
-        return json.dumps(self, **kw)
+    def dumps(self, **kwargs):
+        """
+        Serialize as json text
+
+        Args:
+            **kwargs: passed to :func:`json.dumps`
+
+        Returns:
+            str
+        """
+        return json.dumps(self, **kwargs)
+
+    def dump(self, file, **kwargs):
+        """
+        Write json data to a file
+
+        Args:
+            file (PathLike | IO | None):
+                Where to write the data. Can either be a path to a file or an
+                open file pointer / stream.
+            **kwargs: passed to :func:`json.dump`
+        """
+        _safer_dump_wrapper(json.dump, self, file, **kwargs)
 
     @classmethod
-    def loads(cls, text, **kw):
-        data = json.loads(text, **kw)
+    def load(cls, file, **kwargs):
+        """
+        Load json data from a file pointer or path.
+
+        Args:
+            file (PathLike | IO | None):
+                Where to read the data. Can either be a path to a file or an
+                open file pointer / stream.
+            **kwargs: passed to :func:`json.load`
+
+        Returns:
+            Self
+        """
+        data = _safer_load_wrapper(json.load, file, **kwargs)
+        self = cls(**data)
+        return self
+
+    @classmethod
+    def loads(cls, text, **kwargs):
+        """
+        Load json data from a string.
+
+        Args:
+            text (str): json text
+            **kwargs: passed to :func:`json.loads`
+
+        Returns:
+            Self
+        """
+        data = json.loads(text, **kwargs)
         self = cls(**data)
         return self
 
@@ -1956,3 +2011,74 @@ def coerce_site_or_region_model(model_data):
         elif feat['properties']['type'] == 'site':
             return SiteModel(**model_data)
     raise AssertionError('Did not find a region or site header')
+
+
+def _safer_dump_wrapper(dump_func, obj, file, mode='w', temp_file='auto', **kwargs):
+    """
+    Helper to write a "dump" function that takes a file pointer or file path.
+
+    TODO:
+        Reduce code duplication. Refactor this into a shared utility and use in
+        this and kwcoco.CocoDataset.dump - which is where this code was derived
+        from. Does this go in kwutil or just vendor it where needed?
+
+    Args:
+        dump_func (Callable):
+            The dump function to wrap (e.g. json.dump).
+
+        obj (object): the object to pass to the dump func
+
+        file (PathLike | IO | None):
+            Where to write the data. Can either be a path to a file or an
+
+        temp_file (bool | str):
+            Argument to :func:`safer.open`.  Ignored if ``file`` is not a
+            PathLike object. Defaults to 'auto', which is False on Windows
+            and True everywhere else.
+
+        **kwargs Arguments to the file-based "dump" function.
+    """
+    import os
+
+    try:
+        fpath = os.fspath(file)
+    except TypeError:
+        input_was_pathlike = False
+    else:
+        input_was_pathlike = True
+
+    if input_was_pathlike:
+        import safer
+        if temp_file == 'auto':
+            temp_file = not ub.WIN32
+
+        with safer.open(fpath, mode=mode, temp_file=temp_file) as fp:
+            dump_func(obj, fp, **kwargs)
+    else:
+        # We are likely dumping to a real file.
+        dump_func(obj, file, **kwargs)
+
+
+def _safer_load_wrapper(load_func, file, mode='r', temp_file='auto', **kwargs):
+    """
+    Helper to write a "load" function that takes a file pointer or file path.
+    """
+    import os
+
+    try:
+        fpath = os.fspath(file)
+    except TypeError:
+        input_was_pathlike = False
+    else:
+        input_was_pathlike = True
+
+    if input_was_pathlike:
+        import safer
+        if temp_file == 'auto':
+            temp_file = not ub.WIN32
+
+        with safer.open(fpath, mode=mode, temp_file=temp_file) as fp:
+            return load_func(fp, **kwargs)
+    else:
+        # We are likely dumping to a real file.
+        return load_func(file, **kwargs)
