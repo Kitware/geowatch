@@ -362,14 +362,35 @@ python -m geowatch.cli.prepare_splits \
 
 cd "$DST_BUNDLE_DPATH"
 
-dvc add -vvv -- \
-    *_rawbands_*.kwcoco.zip \
-    */imgonly-*-rawbands.kwcoco.zip \
-    */imganns-*-rawbands.kwcoco.zip \
-    */*/L8 \
-    */*/S2 \
-    */*/WV \
-    */*/PD && \
+#dvc add -vvv -- \
+#    *_rawbands_*.kwcoco.zip \
+#    */imgonly-*-rawbands.kwcoco.zip \
+#    */imganns-*-rawbands.kwcoco.zip \
+#    */*/L8 \
+#    */*/S2 \
+#    */*/WV \
+#    */*/PD && \
+
+python -c "if 1:
+    import ubelt as ub
+    root = ub.Path('.')
+
+    to_add = []
+    to_add += list(root.glob('*rawbands*.kwcoco.zip'))
+
+    regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip')})
+    for dpath in regions_dpaths_with_kwcoco:
+        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('*/L8'))
+        to_add += list(dpath.glob('*/S2'))
+        to_add += list(dpath.glob('*/WV'))
+        to_add += list(dpath.glob('*/PD'))
+
+    import simple_dvc as sdvc
+    dvc_repo = sdvc.SimpleDVC.coerce(root)
+    dvc_repo.add(to_add, verbose=1)
+"
 git commit -m "Update Drop8 Crop SC" && \
 git push && \
 dvc push -r aws -R . -vvv
