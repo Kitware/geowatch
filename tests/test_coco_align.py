@@ -31,6 +31,7 @@ def test_coco_align_with_empty_site_summary():
         'num_start_frames': 3,
         'num_end_frames': 3,
         'site_summary': True,
+        'minimum_size': '128x128@10GSD',
     }
     coco_align.main(cmdline=False, **kw)
     assert dst_fpath.exists()
@@ -71,6 +72,7 @@ def test_coco_align_with_empty_inputs_coco():
         'num_start_frames': 3,
         'num_end_frames': 3,
         'site_summary': True,
+        'minimum_size': '128x128@10GSD',
     }
     coco_align.main(cmdline=False, **kw)
     assert dst_fpath.exists()

@@ -872,7 +872,8 @@ def main(cmdline=True, **kw):
             buf_utm = sub_utm['geometry'].scale(xfact=sfx, yfact=sfy, origin='centroid')
             buf = buf_utm.to_crs(orig_crs)
             buffered_geoms.append(buf)
-        region_df['geometry'] = pd.concat(buffered_geoms)
+        if len(buffered_geoms):
+            region_df['geometry'] = pd.concat(buffered_geoms)
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
