@@ -153,8 +153,13 @@ class QA_SpecMixin:
             num_nan = is_nan.sum()
             _raw2 = _raw[~is_nan]
         else:
-            num_nan = 0
-            _raw2 = _raw
+            if hasattr(quality_im, 'mask'):
+                is_nan = quality_im.mask
+                num_nan = is_nan.sum()
+                _raw2 = quality_im.data[~is_nan].ravel()
+            else:
+                num_nan = 0
+                _raw2 = _raw
 
         if verbose:
             print('Counting unique values')
@@ -202,7 +207,9 @@ class QA_SpecMixin:
             colorized[mask] = color255
 
         # Because the QA band is categorical, we should be able to make a short
-        qa_canvas = colorized
+        masked = np.ma.MaskedArray(colorized, mask=np.tile(is_nan[..., None], (1, 1, 3)))
+        qa_canvas = kwimage.nodata_checkerboard(masked).data
+        # qa_canvas = colorized
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
 
@@ -980,12 +987,16 @@ QA_SPECS.append(QA_BitSpecTable({
 
 
 def demo():
+    """
+    Small script to viz qa bands.
+    """
     import sys
     fpath = sys.argv[1]
     from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-    table = QA_SPECS.find_table('ACC-1', 'WV')
+    # table = QA_SPECS.find_table('ACC-1', 'WV')
+    table = QA_SPECS.find_table('ARA-4', 'L8')
     import kwimage
-    quality_im = kwimage.imread(fpath)
+    quality_im = kwimage.imread(fpath, nodata_method='ma')
     drawings = table.draw_labels(quality_im)
     qa_canvas = drawings['qa_canvas']
     legend = drawings['legend']
@@ -993,11 +1004,14 @@ def demo():
     import kwplot
     kwplot.autompl()
     kwplot.imshow(canvas)
+    kwplot.show_if_requested()
 
 
 if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/geowatch/tasks/fusion/datamodules/qa_bands.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop7-DEBUG/US_R007/WV/affine_warp/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0_quality.tif
+
+        python ~/code/watch/geowatch/tasks/fusion/datamodules/qa_bands.py /data/joncrall/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/L8/affine_warp/crop_20140225T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0/crop_20140225T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0_quality.tif --show
     """
     demo()
