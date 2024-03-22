@@ -23,7 +23,6 @@ import os
 import ubelt as ub
 import subprocess
 import functools
-import retry
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -1049,13 +1048,15 @@ def _execute_gdal_command_with_checks(command,
     if verbose > 100:
         print(command)
 
+    # import retry
+    from geowatch.utils.util_retry import retry_call
     retryable_exceptions = (
         subprocess.CalledProcessError,
         FileNotFoundError,
         RuntimeError)
     try:
         logger = DummyLogger()
-        got = retry.api.retry_call(
+        got = retry_call(
             _execute_command,
             tries=tries,
             delay=cooldown,
