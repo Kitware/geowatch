@@ -900,18 +900,21 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                             image_data[x, y, :] = np.nan
                         yield image_data
 
-                # TODO: Make this less computationally expensive.
-                median_stack = []
-
                 if 1:
                     # from remedian.remedian import Remedian
                     from geowatch.utils.remedian import Remedian
-                    data_shape = median_stack[0].shape
-                    approx_median = Remedian(data_shape, n_obs=3, t=len(median_stack), allow_nan=True)
+                    num_frames = len(window_coco_images)
+                    frame_gen = generate_frames()
+                    first_frame = next(frame_gen)
+                    data_shape = first_frame.shape
+                    approx_median = Remedian(data_shape, n_obs=5, t=num_frames, allow_nan=True)
+                    approx_median.add_obs(first_frame)
+                    del first_frame
                     for image_data in generate_frames():
                         approx_median.add_obs(image_data)
                     combined_image_data = approx_median.remedian
                 else:
+                    # TODO: Make this less computationally expensive.
                     # TODO: Fix the logic below to match above because it should be faster.
                     median_stack = list(generate_frames())
                     # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
