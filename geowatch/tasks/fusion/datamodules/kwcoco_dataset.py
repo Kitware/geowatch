@@ -2326,7 +2326,7 @@ class IntrospectMixin:
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> summary = self.summarize_item(item, stats=True)
-            >>> print(f'summary = {ub.urepr(summary, nl=-1)}')
+            >>> print(f'summary = {ub.urepr(summary, nl=-2)}')
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
