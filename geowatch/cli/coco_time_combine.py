@@ -910,7 +910,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                     approx_median = Remedian(data_shape, n_obs=5, t=num_frames, allow_nan=True)
                     approx_median.add_obs(first_frame)
                     del first_frame
-                    for image_data in generate_frames():
+                    for image_data in frame_gen:
                         approx_median.add_obs(image_data)
                     combined_image_data = approx_median.remedian
                 else:
