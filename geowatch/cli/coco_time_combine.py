@@ -79,7 +79,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 
@@ -1063,6 +1063,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
         >>> assert len(all_filtered_gids) > len(ignore_torrid_regions_gids)
     """
     from kwutil import util_time
+    # todo: find a way to abstract the domain specific concept of "season"
     hemipshere_to_season_map = {
         'northern': {
             'spring': [3, 4, 5],
