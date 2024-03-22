@@ -1,6 +1,6 @@
 """
-A reimplementation of the retry library [RetryLib]_ with some minor
-differences.
+A reimplementation of the retry library [RetryLib]_ with some minor changes,
+mainly logging default to a print statement rather than an actual logger.
 
 References:
     .. [RetryLib] https://github.com/invl/retry
