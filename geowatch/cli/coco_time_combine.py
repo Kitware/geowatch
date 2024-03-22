@@ -843,6 +843,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     # avoid_quality_values += ['ice']
 
     # Create canvas to combine averaged tiles into.
+
+    # todo: memmap this.
     average_canvas = kwarray.Stitcher(canvas_shape)
 
     import warnings
@@ -882,32 +884,43 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                 combined_image_data = accum.finalize()
 
             elif merge_method == 'median':
+
+                def generate_frames():
+                    for coco_img in window_coco_images:
+                        delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+                        delayed = delayed.crop(crop_slice)
+                        image_data = delayed.finalize(nodata_method='float')
+
+                        if mask_low_quality:
+                            # Load quality mask.
+                            quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+
+                            # Update pixel weights based on quality pixel values.
+                            x, y = np.where(quality_mask[..., 0] == 0)
+                            image_data[x, y, :] = np.nan
+                        yield image_data
+
                 # TODO: Make this less computationally expensive.
                 median_stack = []
-                for coco_img in window_coco_images:
-                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                    delayed = delayed.crop(crop_slice)
-                    image_data = delayed.finalize(nodata_method='float')
 
-                    if mask_low_quality:
-                        # Load quality mask.
-                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
-
-                        # Update pixel weights based on quality pixel values.
-                        x, y = np.where(quality_mask[..., 0] == 0)
-                        image_data[x, y, :] = np.nan
-
-                        # TODO: Fix the logic below to match above because it should be faster.
-                        # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
-                        # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
-                        # image_data = M.filled(np.nan)
-                        # masked_image_data = M.filled(np.nan)
-
-                    median_stack.append(image_data)
-
-                import xdev
-                xdev.embed()
-                combined_image_data = np.nanmedian(median_stack, axis=0)
+                if 1:
+                    # from remedian.remedian import Remedian
+                    from geowatch.utils.remedian import Remedian
+                    data_shape = median_stack[0].shape
+                    approx_median = Remedian(data_shape, n_obs=3, t=len(median_stack), allow_nan=True)
+                    for image_data in generate_frames():
+                        approx_median.add_obs(image_data)
+                    combined_image_data = approx_median.remedian
+                else:
+                    # TODO: Fix the logic below to match above because it should be faster.
+                    median_stack = list(generate_frames())
+                    # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
+                    # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
+                    # image_data = M.filled(np.nan)
+                    # masked_image_data = M.filled(np.nan)
+                    # _median_stack = np.stack(median_stack)
+                    # combined_image_data = np.nanmedian(_median_stack, axis=0)
+                    combined_image_data = np.nanmedian(median_stack, axis=0)
 
             elif merge_method == 'max':
                 # TODO: Combine with other methods.
