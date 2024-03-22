@@ -627,7 +627,7 @@ def combine_kwcoco_channels_temporally(config):
 
             print(f'{len(images)} / {len(flags)} images in {video_name} have {len(groupid_to_idxs)} mergable groups')
 
-            SHOW_INFO = 0
+            SHOW_INFO = 1
             # DEBUG: Print the distribution of images per window.
             if SHOW_INFO:
                 # Get the histogram for the number of images per window.
@@ -900,14 +900,15 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                             image_data[x, y, :] = np.nan
                         yield image_data
 
-                if 1:
+                use_remedian = 0
+                if use_remedian:
                     # from remedian.remedian import Remedian
                     from geowatch.utils.remedian import Remedian
                     num_frames = len(window_coco_images)
                     frame_gen = generate_frames()
                     first_frame = next(frame_gen)
                     data_shape = first_frame.shape
-                    approx_median = Remedian(data_shape, n_obs=5, t=num_frames, allow_nan=True)
+                    approx_median = Remedian(data_shape, n_obs=7, t=num_frames, allow_nan=True)
                     approx_median.add_obs(first_frame)
                     del first_frame
                     for image_data in frame_gen:
@@ -915,15 +916,15 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                     combined_image_data = approx_median.remedian
                 else:
                     # TODO: Make this less computationally expensive.
-                    # TODO: Fix the logic below to match above because it should be faster.
                     median_stack = list(generate_frames())
+                    combined_image_data = np.nanmedian(median_stack, axis=0, overwrite_input=True)
+                    # TODO: Fix the logic below to match above because it should be faster.
                     # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
                     # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
                     # image_data = M.filled(np.nan)
                     # masked_image_data = M.filled(np.nan)
                     # _median_stack = np.stack(median_stack)
                     # combined_image_data = np.nanmedian(_median_stack, axis=0)
-                    combined_image_data = np.nanmedian(median_stack, axis=0)
 
             elif merge_method == 'max':
                 # TODO: Combine with other methods.
