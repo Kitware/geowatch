@@ -78,6 +78,11 @@ import os
 import ubelt as ub
 import scriptconfig as scfg
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
 
 class TimeCombineConfig(scfg.DataConfig):
     """
@@ -470,6 +475,7 @@ def main(cmdline=1, **kwargs):
     return output_coco_dset
 
 
+@profile
 def combine_kwcoco_channels_temporally(config):
     """Combine spatial data within a temporal window from a kwcoco dataset and save the result to a new kwcoco dataset.
 
@@ -655,6 +661,8 @@ def combine_kwcoco_channels_temporally(config):
                                   config=config)
                 job.merge_images = merge_images
 
+            max_percent = 0
+            from geowatch.utils import util_hardware
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
@@ -664,10 +672,16 @@ def combine_kwcoco_channels_temporally(config):
                     continue
                 output_coco_dset.add_image(**new_img)
                 n_combined_images += 1
+
+                mem_info = util_hardware.get_mem_info()
+                curr_percent = mem_info['percent']
+                max_percent = max(max_percent, curr_percent)
                 pman.update_info(ub.codeblock(
                     f'''
                     {n_combined_images=}
                     {n_failed_merges=}
+                    Memory Percent: {curr_percent}
+                    Max Percent: {max_percent}
                     '''))
 
     if n_combined_images == 0:
@@ -699,6 +713,7 @@ def combine_kwcoco_channels_temporally(config):
     return output_coco_dset
 
 
+@profile
 def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None):
     """Get a binary mask of the quality data.
 
@@ -726,9 +741,8 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
         return np.ones_like(qa_data, dtype=np.uint8)
 
     from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-    # We don't have the exact right information here, so we can
-    # punt for now and assume "Drop4"
-    spec_name = 'ACC-1'
+    from geowatch import heuristics
+    spec_name = coco_image.img.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
     sensor = coco_image.img.get('sensor_coarse', '*')
     try:
         table = QA_SPECS.find_table(spec_name, sensor)
@@ -743,6 +757,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
     return quality_mask
 
 
+@profile
 def merge_images(window_coco_images, merge_method, requested_chans, space,
                  resolution, new_bundle_dpath, mask_low_quality,
                  sensor_weights, og_kwcoco_fpath, spatial_tile_size, config):
@@ -1007,6 +1022,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     return final_img
 
 
+@profile
 def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_winter_torrid_zone=True):
     """Filter a sequence of image ids by season and geolocation.
 

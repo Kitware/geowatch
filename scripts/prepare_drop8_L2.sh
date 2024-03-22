@@ -56,8 +56,8 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --collated True \
     --dvc_dpath="$DVC_DATA_DPATH" \
     --aws_profile=iarpa \
-    --region_globstr="$REGION_GLOBSTR" \
-    --site_globstr="$SITE_GLOBSTR" \
+    --regions="$REGION_GLOBSTR" \
+    --sites="$SITE_GLOBSTR" \
     --requester_pays=$REQUESTER_PAYS \
     --fields_workers=8 \
     --convert_workers=0 \

@@ -453,8 +453,8 @@ def main(cmdline=False, **kwargs):
             if 1:
                 regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                 sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
-                sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\ntruncated~~\n", tail="\n~~\n~~")
+                sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\ntruncated~~\n", tail="\n~~\n~~")
                 print('len(regions_with_sites) = ' + str(len(region_id_to_site_fpaths)))
                 print('len(sites_with_region) = ' + str(sum(map(len, region_id_to_site_fpaths.values()))))
                 print(f'regions_without_sites={regions_without_sites_str}')

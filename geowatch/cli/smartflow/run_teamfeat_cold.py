@@ -4,6 +4,27 @@ import scriptconfig as scfg
 from geowatch.cli.smartflow_ingress import smartflow_ingress
 from geowatch.cli.smartflow_egress import smartflow_egress
 
+__DEBUG_INFO__ = """
+
+import sys, ubelt
+sys.path.append(ubelt.expandpath('~/code/geowatch'))
+from geowatch.cli.smartflow.run_teamfeat_cold import *  # NOQA
+
+config = TeamFeatColdConfig(**{
+    'input_path'       : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v174/batch/kit/KR_R001/split_work/52SDG67/products/kwcoco-dataset/items.jsonl',
+    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v174/batch/kit/KR_R001/split_input/52SDG67/region_models/KR_R001.geojson',
+    'output_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v174/batch/kit/KR_R001/split_work/52SDG67/products/cold/items.jsonl',
+    'aws_profile'      : None,
+    'dryrun'           : False,
+    'outbucket'        : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v174/batch/kit/KR_R001/split_work/52SDG67/products/cold',
+    'newline'          : True,
+    'expt_dvc_dpath'   : '/root/data/smart_expt_dvc',
+    'cold_workers'     : 2,
+    'cold_config'      : None,
+})
+
+"""
+
 
 class TeamFeatColdConfig(scfg.DataConfig):
     """
