@@ -2338,7 +2338,8 @@ class IntrospectMixin:
             for mode_key, im_mode in frame['modes'].items():
                 domain_key = frame['sensor'] + ':' + mode_key
                 if stats:
-                    frame_summary[domain_key] = kwarray.stats_dict(im_mode)
+                    frame_summary[domain_key] = kwarray.stats_dict(
+                        im_mode, nan=True)
                 else:
                     frame_summary[domain_key] = im_mode.shape
             label_keys = [
