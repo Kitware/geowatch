@@ -493,10 +493,10 @@ def combine_kwcoco_channels_temporally(config):
     from geowatch.utils import kwcoco_extensions
     from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
-    # Check inputs.
+    from geowatch.utils import util_hardware
 
+    # combining over time seems to only make sense in a video context
     space = 'video'
-
     workers = util_parallel.coerce_num_workers(config.workers)
 
     ## Check input kwcoco file path exists.
@@ -662,7 +662,6 @@ def combine_kwcoco_channels_temporally(config):
                 job.merge_images = merge_images
 
             max_percent = 0
-            from geowatch.utils import util_hardware
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
@@ -906,6 +905,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
                     median_stack.append(image_data)
 
+                import xdev
+                xdev.embed()
                 combined_image_data = np.nanmedian(median_stack, axis=0)
 
             elif merge_method == 'max':
