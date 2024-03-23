@@ -120,7 +120,8 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''
         Optimizer name supported by the netharn API
         '''))
-    learning_rate = scfg.Value(0.001, type=float)
+    learning_rate = scfg.Value(0.001, type=float, help='DEPRECATED AND UNUSED. SET OPTIMIZER VIA LIGHTNING')
+
     weight_decay = scfg.Value(0.0, type=float)
     lr_scheduler = scfg.Value('CosineAnnealingLR', type=str)
     positive_change_weight = scfg.Value(1.0, type=float)
