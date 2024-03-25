@@ -26,32 +26,28 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         This currently runs based on paths and not STAC catalogs, which is an
         issue that would be nice to fix.
     """
+    region_id = None
+    input_region_path = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
     true_annot_dpath = None
     pred_site_dpath = None
-    outbucket = None
-    region_id = None
-    aws_profile = None
-
-    input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
+    outbucket = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            Path to input T&E Baseline Framework Region definition JSON
+            S3 Output directory for STAC item / asset egress
             '''))
+    output_path = scfg.Value(None, type=str, help='S3 path for output JSON')
+    aws_profile = None
 
     # input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
     #         '''
     #         Path to input T&E Baseline Framework JSON
     #         '''))
-    # output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
-
-    # outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-    #         '''
-    #         S3 Output directory for STAC item / asset egress
-    #         '''))
     # input_region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
     #         '''
     #         Which region model assets to ingress and fix up
     #         '''), alias=['region_models_asset_name'])
-
     # input_site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
     #     '''
     #     Which site model assets to ingress and fix up
@@ -75,18 +71,9 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         node_state = NodeStateDebugger()
         node_state.print_environment()
 
-        # from geowatch.cli.smartflow_ingress import smartflow_ingress
-        # from geowatch.cli.smartflow_egress import smartflow_egress
         from geowatch.utils.util_framework import download_region
-        # from geowatch.utils import util_framework
-        # from kwutil.util_yaml import Yaml
         from geowatch.mlops import smart_pipeline
-
         from geowatch.utils.util_fsspec import FSPath
-
-        # outdir = FSPath.coerce(outdir)
-        # asset_href = FSPath.coerce(asset_href)
-        # asset_outpath = outdir / asset_href.name
 
         # 1. Ingress data
         print("* Running baseline framework kwcoco ingress *")
@@ -147,8 +134,8 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         })
         command = eval_node.command().rstrip('\\')
         print(command)
-
         ub.cmd(command, check=True, verbose=3, system=True)
+
         node_state.print_current_state(ingress_dir)
 
         assets_to_egress = {
