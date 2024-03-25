@@ -158,6 +158,7 @@ class QA_SpecMixin:
                 num_nan = is_nan.sum()
                 _raw2 = quality_im.data[~is_nan].ravel()
             else:
+                is_nan = None
                 num_nan = 0
                 _raw2 = _raw
 
@@ -207,9 +208,11 @@ class QA_SpecMixin:
             colorized[mask] = color255
 
         # Because the QA band is categorical, we should be able to make a short
-        masked = np.ma.MaskedArray(colorized, mask=np.tile(is_nan[..., None], (1, 1, 3)))
-        qa_canvas = kwimage.nodata_checkerboard(masked).data
-        # qa_canvas = colorized
+        if is_nan is not None:
+            masked = np.ma.MaskedArray(colorized, mask=np.tile(is_nan[..., None], (1, 1, 3)))
+            qa_canvas = kwimage.nodata_checkerboard(masked).data
+        else:
+            qa_canvas = colorized
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
 
