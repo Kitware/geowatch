@@ -3,6 +3,7 @@ import subprocess
 import json
 import os
 import pystac
+import ubelt as ub
 from os.path import join
 
 
@@ -683,7 +684,6 @@ class AWS_S3_Command:
         Likewise profile=foo will result in `--profile foo` and profile=None will include no option.
         """
         if arg is not None:
-            import ubelt as ub
             options = ub.udict(arg) | options
 
         for k, v in options.items():
@@ -718,7 +718,6 @@ class AWS_S3_Command:
         Returns:
             Dict : ubelt cmd info dict
         """
-        import ubelt as ub
         final_command = self.finalize()
         print('final_command = {}'.format(ub.urepr(final_command, nl=1)))
         run_info = ub.cmd(final_command, verbose=verbose, shell=shell,
@@ -809,7 +808,6 @@ class NodeStateDebugger:
 
     def print_environment(self):
         # Print info about what version of the code we are running on
-        import ubelt as ub
         import os
         import geowatch
         print(' --- <NODE_ENV> --- ')
@@ -826,16 +824,11 @@ class NodeStateDebugger:
         print(' --- </NODE_ENV> --- ')
 
     def print_current_state(self, dpath):
-        import ubelt as ub
         print(f' --- <NODE_STATE iter={self.current_iteration}> --- ')
-        print(f'* Printing current directory contents ({self.current_iteration})')
         dpath = ub.Path(dpath).resolve()
         # cwd_paths = sorted([p.resolve() for p in dpath.glob('*')])
         # print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
-        if dpath.exists():
-            ub.cmd('ls -al', verbose=3, cwd=dpath)
-        else:
-            print(f'dpath={dpath} does not exist')
+        self.print_directory_contents(dpath)
 
         print(f' * Print some disk and machine statistics ({self.current_iteration})')
         ub.cmd('df -h', verbose=3)
@@ -846,6 +839,16 @@ class NodeStateDebugger:
 
         print(f' --- </NODE_STATE iter={self.current_iteration}> --- ')
         self.current_iteration += 1
+
+    def print_directory_contents(self, dpath):
+        print(f'* Printing directory contents: {dpath}')
+        dpath = ub.Path(dpath).resolve()
+        # cwd_paths = sorted([p.resolve() for p in dpath.glob('*')])
+        # print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
+        if dpath.exists():
+            ub.cmd('ls -al', verbose=3, cwd=dpath)
+        else:
+            print(f'dpath={dpath} does not exist')
 
 
 class PrintLogger:

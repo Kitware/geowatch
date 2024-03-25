@@ -68,6 +68,20 @@ def main(cmdline=1, **kwargs):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
 
+    if not config.input_site_models_asset_name:
+        raise ValueError(ub.paragraph(
+            '''
+            Must specify which asset name in the STAC catalog points to the
+            site models
+            '''))
+
+    if not config.input_region_models_asset_name:
+        raise ValueError(ub.paragraph(
+            '''
+            Must specify which asset name in the STAC catalog points to the
+            site models
+            '''))
+
     input_path = config.input_path
     assets = [
         {'key': config.input_region_models_asset_name},

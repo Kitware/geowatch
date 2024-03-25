@@ -85,6 +85,41 @@ python -m geowatch.cli.prepare_ta2_dataset \
     #' \
 
 
+# Determine statistics about the datasets
+echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+cd "$DVC_DATA_DPATH/Aligned-Drop8-L2"
+python -c "if 1:
+    import ubelt as ub
+    import kwcoco
+    root = ub.Path('.').absolute()
+    imganns_kwcocos = list(root.glob('*/imgann*.kwcoco.zip'))
+    imgonly_kwcocos = list(root.glob('*/imgann*.kwcoco.zip'))
+
+    if len(imganns_kwcocos) != len(imgonly_kwcocos):
+        print('Something went wrong in ann projection')
+
+    datas = kwcoco.CocoDataset.coerce_multiple(imganns_kwcocos, workers=10, mode='thread')
+
+    rows = []
+    for dset in datas:
+        fpath = ub.Path(dset.fpath)
+        region_name = fpath.stem.split('-')[1]
+        row = {}
+        sensor_hist = ub.dict_hist(dset.images().lookup('sensor_coarse'))
+        row['region_name'] = region_name
+        row['region_group'] = region_name.split('_')[1][0]
+        row.update(sensor_hist)
+        rows.append(row)
+
+    rows = sorted(rows, key=lambda x: x['region_group'])
+    group_to_rows = ub.udict(ub.group_items(rows, key=lambda x: x['region_group']))
+    group_to_rows.map_values(len)
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+"
+
+
 #export AWS_REQUEST_PAYER=requester
 #python -m geowatch.cli.coco_add_watch_fields \
 #    --src=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Uncropped-Drop8-L2/data_KR_R001.kwcoco.zip \

@@ -282,6 +282,10 @@ class PolygonEvaluation(ProcessNode):
         'eval_fpath': 'poly_eval.json',
     }
 
+    perf_params = {
+        'enable_viz': False,
+    }
+
     @profile
     def command(self):
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
@@ -291,7 +295,7 @@ class PolygonEvaluation(ProcessNode):
         handled = {
             'name', 'true_site_dpath', 'merge', 'true_region_dpath',
             'true_region_dpath', 'pred_sites', 'tmp_dir', 'out_dir',
-            'merge_fpath',
+            'merge_fpath', 'sites_fpath',
         }
 
         fmtkw['params_argstr'] = self._make_argstr(self.final_algo_config - handled)
@@ -325,7 +329,6 @@ class PolygonEvaluation(ProcessNode):
                 --tmp_dir "{tmp_dpath}" \
                 --out_dir "{eval_dpath}" \
                 --merge_fpath "{eval_fpath}" \
-                --enable_viz=False \
                 {params_argstr} \
                 {perf_argstr}
             ''').format(**fmtkw)

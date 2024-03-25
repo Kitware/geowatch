@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Updated coverage minimum version, which decreases CI time from >1 hour to 10-30 minutes.
 * Allow "kit" as annotator in geomodel schemas
 * `coco_align` no longer errors and simply writes an empty kwcoco file if the input regions are empty by default. Old behavior can be enabled with 
+* Updated wrapper scoring code to support latest IARPA metrics.
 
 
 ## Version 0.15.1 - Released 2024-03-04
