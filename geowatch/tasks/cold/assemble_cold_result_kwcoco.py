@@ -65,6 +65,7 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
         PrepareKwcocoConfig
         '''))
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
+    cold_time_span = scfg.Value('1year', type=str, help='Temporal period for extracting cold features, default is "1year", another option is "6months"')
 
 
 @profile
@@ -126,6 +127,7 @@ def assemble_main(cmdline=1, **kwargs):
     exclude_first = config_in['exclude_first']
     resolution = config_in['resolution']
     sensors = config_in['sensors']
+    cold_time_span = config_in['cold_time_span']
 
     if config_in['combined_coco_fpath'] is not None:
         combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
@@ -135,7 +137,10 @@ def assemble_main(cmdline=1, **kwargs):
         combined_coco_fpath = None
 
     # define variables
-    config = read_json_metadata(stack_path)
+    # config = read_json_metadata(stack_path)
+    log_fpath = reccg_path / 'log.json'
+    with open(log_fpath, "r") as f:
+        config = json.load(f)
     vid_w = config['video_w']
     vid_h = config['video_h']
     n_block_x = config['n_block_x']
@@ -269,47 +274,106 @@ def assemble_main(cmdline=1, **kwargs):
         ordinal_day_list = ordinal_dates
     else:
         # Get only the first ordinal date of each year
-        first_ordinal_dates_L8 = []
-        first_img_names_L8 = []
-        first_ordinal_dates_S2 = []
-        first_img_names_S2 = []
-        last_year = None
-        if 'L8' in sensors:
-            for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
-                year = pd.Timestamp.fromordinal(ordinal_day).year
-                if year != last_year:
-                    first_ordinal_dates_L8.append(ordinal_day)
-                    first_img_names_L8.append(img_name[:-4])
-                    last_year = year
-        if 'S2' in sensors:
-            for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
-                year = pd.Timestamp.fromordinal(ordinal_day).year
-                if year != last_year:
-                    first_ordinal_dates_S2.append(ordinal_day)
-                    first_img_names_S2.append(img_name[:-4])
-                    last_year = year
-        if exclude_first:
-            if 'L8' in sensors and 'S2' in sensors:
-                combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:],
-                                     first_img_names_L8[1:] + first_img_names_S2[1:]))
-            elif 'L8' in sensors and 'S2' not in sensors:
-                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
-            elif 'S2' in sensors and 'L8' not in sensors:
-                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
+        if cold_time_span == '1year':
+            first_ordinal_dates_L8 = []
+            first_img_names_L8 = []
+            first_ordinal_dates_S2 = []
+            first_img_names_S2 = []
+            last_year = None
+            if 'L8' in sensors:
+                for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
+                    year = pd.Timestamp.fromordinal(ordinal_day).year
+                    if year != last_year:
+                        first_ordinal_dates_L8.append(ordinal_day)
+                        first_img_names_L8.append(img_name[:-4])
+                        last_year = year
+            if 'S2' in sensors:
+                for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
+                    year = pd.Timestamp.fromordinal(ordinal_day).year
+                    if year != last_year:
+                        first_ordinal_dates_S2.append(ordinal_day)
+                        first_img_names_S2.append(img_name[:-4])
+                        last_year = year
+            if exclude_first:
+                if 'L8' in sensors and 'S2' in sensors:
+                    combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:],
+                                        first_img_names_L8[1:] + first_img_names_S2[1:]))
+                elif 'L8' in sensors and 'S2' not in sensors:
+                    combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+                elif 'S2' in sensors and 'L8' not in sensors:
+                    combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
 
-            # ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[:1]
-            # img_names = first_img_names_L8[1:] + first_img_names_S2[1:]
-        else:
-            if 'L8' in sensors and 'S2' in sensors:
-                combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2,
-                                     first_img_names_L8 + first_img_names_S2))
-            elif 'L8' in sensors and 'S2' not in sensors:
-                combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
-            elif 'S2' in sensors and 'L8' not in sensors:
-                combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
-            # ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
-            # img_names = first_img_names_L8 + first_img_names_S2
-        combined_data.sort(key=lambda x: x[0])
+                # ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[:1]
+                # img_names = first_img_names_L8[1:] + first_img_names_S2[1:]
+            else:
+                if 'L8' in sensors and 'S2' in sensors:
+                    combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2,
+                                        first_img_names_L8 + first_img_names_S2))
+                elif 'L8' in sensors and 'S2' not in sensors:
+                    combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
+                elif 'S2' in sensors and 'L8' not in sensors:
+                    combined_data = list(zip(first_ordinal_dates_S2[1:], first_img_names_S2[1:]))
+                # ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+                # img_names = first_img_names_L8 + first_img_names_S2
+        elif cold_time_span == '6months':
+            if 'L8' in sensors:
+                year_groups_L8 = {}
+                img_name_groups_L8 = {}
+                ordinal_dates_L8 = []
+                img_name_list_L8 = []
+                for ordinal_day_L8, img_name_L8 in zip(img_dates_L8, img_names_L8):
+                    year = pd.Timestamp.fromordinal(ordinal_day_L8).year
+                    if year not in year_groups_L8:
+                        year_groups_L8[year] = []
+                        img_name_groups_L8[year] = []
+                    year_groups_L8[year].append(ordinal_day_L8)
+                    img_name_groups_L8[year].append(img_name_L8)
+                for year in sorted(year_groups_L8.keys()):
+                    year_group = year_groups_L8[year]
+                    img_name_group = img_name_groups_L8[year]
+                    middle_index = len(year_group) // 2
+                    ordinal_dates_L8.extend([year_group[middle_index], year_group[0]])
+                    img_name_list_L8.extend([img_name_group[middle_index], img_name_group[0]])
+                ordinal_dates_L8.sort()
+                img_name_list_L8.sort()
+            if 'S2' in sensors:
+                year_groups_S2 = {}
+                img_name_groups_S2 = {}
+                ordinal_dates_S2 = []
+                img_name_list_S2 = []
+                for ordinal_day_S2, img_name_S2 in zip(img_dates_S2, img_names_S2):
+                    year = pd.Timestamp.fromordinal(ordinal_day_S2).year
+                    if year not in year_groups_S2:
+                        year_groups_S2[year] = []
+                        img_name_groups_S2[year] = []
+                    year_groups_S2[year].append(ordinal_day_S2)
+                    img_name_groups_S2[year].append(img_name_S2)
+                for year in sorted(year_groups_S2.keys()):
+                    year_group = year_groups_S2[year]
+                    img_name_group = img_name_groups_S2[year]
+                    middle_index = len(year_group) // 2
+                    ordinal_dates_S2.extend([year_group[middle_index], year_group[0]])
+                    img_name_list_S2.extend([img_name_group[middle_index], img_name_group[0]])
+                ordinal_dates_S2.sort()
+                img_name_list_S2.sort()
+                
+            if exclude_first:
+                if 'L8' in sensors and 'S2' in sensors:
+                    combined_data = list(zip(ordinal_dates_L8[1:] + ordinal_dates_S2[1:],
+                                        img_name_list_L8[1:] + img_name_list_S2[1:]))
+                elif 'L8' in sensors and 'S2' not in sensors:
+                    combined_data = list(zip(ordinal_dates_L8[1:], img_name_list_L8[1:]))
+                elif 'S2' in sensors and 'L8' not in sensors:
+                    combined_data = list(zip(ordinal_dates_S2[1:], img_name_list_S2[1:]))
+            else:
+                if 'L8' in sensors and 'S2' in sensors:
+                    combined_data = ordinal_dates_L8 + ordinal_dates_S2
+                elif 'L8' in sensors and 'S2' not in sensors:
+                    combined_data = ordinal_dates_L8
+                elif 'S2' in sensors and 'L8' not in sensors:
+                    combined_data = ordinal_dates_S2
+            
+        combined_data.sort(key=lambda x: x[0])        
         ordinal_day_list, img_names = zip(*combined_data)
     # assemble
     logger.info('Generating COLD output geotiff')

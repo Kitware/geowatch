@@ -159,6 +159,7 @@ import ubelt as ub
 import json
 import logging
 import os
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -209,11 +210,13 @@ class ColdPredictConfig(scfg.DataConfig):
     coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     combine = scfg.Value(False, help='for temporal combined mode, Default is False')
+    cold_time_span = scfg.Value('1year', type=str, help='temporal period for extracting cold features, default is "1year", another option is "6months"')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     workers = scfg.Value(16, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
+    # region_id = scfg.Value(None, help='region id for the input kwcoco file')
 
 
 @profile
@@ -284,9 +287,8 @@ def cold_predict_main(cmdline=1, **kwargs):
     adj_cloud = config['adj_cloud']
     method = config['method']
     workers = util_parallel.coerce_num_workers(config['workers'])
-
     use_subprogress = workers == 0 or config['workermode'] != 'process'
-
+    region_id = config['coco_fpath'].split('/')[-2]
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
 
@@ -300,30 +302,34 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 1: Prepare')
 
         metadata = None
-        if (out_dpath / 'stacked').exists():
-            for region in os.listdir(out_dpath / 'stacked'):
-                if region in str(config['coco_fpath']):
-                    if os.path.exists(out_dpath / 'reccg' / region):
-                        logger.info('Skipping step 1 because the stacked image already exists...')
-                        for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
-                            for file in files:
-                                if file.endswith(".json"):
-                                    json_path = os.path.join(root, file)
-
-                                    with open(json_path, "r") as f:
-                                        metadata = json.load(f)
-                                break
-
-        if metadata is None:
+        log_fpath = out_dpath / 'reccg' / region_id / 'log.json'
+        if (log_fpath).exists():
+            print("Skipping step 1 because the stacked image already exists...")
+            logger.info('Skipping step 1 because the stacked image already exists...')
+            with open(log_fpath, "r") as f:
+                metadata = json.load(f)
+        else:
             meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
-                cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
-                adj_cloud=adj_cloud, method=method, workers=workers,
-                resolution=config.resolution,
-            )
-
+                    cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
+                    adj_cloud=adj_cloud, method=method, workers=workers,
+                    resolution=config.resolution,
+                )
             with open(meta_fpath, "r") as f:
                 metadata = json.load(f)
+        #     for region in os.listdir(out_dpath / 'stacked'):
+        #         if region in str(config['coco_fpath']):
+        #             if os.path.exists(out_dpath / 'reccg' / region):
+        #                 logger.info('Skipping step 1 because the stacked image already exists...')
+        #                 for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
+        #                     for file in files:
+        #                         if file.endswith(".json"):
+        #                             json_path = os.path.join(root, file)
 
+        #                             with open(json_path, "r") as f:
+        #                                 metadata = json.load(f)
+        #                         break
+
+        
         main_prog.step()
 
         # =========
@@ -332,16 +338,15 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 2: Process')
         logger.info('Starting COLD tile-processing...')
         tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
-        tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        tile_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
+        tile_log_fpath = out_dpath / 'reccg' / region_id / 'log.json'
         tile_kwargs['method'] = method
         tile_kwargs['prob'] = config['prob']
         tile_kwargs['conse'] = config['conse']
         tile_kwargs['cm_interval'] = config['cm_interval']
         if use_subprogress:
-            tile_kwargs['pman'] = pman
-
-        tile_log_fpath = out_dpath / 'reccg' / metadata['region_id'] / 'log.json'
+            tile_kwargs['pman'] = pman        
 
         if os.path.exists(tile_log_fpath):
             logger.info('Skipping step 2 because COLD processing already finished...')
@@ -364,8 +369,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 3: Export')
         logger.info('Writting tmp file of COLD output...')
         export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
-        export_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        export_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        export_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        export_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
         export_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
@@ -375,6 +380,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['timestamp'] = config['timestamp']
         export_kwargs['exclude_first'] = config['exclude_first']
         export_kwargs['sensors'] = sensors
+        export_kwargs['cold_time_span'] = config['cold_time_span']
         if use_subprogress:
             export_kwargs['pman'] = pman
 
@@ -395,9 +401,9 @@ def cold_predict_main(cmdline=1, **kwargs):
         # =============
         main_prog.set_postfix('Step 4: Assemble')
         logger.info('Writting geotiff of COLD output...')
-        assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()
-        assemble_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        assemble_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()  
+        assemble_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        assemble_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
         assemble_kwargs['coco_fpath'] = coco_fpath
         assemble_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
@@ -411,7 +417,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['exclude_first'] = config['exclude_first']
         assemble_kwargs['resolution'] = config.resolution
         assemble_kwargs['sensors'] = sensors
-
+        assemble_kwargs['cold_time_span'] = config['cold_time_span']
         if True:
             assemble_kwargs['pman'] = pman
         assemble_cold_result_kwcoco.assemble_main(
@@ -425,18 +431,18 @@ def cold_predict_main(cmdline=1, **kwargs):
         # main_prog.step()
 
 
-@profile
-def read_json_metadata(folder_path):
-    stacked_path = folder_path / 'stacked'
-    for root, dirs, files in os.walk(stacked_path):
-        for file in files:
-            if file.endswith(".json"):
-                json_path = os.path.join(root, file)
+# @profile
+# def read_json_metadata(folder_path):
+#     stacked_path = folder_path / 'stacked'
+#     for root, dirs, files in os.walk(stacked_path):
+#         for file in files:
+#             if file.endswith(".json"):
+#                 json_path = os.path.join(root, file)
 
-                with open(json_path, "r") as f:
-                    metadata = json.load(f)
-                    return metadata
-    return None
+#                 with open(json_path, "r") as f:
+#                     metadata = json.load(f)
+#                     return metadata
+#     return None
 
 
 if __name__ == '__main__':

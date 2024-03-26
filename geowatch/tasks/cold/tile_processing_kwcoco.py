@@ -108,6 +108,10 @@ def tile_process_main(cmdline=1, **kwargs):
     cm_output_interval = config_in['cm_interval']
 
     config = read_json_metadata(stack_path)
+    n_cols_origin = config['n_cols']
+    n_rows_origin = config['n_rows']
+    video_w = config['video_w']
+    video_h = config['video_h']
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -390,6 +394,16 @@ def tile_process_main(cmdline=1, **kwargs):
         'algorithm': method,
         'prob': prob,
         'conse': conse,
+        'region_id': config['region_id'],
+        'n_cols': n_cols_origin,
+        'n_rows': n_rows_origin,
+        'video_w': video_w,
+        'video_h': video_h,
+        'padded_n_cols': n_cols,
+        'padded_n_rows': n_rows,
+        'n_block_x': n_block_x,
+        'n_block_y': n_block_y,
+        
     }
 
     log_fpath = reccg_path / 'log.json'
