@@ -156,10 +156,10 @@ CommandLine:
 """
 import scriptconfig as scfg
 import ubelt as ub
-import json
+# import json
 import logging
 import os
-import shutil
+# import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -301,21 +301,20 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Step 1: Prepare')
 
-        metadata = None
+        # metadata = None
         log_fpath = out_dpath / 'reccg' / region_id / 'log.json'
         if (log_fpath).exists():
             print("Skipping step 1 because the stacked image already exists...")
             logger.info('Skipping step 1 because the stacked image already exists...')
-            with open(log_fpath, "r") as f:
-                metadata = json.load(f)
+            # with open(log_fpath, "r") as f:
+            #     metadata = json.load(f)
         else:
-            meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
+            prepare_kwcoco.prepare_kwcoco_main(
                     cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                     adj_cloud=adj_cloud, method=method, workers=workers,
-                    resolution=config.resolution,
-                )
-            with open(meta_fpath, "r") as f:
-                metadata = json.load(f)
+                    resolution=config.resolution)
+            # with open(meta_fpath, "r") as f:
+            #     metadata = json.load(f)
         #     for region in os.listdir(out_dpath / 'stacked'):
         #         if region in str(config['coco_fpath']):
         #             if os.path.exists(out_dpath / 'reccg' / region):
@@ -329,7 +328,6 @@ def cold_predict_main(cmdline=1, **kwargs):
         #                                 metadata = json.load(f)
         #                         break
 
-        
         main_prog.step()
 
         # =========
@@ -346,7 +344,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         tile_kwargs['conse'] = config['conse']
         tile_kwargs['cm_interval'] = config['cm_interval']
         if use_subprogress:
-            tile_kwargs['pman'] = pman        
+            tile_kwargs['pman'] = pman
 
         if os.path.exists(tile_log_fpath):
             logger.info('Skipping step 2 because COLD processing already finished...')
@@ -401,7 +399,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         # =============
         main_prog.set_postfix('Step 4: Assemble')
         logger.info('Writting geotiff of COLD output...')
-        assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()  
+        assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()
         assemble_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
         assemble_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
         assemble_kwargs['coco_fpath'] = coco_fpath

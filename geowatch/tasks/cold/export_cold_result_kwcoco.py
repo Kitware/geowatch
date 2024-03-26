@@ -76,6 +76,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     cold_time_span = scfg.Value('1year', type=str, help='Temporal period for extracting cold features, default is "1year", another option is "6months"')
 
+
 @profile
 def export_cold_main(cmdline=1, **kwargs):
     """
@@ -121,7 +122,7 @@ def export_cold_main(cmdline=1, **kwargs):
     exclude_first = config_in['exclude_first']
     sensors = config_in['sensors']
     cold_time_span = config_in['cold_time_span']
-    
+
     if combine:
         combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     else:
@@ -278,7 +279,7 @@ def export_cold_main(cmdline=1, **kwargs):
 
     if timestamp:
         ordinal_day_list = img_dates
-    if not timestamp:        
+    if not timestamp:
         if cold_time_span == '6months':
             if 'L8' in sensors:
                 year_groups_L8 = {}
@@ -293,11 +294,11 @@ def export_cold_main(cmdline=1, **kwargs):
                     img_name_groups_L8[year].append(img_name_L8)
                 for year in sorted(year_groups_L8.keys()):
                     year_group = year_groups_L8[year]
-                    img_name_group = img_name_groups_L8[year]
+                    # img_name_group = img_name_groups_L8[year]
                     middle_index = len(year_group) // 2
-                    ordinal_dates_L8.extend([year_group[middle_index], year_group[0]]) 
+                    ordinal_dates_L8.extend([year_group[middle_index], year_group[0]])
                 ordinal_dates_L8.sort()
-                
+
             if 'S2' in sensors:
                 year_groups_S2 = {}
                 img_name_groups_S2 = {}
@@ -311,11 +312,11 @@ def export_cold_main(cmdline=1, **kwargs):
                     img_name_groups_S2[year].append(img_name_S2)
                 for year in sorted(year_groups_S2.keys()):
                     year_group = year_groups_S2[year]
-                    img_name_group = img_name_groups_S2[year]
+                    # img_name_group = img_name_groups_S2[year]
                     middle_index = len(year_group) // 2
-                    ordinal_dates_S2.extend([year_group[middle_index], year_group[0]]) 
+                    ordinal_dates_S2.extend([year_group[middle_index], year_group[0]])
                 ordinal_dates_S2.sort()
-                
+
             if exclude_first:
                 if 'L8' in sensors and 'S2' in sensors:
                     ordinal_day_list = ordinal_dates_L8[1:] + ordinal_dates_S2[1:]
@@ -330,7 +331,7 @@ def export_cold_main(cmdline=1, **kwargs):
                     ordinal_day_list = ordinal_dates_L8
                 elif 'S2' in sensors and 'L8' not in sensors:
                     ordinal_day_list = ordinal_dates_S2
-        
+
         elif cold_time_span == '1year':
             first_ordinal_dates_L8 = []
             first_img_names_L8 = []
@@ -366,7 +367,7 @@ def export_cold_main(cmdline=1, **kwargs):
                     ordinal_day_list = first_ordinal_dates_L8
                 elif 'S2' in sensors and 'L8' not in sensors:
                     ordinal_day_list = first_ordinal_dates_S2
-        
+
         ordinal_day_list.sort()
         # print(ordinal_day_list)
     if combine:

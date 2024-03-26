@@ -297,7 +297,7 @@ def assemble_main(cmdline=1, **kwargs):
             if exclude_first:
                 if 'L8' in sensors and 'S2' in sensors:
                     combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:],
-                                        first_img_names_L8[1:] + first_img_names_S2[1:]))
+                                             first_img_names_L8[1:] + first_img_names_S2[1:]))
                 elif 'L8' in sensors and 'S2' not in sensors:
                     combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
                 elif 'S2' in sensors and 'L8' not in sensors:
@@ -308,7 +308,7 @@ def assemble_main(cmdline=1, **kwargs):
             else:
                 if 'L8' in sensors and 'S2' in sensors:
                     combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2,
-                                        first_img_names_L8 + first_img_names_S2))
+                                             first_img_names_L8 + first_img_names_S2))
                 elif 'L8' in sensors and 'S2' not in sensors:
                     combined_data = list(zip(first_ordinal_dates_L8[1:], first_img_names_L8[1:]))
                 elif 'S2' in sensors and 'L8' not in sensors:
@@ -356,11 +356,11 @@ def assemble_main(cmdline=1, **kwargs):
                     img_name_list_S2.extend([img_name_group[middle_index], img_name_group[0]])
                 ordinal_dates_S2.sort()
                 img_name_list_S2.sort()
-                
+
             if exclude_first:
                 if 'L8' in sensors and 'S2' in sensors:
                     combined_data = list(zip(ordinal_dates_L8[1:] + ordinal_dates_S2[1:],
-                                        img_name_list_L8[1:] + img_name_list_S2[1:]))
+                                             img_name_list_L8[1:] + img_name_list_S2[1:]))
                 elif 'L8' in sensors and 'S2' not in sensors:
                     combined_data = list(zip(ordinal_dates_L8[1:], img_name_list_L8[1:]))
                 elif 'S2' in sensors and 'L8' not in sensors:
@@ -372,8 +372,8 @@ def assemble_main(cmdline=1, **kwargs):
                     combined_data = ordinal_dates_L8
                 elif 'S2' in sensors and 'L8' not in sensors:
                     combined_data = ordinal_dates_S2
-            
-        combined_data.sort(key=lambda x: x[0])        
+
+        combined_data.sort(key=lambda x: x[0])
         ordinal_day_list, img_names = zip(*combined_data)
     # assemble
     logger.info('Generating COLD output geotiff')

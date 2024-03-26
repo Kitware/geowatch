@@ -403,7 +403,6 @@ def tile_process_main(cmdline=1, **kwargs):
         'padded_n_rows': n_rows,
         'n_block_x': n_block_x,
         'n_block_y': n_block_y,
-        
     }
 
     log_fpath = reccg_path / 'log.json'
