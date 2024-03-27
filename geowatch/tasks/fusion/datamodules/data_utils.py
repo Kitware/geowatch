@@ -9,6 +9,13 @@ import kwarray
 import networkx as nx
 
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
+
+
 def resolve_scale_request(request=None, data_gsd=None):
     """
     Helper for handling user and machine specified spatial scale requests
@@ -394,6 +401,7 @@ class BalancedSampleTree(ub.NiceRepr):
         >>> print('color weights = {}'.format(ub.urepr(weights, nl=1)))
         >>> print('hist3 (color) = {}'.format(ub.urepr(hist3_color, nl=1)))
     """
+    @profile
     def __init__(self, sample_grid, rng=None):
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
@@ -407,6 +415,7 @@ class BalancedSampleTree(ub.NiceRepr):
         raise ValueError("""BalancedSampleTree only supports input in the
             form of a flat list or list of dicts.""")
 
+    @profile
     def _create_graph(self, sample_grid):
         graph = nx.DiGraph()
 
@@ -423,6 +432,7 @@ class BalancedSampleTree(ub.NiceRepr):
             graph.add_edge(root_node, index)
         return graph
 
+    @profile
     def _get_parent(self, n):
         """ Get the parent of a node (assume a tree). None if it doesnt exist """
         preds = self.graph.pred[n]
@@ -432,6 +442,7 @@ class BalancedSampleTree(ub.NiceRepr):
         else:
             return None
 
+    @profile
     def _reweight(self, node, idx_child):
         if self.graph.nodes[node]['weights'] is not None:
             _weights = self.graph.nodes[node]['weights']
@@ -446,6 +457,7 @@ class BalancedSampleTree(ub.NiceRepr):
                 _weights = np.zeros(1)
             self.graph.nodes[node]['weights'] = _weights
 
+    @profile
     def _prune_and_reweight(self, nodes):
         for parent, orphans in nodes:
             grandpa = self._get_parent(parent)
@@ -480,6 +492,7 @@ class BalancedSampleTree(ub.NiceRepr):
         if len(self._leaf_nodes) == 0:
             raise ValueError("Leaf nodes became empty.")
 
+    @profile
     def subdivide(self, key, weights=None):
         remove_nodes = []
         remove_edges = []
@@ -523,11 +536,13 @@ class BalancedSampleTree(ub.NiceRepr):
         self.graph.add_edges_from(add_edges)
         self._prune_and_reweight(remove_nodes)
 
+    @profile
     def _sample_many(self, num):
         for _ in range(num):
             idx = self.sample()
             yield idx
 
+    @profile
     def sample(self):
         current = '__root__'
         while self.graph.out_degree(current) > 0:
@@ -543,9 +558,11 @@ class BalancedSampleTree(ub.NiceRepr):
             current = children[idx]
         return current
 
+    @profile
     def __len__(self):
         return len(list(self._leaf_nodes))
 
+    @profile
     def __nice__(self):
         n_nodes = self.graph.number_of_nodes()
         n_edges = self.graph.number_of_edges()
@@ -558,6 +575,9 @@ class BalancedSampleForest(ub.NiceRepr):
     """
     Manages a sampling from a forest of BalancedSampleTree's. Helps with balancing
     samples in the multi-label case.
+
+    CommandLine:
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.data_utils BalancedSampleForest:1 --benchmark
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleForest
@@ -588,7 +608,40 @@ class BalancedSampleForest(ub.NiceRepr):
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--benchmark)
+        >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleForest
+        >>> # Make a very large dataset to test speed constraints
+        >>> sample_grid = [
+        >>>     { 'region': 'region1', 'color': {'blue': 10, 'red': 3}},
+        >>>     { 'region': 'region1', 'color': {'green': 3, 'purple': 2}},
+        >>>     { 'region': 'region1', 'color': {'blue': 1}},
+        >>>     { 'region': 'region1', 'color': {'green': 3, 'red': 5}},
+        >>>     { 'region': 'region1', 'color': {'purple': 1, 'blue': 1}},
+        >>>     { 'region': 'region2', 'color': {'blue': 5, 'red': 5}},
+        >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
+        >>> ] * 100
+        >>> #
+        >>> self = BalancedSampleForest(sample_grid)
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
+        >>> print('hist0 = {}'.format(ub.urepr(hist0, nl=1)))
+        >>> #
+        >>> self.subdivide('region')
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist1 = ub.dict_hist([g['region'] for g in sampled])
+        >>> print('hist1 = {}'.format(ub.urepr(hist1, nl=1)))
+        >>> #
+        >>> self.subdivide('color')
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
+        >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
     """
+    @profile
     def __init__(self, sample_grid, rng=None, n_trees=16, scoring='uniform'):
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
@@ -597,6 +650,7 @@ class BalancedSampleForest(ub.NiceRepr):
         self.n_trees = n_trees
         self.forest = self._create_forest(sample_grid, n_trees, scoring)
 
+    @profile
     def _create_forest(self, sample_grid, n_trees, scoring):
         """ Generate N BalancedSampleTree's, producing a hard assignment for
         each multi-label attribute. Expects a multi-label attribute to arrive
@@ -636,23 +690,28 @@ class BalancedSampleForest(ub.NiceRepr):
             forest.append(bst)
         return forest
 
+    @profile
     def subdivide(self, key, weights=None):
         for tree in self.forest:
             tree.subdivide(key, weights=weights)
 
+    @profile
     def _sample_many(self, num):
         for _ in range(num):
             idx = self.sample()
             yield idx
 
+    @profile
     def sample(self):
         """ Uniformly sample a tree from the forest, then sample from it. """
         idx = self.rng.choice(self.n_trees)
         return self.forest[idx].sample()
 
+    @profile
     def __len__(self):
         return len(self.forest[0])
 
+    @profile
     def __nice__(self):
         graph = self.forest[0].graph
         n_trees = self.n_trees

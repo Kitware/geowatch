@@ -2401,6 +2401,9 @@ class BalanceMixin:
     """
     Helpers to build the sample grid and balance it
 
+    CommandLine:
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin
+
     Example:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
@@ -2440,6 +2443,7 @@ class BalanceMixin:
         >>> assert num_positives > num_negatives
     """
 
+    @profile
     def _get_video_names(self, vidids):
         unique_vidids, _idx_to_unique_idx = np.unique(vidids, return_inverse=True)
         coco_dset = self.sampler.dset
@@ -2457,6 +2461,7 @@ class BalanceMixin:
         vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
         return vidnames
 
+    @profile
     def _get_region_names(self, vidnames):
         # create mapping from video name to region name
         from kwutil import util_pattern
@@ -2469,6 +2474,7 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = vidname
         return list(ub.take(self.vidname_to_region_name, vidnames))
 
+    @profile
     def _load_target_annots(self, target, sequence=False):
         """
         TODO: need an ndsampler endpoint that just finds the annotations in a
@@ -2485,6 +2491,7 @@ class BalanceMixin:
         else:
             return self.sampler.regions.overlapping_aids(target['main_gid'], space_box.boxes)
 
+    @profile
     def _get_observed_annotations(self, targets):
         observed_cats = []
         for target in targets:
@@ -2493,6 +2500,7 @@ class BalanceMixin:
             observed_cats.append(ub.dict_hist(catnames))
         return observed_cats
 
+    @profile
     def _setup_attribute_dataframe(self, new_sample_grid):
         """
         Build a dataframe of attributes (for each sample) that can be used for balancing.
@@ -2518,6 +2526,7 @@ class BalanceMixin:
         }).reset_index(drop=False)
         return df
 
+    @profile
     def _init_balance(self, sample_grid_input):
         """
         Build data structure used for balanced sampling.
@@ -3126,6 +3135,17 @@ class MiscMixin:
             collate_fn=ub.identity,  # disable collation
         )
         return loader
+
+
+class BackwardCompatMixin:
+    """
+    Backwards compatability for modified properties.
+    (These may eventually be deprecated).
+    """
+
+    @property
+    def new_sample_grid(self):
+        return self.sample_grid
 
 
 class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMixin, IntrospectMixin, MiscMixin, SpacetimeAugmentMixin, SMARTDataMixin):
