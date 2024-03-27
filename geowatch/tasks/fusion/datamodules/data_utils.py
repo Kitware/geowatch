@@ -403,6 +403,14 @@ class BalancedSampleTree(ub.NiceRepr):
     """
     @profile
     def __init__(self, sample_grid, rng=None):
+        """
+        Args:
+            sample_grid (List[Dict]):
+                List of items with properties to be sampled
+
+            rng (int | None | RandomState):
+                random number generator or seed
+        """
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
 
@@ -424,7 +432,11 @@ class BalancedSampleTree(ub.NiceRepr):
         graph.add_node(root_node, weights=None)
 
         for index, item in enumerate(sample_grid):
-            label = f'{index:02d} ' + ub.urepr(item, nl=0, compact=1, nobr=1)
+            # Using urepr in the critial loop is too slow for large sample
+            # grids
+            # maybe we add an option to enable this for debugging / demo?
+            # label = f'{index:02d} ' + ub.urepr(item, nl=0, compact=1, nobr=1)
+            label = f'{index:02d}'
             if isinstance(item, dict):
                 graph.add_node(index, label=label, **item)
             else:
