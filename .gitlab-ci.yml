@@ -50,9 +50,9 @@ stages:
     # Change pip's cache directory to be inside the project directory
     # since we can only cache local items.
     PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
-  except:
-    # Don't run the pipeline for new tags
-  - tags
+  #except:
+  #  # Don't run the pipeline for new tags
+  #- tags
 
   cache:
     paths:
