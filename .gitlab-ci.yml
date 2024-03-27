@@ -47,6 +47,9 @@ stages:
       when: on_success
     # Ignore everything else.
     - when: never
+  #except:
+  #  # Don't run the pipeline for new tags
+  #  - tags
   cache:
     paths:
     - .cache/pip
@@ -210,11 +213,13 @@ gpgsign/wheels:
     - dist/*.asc
     - dist/*.whl
     - dist/*.ots
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: on_success
-    - if: '$CI_COMMIT_BRANCH == "release"'
-      when: on_success
+  variables:
+    IS_FOR_RELEASE: "true"
+  #rules:
+  #  - if: '$CI_COMMIT_BRANCH == "main"'
+  #    when: on_success
+  #  - if: '$CI_COMMIT_BRANCH == "release"'
+  #    when: on_success
   #only:
   #  refs:
   #      # Gitlab will only expose protected variables on protected branches
@@ -268,11 +273,13 @@ deploy/wheels:
   <<: *common_template
   image: python:3.11
   stage: deploy
-  rules:
-    #- if: '$CI_COMMIT_BRANCH == "main"'
-    #  when: on_success
-    - if: '$CI_COMMIT_BRANCH == "release"'
-      when: on_success
+  variables:
+    IS_FOR_RELEASE: "true"
+  #rules:
+  #  #- if: '$CI_COMMIT_BRANCH == "main"'
+  #  #  when: on_success
+  #  - if: '$CI_COMMIT_BRANCH == "release"'
+  #    when: on_success
   #only:
   #  refs:
   #  - release
