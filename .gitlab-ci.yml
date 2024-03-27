@@ -280,9 +280,9 @@ deploy/wheels:
   #  #  when: on_success
   #  - if: '$CI_COMMIT_BRANCH == "release"'
   #    when: on_success
-  #only:
-  #  refs:
-  #  - release
+  only:
+    refs:
+    - release
   script:
   - pip install pyopenssl ndg-httpsclient pyasn1 requests[security] twine -U
   - ls dist
