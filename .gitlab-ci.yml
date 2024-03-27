@@ -11,6 +11,8 @@ stages:
 - gpgsign
 - deploy
 .common_template: &common_template
+  extends:
+    - .rules
   tags:
     # Tags define which runners will accept which jobs
   - docker
