@@ -11,8 +11,6 @@ stages:
 - gpgsign
 - deploy
 .common_template: &common_template
-  extends:
-    - .rules
   tags:
     # Tags define which runners will accept which jobs
   - docker
@@ -174,6 +172,8 @@ test/full-strict/cp311-linux-x86_64:
   - build/cp311-linux-x86_64
 lint:
   <<: *common_template
+  extends:
+    - .rules
   image: python:3.11
   stage: lint
   before_script:
