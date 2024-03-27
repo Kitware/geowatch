@@ -38,7 +38,6 @@ stages:
 - gpgsign
 - deploy
 .common_template: &common_template
-  <<: *rules_template
   tags:
     # Tags define which runners will accept which jobs
   - docker
@@ -50,9 +49,9 @@ stages:
     # Change pip's cache directory to be inside the project directory
     # since we can only cache local items.
     PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
-  #except:
-  #  # Don't run the pipeline for new tags
-  #- tags
+  except:
+    # Don't run the pipeline for new tags
+  - tags
 
   cache:
     paths:
@@ -200,8 +199,6 @@ test/full-strict/cp311-linux-x86_64:
   - build/cp311-linux-x86_64
 lint:
   <<: *common_template
-  extends:
-    - .rules
   image: python:3.11
   stage: lint
   before_script:
