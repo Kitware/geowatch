@@ -10,8 +10,7 @@ import networkx as nx
 
 
 try:
-    import xdev
-    profile = xdev.profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 
@@ -411,17 +410,28 @@ class BalancedSampleTree(ub.NiceRepr):
             rng (int | None | RandomState):
                 random number generator or seed
         """
-        super().__init__()
-        self.rng = rng = kwarray.ensure_rng(rng)
+        self.rng = kwarray.ensure_rng(rng)
 
         # validate input
-        if isinstance(sample_grid, list) and sample_grid:
-            if isinstance(sample_grid[0], (dict, int, float)):
-                self.graph = self._create_graph(sample_grid)
-                self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
-                return
-        raise ValueError("""BalancedSampleTree only supports input in the
-            form of a flat list or list of dicts.""")
+        if not isinstance(sample_grid, list):
+            raise TypeError(ub.paragraph(
+                """
+                BalancedSampleTree only accepts List[Dict], but outer type
+                was {type(sample_grid)}.
+                """))
+
+        if not sample_grid:
+            raise ValueError('Input sample_grid is empty')
+
+        if not isinstance(sample_grid[0], dict):
+            raise TypeError(ub.paragraph(
+                """
+                BalancedSampleTree only accepts List[Dict], but inner type
+                was {type(sample_grid[0])}.
+                """))
+
+        self.graph = self._create_graph(sample_grid)
+        self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
 
     @profile
     def _create_graph(self, sample_grid):
@@ -437,10 +447,7 @@ class BalancedSampleTree(ub.NiceRepr):
             # maybe we add an option to enable this for debugging / demo?
             # label = f'{index:02d} ' + ub.urepr(item, nl=0, compact=1, nobr=1)
             label = f'{index:02d}'
-            if isinstance(item, dict):
-                graph.add_node(index, label=label, **item)
-            else:
-                graph.add_node(index, label=label)
+            graph.add_node(index, label=label, **item)
             graph.add_edge(root_node, index)
         return graph
 
@@ -448,11 +455,13 @@ class BalancedSampleTree(ub.NiceRepr):
     def _get_parent(self, n):
         """ Get the parent of a node (assume a tree). None if it doesnt exist """
         preds = self.graph.pred[n]
-        if len(preds):
-            assert len(preds) == 1
-            return next(iter(preds))
-        else:
-            return None
+        # This function is called a lot, disable sanity checks
+        # if len(preds):
+        #     assert len(preds) == 1
+        #     return next(iter(preds))
+        # else:
+        #     return None
+        return next(iter(preds))
 
     @profile
     def _reweight(self, node, idx_child):
@@ -506,16 +515,31 @@ class BalancedSampleTree(ub.NiceRepr):
 
     @profile
     def subdivide(self, key, weights=None):
+        """
+        Args:
+            key (str):
+                A key into the item dictionary of a sample that maps to the
+                property to balance over.
+
+            weights (None | Dict[Any, Number]):
+                an optional mapping from values that ``key`` could point to
+                to a numeric weight.
+        """
         remove_nodes = []
         remove_edges = []
         add_edges = []
         add_nodes = []
 
         # Group all leaf nodes by their direct parents
+
+        # It is possible that we could optimize this with a column-based data
+        # structure, but this current structure if far more general and easier
+        # to read.
         parent_to_leafs = ub.group_items(self._leaf_nodes, key=lambda n: self._get_parent(n))
+
         for parent, children in parent_to_leafs.items():
             # Group children by the new attribute
-            val_to_subgroup = ub.group_items(children, lambda n:  self.graph.nodes[n][key])
+            val_to_subgroup = ub.group_items(children, lambda n: self.graph.nodes[n][key])
             val_to_subgroup = ub.odict(sorted(val_to_subgroup.items()))
 
             # Add weights to the prior parent
@@ -633,7 +657,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'region': 'region1', 'color': {'purple': 1, 'blue': 1}},
         >>>     { 'region': 'region2', 'color': {'blue': 5, 'red': 5}},
         >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
-        >>> ] * 100
+        >>> ] * 10000
         >>> #
         >>> self = BalancedSampleForest(sample_grid)
         >>> print(f'self={self}')
@@ -729,7 +753,7 @@ class BalancedSampleForest(ub.NiceRepr):
         n_trees = self.n_trees
         n_nodes = graph.number_of_nodes()
         n_edges = graph.number_of_edges()
-        n_leafs = self.__len__()
+        n_leafs = len(self)
         n_depth = len(nx.algorithms.dag.dag_longest_path(graph))
         return f'trees={n_trees}, nodes={n_nodes}, edges={n_edges}, leafs={n_leafs}, depth={n_depth}'
 
