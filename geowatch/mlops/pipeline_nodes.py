@@ -274,66 +274,14 @@ class Pipeline:
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
 
-    def print_graphs(self, shrink_labels=1, smart_colors=0):
+    def print_graphs(self, shrink_labels=1, show_types=0, smart_colors=0):
         """
         Prints the Process and IO graph for the DAG.
         """
         self._ensure_clean()
 
-        colors = ['bright_magenta', 'yellow', 'cyan']
-        unused_colors = colors.copy()
-        clsname_to_color = {
-            'ProcessNode': 'yellow',
-            'InputNode': 'bright_cyan',
-            'OutputNode': 'bright_yellow',
-        }
-
-        def labelize_graph(graph, color_procs=0):
-            # # self.io_graph.add_node(name + '.proc', node=node)
-            all_names = []
-            for _, data in graph.nodes(data=True):
-                all_names.append(data['node'].name)
-
-            if shrink_labels:
-                ambiguous_names = list(ub.find_duplicates(all_names))
-
-            for _, data in graph.nodes(data=True):
-
-                if shrink_labels:
-                    if data['node'].name in ambiguous_names:
-                        data['label'] = data['node'].key
-                    else:
-                        data['label'] = data['node'].name
-                else:
-                    data['label'] = data['node'].key
-
-                if color_procs:
-                    clsname = data.get('node_clsname')
-                    if clsname not in clsname_to_color:
-                        if unused_colors:
-                            color = unused_colors.pop()
-                        else:
-                            color = None
-                        clsname_to_color[clsname] = color
-                    color = clsname_to_color[clsname]
-                    if color is not None:
-                        label = data['label']
-                        data['label'] = f'[{color}]{label}[/{color}]'
-
-                elif smart_colors:
-                    # SMART specific hack: remove later
-                    if 'bas' in data['label']:
-                        data['label'] = '[yellow]' + data['label']
-                    elif 'sc' in data['label']:
-                        data['label'] = '[cyan]' + data['label']
-                    elif 'crop' in data['label']:
-                        data['label'] = '[white]' + data['label']
-                    elif 'building' in data['label']:
-                        data['label'] = '[bright_magenta]' + data['label']
-                    elif 'sv' in data['label']:
-                        data['label'] = '[bright_magenta]' + data['label']
-        labelize_graph(self.io_graph, color_procs=True)
-        labelize_graph(self.proc_graph)
+        _labelize_graph(self.io_graph, shrink_labels, show_types, smart_colors, color_procs=True)
+        _labelize_graph(self.proc_graph, shrink_labels, show_types, smart_colors)
 
         import rich
         from cmd_queue.util import util_networkx
@@ -835,7 +783,7 @@ class ProcessNode(Node):
     Example:
         >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> from geowatch.mlops.pipeline_nodes import _classvar_init
-        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode')
+        >>> dpath = ub.Path.appdir('geowatch/tests/pipeline/TestProcessNode')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
         ...     '''
@@ -881,7 +829,7 @@ class ProcessNode(Node):
         >>> # First let's write a program to disk
         >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> import stat
-        >>> dpath = ub.Path.appdir('geowatch/test/pipeline/TestProcessNode2')
+        >>> dpath = ub.Path.appdir('geowatch/tests/pipeline/TestProcessNode2')
         >>> dpath.delete().ensuredir()
         >>> pycode = ub.codeblock(
                 '''
@@ -1051,6 +999,12 @@ class ProcessNode(Node):
         This rebuilds the templates and formats them so the "final" variables
         take on directory names based on the given configuration. This a
 
+        FIXME:
+            Gotcha: Calling this twice with a new config will reset the
+            configuration. These nodes are stateful, so we should maintain and
+            update state, not reset it. If we need to reset to defaults, there
+            should be a method for that. Can work around by passing self.config
+            as the first argument.
         """
         self.cache = cache
         self._configured_cache.clear()  # Reset memoization caches
@@ -1646,6 +1600,75 @@ class ProcessNode(Node):
         print(f'num_finished={num_finished}')
         print(f'num_started={num_started}')
         return rows
+
+
+def _labelize_graph(graph, shrink_labels, show_types, smart_colors, color_procs=0):
+    """
+    Add a label to a networkx graph with rich colors specific to this use-case.
+    """
+    colors = ['bright_magenta', 'yellow', 'cyan']
+    unused_colors = colors.copy()
+    clsname_to_color = {
+        'ProcessNode': 'yellow',
+        'InputNode': 'bright_cyan',
+        'OutputNode': 'bright_yellow',
+    }
+    clsname_to_typename = {
+        'ProcessNode': 'proc',
+        'InputNode': 'in',
+        'OutputNode': 'out',
+    }
+
+    all_names = []
+    for _, data in graph.nodes(data=True):
+        all_names.append(data['node'].name)
+
+    if shrink_labels:
+        ambiguous_names = list(ub.find_duplicates(all_names))
+
+    for _, data in graph.nodes(data=True):
+
+        if shrink_labels:
+            if data['node'].name in ambiguous_names:
+                data['label'] = data['node'].key
+            else:
+                data['label'] = data['node'].name
+        else:
+            data['label'] = data['node'].key
+
+        if show_types:
+            clsname = data.get('node_clsname')
+            if shrink_labels:
+                typename = clsname
+            else:
+                typename = clsname_to_typename.get(clsname, clsname)
+            data['label'] = f'{typename}: ' + data['label']
+
+        if color_procs:
+            clsname = data.get('node_clsname')
+            if clsname not in clsname_to_color:
+                if unused_colors:
+                    color = unused_colors.pop()
+                else:
+                    color = None
+                clsname_to_color[clsname] = color
+            color = clsname_to_color[clsname]
+            if color is not None:
+                label = data['label']
+                data['label'] = f'[{color}]{label}[/{color}]'
+
+        elif smart_colors:
+            # SMART specific hack: remove later
+            if 'bas' in data['label']:
+                data['label'] = '[yellow]' + data['label']
+            elif 'sc' in data['label']:
+                data['label'] = '[cyan]' + data['label']
+            elif 'crop' in data['label']:
+                data['label'] = '[white]' + data['label']
+            elif 'building' in data['label']:
+                data['label'] = '[bright_magenta]' + data['label']
+            elif 'sv' in data['label']:
+                data['label'] = '[bright_magenta]' + data['label']
 
 
 def _load_json(fpath):

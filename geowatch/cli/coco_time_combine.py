@@ -78,6 +78,11 @@ import os
 import ubelt as ub
 import scriptconfig as scfg
 
+try:
+    from line_profiler import profile
+except Exception:
+    profile = ub.identity
+
 
 class TimeCombineConfig(scfg.DataConfig):
     """
@@ -470,6 +475,7 @@ def main(cmdline=1, **kwargs):
     return output_coco_dset
 
 
+@profile
 def combine_kwcoco_channels_temporally(config):
     """Combine spatial data within a temporal window from a kwcoco dataset and save the result to a new kwcoco dataset.
 
@@ -487,10 +493,10 @@ def combine_kwcoco_channels_temporally(config):
     from geowatch.utils import kwcoco_extensions
     from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
-    # Check inputs.
+    from geowatch.utils import util_hardware
 
+    # combining over time seems to only make sense in a video context
     space = 'video'
-
     workers = util_parallel.coerce_num_workers(config.workers)
 
     ## Check input kwcoco file path exists.
@@ -621,7 +627,7 @@ def combine_kwcoco_channels_temporally(config):
 
             print(f'{len(images)} / {len(flags)} images in {video_name} have {len(groupid_to_idxs)} mergable groups')
 
-            SHOW_INFO = 0
+            SHOW_INFO = 1
             # DEBUG: Print the distribution of images per window.
             if SHOW_INFO:
                 # Get the histogram for the number of images per window.
@@ -655,6 +661,7 @@ def combine_kwcoco_channels_temporally(config):
                                   config=config)
                 job.merge_images = merge_images
 
+            max_percent = 0
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
@@ -664,10 +671,16 @@ def combine_kwcoco_channels_temporally(config):
                     continue
                 output_coco_dset.add_image(**new_img)
                 n_combined_images += 1
+
+                mem_info = util_hardware.get_mem_info()
+                curr_percent = mem_info['percent']
+                max_percent = max(max_percent, curr_percent)
                 pman.update_info(ub.codeblock(
                     f'''
                     {n_combined_images=}
                     {n_failed_merges=}
+                    Memory Percent: {curr_percent}
+                    Max Percent: {max_percent}
                     '''))
 
     if n_combined_images == 0:
@@ -699,6 +712,7 @@ def combine_kwcoco_channels_temporally(config):
     return output_coco_dset
 
 
+@profile
 def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None):
     """Get a binary mask of the quality data.
 
@@ -726,9 +740,8 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
         return np.ones_like(qa_data, dtype=np.uint8)
 
     from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-    # We don't have the exact right information here, so we can
-    # punt for now and assume "Drop4"
-    spec_name = 'ACC-1'
+    from geowatch import heuristics
+    spec_name = coco_image.img.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
     sensor = coco_image.img.get('sensor_coarse', '*')
     try:
         table = QA_SPECS.find_table(spec_name, sensor)
@@ -743,6 +756,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
     return quality_mask
 
 
+@profile
 def merge_images(window_coco_images, merge_method, requested_chans, space,
                  resolution, new_bundle_dpath, mask_low_quality,
                  sensor_weights, og_kwcoco_fpath, spatial_tile_size, config):
@@ -829,6 +843,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     # avoid_quality_values += ['ice']
 
     # Create canvas to combine averaged tiles into.
+
+    # todo: memmap this.
     average_canvas = kwarray.Stitcher(canvas_shape)
 
     import warnings
@@ -868,30 +884,47 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                 combined_image_data = accum.finalize()
 
             elif merge_method == 'median':
-                # TODO: Make this less computationally expensive.
-                median_stack = []
-                for coco_img in window_coco_images:
-                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                    delayed = delayed.crop(crop_slice)
-                    image_data = delayed.finalize(nodata_method='float')
 
-                    if mask_low_quality:
-                        # Load quality mask.
-                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+                def generate_frames():
+                    for coco_img in window_coco_images:
+                        delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+                        delayed = delayed.crop(crop_slice)
+                        image_data = delayed.finalize(nodata_method='float')
 
-                        # Update pixel weights based on quality pixel values.
-                        x, y = np.where(quality_mask[..., 0] == 0)
-                        image_data[x, y, :] = np.nan
+                        if mask_low_quality:
+                            # Load quality mask.
+                            quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
 
-                        # TODO: Fix the logic below to match above because it should be faster.
-                        # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
-                        # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
-                        # image_data = M.filled(np.nan)
-                        # masked_image_data = M.filled(np.nan)
+                            # Update pixel weights based on quality pixel values.
+                            x, y = np.where(quality_mask[..., 0] == 0)
+                            image_data[x, y, :] = np.nan
+                        yield image_data
 
-                    median_stack.append(image_data)
-
-                combined_image_data = np.nanmedian(median_stack, axis=0)
+                use_remedian = 0
+                if use_remedian:
+                    # from remedian.remedian import Remedian
+                    from geowatch.utils.remedian import Remedian
+                    num_frames = len(window_coco_images)
+                    frame_gen = generate_frames()
+                    first_frame = next(frame_gen)
+                    data_shape = first_frame.shape
+                    approx_median = Remedian(data_shape, n_obs=7, t=num_frames, allow_nan=True)
+                    approx_median.add_obs(first_frame)
+                    del first_frame
+                    for image_data in frame_gen:
+                        approx_median.add_obs(image_data)
+                    combined_image_data = approx_median.remedian
+                else:
+                    # TODO: Make this less computationally expensive.
+                    median_stack = list(generate_frames())
+                    combined_image_data = np.nanmedian(median_stack, axis=0, overwrite_input=True)
+                    # TODO: Fix the logic below to match above because it should be faster.
+                    # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
+                    # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
+                    # image_data = M.filled(np.nan)
+                    # masked_image_data = M.filled(np.nan)
+                    # _median_stack = np.stack(median_stack)
+                    # combined_image_data = np.nanmedian(_median_stack, axis=0)
 
             elif merge_method == 'max':
                 # TODO: Combine with other methods.
@@ -1007,6 +1040,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     return final_img
 
 
+@profile
 def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_winter_torrid_zone=True):
     """Filter a sequence of image ids by season and geolocation.
 
@@ -1047,6 +1081,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
         >>> assert len(all_filtered_gids) > len(ignore_torrid_regions_gids)
     """
     from kwutil import util_time
+    # todo: find a way to abstract the domain specific concept of "season"
     hemipshere_to_season_map = {
         'northern': {
             'spring': [3, 4, 5],

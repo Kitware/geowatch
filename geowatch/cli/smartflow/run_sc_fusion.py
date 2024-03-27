@@ -273,10 +273,11 @@ def run_sc_fusion_for_baseline(config):
         print('Warning: No Videos in Ingress Dataset, Skipping Predict!')
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
-    os.makedirs(cropped_site_models_outdir, exist_ok=True)
     cropped_region_models_outdir = ingress_dir / 'cropped_region_models'
     sc_heatmap_dpath = ingress_dir / '_assets'
-    os.makedirs(cropped_region_models_outdir, exist_ok=True)
+
+    cropped_site_models_outdir.ensuredir()
+    cropped_region_models_outdir.ensuredir()
 
     ub.cmd([
         'python', '-m', 'geowatch.cli.crop_sites_to_regions',
@@ -296,10 +297,8 @@ def run_sc_fusion_for_baseline(config):
     )
 
     node_state.print_current_state(ingress_dir)
-
-    # Ensure the directory is not empty
-    if len(cropped_site_models_outdir.ls()) == 0:
-        (cropped_site_models_outdir / '__emptydir__').write_text('empty file')
+    node_state.print_directory_contents(cropped_site_models_outdir)
+    node_state.print_directory_contents(cropped_region_models_outdir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

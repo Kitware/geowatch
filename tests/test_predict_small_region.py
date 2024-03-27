@@ -8,7 +8,7 @@ def test_small_predict_region():
     import geowatch
 
     gpus = None
-    test_dpath = ub.Path.appdir('geowatch/test/fusion/')
+    test_dpath = ub.Path.appdir('geowatch/tests/fusion/')
     results_path = (test_dpath / 'predict').ensuredir()
     ub.delete(results_path)
     ub.ensuredir(results_path)

@@ -67,7 +67,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
     from fels.sentinel2 import get_sentinel2_image
     lib = liberator.Liberator()
     lib.add_dynamic(get_sentinel2_image)
-    print(lib.current_sourcecode()
+    print(lib.current_sourcecode())
     """
     try:
         from fels.sentinel2 import get_sentinel2_image

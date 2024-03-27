@@ -28,6 +28,11 @@ def get_mem_info():
 
     References:
         https://psutil.readthedocs.io/en/latest/#psutil.virtual_memory
+
+    Example:
+        >>> from geowatch.utils import util_hardware
+        >>> mem_info = util_hardware.get_mem_info()
+        >>> print(f'mem_info={mem_info}')
     """
     import psutil
     svmem_info = psutil.virtual_memory()

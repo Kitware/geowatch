@@ -407,6 +407,9 @@ class WatchModuleMixins:
         Returns:
             Tensor
 
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.methods.watch_module_mixins WatchModuleMixins._coerce_saliency_weights
+
         Example:
             >>> # xdoctest: +IGNORE_WANT
             >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
@@ -433,49 +436,55 @@ class WatchModuleMixins:
             tensor([70., 20.])
             >>> self._coerce_saliency_weights('{fg: 1, bg: 2}')
             tensor([2., 1.])
+            >>> self._coerce_saliency_weights({'fg': 1, 'bg': 2})
+            tensor([2., 1.])
+            >>> import pytest
+            >>> with pytest.raises(Exception):
+            >>>     self._coerce_saliency_weights(123)
         """
-        if saliency_weights is None:
-            bg_weight = 1.0
-            fg_weight = 1.0
-        elif isinstance(saliency_weights, str):
-            if saliency_weights == 'auto':
-                class_freq = self.class_freq
-                if class_freq is not None:
-                    print(f'class_freq={class_freq}')
-                    bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
-                    fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
-                    bg_weight = 1.
-                    fg_weight = bg_freq / (fg_freq + 1)
+        from kwutil.util_yaml import Yaml
+        saliency_weights_ = Yaml.coerce(saliency_weights)
+
+        try:
+            if saliency_weights_ is None:
+                saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
+            elif isinstance(saliency_weights_, str):
+                if saliency_weights_ == 'auto':
+                    class_freq = self.class_freq
+                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
+                    if class_freq is not None:
+                        print(f'class_freq={class_freq}')
+                        bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
+                        fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
+                        saliency_weights_['fg'] = bg_freq / (fg_freq + 1)
+                elif saliency_weights_.lower() in {'null', 'none'}:
+                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
                 else:
-                    bg_weight = 1.0
-                    fg_weight = 1.0
-            elif saliency_weights.lower() in {'null', 'none'}:
-                bg_weight = 1.0
-                fg_weight = 1.0
+                    bg_weight, fg_weight = saliency_weights_.split(':')
+                    saliency_weights_ = {
+                        'bg': float(bg_weight.strip()),
+                        'fg': float(fg_weight.strip()),
+                    }
+            elif isinstance(saliency_weights_, dict):
+                ...
             else:
-                try:
-                    bg_weight, fg_weight = saliency_weights.split(':')
-                    fg_weight = float(fg_weight.strip())
-                    bg_weight = float(bg_weight.strip())
-                except Exception:
-                    from kwutil.util_yaml import Yaml
-                    saliency_weights_ = Yaml.coerce(saliency_weights)
-                    try:
-                        bg_weight = float(saliency_weights_['bg'])
-                        fg_weight = float(saliency_weights_['fg'])
-                    except Exception:
-                        # TODO better error message
-                        raise
-        else:
-            raise TypeError(f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}')
-        print(f'bg_weight={bg_weight}')
-        print(f'fg_weight={fg_weight}')
-        bg_fg_weights = [bg_weight, fg_weight]
+                raise TypeError('Unexpected saliency weights type')
+        except Exception as ex:
+            from geowatch.utils import util_exception
+            notes = f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}'
+            new_ex = util_exception.add_exception_note(ex, notes)
+            raise new_ex
+
+        print(f'saliency_weights_ = {ub.urepr(saliency_weights_, nl=1)}')
+        bg_fg_weights = [
+            saliency_weights_.get('bg', 1.0),
+            saliency_weights_.get('fg', 1.0)
+        ]
         # What is the motivation for having "saliency_num_classes" be not 2?
         _n = self.saliency_num_classes
         _w = bg_fg_weights + ([0.0] * (_n - len(bg_fg_weights)))
-        saliency_weights = torch.Tensor(_w)
-        return saliency_weights
+        final_saliency_weights = torch.Tensor(_w)
+        return final_saliency_weights
 
     def set_dataset_specific_attributes(self, input_sensorchan, dataset_stats):
         """

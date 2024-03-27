@@ -20,42 +20,49 @@ DATASET_SUFFIX=Drop8-ARA
 
 todo(){
 # NOTE: If updating the dataset, unprotect the files
-dvc unprotect -- */*.kwcoco*.zip
+sdvc unprotect -- "$DVC_DATA_DPATH"/Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
+#cd "$DVC_DATA_DPATH"
+#dvc unprotect -- Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
 # also remove kwcoco files to regen them with cache?
 #ls -- */*.kwcoco*.zip
 }
 
 
-# NOTE: Ensure the annotations/drop8.dvc data is pulled, otherwise there is an error.
+# NOTE: Ensure the annotations/drop8-v1.dvc data is pulled, otherwise there is an error.
 
 # All Regions
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_*0*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_*0*_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_*0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
 
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/CO_C009.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/CO_C009_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/CO_C009.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/CO_C009_*.geojson"
 
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KW_C001.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KW_C001_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KW_C001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KW_C001_*.geojson"
 
 
 # iMerit Regions Only
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_C*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_C*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_C*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_C*_*.geojson"
 
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/KR_T001.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/KR_T001_*.geojson"
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_T0*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_T0*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_T001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_T001_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_T0*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_T0*_*.geojson"
 
 # T&E Regions Only
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/region_models/*_R*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8/site_models/*_R*_*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_R*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_R*_*.geojson"
 
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 export REQUESTER_PAYS=False
 #export SMART_STAC_API_KEY=""
+
+echo "
+DVC_DATA_DPATH=$DVC_DATA_DPATH
+DVC_DATA_DPATH=$DVC_DATA_DPATH
+"
 
 # Construct the TA2-ready dataset
 python -m geowatch.cli.prepare_ta2_dataset \
@@ -70,6 +77,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
     --requester_pays=$REQUESTER_PAYS \
+    --unsigned_nodata=0 \
     --fields_workers=8 \
     --convert_workers=0 \
     --align_workers=4 \
@@ -77,9 +85,9 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
-    --skip_existing=1 \
+    --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \
@@ -87,57 +95,22 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=4 \
-    --sensor_to_time_window='
-        S2: 2 weeks
-        L8: 2 weeks
-        #PD: 2 weeks
-        #WV: 2 weeks
-    ' \
+    --tmux_workers=6 \
     --run=1
-
-
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
-echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
-cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
-
-git pull
-
-## Add a few files from KR_R001 to start with so people have data
-#dvc add -vvv -- \
-#    KR_R001/L8 \
-#    KR_R001/S2 \
-#    KR_R001/WV \
-#    KR_R001/imganns-*-rawbands.kwcoco.zip \
-#    KR_R001/imgonly-*-rawbands.kwcoco.zip
-
-#git commit -am "Add KR_R001"
-#git push
-#dvc push -r aws -R KR_R001 -vvv
-
-
-## Add more select regions
-#dvc add -vvv -- \
-#    BR_R002/L8 \
-#    BR_R002/S2 \
-#    BR_R002/WV \
-#    BR_R002/PD \
-#    BR_R002/*.kwcoco.zip \
-#    HK_T003/L8 \
-#    HK_T003/S2 \
-#    HK_T003/WV \
-#    HK_T003/PD \
-#    HK_T003/*.kwcoco.zip
-
-#git commit -am "Add BR_R002 and HK_T003"
-#git push
-#dvc push -r aws -R . -vvv
+    #--sensor_to_time_window='
+    #    #S2: 2 weeks
+    #    #L8: 2 weeks
+    #    #PD: 2 weeks
+    #    #WV: 2 weeks
+    #' \
 
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
 # shellcheck disable=SC2164
 cd "$DVC_DATA_DPATH/Aligned-Drop8-ARA"
+git pull
+
 python -c "
 import ubelt as ub
 root = ub.Path('.').absolute()
@@ -167,8 +140,7 @@ git push
 
 # Push kwcoco files first
 # Then push sensor data in a given order
-sdvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
-
+#sdvc push -v -r aws -- */*.kwcoco.zip.dvc */PD.dvc
 dvc push -r aws -- */*.kwcoco.zip.dvc \
 dvc push -r aws -- */PD.dvc && \
 dvc push -r aws -- */L8.dvc && \
@@ -204,8 +176,8 @@ export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
 export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Cropped2GSD-V1
 
-export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8
-export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8/region_models"
+export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
+export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
 
 echo "
 SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
@@ -389,14 +361,37 @@ python -m geowatch.cli.prepare_splits \
 #    */imgonly-*-rawbands.kwcoco.zip \
 #    */imganns-*-rawbands.kwcoco.zip
 
-dvc add -vvv -- \
-    *_rawbands_*.kwcoco.zip \
-    */imgonly-*-rawbands.kwcoco.zip \
-    */imganns-*-rawbands.kwcoco.zip \
-    */*/L8 \
-    */*/S2 \
-    */*/WV \
-    */*/PD && \
+cd "$DST_BUNDLE_DPATH"
+
+#dvc add -vvv -- \
+#    *_rawbands_*.kwcoco.zip \
+#    */imgonly-*-rawbands.kwcoco.zip \
+#    */imganns-*-rawbands.kwcoco.zip \
+#    */*/L8 \
+#    */*/S2 \
+#    */*/WV \
+#    */*/PD && \
+
+python -c "if 1:
+    import ubelt as ub
+    root = ub.Path('.')
+
+    to_add = []
+    to_add += list(root.glob('*rawbands*.kwcoco.zip'))
+
+    regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip')})
+    for dpath in regions_dpaths_with_kwcoco:
+        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('*/L8'))
+        to_add += list(dpath.glob('*/S2'))
+        to_add += list(dpath.glob('*/WV'))
+        to_add += list(dpath.glob('*/PD'))
+
+    import simple_dvc as sdvc
+    dvc_repo = sdvc.SimpleDVC.coerce(root)
+    dvc_repo.add(to_add, verbose=1)
+"
 git commit -m "Update Drop8 Crop SC" && \
 git push && \
 dvc push -r aws -R . -vvv
@@ -406,6 +401,7 @@ dvc push -r aws -R . -vvv
 # Build Median BAS Dataset
 ##########################
 
+
 # shellcheck disable=SC2155
 export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 # shellcheck disable=SC2155
@@ -414,8 +410,8 @@ export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
 export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Median10GSD-V1
 
-export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8
-export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8/region_models"
+export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
+export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
 
 echo "
 SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
@@ -426,6 +422,17 @@ DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
 
 TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
 "
+
+
+todo(){
+# NOTE: If updating the dataset, unprotect the files
+cd "$DST_BUNDLE_DPATH"
+sdvc unprotect -- **/*.dvc
+#cd "$DVC_DATA_DPATH"
+#dvc unprotect -- Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
+# also remove kwcoco files to regen them with cache?
+#ls -- */*.kwcoco*.zip
+}
 
 # shellcheck disable=SC2155
 export REGION_IDS_STR=$(python -c "if 1:
@@ -478,7 +485,7 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --spatial_tile_size=1024 \
     --merge_method=median \
     --mask_low_quality=True \
-    --tmux_workers=1 \
+    --tmux_workers=8 \
     --time_window=6months \
     --combine_workers=4 \
     --resolution=10GSD \

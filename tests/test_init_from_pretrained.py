@@ -16,7 +16,7 @@ def test_init_from_pretrained_state():
     # args = None
     # cmdline = False
     gpus = None
-    test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
+    test_dpath = ub.Path.appdir('geowatch/tests/fusion/').ensuredir()
     results_path = ub.ensuredir((test_dpath, 'predict'))
     ub.delete(results_path)
     ub.ensuredir(results_path)
@@ -87,7 +87,7 @@ def test_init_from_phase1_models():
     assert state_dict
 
     # gpus = None
-    test_dpath = ub.Path.appdir('geowatch/test/fusion/').ensuredir()
+    test_dpath = ub.Path.appdir('geowatch/tests/fusion/').ensuredir()
     results_path = ub.ensuredir((test_dpath, 'predict'))
     ub.delete(results_path)
     ub.ensuredir(results_path)

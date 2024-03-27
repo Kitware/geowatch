@@ -215,7 +215,13 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
 
     root_dpath = scfg.Value('auto', help=(
         'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
-    pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run. Can also specify this in the params.')
+
+    pipeline = scfg.Value('joint_bas_sc', help=ub.paragraph(
+        '''
+        The name of the pipeline to run. Can also specify this in the params.
+        There are special SMART-specific names that are available, and initial
+        experimental support for custom pipelines, which needs documentation.
+        '''))
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
     cache = scfg.Value(True, isflag=True, help=(
@@ -277,6 +283,7 @@ def schedule_evaluation(config):
         config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
     root_dpath = ub.Path(config['root_dpath'])
+    pipeline = config.pipeline
 
     if config['params'] is not None:
         param_arg = Yaml.coerce(config['params']) or {}
@@ -318,7 +325,16 @@ def schedule_evaluation(config):
             param_arg['submatrices'] = submatrices
 
     # Load the requested pipeline
-    dag = smart_pipeline.make_smart_pipeline(pipeline)
+    EXPERIMENTAL_CUSTOM_PIPELINES = True
+    try:
+        dag = smart_pipeline.make_smart_pipeline(pipeline)
+    except Exception:
+        if EXPERIMENTAL_CUSTOM_PIPELINES:
+            # New experimental pipelines
+            dag = _experimental_resolve_pipeline(pipeline)
+        else:
+            raise
+        ...
     dag.print_graphs(smart_colors=1)
     dag.inspect_configurables()
 
@@ -425,6 +441,65 @@ def _auto_gpus():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS
+
+
+def _experimental_resolve_pipeline(pipeline):
+    """
+    Users need to be able to build and specify their own pipelines here
+    (similar to how kwiver pipelines work). This is initial support.
+
+    Ignore:
+        pipeline = 'user_module.pipelines.custom_pipeline_func()'
+        pipeline = 'geowatch.mlops.smart_pipeline.make_smart_pipeline("bas")'
+        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        _experimental_resolve_pipeline(pipeline)
+    """
+    # Case: given in the format `{module_name}.{attribute_expression}`
+    # Note the attribute_expression allows arbitrary code execution
+    print('Resolving user-specified pipeline')
+    if '.' in pipeline:
+        # Find which part is the module and which is the member
+        parts = pipeline.split('.')
+        found = None
+        for idx in reversed(range(1, len(parts) + 1)):
+            candidate = '.'.join(parts[:idx])
+            try:
+                modpath = _coerce_modpath(candidate)
+            except ValueError:
+                ...
+            else:
+                lhs = candidate
+                rhs = '.'.join(parts[idx:])
+                module = ub.import_module_from_path(modpath)
+                found = (module, modpath, lhs, rhs)
+                print(f'found = {ub.urepr(found, nl=1)}')
+                break
+        if found is None:
+            raise ValueError('unable to resolve pipeline')
+        else:
+            # This initial specification allows arbitrary code execution.
+            # We should define a hardened variant which does not require this.
+            (module, modpath, lhs, rhs) = found
+            limited_namespace = {'pipeline_module': module}
+            statement = f'pipeline_module.{rhs}'
+            dag = eval(statement, limited_namespace)
+            return dag
+    else:
+        raise ValueError(pipeline)
+
+
+def _coerce_modpath(modpath_or_name):
+    import types
+    import os
+    if isinstance(modpath_or_name, types.ModuleType):
+        raise TypeError('Expected a static module but got a dynamic one')
+    modpath = ub.modname_to_modpath(modpath_or_name)
+    if modpath is None:
+        if os.path.exists(modpath_or_name):
+            modpath = modpath_or_name
+        else:
+            raise ValueError('Cannot find module={}'.format(modpath_or_name))
+    return modpath
 
 
 __notes__ = """

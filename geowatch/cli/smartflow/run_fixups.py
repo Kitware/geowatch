@@ -55,6 +55,10 @@ def main(cmdline=1, **kwargs):
     config = FixupConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
 
+    from geowatch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     from geowatch.cli.smartflow_ingress import smartflow_ingress
     from geowatch.cli.smartflow_egress import smartflow_egress
     from geowatch.utils.util_framework import download_region
@@ -63,6 +67,20 @@ def main(cmdline=1, **kwargs):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
+
+    if not config.input_site_models_asset_name:
+        raise ValueError(ub.paragraph(
+            '''
+            Must specify which asset name in the STAC catalog points to the
+            site models
+            '''))
+
+    if not config.input_region_models_asset_name:
+        raise ValueError(ub.paragraph(
+            '''
+            Must specify which asset name in the STAC catalog points to the
+            site models
+            '''))
 
     input_path = config.input_path
     assets = [
@@ -93,6 +111,8 @@ def main(cmdline=1, **kwargs):
         strip_nonregions=True,
     )
 
+    node_state.print_current_state(ingress_dir)
+
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
@@ -112,6 +132,8 @@ def main(cmdline=1, **kwargs):
         region_dpath=output_region_dpath,
         site_dpath=output_site_dpath,
     )
+
+    node_state.print_current_state(ingress_dir)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

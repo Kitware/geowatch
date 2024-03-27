@@ -193,13 +193,12 @@ class AssetExtractConfig(scfg.DataConfig):
     Part of the extract config for asset jobs
     """
     keep = scfg.Value(None, help=ub.paragraph(
-            '''
-            Level of detail to overwrite existing data at, since this is
-            slow. "none": overwrite all, including existing images
-            "img": only add new images "roi": only add new ROIs "roi-
-            img": only add new ROIs and only new images within those
-            ROIs (good for rerunning failed jobs)
-            '''))
+        '''
+        Level of detail to overwrite existing data at, since this is slow.
+        "none": overwrite all, including existing images "img": only add new
+        images "roi": only add new ROIs "roi-img": only add new ROIs and only
+        new images within those ROIs (good for rerunning failed jobs)
+        '''))
 
     corruption_checks = scfg.Value(False, help=ub.paragraph(
         '''
@@ -209,26 +208,25 @@ class AssetExtractConfig(scfg.DataConfig):
         '''))
 
     include_channels = scfg.Value(None, help=ub.paragraph(
-            '''
-            If specified only align the given channels
-            '''))
+        '''
+        If specified only align the given channels
+        '''))
     exclude_channels = scfg.Value(None, help='If specified ignore these channels')
 
     force_nodata = scfg.Value(None, help=ub.paragraph(
-            '''
-            if specified, forces nodata to this value (e.g. -9999)
-            Ideally this is not needed and all source geotiffs properly
-            specify nodata.
+        '''
+        if specified, forces nodata to this value (e.g. -9999) Ideally this is
+        not needed and all source geotiffs properly specify nodata.
 
-            NOTE: For quality bands WE DO NOT RESPECT THIS. This may change in
-            the future to have a more sane way of dealing with it. But hacking it
-            to zero for now. If this is specified we force it to zero.
-            If this is None, we DO use that for the quality bands.
+        NOTE: For quality bands WE DO NOT RESPECT THIS. This may change in the
+        future to have a more sane way of dealing with it. But hacking it to
+        zero for now. If this is specified we force it to zero.  If this is
+        None, we DO use that for the quality bands.
 
-            NOTE: We currently must specify this to handle gdal-merge
-            correctly. Perhasp in the future we may be able to introspect, but
-            for now specify it.
-            '''))
+        NOTE: We currently must specify this to handle gdal-merge correctly.
+        Perhasp in the future we may be able to introspect, but for now specify
+        it.
+        '''))
 
     unsigned_nodata = scfg.Value(256, help=ub.paragraph(
         '''
@@ -239,44 +237,42 @@ class AssetExtractConfig(scfg.DataConfig):
         '''))
 
     tries = scfg.Value(2, help=ub.paragraph(
-            '''
-            The maximum number of times to retry failed gdal warp
-            commands before stopping.
-            '''), alias=['warp_tries'])
+        '''
+        The maximum number of times to retry failed gdal warp commands before
+        stopping.
+        '''), alias=['warp_tries'])
 
     cooldown = scfg.Value(10, help='seconds between tries after a failed attempt')
 
     backoff = scfg.Value(3.0, help='factor to multiply cooldown by after a failed attempt')
 
     asset_timeout = scfg.Value('4hours', help=ub.paragraph(
-            '''
-            The maximum amount of time to spend pulling down a single
-            image asset before giving up
-            '''))
+        '''
+        The maximum amount of time to spend pulling down a single
+        image asset before giving up
+        '''))
 
     force_min_gsd = scfg.Value(None, help=ub.paragraph(
-            '''
-            Force output crops to be at least this minimum GSD (e.g. if
-            set to 10.0 an input image with a 30.0 GSD will have an
-            output GSD of 30.0, whereas in input image with a 0.5 GSD
-            will have it set to 10.0 during cropping)
-            '''))
+        '''
+        Force output crops to be at least this minimum GSD (e.g. if set to 10.0
+        an input image with a 30.0 GSD will have an output GSD of 30.0, whereas
+        in input image with a 0.5 GSD will have it set to 10.0 during cropping)
+        '''))
 
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Hack lazy is a proof of concept with the intent on speeding
-            up the download / cropping of data by flattening the gdal
-            processing into a single queue of parallel processes
-            executed via a command queue. By running once with this flag
-            on, it will execute the command queue, and then running
-            again, it should see all of the data as existing and
-            construct the aligned kwcoco dataset as normal.
-            '''))
+        '''
+        Hack lazy is a proof of concept with the intent on speeding up the
+        download / cropping of data by flattening the gdal processing into a
+        single queue of parallel processes executed via a command queue. By
+        running once with this flag on, it will execute the command queue, and
+        then running again, it should see all of the data as existing and
+        construct the aligned kwcoco dataset as normal.
+        '''))
 
     verbose = scfg.Value(0, help=ub.paragraph(
-            '''
-            Note: no silent mode, 0 is just least verbose.
-            '''))
+        '''
+        Note: no silent mode, 0 is just least verbose.
+        '''))
 
     def __post_init__(config):
         from geowatch.utils.util_resolution import ResolvedUnit
@@ -292,22 +288,21 @@ class ImageExtractConfig(AssetExtractConfig):
     """
     # TODO: change this name to just align-method or something
     rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
-            '''
-            Can be one of: (1) orthorectify - which uses gdalwarp with
-            -rpc if available otherwise falls back to affine transform,
-            (2) pixel_crop - which warps annotations onto pixel with
-            RPCs but only crops the original image without distortion,
-            (3) affine_warp - which ignores RPCs and uses the affine
-            transform in the geotiff metadata.
-            '''))
+        '''
+        Can be one of: (1) orthorectify - which uses gdalwarp with -rpc if
+        available otherwise falls back to affine transform, (2) pixel_crop -
+        which warps annotations onto pixel with RPCs but only crops the
+        original image without distortion, (3) affine_warp - which ignores RPCs
+        and uses the affine transform in the geotiff metadata.
+        '''))
 
     aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs')
 
     image_timeout = scfg.Value('8hours', help=ub.paragraph(
-            '''
-            The maximum amount of time to spend pulling down a all image
-            assets before giving up
-            '''))
+        '''
+        The maximum amount of time to spend pulling down a all image
+        assets before giving up
+        '''))
 
     num_start_frames = scfg.Value(None, help=ub.paragraph(
         '''
@@ -329,33 +324,33 @@ class ExtractConfig(ImageExtractConfig):
     but for now we duplicate param names.
     """
     write_subsets = scfg.Value(False, isflag=1, help=ub.paragraph(
-            '''
-            if True, writes a separate kwcoco file for every discovered
-            ROI in addition to the final kwcoco file.
-            '''))
+        '''
+        if True, writes a separate kwcoco file for every discovered
+        ROI in addition to the final kwcoco file.
+        '''))
 
     visualize = scfg.Value(False, isflag=1, help=ub.paragraph(
-            '''
-            DEPRECATED: simply call visualize on the subdata kwcoco files as
-            they are written. If set to true an error will be raised.
-            '''))
+        '''
+        DEPRECATED: simply call visualize on the subdata kwcoco files as
+        they are written. If set to true an error will be raised.
+        '''))
 
     img_workers = scfg.Value(0, type=str, help=ub.paragraph(
-            '''
-            number of parallel procs. This can also be an expression
-            accepted by coerce_num_workers.
-            '''), alias=['max_workers', 'workers'])
+        '''
+        number of parallel procs. This can also be an expression
+        accepted by coerce_num_workers.
+        '''), alias=['max_workers', 'workers'])
 
     target_gsd = scfg.Value(10, help=ub.paragraph(
-            '''
-            The **virtual** GSD to use as the "video-space" for output files.
-            '''))
+        '''
+        The **virtual** GSD to use as the "video-space" for output files.
+        '''))
 
     debug_valid_regions = scfg.Value(False, isflag=1, help=ub.paragraph(
-            '''
-            write valid region visualizations to help debug "black
-            images" issues.
-            '''))
+        '''
+        write valid region visualizations to help debug "black
+        images" issues.
+        '''))
 
     max_frames = scfg.Value(None, help=ub.paragraph(
         '''
@@ -393,9 +388,9 @@ class CocoAlignGeotiffConfig(ExtractConfig):
 
     src = scfg.Value('in.geojson.json', help='input dataset to chip', group='inputs')
     dst = scfg.Value(None, help=ub.paragraph(
-            '''
-            bundle directory or kwcoco json file for the output
-            '''), group='outputs')
+        '''
+        bundle directory or kwcoco json file for the output
+        '''), group='outputs')
 
     dst_bundle_dpath = scfg.Value(None, help=ub.paragraph(
         '''
@@ -420,37 +415,43 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         '''))
 
     context_factor = scfg.Value(1.0, help=ub.paragraph(
-            '''
-            Scale factor to expand each ROI by crop regions by.
-            '''))
+        '''
+        Scale factor to expand each ROI by crop regions by.
+        '''))
     minimum_size = scfg.Value(None, help=ub.paragraph(
-            '''
-            Minimum (bounding-box) size of each ROI. Must be specified
-            as ``<w> x <h> @ <magnitude> <resolution>``. E.g.
-            ``128x128@10GSD`` will ensure a region polygon that is at least
-            1280 meters tall and wide.
-            '''))
+        '''
+        Minimum (bounding-box) size of each ROI. Must be specified as
+        ``<w> x <h> @ <magnitude> <resolution>``. E.g.  ``128x128@10GSD``
+        will ensure a region polygon that is at least 1280 meters tall and
+        wide.
+        '''))
     convexify_regions = scfg.Value(False, help=ub.paragraph(
-            '''
-            if True, ensure that the regions are convex
-            '''))
+        '''
+        if True, ensure that the regions are convex
+        '''))
 
     geo_preprop = scfg.Value('auto', help='force if we check geo properties or not')
 
     include_sensors = scfg.Value(None, help=ub.paragraph(
-            '''
-            if specified can be comma separated valid sensors
-            '''))
+        '''
+        if specified can be comma separated valid sensors
+        '''))
     exclude_sensors = scfg.Value(None, help=ub.paragraph(
-            '''
-            if specified can be comma separated invalid sensors
-            '''))
+        '''
+        if specified can be comma separated invalid sensors
+        '''))
 
     edit_geotiff_metadata = scfg.Value(False, help=ub.paragraph(
-            '''
-            if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is
-            propogated
-            '''))
+        '''
+        if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is
+        propogated
+        '''))
+
+    empty_region_policy = scfg.Value('ignore', help=ub.paragraph(
+        '''
+        What to do when input contain no regions to crops. Can be "ignore"
+        to write an empty kwcoco file or "raise" to throw an Exception.
+        '''))
 
 
 @profile
@@ -489,7 +490,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle1').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -533,7 +534,7 @@ def main(cmdline=True, **kw):
         >>> from geowatch.geoannots import geomodels
         >>> region = geomodels.RegionModel.random(region_poly=dummy_poly, start_time=dt.isoformat())
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = (dpath / 'align_bundle_timeout').ensuredir()
         >>> dst.delete()
         >>> dst.ensuredir()
@@ -582,7 +583,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -617,7 +618,7 @@ def main(cmdline=True, **kw):
         >>> import geojson
         >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_align2').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
@@ -688,6 +689,7 @@ def main(cmdline=True, **kw):
     from geowatch.utils import kwcoco_extensions
     import kwcoco
     import pandas as pd
+    import geopandas as gpd
     import warnings
     import kwimage
 
@@ -745,8 +747,10 @@ def main(cmdline=True, **kw):
     region_df = None
     regions = config['regions']
     if regions in {'annots', 'images'}:
-        pass
+        ...
     else:
+        # Note: could update code to use geoannots.RegionModel or
+        # geoannots.SiteModel to make this code more concise.
         infos = list(util_gis.coerce_geojson_datas(regions))
         parts = []
         for info in infos:
@@ -760,8 +764,13 @@ def main(cmdline=True, **kw):
                     # This is a region model
                     df = type_to_subdf['site_summary']
                     df['region_id'] = type_to_subdf['region']['region_id'].iloc[0]
-                # Don't extract system rejected regions
-                df = df[df['status'] != 'system_rejected']
+
+                if 'status' not in df.columns:
+                    # no site summaries available, filter to an empty data frame
+                    df = df.iloc[:0]
+                else:
+                    # Don't extract system rejected regions
+                    df = df[df['status'] != 'system_rejected']
             else:
                 if 'site' in type_to_subdf:
                     # This is a site model
@@ -774,9 +783,17 @@ def main(cmdline=True, **kw):
             if len(df):
                 parts.append(df)
 
-        if not len(parts):
-            raise ValueError('No regions to crop to were found')
-        region_df = pd.concat(parts)
+        if len(parts):
+            region_df = pd.concat(parts)
+        else:
+            if config.empty_region_policy == 'raise':
+                raise ValueError('No regions to crop to were found')
+            elif config.empty_region_policy == 'ignore':
+                ...
+            else:
+                raise KeyError(config.empty_region_policy)
+            region_df = gpd.GeoDataFrame(columns=['geometry'])
+
         print(f'Loaded {len(region_df)} regions to crop')
 
     # Load the dataset and extract geotiff metadata from each image.
@@ -855,7 +872,8 @@ def main(cmdline=True, **kw):
             buf_utm = sub_utm['geometry'].scale(xfact=sfx, yfact=sfy, origin='centroid')
             buf = buf_utm.to_crs(orig_crs)
             buffered_geoms.append(buf)
-        region_df['geometry'] = pd.concat(buffered_geoms)
+        if len(buffered_geoms):
+            region_df['geometry'] = pd.concat(buffered_geoms)
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
@@ -1324,7 +1342,7 @@ class SimpleDataCube:
             >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/tests/coco_align/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> to_extract = cube.query_image_overlaps(region_df)
@@ -1338,7 +1356,7 @@ class SimpleDataCube:
             >>> from geowatch.cli.coco_align import *  # NOQA
             >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.Path.appdir('geowatch/test/coco_align/demo_extract_overlaps2').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('geowatch/tests/coco_align/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
@@ -1406,6 +1424,10 @@ class SimpleDataCube:
 
         # If specified, only choose a subset of images over time.
         sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
+        if isinstance(sensor_to_time_window, str):
+            # not sure why null can show up here.
+            if sensor_to_time_window.strip() not in {'', 'null'}:
+                sensor_to_time_window = None
 
         TIME_WINDOW_FILTER = 1
         import math
@@ -1414,6 +1436,9 @@ class SimpleDataCube:
 
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
+            if not isinstance(sensor_to_time_window, dict):
+                raise TypeError(f'sensor_to_time_window: {type(sensor_to_time_window)} = {sensor_to_time_window}')
+
             sensor_to_time_window = ub.udict(sensor_to_time_window)
             sensor_to_time_window = sensor_to_time_window.map_values(util_time.coerce_timedelta)
             if sensor_to_time_window is not None:
@@ -2372,7 +2397,6 @@ def _aligncrop(obj_group,
                 needs_recompute = True
                 print(f'The data exists {dst_gpath}, but is corrupted. Recomputing')
                 dst_gpath.delete()
-                pass
             else:
                 ref = None
 

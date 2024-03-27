@@ -212,7 +212,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> import numpy as np
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features')
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_average_features')
         >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
@@ -286,7 +286,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
         >>> import numpy as np
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features')
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_average_features')
         >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
@@ -609,7 +609,7 @@ def main(cmdline=True, **kw):
         >>> import numpy as np
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> dpath = ub.Path.appdir('geowatch/test/coco_average_features_main')
+        >>> dpath = ub.Path.appdir('geowatch/tests/coco_average_features_main')
         >>> base_dset = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)

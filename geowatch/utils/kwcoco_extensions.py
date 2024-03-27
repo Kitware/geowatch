@@ -524,7 +524,7 @@ def _populate_valid_region(coco_img):
         >>> import kwcoco
         >>> H, W = 1024, 1024
         >>> nodata = 0  #
-        >>> dpath = ub.Path.appdir('geowatch/test/valid_region').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/valid_region').ensuredir()
         >>> imdata = ((np.random.rand(H, W) * 240) + 3).astype(np.uint8)
         >>> # Fill in nodata values
         >>> imdata[:, 0:20] = nodata

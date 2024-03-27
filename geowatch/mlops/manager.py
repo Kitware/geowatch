@@ -170,10 +170,11 @@ def main(cmdline=True, **kwargs):
 
     available_actions = [
         'status', 'evaluate', 'push', 'pull', 'list',
-        'report', 'add',
+        'report', 'add', 'gather', 'repackage'
     ]
     available_targets = [
         'packages',
+        'checkpoints',
     ]
 
     actions = []
@@ -210,8 +211,13 @@ def main(cmdline=True, **kwargs):
     if 'pull' in actions:
         manager.pull(targets, yes=config.yes)
 
-    if 'add' in actions and 'packages' in targets:
-        manager.add_packages(yes=config.yes)
+    if ('repackage' in actions) and 'checkpoints' in targets:
+        # Add might be a bad verb for this. Maybe "gather"?
+        manager.repackage_checkpoints(yes=config.yes)
+
+    if ('add' in actions or 'gather' in actions) and 'packages' in targets:
+        # Add might be a bad verb for this. Maybe "gather"?
+        manager.gather_packages(yes=config.yes)
 
     if 'push' in actions and 'packages' in targets:
         manager.push_packages(yes=config.yes)
@@ -328,7 +334,7 @@ class DVCExptManager(ub.NiceRepr):
                 raise UserAbort
             manager.dvc.pull(pull_fpaths)
 
-    def add_packages(manager, yes=None):
+    def gather_packages(manager, yes=None):
         """
         TODO: break this up into smaller components.
         """
@@ -336,6 +342,17 @@ class DVCExptManager(ub.NiceRepr):
         # mode = 'commit'
         for state in manager.states:
             state.add_packages(yes=yes)
+
+    add_packages = gather_packages
+
+    def repackage_checkpoints(manager, yes=None):
+        """
+        TODO: break this up into smaller components.
+        """
+        # from geowatch.tasks.fusion import repackage
+        # mode = 'commit'
+        for state in manager.states:
+            state.repackage_checkpoints(yes=yes)
 
     def push_packages(manager, yes=None):
         """
@@ -859,7 +876,7 @@ class ExperimentState(ub.NiceRepr):
         tables = self.cross_referenced_tables()
         summarize_tables(tables)
 
-    def package_checkpoints(self, yes=None):
+    def repackage_checkpoints(self, yes=None):
         from geowatch.mlops import repackager
         from rich.prompt import Confirm
 
@@ -869,9 +886,9 @@ class ExperimentState(ub.NiceRepr):
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
-        print(f'There are {len(needs_package)} / {len(staging_df)} checkpoints that need packaging')
+        print(f'There are {len(needs_package)} / {len(staging_df)} checkpoints that need repackaging')
         if len(needs_package):
-            flag = yes or Confirm.ask('Do you want to repackage?')
+            flag = yes or Confirm.ask('Do you want to rerepackage?')
             if not flag:
                 raise UserAbort
 
@@ -950,14 +967,16 @@ class ExperimentState(ub.NiceRepr):
             python -m geowatch.mlops.manager "status packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
             """))
 
-    def add_packages(self, yes=None):
+    def gather_packages(self, yes=None):
         """
         This does what repackage used to do.
         Repackages checkpoints as torch packages, copies them to the DVC repo,
         and then adds them to DVC.
         """
-        self.package_checkpoints(yes=yes)
+        self.repackage_checkpoints(yes=yes)
         self.copy_packages_to_dvc(yes=yes)
+
+    add_packages = gather_packages   # backwards compat
 
     def push_packages(self, yes=None):
         """
@@ -974,7 +993,7 @@ class ExperimentState(ub.NiceRepr):
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
         >>> self.summarize()
         """
-        self.package_checkpoints(yes=yes)
+        self.repackage_checkpoints(yes=yes)
         self.copy_packages_to_dvc(yes=yes)
         self.add_packages_to_dvc(yes=yes)
 

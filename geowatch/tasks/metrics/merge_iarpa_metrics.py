@@ -84,7 +84,8 @@ class RegionResult:
                 rows.append(row)
             scoreboard = pd.concat(rows)
         scoreboard['region_id'] = region_id
-        scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
+        index_cols = ub.oset(['region_id', 'rho', 'tau', 'Min Confidence']) & scoreboard.columns
+        scoreboard = scoreboard.set_index(list(index_cols))
         return scoreboard
 
     @property
@@ -401,7 +402,6 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
     #
 
     # all regions
-
     concat_df = pd.concat([r.bas_df for r in bas_results])
 
     sum_cols = [
@@ -419,23 +419,23 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
     # alternate sweep param w/ rho, tau. range(0, 50000, 1000)
     # drop_cols = [ 'min_area', ]
 
+    INDEX_COLS = ['region_id', 'rho', 'tau', 'Min Confidence']
+
     #
     # micro-average over sites
     #
-
-    group_keys = list((ub.oset(concat_df.index.names) | concat_df.columns) & ['rho', 'tau', 'min_area'])
+    group_keys = list((ub.oset(concat_df.index.names) | concat_df.columns) & ['rho', 'tau', 'min_area', 'Min Confidence'])
 
     micro_df = concat_df.groupby(group_keys)[sum_cols].sum()
     micro_df.loc[:, 'region_id'] = '__micro__'
-    micro_df = micro_df.reset_index().set_index(['region_id', 'rho', 'tau'])
+    micro_df = micro_df.reset_index()
+    index_cols = list(ub.oset(INDEX_COLS) & micro_df.columns)
+    micro_df = micro_df.set_index(index_cols)
 
     # ref: metrics-and-test-framework.evaluation.Metric
-    # (_, tp), (_, fp), (_, fn) = micro_df[
-    #     ['tp sites', 'fp sites', 'fn sites']].iteritems()
-    tp = concat_df['tp sites']
-    fp = concat_df['fp sites']
-    fn = concat_df['fn sites']
-
+    tp = micro_df['tp sites']
+    fp = micro_df['fp sites']
+    fn = micro_df['fn sites']
     micro_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
     micro_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
     micro_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
@@ -481,7 +481,7 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
         tp = concat_df['tp sites']
         fp = concat_df['fp sites']
         fn = concat_df['fn sites']
-        
+
         ftp = (1 + fbeta**2) * tp
         micro_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta**2 * fn) + fp)), 0)
 
@@ -497,7 +497,9 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
         axis=1
     )
     macro_df.loc[:, 'region_id'] = '__macro__'
-    macro_df = macro_df.reset_index().set_index(['region_id', 'rho', 'tau'])
+    macro_df = macro_df.reset_index()
+    index_cols = list(ub.oset(INDEX_COLS) & macro_df.columns)
+    macro_df = macro_df.set_index(index_cols)
 
     df = pd.concat(
         (concat_df, micro_df, macro_df),
@@ -603,12 +605,21 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, fbe
     sc_df = merge_sc_metrics_results(sc_results)
 
     # create and print a BAS and SC summary
-    min_rho, max_rho = 0.5, 0.5
-    min_tau, max_tau = 0.2, 0.2
+    param_ranges = [
+        {'name': 'rho', 'min': 0.5, 'max': 0.5},
+        {'name': 'tau', 'min': 0.2, 'max': 0.2},
+        {'name': 'Min Confidence', 'min': 0.0, 'max': 1.0},
+    ]
+    # min_rho, max_rho = 0.5, 0.5
+    # min_tau, max_tau = 0.2, 0.2
 
-    group = bas_df.query(
-        f'{min_rho} <= rho <= {max_rho} and {min_tau} <= tau <= {max_tau}'
-    ).groupby('region_id')
+    current_index = bas_df.index
+    for param_range in param_ranges:
+        name = param_range['name']
+        if name in bas_df.columns or name in bas_df.index.names:
+            result = bas_df.query("{min} <= `{name}` <= {max}".format(**param_range)).index
+            current_index = current_index.intersection(result)
+    group = bas_df.loc[current_index].groupby('region_id')
     best_bas_rows = bas_df.loc[group['F1'].idxmax()]
 
     concise_best_bas_rows = best_bas_rows.rename(

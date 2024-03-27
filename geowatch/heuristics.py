@@ -23,6 +23,8 @@ HEURISTIC_END_STATES = {
     'Post Construction'
 }
 
+DEFAULT_QA_ENCODING = 'ARA-4'
+
 
 # # FIXME: Hard-coded category aliases.
 # https://smartgitlab.com/TE/standards

@@ -184,6 +184,8 @@ def run_generate_sv_cropped_kwcoco(config):
 
     # Ensure at least one file exists in the directory we want to upload
     # so aws doesn't break.
+    # TODO: we have standardized on "__dir__" being the dummy filename.
+    # verify that this doesn't break anything and change it here.
     (assets_dpath / '_empty').touch()
 
     print("* Egressing KWCOCO dataset and associated STAC item *")

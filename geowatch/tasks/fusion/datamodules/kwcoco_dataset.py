@@ -2302,25 +2302,46 @@ class IntrospectMixin:
 
         return canvas
 
-    def summarize_item(self, item):
+    def summarize_item(self, item, stats=False):
         """
         Return debugging stats about the item
 
         Args:
             item (dict): an item returned by __getitem__
+            stats (bool): if True, include statistics on input datas.
 
         Returns:
             dict : a summary of the item
+
+        Example:
+            >>> # xdoctest: +SKIP
+            >>> from geowatch.tasks.fusion.datamodules import kwcoco_dataset
+            >>> import kwcoco
+            >>> import geowatch
+            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+            >>> self = kwcoco_dataset.KWCocoVideoDataset(
+            >>>     coco_dset, time_dims=4, window_dims=(300, 300),
+            >>>     channels='r|g|b')
+            >>> self.disable_augmenter = True
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> item = self[index]
+            >>> summary = self.summarize_item(item, stats=True)
+            >>> print(f'summary = {ub.urepr(summary, nl=-2)}')
         """
         if item is None:
-            raise Exception('Cant summarize a failed sample item=None')
+            raise ValueError('Cant summarize a failed sample item=None')
         item_summary = {}
         item_summary['frame_summaries'] = []
         timestamps = []
         for frame in item['frames']:
             frame_summary = {}
             for mode_key, im_mode in frame['modes'].items():
-                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
+                domain_key = frame['sensor'] + ':' + mode_key
+                if stats:
+                    frame_summary[domain_key] = kwarray.stats_dict(
+                        im_mode, nan=True)
+                else:
+                    frame_summary[domain_key] = im_mode.shape
             label_keys = [
                 'class_idxs', 'class_ohe', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights',
@@ -2333,11 +2354,6 @@ class IntrospectMixin:
             item_summary['frame_summaries'].append(frame_summary)
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
-
-            if 0:
-                dset = self.sampler.dset
-                for gid in item['requested_target']['gids']:
-                    assert gid in dset.imgs
 
             annots = self.sampler.dset.annots(frame['ann_aids'])
             cids = annots.lookup('category_id')

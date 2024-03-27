@@ -1183,7 +1183,14 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
     else:
         raise KeyError(format)
 
-    pman = util_progress.ProgressManager()
+    pmankw = {}
+    if submit_progkw['verbose'] == 0:
+        # Hack because rich based progiters always cause a newline
+        # switching to progiter backend prevents this.
+        # TODO: fix this issue in util_progress.ProgressManager itself
+        pmankw['backend'] = 'progiter'
+
+    pman = util_progress.ProgressManager(**pmankw)
     with pman:
 
         for fpath in pman.progiter(geojson_fpaths, **submit_progkw):

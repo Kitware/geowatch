@@ -1,6 +1,41 @@
 import pytest
+import ubelt as ub
 from geowatch.geoannots.geomodels import RegionModel
 from geowatch.geoannots.geomodels import RegionHeader
+
+
+def test_dump_load():
+    from geowatch.geoannots import geomodels
+    # Create arguments to the script
+    dpath = ub.Path.appdir('geowatch/tests/geomodels/test_dump_load').delete().ensuredir()
+
+    region = geomodels.RegionModel.random()
+    fpath1 = dpath / 'region1.geojson'
+    fpath2 = dpath / 'region2.geojson'
+
+    region.dump(fpath1)
+
+    with open(fpath2, 'w') as file:
+        region.dump(file)
+
+    assert fpath1.exists()
+    assert fpath2.exists()
+
+    recon1 = geomodels.RegionModel.load(fpath1)
+
+    with open(fpath2, 'r') as file:
+        recon2 = geomodels.RegionModel.load(file)
+
+    assert recon1 == region
+    assert recon2 == region
+
+
+def test_dumps_loads():
+    from geowatch.geoannots import geomodels
+    region = geomodels.RegionModel.random()
+    text = region.dumps()
+    recon = region.loads(text)
+    assert recon == region
 
 
 def test_infer_region_header():

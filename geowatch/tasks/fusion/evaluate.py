@@ -1046,10 +1046,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     n_vid_matches = len(video_matches)
     n_img_per_vid_matches = [len(d['match_gids1']) for d in video_matches]
-    n_img_matches = image_matches['match_gids1']
+    n_img_matches = len(image_matches['match_gids1'])
     print('n_img_per_vid_matches = {}'.format(ub.urepr(n_img_per_vid_matches, nl=1)))
     print('n_vid_matches = {}'.format(ub.urepr(n_vid_matches, nl=1)))
     print('n_img_matches = {!r}'.format(n_img_matches))
+    rich.print(f'Eval Dpath: [link={eval_dpath}]{eval_dpath}[/link]')
 
     rows = []
     chunk_size = 5
@@ -1162,7 +1163,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     else:
         if len(image_matches['match_gids1']) > 0:
             warnings.warn(ub.paragraph(
-                '''
+                f'''
                 Scoring was requested in video mode, but there are
                 {len(image_matches['match_gids1'])} true/pred image pairs that
                 are unassociated with a video. These pairs will not be included

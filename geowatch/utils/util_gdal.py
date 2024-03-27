@@ -23,7 +23,6 @@ import os
 import ubelt as ub
 import subprocess
 import functools
-import retry
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -95,7 +94,7 @@ def _demo_geoimg_with_nodata():
 
     # Make a dummy geotiff
     imdata = kwimage.grab_test_image('airport')
-    dpath = ub.Path.appdir('geowatch/test/geotiff').ensuredir()
+    dpath = ub.Path.appdir('geowatch/tests/geotiff').ensuredir()
     geo_fpath = dpath / 'dummy_geotiff.tif'
 
     # compute dummy values for a geotransform to CRS84
@@ -608,7 +607,7 @@ def gdal_single_warp(in_fpath,
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
         >>> crop_poly = bound_poly.scale(0.02, about='centroid')
         >>> space_box = crop_poly.to_boxes()
-        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> out_fpath = ub.Path.appdir('geowatch/doctests/util_gdal').ensuredir() / 'cropped.tif'
         >>> error_logfile = '/dev/null'
         >>> gdal_single_warp(in_fpath, out_fpath, space_box=space_box, error_logfile=error_logfile, verbose=3)
         >>> # xdoctest: +REQUIRES(--show)
@@ -628,7 +627,7 @@ def gdal_single_warp(in_fpath,
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
         >>> crop_poly = bound_poly.scale(0.02, about='centroid')
         >>> space_box = crop_poly.to_boxes()
-        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> out_fpath = ub.Path.appdir('geowatch/doctests/util_gdal').ensuredir() / 'cropped.tif'
         >>> commands = gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3, eager=False)
         >>> assert len(commands) == 2
 
@@ -778,7 +777,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
     NOTE: it is important to set the nodata argument for gdalmerge [SO187522]_
     if you want to preserver them.
 
-    Example:
+    Ignore:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from geowatch.utils.util_gdal import *  # NOQA
@@ -787,7 +786,7 @@ def gdal_multi_warp(in_fpaths, out_fpath,
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        >>> dpath = ub.Path.appdir('geowatch/test/gdal_multi_warp').ensuredir()
+        >>> dpath = ub.Path.appdir('geowatch/tests/gdal_multi_warp').ensuredir()
         >>> out_fpath = ub.Path(dpath) / 'test_multi_warp.tif'
         >>> out_fpath.delete()
         >>> in_fpath1 = cube.coco_dset.get_image_fpath(2)
@@ -1049,13 +1048,15 @@ def _execute_gdal_command_with_checks(command,
     if verbose > 100:
         print(command)
 
+    # import retry
+    from geowatch.utils.util_retry import retry_call
     retryable_exceptions = (
         subprocess.CalledProcessError,
         FileNotFoundError,
         RuntimeError)
     try:
         logger = DummyLogger()
-        got = retry.api.retry_call(
+        got = retry_call(
             _execute_command,
             tries=tries,
             delay=cooldown,
