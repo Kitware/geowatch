@@ -2402,7 +2402,7 @@ class BalanceMixin:
     Helpers to build the sample grid and balance it
 
     CommandLine:
-        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin:1 --bench
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
@@ -2441,6 +2441,18 @@ class BalanceMixin:
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
         >>> assert num_positives > num_negatives
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--bench)
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> import kwcoco
+        >>> coco_fpath = '/media/joncrall/flash1/smart_phase3_data/Drop8-Cropped2GSD-V1/data_vali_rawbands_split6_n004_f9b08cce.kwcoco.zip'
+        >>> coco_fpath = '/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-V2/data_vali_rawbands_split6.kwcoco.zip'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = KWCocoVideoDataset(coco_dset, mode="fit", time_dims=4, window_dims=(300, 300),
+        >>>                           channels='red|green|blue', neg_to_pos_ratio=1.0)
     """
 
     @profile
@@ -2494,7 +2506,7 @@ class BalanceMixin:
     @profile
     def _get_observed_annotations(self, targets):
         observed_cats = []
-        for target in targets:
+        for target in ub.ProgIter(targets, desc='Building observed annots'):
             aids = self._load_target_annots(target)
             catnames = self.sampler.dset.annots(aids).category_names
             observed_cats.append(ub.dict_hist(catnames))

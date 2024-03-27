@@ -676,6 +676,11 @@ class BalancedSampleForest(ub.NiceRepr):
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
+
+    TODO:
+        Currently this will look at all attributes passed in each item in the
+        sample grid. I think we want to specify what the attributes that could
+        be balanced over are, which would help prevent a deep copy.
     """
     @profile
     def __init__(self, sample_grid, rng=None, n_trees=16, scoring='uniform'):
