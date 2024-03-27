@@ -1,0 +1,28 @@
+.rules:
+    rules:
+        # Dependent jobs run automatically
+        - if: '$CI_MERGE_REQUEST_ID && $RUN_DEPENDENT == "true"'
+          when: on_success
+        # Release jobs never run on MRs
+        - if: '$CI_MERGE_REQUEST_ID && $IS_FOR_RELEASE == "true"'
+          when: never
+        # MRs use manual triggers.
+        - if: '$CI_MERGE_REQUEST_ID'
+          when: manual
+        # Non-protected branches without tags have no pipelines (MR source branches).
+        - if: '$CI_COMMIT_REF_PROTECTED != "true" && $CI_COMMIT_TAG == ""'
+          when: never
+        # Otherwise, if it's a matching tag on the main project, run the job.
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch" && $CI_COMMIT_TAG =~ $RELEASE_TAG_RE'
+          when: on_success
+        # If there is a tag and it doesn't match, skip the job.
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch" && $CI_COMMIT_TAG != ""'
+          when: never
+        # If it's a release job and in the project, skip the job.
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch" && $IS_FOR_RELEASE == "true"'
+          when: never
+        # Otherwise, if it is in the project, run the job.
+        - if: '$CI_PROJECT_PATH == "computer-vision/geowatch"'
+          when: on_success
+        # Ignore everything else.
+        - when: never
