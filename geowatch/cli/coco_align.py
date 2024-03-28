@@ -115,7 +115,6 @@ CommandLine:
         --force_nodata=None \
         --include_channels="None" \
         --exclude_channels="None" \
-        --visualize=False \
         --debug_valid_regions=False \
         --rpc_align_method orthorectify \
         --sensor_to_time_window "None" \
@@ -339,12 +338,6 @@ class ExtractConfig(ImageExtractConfig):
         '''
         if True, writes a separate kwcoco file for every discovered
         ROI in addition to the final kwcoco file.
-        '''))
-
-    visualize = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
-        DEPRECATED: simply call visualize on the subdata kwcoco files as
-        they are written. If set to true an error will be raised.
         '''))
 
     img_workers = scfg.Value(0, type=str, help=ub.paragraph(
@@ -608,7 +601,6 @@ def main(cmdline=True, **kw):
         >>>     'convexify_regions': True,
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
-        >>>     'visualize': False,
         >>>     'force_min_gsd': 60.0,
         >>> }
         >>> cmdline = False
@@ -690,9 +682,6 @@ def main(cmdline=True, **kw):
     config = CocoAlignGeotiffConfig.cli(data=kw, cmdline=cmdline, strict=True)
     import rich
     rich.print(ub.urepr(config))
-
-    if config.visualize:
-        raise Exception('The visualize option was deprecated and will be removed')
 
     from kwcoco.util.util_json import ensure_json_serializable
     from geowatch.utils import util_gis
@@ -1784,42 +1773,6 @@ class SimpleDataCube:
 
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=extract_config.target_gsd, video_id=new_vidid)
-
-        # Enable if serialization is breaking
-        if False:
-            for new_gid in sub_new_gids:
-                # Fix json serializability
-                new_img = new_dset.index.imgs[new_gid]
-                new_objs = [new_img] + new_img.get('auxiliary', [])
-                unserializable = list(util_json.find_json_unserializable(new_img))
-                if unserializable:
-                    print('new_img = {}'.format(ub.urepr(new_img, nl=1)))
-                    raise AssertionError('unserializable(gid={}) = {}'.format(
-                        new_gid, ub.urepr(unserializable, nl=0)))
-
-            for new_aid in sub_new_aids:
-                new_ann = new_dset.index.anns[new_aid]
-                unserializable = list(util_json.find_json_unserializable(new_ann))
-                if unserializable:
-                    print('new_ann = {}'.format(ub.urepr(new_ann, nl=1)))
-                    raise AssertionError('unserializable(aid={}) = {}'.format(
-                        new_aid, ub.urepr(unserializable, nl=1)))
-
-            for new_vidid in [new_vidid]:
-                new_video = new_dset.index.videos[new_vidid]
-                unserializable = list(util_json.find_json_unserializable(new_video))
-                if unserializable:
-                    print('new_video = {}'.format(ub.urepr(new_video, nl=1)))
-                    unserializable_repr = ub.urepr(unserializable, nl=1)
-                    raise AssertionError(
-                        f'unserializable(video_id={new_vidid}) = {unserializable_repr}')
-
-        # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
-        # if unserializable:
-        #     raise AssertionError('unserializable = {}'.format(ub.urepr(unserializable, nl=1)))
-
-        if extract_config.visualize:
-            raise Exception('The visualize option was deprecated and will be removed')
 
         if extract_config.write_subsets:
             print('Writing data subset')

@@ -22,6 +22,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `coco_align` no longer errors and simply writes an empty kwcoco file if the input regions are empty by default. Old behavior can be enabled with 
 * Updated wrapper scoring code to support latest IARPA metrics.
 
+### Removed
+* Remove visualize option from coco-align.
+
 ## Version 0.15.1 - Released 2024-03-04
 
 ### Added
