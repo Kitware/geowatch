@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added `coerce_multiple_paths` classmethod to RegionModel and SiteModel
 * Experimental code to let the user specify custom pipelines in `geowatch.mlops.schedule_evaluation`.
 * QA encoding can now be specified for different data sources in coco-align
+* coco-align now writes text files to indicate which images errors occurred on.
 
 ### Changed
 * Can now configure COLD teamfeat via the commandline.

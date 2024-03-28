@@ -270,6 +270,11 @@ class AssetExtractConfig(scfg.DataConfig):
         in input image with a 0.5 GSD will have it set to 10.0 during cropping)
         '''))
 
+    skip_previous_errors = scfg.Value(False, help=ub.paragraph(
+        '''
+        Skip assets where we can detect a previous error occurred.
+        '''))
+
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         Hack lazy is a proof of concept with the intent on speeding up the
@@ -301,11 +306,11 @@ class ImageExtractConfig(AssetExtractConfig):
     # TODO: change this name to just align-method or something
     rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
         '''
-        Can be one of: (1) orthorectify - which uses gdalwarp with -rpc if
-        available otherwise falls back to affine transform, (2) pixel_crop -
-        which warps annotations onto pixel with RPCs but only crops the
-        original image without distortion, (3) affine_warp - which ignores RPCs
-        and uses the affine transform in the geotiff metadata.
+        Can be one of:
+        (1) orthorectify - which uses gdalwarp with -rpc if available otherwise
+        falls back to affine transform,
+        (2) affine_warp - which ignores RPCs and uses the affine transform in
+        the geotiff metadata.
         '''))
 
     aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs')
@@ -1876,6 +1881,7 @@ def extract_image_job(img,
     #     ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
     #     ```
     # When the cache is not computed and workers > 0
+    import json
     from geowatch.utils import kwcoco_extensions
     from kwutil import util_time
     from osgeo import osr
@@ -1918,6 +1924,8 @@ def extract_image_job(img,
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
     obj_groups = list(channels_to_objs.values())
+
+    # True if there are multiple assets written for this image.
     is_multi_image = len(obj_groups) > 1
 
     is_rpc = False
@@ -1943,6 +1951,8 @@ def extract_image_job(img,
         align_method = 'affine_warp'
 
     dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
+    dst_dpath_ = ub.Path(dst_dpath)
+    error_fpath = dst_dpath_.parent / (dst_dpath_.name + '.error')
 
     job_list = []
 
@@ -1971,7 +1981,31 @@ def extract_image_job(img,
     for job in asset_jobs.as_completed(desc='collect warp assets {}'.format(name),
                                        timeout=img_config.image_timeout,
                                        progkw=dict(enabled=DEBUG, verbose=verbose)):
-        dst = job.result(timeout=img_config.asset_timeout)
+        try:
+            dst = job.result(timeout=img_config.asset_timeout)
+        except Exception as ex:
+            # Write a file to disk to indicate an error in builting this image.
+            error_summary = {
+                'ex': {
+                    'type': str(type(ex)),
+                    'str': str(ex),
+                },
+                # TODO: what information is relevant here?
+                'num_object_groups': len(obj_groups),
+                'sensor_coarse': sensor_coarse,
+                'frame_index': frame_index,
+                'name': name,
+                'num': num,
+                'datetime_': str(datetime_),
+                'new_vidid': new_vidid,
+                'new_vidname': new_vidname,
+                'space_str': space_str,
+                'local_epsg': local_epsg,
+                'is_rpc': is_rpc,
+            }
+            error_fpath.write_text(json.dumps(error_summary, indent='    '))
+            print(f'Log Image Error: {error_fpath}')
+            raise
         dst_list.append(dst)
 
     if img_config.hack_lazy:
@@ -1982,24 +2016,23 @@ def extract_image_job(img,
     if verbose > 2:
         print(f'Finish channel crop jobs: {new_gid} in {new_vidname}')
 
-    if align_method != 'pixel_crop':
-        # If we are a pixel crop, we can transform directly
-        for dst in dst_list:
-            if dst is not None:
-                # TODO: We should not populate this for computed features!
-                # hack this in for heuristics
-                if 'sensor_coarse' in img:
-                    dst['sensor_coarse'] = img['sensor_coarse']
-                # We need to overwrite because we changed the bounds
-                # Note: if band info is not popluated above, this
-                # might write bad data based on hueristics
-                # TODO:
-                # We need to remove all spatial metadata from the base image that a
-                # crop would invalidate, otherwise we will propogate bad info.
-                kwcoco_extensions._populate_canvas_obj(
-                    bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
-        if DEBUG:
-            print(f'Finish repopulate canvas jobs: {new_gid}')
+    # If we are a pixel crop, we can transform directly
+    for dst in dst_list:
+        if dst is not None:
+            # TODO: We should not populate this for computed features!
+            # hack this in for heuristics
+            if 'sensor_coarse' in img:
+                dst['sensor_coarse'] = img['sensor_coarse']
+            # We need to overwrite because we changed the bounds
+            # Note: if band info is not popluated above, this
+            # might write bad data based on hueristics
+            # TODO:
+            # We need to remove all spatial metadata from the base image that a
+            # crop would invalidate, otherwise we will propogate bad info.
+            kwcoco_extensions._populate_canvas_obj(
+                bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
+    if DEBUG:
+        print(f'Finish repopulate canvas jobs: {new_gid}')
 
     assert len(dst_list) == len(obj_groups)
 
@@ -2095,6 +2128,7 @@ def _aligncrop(obj_group,
             commands that would be executed.
     """
     import geowatch
+    import json
     import kwcoco
     from geowatch.utils import util_gdal
     from os.path import join
@@ -2128,6 +2162,7 @@ def _aligncrop(obj_group,
             return None
 
     if is_multi_image:
+        # Multiple assets for this image.
         multi_dpath = ub.ensuredir((dst_dpath, name))
         dst_gpath = ub.Path(multi_dpath) / (name + '_' + chan_pname + '.tif')
     else:
@@ -2172,13 +2207,16 @@ def _aligncrop(obj_group,
             else:
                 ref = None
 
+    out_fpath = dst_gpath
+    error_fpath = out_fpath.parent / (out_fpath.name + '.error')
+
+    if asset_config.skip_previous_errors:
+        raise SkipImage('Attempting to grab this asset previously failed, skipping')
+
     if not needs_recompute:
         if verbose > 2:
             print('cache hit dst = {!r}'.format(dst))
         return dst
-
-    if align_method == 'pixel_crop':
-        raise NotImplementedError('no longer supported')
 
     if align_method == 'orthorectify':
         if 'geotiff_metadata' in first_obj:
@@ -2187,8 +2225,10 @@ def _aligncrop(obj_group,
             info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
         # No RPCS exist, use affine-warp instead
         rpcs = info['rpc_transform']
-    else:
+    elif align_method == 'affine_warp':
         rpcs = None
+    else:
+        raise KeyError(align_method)
 
     duplicates = ub.find_duplicates(input_gpaths)
     if duplicates:
@@ -2210,7 +2250,6 @@ def _aligncrop(obj_group,
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
-    out_fpath = dst_gpath
     if verbose > 2:
         print(
             'start gdal warp in_fpaths = {}'.format(ub.urepr(input_gpaths, nl=1)) +
@@ -2309,6 +2348,25 @@ def _aligncrop(obj_group,
         print(f'gdalkw = {ub.urepr(gdalkw, nl=1)}')
         print('!!!!!!')
         print('!!!!!!')
+        DUMP_ERRORS = True
+        if DUMP_ERRORS:
+            # If there is an error write out a file
+            serialized_box = serialize_kwimage_boxes(gdalkw['space_box'])
+            fixed_gdalkw = gdalkw.copy()
+            fixed_gdalkw['space_box'] = serialized_box
+            error_summary = {
+                'ex': {
+                    'type': str(type(ex)),
+                    'str': str(ex),
+                },
+                'input_gpaths': [os.fspath(p) for p in input_gpaths],
+                'gdalkw': fixed_gdalkw,
+                'out_fpath': os.fspath(out_fpath),
+            }
+            error_summary['gdalkw'] = fixed_gdalkw
+            error_text = json.dumps(error_summary, indent='  ')
+            error_fpath.write_text(error_text)
+            print(f'Log Asset Error: {error_fpath}')
         raise
 
     if asset_config.hack_lazy:
@@ -2317,6 +2375,20 @@ def _aligncrop(obj_group,
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
+
+
+def serialize_kwimage_boxes(boxes):
+    """
+    TODO: port to kwimage.Boxes.__json__
+    """
+    json_boxes = {
+        'type': 'kwimage.Boxes',
+        'properties': {
+            'data': boxes.data.tolist(),
+            'format': boxes.format,
+        }
+    }
+    return json_boxes
 
 
 class SkipImage(Exception):
