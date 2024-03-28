@@ -320,6 +320,9 @@ class PrepareTA2Config(CMDQueueConfig):
             construct the aligned kwcoco dataset as normal.
             '''))
 
+    unsigned_nodata = scfg.Value(256, help=ub.paragraph('''See Coco Align'''))
+    qa_encoding = scfg.Value(None, help=ub.paragraph('''See Coco Align'''))
+
     @classmethod
     def _register_main(cls, func):
         cls.main = func
@@ -739,6 +742,8 @@ def main(cmdline=False, **kwargs):
                     --tries="{config.align_tries}" \
                     --cooldown="10" \
                     --backoff="3" \
+                    --unsigned_nodata="{config.unsigned_nodata}" \
+                    --qa_encoding="{config.qa_encoding}" \
                     --asset_timeout="{config.asset_timeout}" \
                     --image_timeout="{config.image_timeout}" \
                     --hack_lazy={config.hack_lazy}

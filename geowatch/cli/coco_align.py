@@ -236,6 +236,18 @@ class AssetExtractConfig(scfg.DataConfig):
         This is only used if ``force_nodata`` is specified.
         '''))
 
+    qa_encoding = scfg.Value(None, help=ub.paragraph(
+        '''
+        TEMPORARY WORKAROUND.
+        The value of this parameter will be set as the "qa_encoding" for any
+        assets with the "quality" role. Ideally this information is determined
+        from the input kwcoco, which itself should be derived from the STAC
+        catalog. There is no reason to assume this is uniform.
+        Additionally, when we do add logic that enriches the input with this
+        metadata, that will no remove the requirement for the "unsigned_nodata"
+        argument, as it should be able to be inferred at that point.
+        '''))
+
     tries = scfg.Value(2, help=ub.paragraph(
         '''
         The maximum number of times to retry failed gdal warp commands before
@@ -2382,6 +2394,9 @@ def _aligncrop(obj_group,
         dst['num_bands'] = first_obj['num_bands']
 
     dst['parent_file_names'] = [o.get('file_name', None) for o in obj_group]
+
+    if 'quality' in roles:
+        dst['qa_encoding'] = asset_config.qa_encoding
 
     already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})

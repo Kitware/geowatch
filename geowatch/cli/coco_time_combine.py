@@ -841,7 +841,6 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     # avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
     avoid_quality_values = ['cloud']
     # avoid_quality_values += ['ice']
-
     # Create canvas to combine averaged tiles into.
 
     # todo: memmap this.
@@ -854,93 +853,58 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
         # Load and combine the images within this range.
         for crop_slice in slider:
+
+            frame_gen = generate_frames(window_coco_images, crop_slice,
+                                        resolution, space, merge_chans,
+                                        mask_low_quality, avoid_quality_values)
+
             if merge_method == 'mean':
                 accum = kwarray.Stitcher(canvas_shape)
 
                 # TODO: we can also parallelize this in case the window is really big
-                for coco_img in window_coco_images:
-                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                    delayed = delayed.crop(crop_slice)
-                    image_data = delayed.finalize(nodata_method='float')
-
+                for coco_img, image_data in frame_gen:
                     pxl_weight = (~np.isnan(image_data)).astype(np.float32)
-
-                    if mask_low_quality:
-                        # Load quality mask.
-                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
-
-                        # Update pixel weights based on quality pixel values.
-                        pxl_weight *= quality_mask
-
                     try:
                         sensor_weight = sensor_weights[coco_img['sensor_coarse']]
                     except KeyError:
                         sensor_weight = 1.0
                     pxl_weight *= sensor_weight
-
                     image_data = np.nan_to_num(image_data)
                     accum.add((slice(None), slice(None)), image_data, pxl_weight)
 
                 combined_image_data = accum.finalize()
 
+            elif merge_method == 'remedian':
+                # from remedian.remedian import Remedian
+                from geowatch.utils.remedian import Remedian
+                num_frames = len(window_coco_images)
+                _, first_frame = next(frame_gen)
+                data_shape = first_frame.shape
+                approx_median = Remedian(data_shape, n_obs=7, t=num_frames, allow_nan=True)
+                approx_median.add_obs(first_frame)
+                del first_frame
+                for _, image_data in frame_gen:
+                    approx_median.add_obs(image_data)
+                combined_image_data = approx_median.remedian
+
             elif merge_method == 'median':
-
-                def generate_frames():
-                    for coco_img in window_coco_images:
-                        delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                        delayed = delayed.crop(crop_slice)
-                        image_data = delayed.finalize(nodata_method='float')
-
-                        if mask_low_quality:
-                            # Load quality mask.
-                            quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
-
-                            # Update pixel weights based on quality pixel values.
-                            x, y = np.where(quality_mask[..., 0] == 0)
-                            image_data[x, y, :] = np.nan
-                        yield image_data
-
-                use_remedian = 0
-                if use_remedian:
-                    # from remedian.remedian import Remedian
-                    from geowatch.utils.remedian import Remedian
-                    num_frames = len(window_coco_images)
-                    frame_gen = generate_frames()
-                    first_frame = next(frame_gen)
-                    data_shape = first_frame.shape
-                    approx_median = Remedian(data_shape, n_obs=7, t=num_frames, allow_nan=True)
-                    approx_median.add_obs(first_frame)
-                    del first_frame
-                    for image_data in frame_gen:
-                        approx_median.add_obs(image_data)
-                    combined_image_data = approx_median.remedian
-                else:
-                    # TODO: Make this less computationally expensive.
-                    median_stack = list(generate_frames())
-                    combined_image_data = np.nanmedian(median_stack, axis=0, overwrite_input=True)
-                    # TODO: Fix the logic below to match above because it should be faster.
-                    # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
-                    # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
-                    # image_data = M.filled(np.nan)
-                    # masked_image_data = M.filled(np.nan)
-                    # _median_stack = np.stack(median_stack)
-                    # combined_image_data = np.nanmedian(_median_stack, axis=0)
+                # TODO: Make this less computationally expensive.
+                median_stack = [t[1] for t in generate_frames()]
+                combined_image_data = np.nanmedian(median_stack, axis=0, overwrite_input=True)
+                # TODO: Fix the logic below to match above because it should be faster.
+                # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
+                # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
+                # image_data = M.filled(np.nan)
+                # masked_image_data = M.filled(np.nan)
+                # _median_stack = np.stack(median_stack)
+                # combined_image_data = np.nanmedian(_median_stack, axis=0)
 
             elif merge_method == 'max':
                 # TODO: Combine with other methods.
-                median_stack = []
-                for coco_img in window_coco_images:
-                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                    delayed = delayed.crop(crop_slice)
-                    image_data = delayed.finalize(nodata_method='float')
-                    if mask_low_quality:
-                        # Load quality mask.
-                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
-                        # Update pixel weights based on quality pixel values.
-                        x, y = np.where(quality_mask[..., 0] == 0)
-                        image_data[x, y, :] = np.nan
-                    median_stack.append(image_data)
-                combined_image_data = np.nanmax(median_stack, axis=0)
+                stack = []
+                for coco_img, image_data in frame_gen:
+                    stack.append(image_data)
+                combined_image_data = np.nanmax(stack, axis=0)
             else:
                 raise NotImplementedError
 
@@ -1038,6 +1002,23 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     final_img = tmp_dset.imgs[gid]
 
     return final_img
+
+
+def generate_frames(window_coco_images, crop_slice, resolution, space, merge_chans, mask_low_quality, avoid_quality_values):
+    import numpy as np
+    for coco_img in window_coco_images:
+        delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+        delayed = delayed.crop(crop_slice)
+        image_data = delayed.finalize(nodata_method='float')
+
+        if mask_low_quality:
+            # Load quality mask.
+            quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+
+            # Update pixel weights based on quality pixel values.
+            x, y = np.where(quality_mask[..., 0] == 0)
+            image_data[x, y, :] = np.nan
+        yield coco_img, image_data
 
 
 @profile

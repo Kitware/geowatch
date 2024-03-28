@@ -12,7 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added `loads`, `load`, and `dump` method to RegionModel and SiteModel
 * Added `coerce_multiple_paths` classmethod to RegionModel and SiteModel
 * Experimental code to let the user specify custom pipelines in `geowatch.mlops.schedule_evaluation`.
-
+* QA encoding can now be specified for different data sources in coco-align
 
 ### Changed
 * Can now configure COLD teamfeat via the commandline.
@@ -21,7 +21,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Allow "kit" as annotator in geomodel schemas
 * `coco_align` no longer errors and simply writes an empty kwcoco file if the input regions are empty by default. Old behavior can be enabled with 
 * Updated wrapper scoring code to support latest IARPA metrics.
-
 
 ## Version 0.15.1 - Released 2024-03-04
 
