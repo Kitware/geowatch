@@ -8,8 +8,8 @@ Setting up the AWS bucket and DVC repo
 source "$HOME"/code/watch-smartflow-dags/secrets/secrets
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
-#SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
-SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4"
+SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
+#SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4"
 
 DATASET_SUFFIX=Drop8-ARA
 
@@ -33,6 +33,9 @@ sdvc unprotect -- "$DVC_DATA_DPATH"/Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
 # All Regions
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_*0*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
+
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/US_T001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/US_T001_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/CO_C009.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/CO_C009_*.geojson"
@@ -96,7 +99,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=6 \
-    --run=1
+    --run=0
     #--sensor_to_time_window='
     #    #S2: 2 weeks
     #    #L8: 2 weeks

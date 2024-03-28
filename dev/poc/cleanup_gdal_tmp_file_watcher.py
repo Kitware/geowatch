@@ -65,7 +65,6 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py
-        python -m cleanup_gdal_tmp_file_watcher
+        python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py --dpath /data2/projects/smart/smart_phase3_data/Aligned-Drop8-ARA
     """
     main()
