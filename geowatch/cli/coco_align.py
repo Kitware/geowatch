@@ -1471,6 +1471,7 @@ class SimpleDataCube:
 
                         if 'parent_stac_properties' in img:
                             for prop in img['parent_stac_properties']:
+                                # FIXME, non general hard-coded properties used here
                                 _cloudcover = prop.get('eo:cloud_cover', nan) / 100
                                 _contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
                                 cloudcover = np.nanmin([cloudcover, _cloudcover])

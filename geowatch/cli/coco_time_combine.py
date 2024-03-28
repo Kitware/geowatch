@@ -785,6 +785,25 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     merge_chans_set = requested_chans_set & available_chans_set
     merge_chans = kwcoco.FusedChannelSpec.coerce(sorted(merge_chans_set))
 
+    if 1:
+        # Take only the N "best" images per group to combine over.
+        # By default we use a hard coded property to identify cloud cover
+        # TODO: make this more general with a standardized kwcoco coarse
+        # quality property
+        max_images_per_group = 10
+        if len(window_coco_images) > max_images_per_group:
+            import xdev
+            xdev.embed()
+            estimated_qualities = []
+            nan = float('nan')
+            for coco_img in window_coco_images:
+                # FIXME, non general hard-coded properties used here
+                ave_cloudcover = np.nanmean([
+                    prop.get('eo:cloud_cover', nan) / 100
+                    for prop in coco_img.img.get('parent_stac_properties', [])
+                ])
+                estimated_qualities.append(ave_cloudcover)
+
     # TODO: we should merge each asset at the highest resolution for that
     # asset, but no more.  For instance, when given red|green|blue|swir16 we
     # should handle rgb separately from swir16. This will involve grouping by

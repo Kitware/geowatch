@@ -61,7 +61,6 @@ export REQUESTER_PAYS=False
 
 echo "
 DVC_DATA_DPATH=$DVC_DATA_DPATH
-DVC_DATA_DPATH=$DVC_DATA_DPATH
 "
 
 # Construct the TA2-ready dataset
