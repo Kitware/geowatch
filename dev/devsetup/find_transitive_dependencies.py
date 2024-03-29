@@ -42,25 +42,46 @@ def find_transitive_dependencies(req_fpaths):
     import setup
     import ubelt as ub
     # repo_dpath = ub.Path(repo_dpath)
-    import tempfile
-    tempdir = tempfile.TemporaryDirectory()
 
     # Exclude paths that have a "transitive" in the filename
     req_fpaths = [r for r in req_fpaths if 'transitive' not in r.stem]
 
-    tmp_root = ub.Path(tempdir.name)
-    tmp_dpath = (tmp_root / 'tmp_deps').ensuredir()
+    USE_TEMPFILE = 0
+    if USE_TEMPFILE:
+        import tempfile
+        tempdir = tempfile.TemporaryDirectory()
+        tmp_root = ub.Path(tempdir.name)
+        tmp_dpath = (tmp_root / 'tmp_deps').ensuredir()
+    else:
+        tmp_dpath = ub.Path.appdir('geowatch/transitive_dependencies')
+        tmp_dpath.ensuredir()
+
+    root_dl_dpath = (tmp_dpath / 'packages').ensuredir()
+    modified_req_dpath = (tmp_dpath / 'modified_requirements').ensuredir()
 
     # TODO: allow strict versions
-    mode = 'loose'
+    mode = 'strict'
 
+    modified_infos = []
     # Actually download the requirement wheels
     import cmd_queue
     queue = cmd_queue.Queue.create(backend='tmux', size=16)
-    for req_fpath in req_fpaths:
-        req_name = req_fpath.stem
-        dldir = (tmp_dpath / req_name).ensuredir()
-        command = f'pip download --prefer-binary -r {req_fpath} --dest {dldir}'
+    for req_fpath in ub.oset(req_fpaths):
+        req_text = req_fpath.read_text()
+        if mode == 'strict':
+            req_text = req_text.replace('>=', '==')
+        hashid = ub.hash_data(req_text, hasher='sha256')
+        new_stem = f'{req_fpath.stem}-{hashid}'
+        modified_req_fpath = modified_req_dpath / (new_stem + '.txt')
+        modified_req_fpath.write_text(req_text)
+        dldir = (root_dl_dpath / new_stem).ensuredir()
+        command = f'pip download --prefer-binary -r {modified_req_fpath} --dest {dldir}'
+
+        modified_infos.append({
+            'req_name': req_fpath.stem,
+            'req_fpath': modified_req_fpath,
+            'dldir': dldir,
+        })
         print(command)
         queue.submit(command)
     queue.print_commands()

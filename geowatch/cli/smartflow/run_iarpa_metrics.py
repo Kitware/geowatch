@@ -148,8 +148,9 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
                          config.output_path,
                          config.outbucket,
                          aws_profile=config.aws_profile,
-                         dryrun=config.dryrun,
-                         newline=config.newline)
+                         # dryrun=config.dryrun,
+                         # newline=config.newline
+                         )
 
 
 __cli__ = RunIARPAMetricsCLI
