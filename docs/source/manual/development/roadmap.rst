@@ -9,9 +9,9 @@ Features
 
 - [ ] **Lineage tracking**: design the storage format and parser.
 
-- [ ] **Bounding Box Head**: Add support for bounding box heads and associated loss functions.
+- [ ] **Bounding Box Head**: Add support for bounding box heads and associated loss functions. `Issue: !9 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/9>`_
 
-- [ ] **Multi-head objectives**: Allow multiple non-weight-tied versions of the same head to have different losses
+- [ ] **Multi-head objectives**: Allow multiple non-weight-tied versions of the same head to have different losses. `Issue: !10 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/10>`_
 
 - [ ] **Balanced Sampling**: Better balanced API and code structure.
 
@@ -21,9 +21,9 @@ Features
 
 - [ ] **OTS Models**: Off-the-shelf Model wrapper API.
 
-- [ ] **Distilation**: Easy distilation (i.e. student / teacher networks) by settting heatmaps from existing predictions as truth targets.
+- [ ] **Distilation**: Easy distilation (i.e. student / teacher networks) by settting heatmaps from existing predictions as truth targets. `Issue: !17 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/17>`_
 
-- [ ] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps
+- [ ] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps `Issue: !14 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/14>`_
 
 - [ ] **Train Monitoring**: Log more weight statistics like rank, magnitude, etc. in tensorboard to better understand the training process.
 
