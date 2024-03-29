@@ -272,8 +272,8 @@ def run_sc_fusion_for_baseline(config):
     else:
         print('Warning: No Videos in Ingress Dataset, Skipping Predict!')
 
-    cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
-    cropped_region_models_outdir = ingress_dir / 'cropped_region_models'
+    cropped_site_models_outdir = ingress_dir / 'cropped_site_models_sc'
+    cropped_region_models_outdir = ingress_dir / 'cropped_region_models_sc'
     sc_heatmap_dpath = ingress_dir / '_assets'
 
     cropped_site_models_outdir.ensuredir()
