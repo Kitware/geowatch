@@ -612,8 +612,8 @@ class Cropping(ProcessNode):
         # 'aux_workers': 16,
         'img_workers': 32,
         'aux_workers': 4,
-        'debug_valid_regions': False,
-        'visualize': False,
+        # 'debug_valid_regions': False,
+        # 'visualize': False,
         'keep': 'img',
         'geo_preprop': 'auto',
     }

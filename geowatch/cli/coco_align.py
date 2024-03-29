@@ -462,7 +462,13 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         '''
         What to do when input contain no regions to crops. Can be "ignore"
         to write an empty kwcoco file or "raise" to throw an Exception.
-        '''))
+        '''), choices=['raise', 'ignore'])
+
+    image_error_policy = scfg.Value('raise', help=ub.paragraph(
+        '''
+        What to do when input contain no regions to crops. Can be "ignore"
+        to write an empty kwcoco file or "raise" to throw an Exception.
+        '''), choices=['raise', 'ignore'])
 
 
 @profile
@@ -2005,7 +2011,11 @@ def extract_image_job(img,
             }
             error_fpath.write_text(json.dumps(error_summary, indent='    '))
             print(f'Log Image Error: {error_fpath}')
-            raise
+
+            if img_config.image_error_policy == 'ignore':
+                raise SkipImage
+            else:
+                raise
         dst_list.append(dst)
 
     if img_config.hack_lazy:
