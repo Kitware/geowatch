@@ -912,7 +912,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
             elif merge_method == 'median':
                 # TODO: Make this less computationally expensive.
-                median_stack = [t[1] for t in generate_frames()]
+                median_stack = [t[1] for t in frame_gen]
                 combined_image_data = np.nanmedian(median_stack, axis=0, overwrite_input=True)
                 # TODO: Fix the logic below to match above because it should be faster.
                 # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
