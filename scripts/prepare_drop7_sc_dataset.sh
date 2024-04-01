@@ -527,7 +527,7 @@ python -m cmd_queue run --workers=8 "reproject_for_sc"
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -605,7 +605,7 @@ for src, dst in ub.ProgIter(mv_jobs):
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD-V2
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/imgonly-*-rawbands.kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -676,7 +676,7 @@ python -m cmd_queue run --workers=16 "reproject_for_feat_sc"
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD-V2
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$BUNDLE_DPATH"/*/combo_imganns-*_D.kwcoco.zip \
     --dst_dpath "$BUNDLE_DPATH" \
     --suffix=D \

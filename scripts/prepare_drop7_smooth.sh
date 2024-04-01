@@ -50,7 +50,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7-Smooth-V2
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/*/imgann-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
@@ -97,7 +97,7 @@ export CUDA_VISIBLE_DEVICES="0"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-SmoothMedianNoWinter3Month10GSD
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \
@@ -143,7 +143,7 @@ export CUDA_VISIBLE_DEVICES="0"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-SmoothMedianNoWinterMonthly10GSD
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \

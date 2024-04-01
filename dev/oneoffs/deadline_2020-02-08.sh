@@ -66,7 +66,7 @@ python -m geowatch.cli.coco_align_geotiffs \
 
 
 #DVC_DPATH=$(geowatch_dvc)
-#python -m geowatch.cli.prepare_teamfeats \
+#python -m geowatch.cli.queue_cli.prepare_teamfeats \
 #    --base_fpath="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
 #    --gres="0," \
 #    --with_depth=True \

@@ -178,7 +178,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/*/imganns*-*_[RC]*.kwcoco.zip \
     --suffix=rawbands \
     --backend=tmux --tmux_workers=6 \
@@ -349,7 +349,7 @@ export CUDA_VISIBLE_DEVICES="0"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --src_kwcocos "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \

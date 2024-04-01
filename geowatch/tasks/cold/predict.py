@@ -4,7 +4,7 @@ Main prediction script for cold
 
 SeeAlso:
 
-    ../../cli/prepare_teamfeats.py
+    ../../cli/queue_cli/prepare_teamfeats.py
 
     predict.py *
 
@@ -132,7 +132,7 @@ CommandLine:
 
     echo "$DVC_DATA_DPATH"
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath \
             "$BUNDLE_DPATH"/imganns-*AE_[RC]*.kwcoco.zip \
             "$BUNDLE_DPATH"/imganns-*BH_[RC]*.kwcoco.zip \

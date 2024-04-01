@@ -166,7 +166,7 @@ def main():
 
     # Use the existing prepare teamfeat script to get the features invocation.
     # This has a specific output pattern that we hard code here.
-    from geowatch.cli import prepare_teamfeats
+    from geowatch.cli.queue_cli import prepare_teamfeats
     base_fpath = ub.Path(input_kwcoco_fpath)
     # watch_coco_stats.main(cmdline=0, src=base_fpath)
     # coco_stats._CLI.main(cmdline=0, src=[base_fpath])

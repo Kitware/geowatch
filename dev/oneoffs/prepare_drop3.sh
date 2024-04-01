@@ -158,7 +158,7 @@ hack_fix_empty_imges(){
     7z 
 
     DVC_DPATH=$(geowatch_dvc)
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --base_fpath="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --run=1 --serial=True
 
@@ -187,7 +187,7 @@ hack_fix_empty_imges(){
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --run=1 --backend=tmux 
 
@@ -325,7 +325,7 @@ prepare_cropped_from_tracks(){
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --base_fpath="$BASE_DPATH" \
         --run=0 --backend=serial
 
@@ -339,7 +339,7 @@ prepare_cropped_from_tracks(){
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
         --gres=",0" \
@@ -353,7 +353,7 @@ prepare_cropped_from_tracks(){
 
 
     DVC_DPATH=$(geowatch_dvc --hardware="ssd")
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --base_fpath="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/combo_DLM.kwcoco.json" \
         --run=0
 
@@ -387,7 +387,7 @@ cropped_with_more_context(){
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
     export CUDA_VISIBLE_DEVICES=1
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/.kwcoco.json" \
         --dvc_dpath="$DVC_DPATH" \
         --gres="0,1" \

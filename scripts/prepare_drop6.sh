@@ -76,7 +76,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #    cd "$DATA_DVC_DPATH"
 #    git add Drop6
 #    cd "$DATA_DVC_DPATH/Drop6"
-#    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+#    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 #    7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
 #    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push
 #}
@@ -168,7 +168,7 @@ poc_util_grab_array(){
 }
 
 dvc_add(){
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
     7z a splits2.zip data*.kwcoco.json img*.kwcoco.json -mx9
 
@@ -363,7 +363,7 @@ update_from_dmj_constructions(){
 
     dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
 
-    python ~/code/watch/watch/cli/prepare_splits.py \
+    python ~/code/watch/watch/cli/queue_cli/prepare_splits.py \
         --base_fpath="imganns*.kwcoco.*" \
         --workers=5 \
         --constructive_mode=True --run=1

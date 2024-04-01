@@ -960,7 +960,7 @@ def main(cmdline=False, **kwargs):
     DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.zip \
         --gres=0, \
         --with_depth=0 \

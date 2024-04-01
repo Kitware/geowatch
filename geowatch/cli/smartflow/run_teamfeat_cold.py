@@ -133,7 +133,7 @@ def main():
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
-    from geowatch.cli import prepare_teamfeats
+    from geowatch.cli.queue_cli import prepare_teamfeats
     base_fpath = ub.Path(full_input_kwcoco_fpath)
     prepare_teamfeats.main(
         cmdline=0,

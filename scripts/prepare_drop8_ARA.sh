@@ -100,7 +100,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=4 \
+    --tmux_workers=1 \
     --run=1
     #--sensor_to_time_window='
     #    #S2: 2 weeks
@@ -108,6 +108,19 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     #    #PD: 2 weeks
     #    #WV: 2 weeks
     #' \
+
+
+background_cleanup(){
+
+    # shellcheck disable=SC2155
+    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+    # Run in background to deal with temp cleanup
+    python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py \
+        --dpath "$SRC_BUNDLE_DPATH" \
+        --age_thresh "1 hour"
+
+}
 
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
@@ -313,7 +326,7 @@ python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=16 "reproject_for_sc"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -464,7 +477,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \

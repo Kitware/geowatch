@@ -15,7 +15,7 @@ python -m geowatch.cli.split_videos \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.zip" \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.zip" \

@@ -89,7 +89,7 @@ python -m geowatch.cli.coco_time_combine \
 # COLD FEATURES on original data
 #
 # Helper to generate the raw commands
-# python -m geowatch.cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+# python -m geowatch.cli.queue_cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
 #    --with_cold=1 --skip_existing=1 --gres=0,1 --tmux_workers=4 \
 #    --backend=tmux --run=0 --print-commands
 

@@ -1,7 +1,7 @@
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath="$DVC_DATA_DPATH/Drop6/imganns-*BH_R001.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \

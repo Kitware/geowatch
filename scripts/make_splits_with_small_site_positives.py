@@ -36,7 +36,7 @@ for imgonly_fpath in imgonly_fpaths:
 
 # command = ub.codeblock(
 # fr'''
-# python ~/code/watch/watch/cli/prepare_splits.py \
+# python ~/code/watch/watch/cli/queue_cli/prepare_splits.py \
 #     --base_fpath="imganns*.kwcoco.*" \
 #     --workers=5 \
 #     --constructive_mode=True --run=1

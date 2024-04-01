@@ -218,7 +218,7 @@ dvc_add_SC(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
     __hack__="
     import shutil
@@ -490,7 +490,7 @@ dvc_add(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
     #--backend=serial
 
     mkdir -p viz512_anns

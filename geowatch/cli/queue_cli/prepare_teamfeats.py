@@ -4,7 +4,7 @@
 The following example simply produces the script under different variations.
 
 CommandLine:
-    xdoctest -m geowatch.cli.prepare_teamfeats __doc__
+    xdoctest -m geowatch.cli.queue_cli.prepare_teamfeats __doc__
 
 SeeAlso:
     ../tasks/invariants/predict.py
@@ -15,7 +15,7 @@ SeeAlso:
     ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
 Example:
-    >>> from geowatch.cli.prepare_teamfeats import *  # NOQA
+    >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './pretend_bundle/data.kwcoco.json',
@@ -47,7 +47,7 @@ Example:
 
 Example:
     >>> # Test landcover commands
-    >>> from geowatch.cli.prepare_teamfeats import *  # NOQA
+    >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './PRETEND_BUNDLE/data.kwcoco.json',
@@ -71,7 +71,7 @@ Example:
 
 Example:
     >>> # Test COLD commands
-    >>> from geowatch.cli.prepare_teamfeats import *  # NOQA
+    >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> cold_config = ub.codeblock(
         '''
@@ -104,7 +104,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=0 \
@@ -120,7 +120,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
@@ -138,7 +138,7 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --src_kwcocos "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_s2_landcover=1 \
@@ -152,7 +152,7 @@ Ignore:
         --gres=0, --tmux_workers=1 --backend=tmux --run=0
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --src_kwcocos=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
         --constructive_mode=True \
         --suffix=I2LS \
@@ -774,15 +774,15 @@ if __name__ == '__main__':
     """
     CommandLine:
         DVC_DPATH=$(geowatch_dvc)
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --src_kwcocos="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
             --with_depth=0 \
             --run=False --skip_existing=False --virtualenv_cmd "conda activate geowatch" \
             --backend=serial
 
-        python -m geowatch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
-        python -m geowatch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
+        python -m geowatch.cli.queue_cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
+        python -m geowatch.cli.queue_cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
 
         # TODO: rename to schedule teamfeatures
 
@@ -798,7 +798,7 @@ if __name__ == '__main__':
 
         # Team Features on Drop2
         DVC_DPATH=$(geowatch_dvc)
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --src_kwcocos=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  \
             --run=0
@@ -808,7 +808,7 @@ if __name__ == '__main__':
         DVC_DPATH=$(geowatch_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --src_kwcocos=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=1 \
@@ -818,7 +818,7 @@ if __name__ == '__main__':
             --skip_existing=0 --run=0
 
         # Simple demo
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --src_kwcocos=./mydata/data.kwcoco.json \
             --gres=0,1 \
             --with_depth=0 \

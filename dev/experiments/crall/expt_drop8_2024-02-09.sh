@@ -52,7 +52,7 @@ size_parameter_adjuster(){
 
 prepare_splits(){
     DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --src_kwcocos="$DVC_DATA_DPATH"/Aligned-Drop8-ARA/*/imganns-*.kwcoco.zip \
         --dst_dpath "$DVC_DATA_DPATH"/Aligned-Drop8-ARA \
         --suffix=rawbands \

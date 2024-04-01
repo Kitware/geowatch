@@ -308,7 +308,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -433,7 +433,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -621,7 +621,7 @@ python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=16 "reproject_for_sc"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \

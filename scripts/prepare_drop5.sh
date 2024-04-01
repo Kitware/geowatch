@@ -73,7 +73,7 @@ add_dvc_data(){
     ln -s "Aligned-Drop5-2022-11-07-c30-TA1-S2-L8-WV-PD-ACC-1" "Drop5"
     git add Drop5
     cd "$DATA_DVC_DPATH/Drop5"
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
     7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
     dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop5 ACC-1" && git push 
 }

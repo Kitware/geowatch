@@ -1858,7 +1858,7 @@ prep_teamfeat_drop2(){
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DVC_DPATH=$(geowatch_dvc)
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
     --gres=0,1 \
     --with_landcover=True \
@@ -1870,7 +1870,7 @@ python -m geowatch.cli.prepare_teamfeats \
     --run=1 --do_splits=1 \
     --cache=1
 
-#python -m geowatch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+#python -m geowatch.cli.queue_cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc

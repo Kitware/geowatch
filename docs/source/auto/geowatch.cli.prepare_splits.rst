@@ -1,7 +1,7 @@
 geowatch.cli.prepare\_splits module
 ===================================
 
-.. automodule:: geowatch.cli.prepare_splits
+.. automodule:: geowatch.cli.queue_cli.prepare_splits
    :members:
    :undoc-members:
    :show-inheritance:
