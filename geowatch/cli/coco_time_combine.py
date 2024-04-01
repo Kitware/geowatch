@@ -197,6 +197,13 @@ class TimeCombineConfig(scfg.DataConfig):
         subset of images.
         '''))
 
+    avoid_quality_values = scfg.Value(['cloud'], nargs='+', help=ub.paragraph(
+        '''
+        The types of QA categories we will avoid.
+        '''))
+    # avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    # avoid_quality_values += ['ice']
+
 
 def main(cmdline=1, **kwargs):
     """
@@ -524,6 +531,7 @@ def combine_kwcoco_channels_temporally(config):
 
     # 1. Load kwcoco dataset.
     coco_dset = kwcoco.CocoDataset.coerce(config.input_kwcoco_fpath)
+    print(f'coco_dset = {ub.urepr(coco_dset, nl=1)}')
 
     selected_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -734,7 +742,8 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
     Returns:
         np.ndarray: A binary numpy array of shape [H, W, 1] where the 1 values corresponds to a quality pixel vice versa for 0 values.
     """
-    import numpy as np
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    from geowatch import heuristics
     delay = coco_image.imdelay('quality',
                                space=space,
                                interpolation='nearest',
@@ -742,14 +751,10 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
                                resolution=resolution)
     if crop_slice:
         delay = delay.crop(crop_slice)
-    qa_data = delay.finalize(antialias=False, interpolation='nearest')
+    qa_data = delay.finalize(antialias=False, interpolation='nearest',
+                             nodata_method='ma')
+    is_nodata = qa_data.mask
 
-    if qa_data.dtype.kind == 'f' or avoid_quality_values is None:
-        # If the qa band is a float, then it must be a nan channel
-        return np.ones_like(qa_data, dtype=np.uint8)
-
-    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-    from geowatch import heuristics
     spec_name = coco_image.img.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
     sensor = coco_image.img.get('sensor_coarse', '*')
     try:
@@ -758,11 +763,74 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
         print(f'warning ex={ex}')
         is_iffy = None
     else:
-        is_iffy = table.mask_any(qa_data, avoid_quality_values)
+        is_iffy = table.mask_any(qa_data.data, avoid_quality_values)
+    is_iffy |= is_nodata
 
     quality_mask = (1 - is_iffy)
-
     return quality_mask
+
+
+@profile
+def estimate_top_quality_images(window_coco_images, max_images_per_group, avoid_quality_values):
+    """
+    Heuristic to subselect top images.
+    """
+    import numpy as np
+    # We can try to use QA bands if we have those
+    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+
+    assert len(window_coco_images) > max_images_per_group
+
+    use_qa_bands = True
+    qa_assets = [coco_img.find_asset('quality')
+                 for coco_img in window_coco_images]
+    has_known_encoding = [
+        qa_asset is not None and 'qa_encoding' in qa_asset
+        for qa_asset in qa_assets
+    ]
+    use_qa_bands = all(has_known_encoding)
+    estimated_iffyness = []
+
+    qa_scale = 0.25
+
+    if use_qa_bands:
+        for coco_img in window_coco_images:
+            qa_asset = coco_img.find_asset('quality')
+            spec_name = qa_asset['qa_encoding']
+            sensor = qa_asset['sensor_coarse']
+            table = QA_SPECS.find_table(spec_name, sensor)
+
+            # Note: might want to configure the resolution we are loading at
+            qa_delay = coco_img.imdelay('quality',
+                                        space='video',
+                                        interpolation='nearest',
+                                        antialias=False)
+            # Use an overview to estimate quality
+            qa_delay = qa_delay.scale(qa_scale)
+            qa_data = qa_delay.finalize(antialias=False, interpolation='nearest',
+                                        nodata_method='ma')
+            is_nodata = qa_data.mask
+            is_iffy = table.mask_any(qa_data.data, avoid_quality_values)
+            is_iffy |= is_nodata
+            iffyness = is_iffy.sum() / is_iffy.size
+            estimated_iffyness.append(iffyness)
+    else:
+        # If we have no information on QA bands, we can use the coarse stac
+        # properties of the larger images
+        inf = float('inf')
+        for coco_img in window_coco_images:
+            # FIXME, non general hard-coded properties used here
+            ave_cloudcover = np.nanmean([
+                prop.get('eo:cloud_cover', inf) / 100
+                for prop in coco_img.img.get('parent_stac_properties', [])
+            ])
+            estimated_iffyness.append(ave_cloudcover)
+
+    ranked_idxs = np.argsort(estimated_iffyness)
+    top_idxs = ranked_idxs[:max_images_per_group]
+    chosen = list(ub.take(window_coco_images, top_idxs))
+    chosen_window_coco_images = sorted(chosen, key=lambda x: x.datetime)
+    return chosen_window_coco_images
 
 
 @profile
@@ -798,21 +866,11 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     # By default we use a hard coded property to identify cloud cover
     # TODO: make this more general with a standardized kwcoco coarse
     # quality property
-    max_images_per_group = config.max_image_per_group
-    if len(window_coco_images) > max_images_per_group:
-        estimated_qualities = []
-        inf = float('inf')
-        for coco_img in window_coco_images:
-            # FIXME, non general hard-coded properties used here
-            ave_cloudcover = np.nanmean([
-                prop.get('eo:cloud_cover', inf) / 100
-                for prop in coco_img.img.get('parent_stac_properties', [])
-            ])
-            estimated_qualities.append(ave_cloudcover)
-        ranked_idxs = np.argsort(estimated_qualities)
-        top_idxs = ranked_idxs[:max_images_per_group]
-        chosen = list(ub.take(window_coco_images, top_idxs))
-        window_coco_images = sorted(chosen, lambda x: x.datetime)
+    max_images_per_group = config.max_images_per_group
+    if max_images_per_group is not None and len(window_coco_images) > max_images_per_group:
+        window_coco_images = estimate_top_quality_images(
+            window_coco_images, max_images_per_group,
+            config.avoid_quality_values)
 
     # TODO: we should merge each asset at the highest resolution for that
     # asset, but no more.  For instance, when given red|green|blue|swir16 we
@@ -867,9 +925,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
             allow_overshoot=True
         )
 
-    # avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
-    avoid_quality_values = ['cloud']
-    # avoid_quality_values += ['ice']
+    avoid_quality_values = config.avoid_quality_values
     # Create canvas to combine averaged tiles into.
 
     # todo: memmap this.
@@ -1033,6 +1089,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     return final_img
 
 
+@profile
 def generate_frames(window_coco_images, crop_slice, resolution, space, merge_chans, mask_low_quality, avoid_quality_values):
     import numpy as np
     for coco_img in window_coco_images:

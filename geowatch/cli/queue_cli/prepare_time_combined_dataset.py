@@ -38,6 +38,15 @@ class PrepareTimeAverages(CMDQueueConfig):
     true_site_dpath = scfg.Value(None)
     true_region_dpath = scfg.Value(None)
 
+    max_images_per_group = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, the averaging operation (e.g. mean/median) will only
+        consider a subset of the images within each temporal window.  This can
+        greatly reduce the resources required to run this script at the cost of
+        quality. Currently a heuristic is used to select the "highest quality"
+        subset of images.
+        '''))
+
     queue_name = scfg.Value('time-ave-queue', help='overwrite the default queue name', group='cmd-queue')
 
 
@@ -155,6 +164,7 @@ def main(cmdline=1, **kwargs):
                 --merge_method=$merge_method \
                 --spatial_tile_size=$spatial_tile_size \
                 --mask_low_quality=$mask_low_quality \
+                --max_images_per_group=$max_images_per_group
                 --start_time=2010-03-01 \
                 --assets_dname="raw_bands" \
                 --workers=$combine_workers

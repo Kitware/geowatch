@@ -274,24 +274,33 @@ class Pipeline:
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
 
-    def print_graphs(self, shrink_labels=1, show_types=0, smart_colors=0):
-        """
-        Prints the Process and IO graph for the DAG.
-        """
-        self._ensure_clean()
-
-        _labelize_graph(self.io_graph, shrink_labels, show_types, smart_colors, color_procs=True)
-        _labelize_graph(self.proc_graph, shrink_labels, show_types, smart_colors)
-
+    def print_process_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
         import rich
         from cmd_queue.util import util_networkx
+        self._ensure_clean()
+        _labelize_graph(self.proc_graph, shrink_labels, show_types, smart_colors)
         print('')
         print('Process Graph')
         util_networkx.write_network_text(self.proc_graph, path=rich.print, end='', vertical_chains=True)
 
+    def print_io_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
+        import rich
+        from cmd_queue.util import util_networkx
+        self._ensure_clean()
+        _labelize_graph(self.io_graph, shrink_labels, show_types, smart_colors, color_procs=True)
         print('')
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='', vertical_chains=True)
+
+    def print_graphs(self, shrink_labels=1, show_types=0, smart_colors=0):
+        """
+        Prints the Process and IO graph for the DAG.
+        """
+        self.print_process_graph(shrink_labels=shrink_labels,
+                                 show_types=show_types,
+                                 smart_colors=smart_colors)
+        self.print_io_graph(shrink_labels=shrink_labels, show_types=show_types,
+                            smart_colors=smart_colors)
 
     @profile
     def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,

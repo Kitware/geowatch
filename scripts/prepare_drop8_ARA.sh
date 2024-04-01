@@ -66,6 +66,8 @@ echo "
 DVC_DATA_DPATH=$DVC_DATA_DPATH
 "
 
+CACHE_STEPS="stac-search,baseline_ingress,stac_to_kwcoco,coco_add_watch_fields"
+
 # Construct the TA2-ready dataset
 python -m geowatch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
@@ -88,7 +90,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=0 \
+    --cache=$CACHE_STEPS \
     --verbose=100 \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
@@ -288,37 +290,6 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
 done
 python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run --workers=8 "crop_for_sc_queue"
-
-## FIXUP to remove the nan images
-#python -m cmd_queue new "fixup_remove_nan_images"
-#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-#    #echo "REGION_ID = $REGION_ID"
-#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    if test -f "$DST_KWCOCO_FPATH"; then
-#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
-#        python -m cmd_queue submit --jobname="fixup-nan-$REGION_ID" -- fixup_remove_nan_images \
-#            python ~/code/watch/dev/poc/find_and_remove_unregistered_images.py --src "$DST_KWCOCO_FPATH" --yes=True
-#    fi
-#done
-#python -m cmd_queue show "fixup_remove_nan_images"
-#python -m cmd_queue run --workers=8 "fixup_remove_nan_images"
-
-
-## Hack fixup
-#python -m cmd_queue new "crop_for_sc_queue"
-## sdvc unprotect -- */*.kwcoco*.zip
-#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-#    REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
-#    REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
-#    SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-
-#    CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    if test -f "$DST_KWCOCO_FPATH"; then
-#        mv "$DST_KWCOCO_FPATH" "$CRP_KWCOCO_FPATH"
-#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
-#    fi
-#done
 
 
 ### Reproject Annotation Jobs

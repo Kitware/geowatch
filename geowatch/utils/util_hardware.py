@@ -19,7 +19,7 @@ def get_cpu_info():
     return cpu_info
 
 
-def get_mem_info():
+def get_mem_info(with_units=False):
     """
     Memory info is returned in bytes.
 
@@ -31,12 +31,24 @@ def get_mem_info():
 
     Example:
         >>> from geowatch.utils import util_hardware
-        >>> mem_info = util_hardware.get_mem_info()
-        >>> print(f'mem_info={mem_info}')
+        >>> import ubelt as ub
+        >>> mem_info = util_hardware.get_mem_info(with_units=0)
+        >>> print(f'mem_info = {ub.urepr(mem_info, nl=1)}')
     """
     import psutil
     svmem_info = psutil.virtual_memory()
     mem_info = dict(zip(svmem_info._fields, svmem_info))
+
+    if with_units:
+        import pint
+        ureg = pint.UnitRegistry()
+        bytes_keys = [
+            'total', 'available', 'used', 'free', 'active', 'inactive',
+            'buffers', 'cached', 'shared', 'slab', 'wired',
+        ]
+        for key in bytes_keys:
+            if key in mem_info:
+                mem_info[key] = (mem_info[key] * ureg.bytes).to('gigabytes')
     return mem_info
 
 

@@ -350,16 +350,18 @@ def main(cmdline=False, **kwargs):
 
     """
     config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
     from kwutil import slugify_ext
     from geowatch.utils import util_gis
-    import rich
     from geowatch.mlops.pipeline_nodes import Pipeline
-    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    from geowatch.monkey import monkey_kwutil
+    monkey_kwutil.patch_kwutil_toplevel()
 
     out_dpath = config['out_dpath']
     if out_dpath == 'auto':
-        import geowatch
-        out_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        raise Exception('the "auto" argument is deprecated')
     out_dpath = ub.Path(out_dpath)
 
     aws_profile = config['aws_profile']
@@ -367,12 +369,8 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    if 1:
-        uncropped_dpath = out_dpath / uncropped_bundle_name
-        aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
-    else:
-        uncropped_dpath = ub.Path('.') / uncropped_bundle_name
-        aligned_kwcoco_bundle = ub.Path('.') / aligned_bundle_name
+    uncropped_dpath = out_dpath / uncropped_bundle_name
+    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
 
     uncropped_query_dpath = uncropped_dpath / '_query/items'
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
@@ -401,7 +399,7 @@ def main(cmdline=False, **kwargs):
     environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
     if api_key is not None and api_key.startswith('env:'):
         import os
-        # NOTE!!!
+        # NOTE!!! WARNING!!!
         # THIS WILL LOG YOUR SECRET KEY IN PLAINTEXT!!!
         # TODO: figure out how to pass the in-environment secret key
         # to the tmux sessions.
@@ -707,7 +705,7 @@ def main(cmdline=False, **kwargs):
         # Crop big images to the geojson regions
         import kwutil
         if config.sensor_to_time_window:
-            sensor_to_time_window = kwutil.util_yaml.Yaml.dumps(kwutil.util_yaml.Yaml.loads(config.sensor_to_time_window))
+            sensor_to_time_window = kwutil.Yaml.dumps(kwutil.util_yaml.Yaml.loads(config.sensor_to_time_window))
             sensor_to_time_window = "\n" + ub.indent(sensor_to_time_window, ' ' * (4 * 6))
         else:
             sensor_to_time_window = config.sensor_to_time_window
@@ -881,6 +879,24 @@ def main(cmdline=False, **kwargs):
         cache=config.cache
     )
 
+    hanlde_custom_cache = isinstance(cache, list)
+    if hanlde_custom_cache:
+        # The old version of this script had customized per-node caching,
+        # this is a small workaround to add that feature to the new pipeline
+        import networkx as nx
+        from geowatch.utils import util_dotdict
+        self = new_pipeline
+        dotconfig = util_dotdict.DotDict(config)
+
+        for node_name in nx.topological_sort(self.proc_graph):
+            # non-robust hack to grab the generic process type by removing the
+            # region part
+            proc_type = node_name.rsplit('-', 1)[0]
+            hacked_cache_flag = proc_type in cache
+            node = self.proc_graph.nodes[node_name]['node']
+            node_config = dict(dotconfig.prefix_get(node.name, {}))
+            node.configure(node_config, cache=hacked_cache_flag)
+
     # new_pipeline.inspect_configurables()
     # new_pipeline.print_graphs()
 
@@ -902,7 +918,6 @@ def main(cmdline=False, **kwargs):
         from geowatch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
             aligned_final_fpath, queue, depends=[aligned_final_nodes])
-
         # TODO: use this instead
         # prepare_splits._submit_constructive_split_jobs(
         #     base_fpath, dst_dpath, suffix, queue, config
@@ -938,14 +953,6 @@ def main(cmdline=False, **kwargs):
         'exclude_tags': ['boilerplate'],
     }
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
-    # if config.rprint:
-    #     queue.print_graph()
-    #     queue.rprint()
-    # if config.run:
-    #     # This logic will exist in cmd-queue itself
-    #     other_session_handler = config.other_session_handler
-    #     queue.run(block=True, system=True, with_textual=config.with_textual,
-    #               other_session_handler=other_session_handler)
 
     # TODO: team features
     """
@@ -963,29 +970,6 @@ def main(cmdline=False, **kwargs):
         --depth_workers=auto \
         --do_splits=1  --cache=1 --run=0
     """
-
-# dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
-# #dvc_dpath=$(geowatch_dvc)
-# #s3_dpath=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
-# query_basename=$(basename "$s3_fpath")
-# aligned_bundle_name=aligned-$dataset_suffix
-# uncropped_bundle_name=uncropped-$dataset_suffix
-
-# #region_models=$dvc_dpath'/annotations/region_models/*.geojson'
-# region_models=$dvc_dpath/annotations/region_models/kr_r002.geojson
-# # helper variables
-# uncropped_dpath=$dvc_dpath/$uncropped_bundle_name
-# uncropped_query_dpath=$uncropped_dpath/_query/items
-# uncropped_ingress_dpath=$uncropped_dpath/ingress
-# uncropped_kwcoco_fpath=$uncropped_dpath/data.kwcoco.zip
-# aligned_kwcoco_bundle=$dvc_dpath/$aligned_bundle_name
-# aligned_kwcoco_fpath=$aligned_kwcoco_bundle/data.kwcoco.zip
-# uncropped_query_fpath=$uncropped_query_dpath/$query_basename
-# uncropped_catalog_fpath=$uncropped_ingress_dpath/catalog.json
-
-# export AWS_DEFAULT_PROFILE=iarpa
-#     pass
-
 
 if __name__ == '__main__':
     """
