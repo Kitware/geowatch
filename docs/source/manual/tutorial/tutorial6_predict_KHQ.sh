@@ -45,7 +45,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset.
 # This is a cmdqueue pipeline of simpler commands
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --cloud_cover=30 \
     --stac_query_mode=auto \

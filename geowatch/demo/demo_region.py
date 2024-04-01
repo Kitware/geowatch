@@ -31,7 +31,7 @@ CommandLine:
     rm -f "$RESULT_FPATH"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --cloud_cover=100 \
         --stac_query_mode=auto \

@@ -47,7 +47,7 @@ simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 #rm -rf 	Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/ Drop6-MeanYear10GSD/ Drop6_Mean3Month10GSD/ Drop6_MeanYear/ Drop7-Cropped2GSD-V2/
 
 # Construct the TA2-ready dataset
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \

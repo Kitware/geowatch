@@ -1,7 +1,7 @@
 #!/bin/bash
 __doc__="
 See Also:
-    ~/code/watch/watch/cli/prepare_ta2_dataset.py
+    ~/code/watch/watch/cli/queue_cli/prepare_ta2_dataset.py
 "
 
 
@@ -10,7 +10,7 @@ DVC_DPATH=$(geowatch_dvc)-hdd
 cd $DVC_DPATH
 
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part2.unique.input \
@@ -33,7 +33,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
 # s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
 
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
@@ -54,7 +54,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
 
 DVC_DPATH=$(geowatch_dvc)
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part1.unique.input \
@@ -169,7 +169,7 @@ hack_fix_empty_imges(){
     # s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
 
     DATASET_SUFFIX=Drop3-TA1-2022-03-10 
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath \
             s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
@@ -259,7 +259,7 @@ prepare_l1_version_of_drop3(){
     echo "DVC_DPATH = $DVC_DPATH"
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
     DATASET_SUFFIX=Drop3-L1
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix="$DATASET_SUFFIX" \
         --s3_fpath="$S3_FPATH" \
         --dvc_dpath="$DVC_DPATH" \
@@ -284,7 +284,7 @@ prepare_wv_crop_from_sites(){
     cd "$DVC_DPATH"
 
     DATASET_SUFFIX=Drop3-TA1-SiteCropsWV-2022-03-30 
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath \
             s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \

@@ -39,7 +39,7 @@ CommandLine:
     export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --cloud_cover=100 \
         --stac_query_mode=auto \
@@ -69,10 +69,10 @@ TODO:
     handle GE01 and WV01 platforms
 
 CommandLine:
-    xdoctest -m geowatch.cli.prepare_ta2_dataset __doc__:0
+    xdoctest -m geowatch.cli.queue_cli.prepare_ta2_dataset __doc__:0
 
 Example:
-    >>> from geowatch.cli.prepare_ta2_dataset import *  # NOQA
+    >>> from geowatch.cli.queue_cli.prepare_ta2_dataset import *  # NOQA
     >>> import ubelt as ub
     >>> dpath = ub.Path.appdir('geowatch/tests/prep_ta2_dataset').delete().ensuredir()
     >>> from geowatch.geoannots import geomodels
@@ -337,7 +337,7 @@ def main(cmdline=False, **kwargs):
     """
 
     Ignore:
-        from geowatch.cli.prepare_ta2_dataset import *  # NOQA
+        from geowatch.cli.queue_cli.prepare_ta2_dataset import *  # NOQA
         cmdline = False
         kwargs = {
             'dataset_suffix': 'TA1_FULL_SEQ_KR_S001_CLOUD_LT_10',
@@ -974,6 +974,6 @@ def main(cmdline=False, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/geowatch/cli/prepare_ta2_dataset.py
+        python ~/code/watch/geowatch/cli/queue_cli/prepare_ta2_dataset.py
     """
     main(cmdline=True)

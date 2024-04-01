@@ -20,7 +20,7 @@ geowatch software.
 
 We have a process to convert STAC to KWCOCO, which puts the geospatial data
 into a pixel-first context. The end-to-end pipeline is outlined here:
-geowatch/cli/prepare_ta2_dataset.py where the input is a geojson file
+geowatch/cli/queue_cli/prepare_ta2_dataset.py where the input is a geojson file
 indicating the spacetime area of interest. The output is a corresponding kwcoco
 dataset.
 
