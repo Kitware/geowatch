@@ -91,30 +91,30 @@ class TimeCombineConfig(scfg.DataConfig):
     __command__ = 'time_combine'
 
     input_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
-            '''
-            The path to the kwcoco file containing the image data to be
-            combined.
-            '''), alias=['kwcoco_fpath'], position=1)
+        '''
+        The path to the kwcoco file containing the image data to be
+        combined.
+        '''), alias=['kwcoco_fpath'], position=1)
 
     output_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
-            '''
-            The path where the combined image data will be saved to in a
-            kwcoco file.
-            '''), position=2)
+        '''
+        The path where the combined image data will be saved to in a
+        kwcoco file.
+        '''), position=2)
 
     channels = scfg.Value('*', help=ub.paragraph(
-            '''
-            The channels to get and combine the spatial data from. E.g.
-            "red|green|blue". Note: Separate channels with "|". A ``*``
-            means combine everything.
-            '''))
+        '''
+        The channels to get and combine the spatial data from. E.g.
+        "red|green|blue". Note: Separate channels with "|". A ``*``
+        means combine everything.
+        '''))
 
     time_window = scfg.Value('1month', help=ub.paragraph(
-            '''
-            The temporal window that will group images. E.g. 1y (or 365d) will
-            group all images in every year. Buckets are non-overlapping.  The first
-            image defines where the buckets start.
-            '''), alias=['temporal_window_duration'])
+        '''
+        The temporal window that will group images. E.g. 1y (or 365d) will
+        group all images in every year. Buckets are non-overlapping.  The first
+        image defines where the buckets start.
+        '''), alias=['temporal_window_duration'])
 
     start_time = scfg.Value(None, help=ub.paragraph(
         '''
@@ -123,27 +123,27 @@ class TimeCombineConfig(scfg.DataConfig):
         '''))
 
     merge_method = scfg.Value('mean', help=ub.paragraph(
-            '''
-            How to combine multiple observations over each time_window.
-            '''), choices=['mean', 'median', 'max'])
+        '''
+        How to combine multiple observations over each time_window.
+        '''), choices=['mean', 'median', 'max'])
 
     resolution = scfg.Value('10GSD', help=ub.paragraph(
-            '''
-            The resolution the imagery will be loaded during the
-            combination operation and saved to the output kwcoco file.
+        '''
+        The resolution the imagery will be loaded during the
+        combination operation and saved to the output kwcoco file.
             '''))
 
     mask_low_quality = scfg.Value(True, isflag=True, help=ub.paragraph(
-            '''
-            If True, use the quality masks to prevent low-quality pixels from
-            being used in the average.
-            '''), alias=['filter_with_cloudmasks'])
+        '''
+        If True, use the quality masks to prevent low-quality pixels from
+        being used in the average.
+        '''), alias=['filter_with_cloudmasks'])
 
     sensor_weights = scfg.Value(0, help=ub.paragraph(
-            '''
-            Weight the contribution of each sensor in the average operation
-            by a scalar value.
-            '''))
+        '''
+        Weight the contribution of each sensor in the average operation
+        by a scalar value.
+        '''))
 
     separate_sensors = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
@@ -167,9 +167,9 @@ class TimeCombineConfig(scfg.DataConfig):
         '''))
 
     exclude_sensors = scfg.Value(None, help=ub.paragraph(
-            '''
-            A list of sensors to exclude from the combination operation.
-            '''))
+        '''
+        A list of sensors to exclude from the combination operation.
+        '''))
 
     select_images = scfg.Value(None, help='see kwcoco_extensions.filter_image_ids docs')
 
@@ -177,16 +177,25 @@ class TimeCombineConfig(scfg.DataConfig):
 
     spatial_tile_size = scfg.Value(None, help=ub.paragraph(
         '''
-            The size of the tiling over space to use when computing the average.
-            If None, the average is computed on the entire stack of images at
-            once.
+        The size of the tiling over space to use when computing the average.
+        If None, the average is computed on the entire stack of images at
+        once.
         '''))
 
     filter_season = scfg.Value([], nargs='+', help=ub.paragraph(
         '''
-            Images within this season(s) will be excluded from the average operation.
-            Season options: ['spring', 'summer', 'fall', 'winter']
+        Images within this season(s) will be excluded from the average operation.
+        Season options: ['spring', 'summer', 'fall', 'winter']
         '''), alias=['remove_seasons'])
+
+    max_images_per_group = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, the averaging operation (e.g. mean/median) will only
+        consider a subset of the images within each temporal window.  This can
+        greatly reduce the resources required to run this script at the cost of
+        quality. Currently a heuristic is used to select the "highest quality"
+        subset of images.
+        '''))
 
 
 def main(cmdline=1, **kwargs):
@@ -785,28 +794,25 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     merge_chans_set = requested_chans_set & available_chans_set
     merge_chans = kwcoco.FusedChannelSpec.coerce(sorted(merge_chans_set))
 
-    if 0:
-        # Take only the N "best" images per group to combine over.
-        # By default we use a hard coded property to identify cloud cover
-        # TODO: make this more general with a standardized kwcoco coarse
-        # quality property
-        max_images_per_group = 10
-        if len(window_coco_images) > max_images_per_group:
-            import xdev
-            xdev.embed()
-            estimated_qualities = []
-            inf = float('inf')
-            for coco_img in window_coco_images:
-                # FIXME, non general hard-coded properties used here
-                ave_cloudcover = np.nanmean([
-                    prop.get('eo:cloud_cover', inf) / 100
-                    for prop in coco_img.img.get('parent_stac_properties', [])
-                ])
-                estimated_qualities.append(ave_cloudcover)
-            ranked_idxs = np.argsort(estimated_qualities)
-            top_idxs = ranked_idxs[:max_images_per_group]
-            chosen = list(ub.take(window_coco_images, top_idxs))
-            window_coco_images = sorted(chosen, lambda x: x.datetime)
+    # Take only the N "best" images per group to combine over.
+    # By default we use a hard coded property to identify cloud cover
+    # TODO: make this more general with a standardized kwcoco coarse
+    # quality property
+    max_images_per_group = config.max_image_per_group
+    if len(window_coco_images) > max_images_per_group:
+        estimated_qualities = []
+        inf = float('inf')
+        for coco_img in window_coco_images:
+            # FIXME, non general hard-coded properties used here
+            ave_cloudcover = np.nanmean([
+                prop.get('eo:cloud_cover', inf) / 100
+                for prop in coco_img.img.get('parent_stac_properties', [])
+            ])
+            estimated_qualities.append(ave_cloudcover)
+        ranked_idxs = np.argsort(estimated_qualities)
+        top_idxs = ranked_idxs[:max_images_per_group]
+        chosen = list(ub.take(window_coco_images, top_idxs))
+        window_coco_images = sorted(chosen, lambda x: x.datetime)
 
     # TODO: we should merge each asset at the highest resolution for that
     # asset, but no more.  For instance, when given red|green|blue|swir16 we

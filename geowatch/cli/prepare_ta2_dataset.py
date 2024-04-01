@@ -214,11 +214,6 @@ class PrepareTA2Config(CMDQueueConfig):
             official L1/L2 catalogs.
             '''))
 
-    debug = scfg.Value(False, isflag=1, help=ub.paragraph(
-            '''
-            if enabled, turns on debug visualizations
-            '''))
-
     select_images = scfg.Value(False, help='if enabled only uses select images')
 
     include_channels = scfg.Value(None, group='align', help='specific channels to use in align crop')
@@ -705,8 +700,6 @@ def main(cmdline=False, **kwargs):
         site_globstr = info['site_globstr']
         parent_node = info['node']
 
-        debug_valid_regions = config.debug
-        align_visualize = config.debug
         include_channels = config.include_channels
         exclude_channels = config.exclude_channels
 
@@ -730,8 +723,6 @@ def main(cmdline=False, **kwargs):
                     --force_nodata={config.force_nodata} \
                     --include_channels="{include_channels}" \
                     --exclude_channels="{exclude_channels}" \
-                    --visualize={align_visualize} \
-                    --debug_valid_regions={debug_valid_regions} \
                     --rpc_align_method {config.rpc_align_method} \
                     --sensor_to_time_window "{sensor_to_time_window}" \
                     --verbose={config.verbose} \
