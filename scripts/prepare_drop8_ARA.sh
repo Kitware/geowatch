@@ -98,8 +98,8 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=6 \
-    --run=0
+    --tmux_workers=4 \
+    --run=1
     #--sensor_to_time_window='
     #    #S2: 2 weeks
     #    #L8: 2 weeks
@@ -262,8 +262,8 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
                     --geo_preprop=False \
                     --sensor_to_time_window "
                         S2: 1month
-                        PD: 1month
                         L8: 1month
+                        PD: 1month
                     " \
                     --keep img
                     #--exclude_sensors=L8 \
@@ -350,30 +350,7 @@ python -m geowatch.cli.prepare_splits \
     --splits split6 \
     --run=1
 
-
-
-
-
-#dvc add -vvv -- */clusters
-#dvc add -vvv -- \
-#    */*/L8 \
-#    */*/S2 \
-#    */*/WV \
-#    */*/PD
-#dvc add -vvv -- \
-#    */imgonly-*-rawbands.kwcoco.zip \
-#    */imganns-*-rawbands.kwcoco.zip
-
 cd "$DST_BUNDLE_DPATH"
-
-#dvc add -vvv -- \
-#    *_rawbands_*.kwcoco.zip \
-#    */imgonly-*-rawbands.kwcoco.zip \
-#    */imganns-*-rawbands.kwcoco.zip \
-#    */*/L8 \
-#    */*/S2 \
-#    */*/WV \
-#    */*/PD && \
 
 python -c "if 1:
     import ubelt as ub
