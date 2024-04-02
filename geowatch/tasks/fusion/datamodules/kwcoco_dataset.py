@@ -668,6 +668,10 @@ class TruthMixin:
         Helper used to construct information about the truth before we start
         constructing the frames. This handles contextual relabeling of classes
         (i.e. if all frames show post construction relabel it as background).
+
+        note: `target` is the original input value (guaranteed to not be
+        modified from user input) and `target_` is the resolved variant we (may
+        have modified).
         """
         # build up info about the tracks
         dset = self.sampler.dset
@@ -748,12 +752,14 @@ class TruthMixin:
             'task_tid_to_cnames': task_tid_to_cnames,
             'gid_to_dets': gid_to_dets,
             'time_weights': time_weights,
+            'dist_weights': target_.get('dist_weights', False),
         }
         return truth_info
 
     @profile
     def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
-                               mode_to_invalid_mask, resolution_info, truth_info, meta_info):
+                               mode_to_invalid_mask, resolution_info,
+                               truth_info, meta_info):
         """
         Enrich a ``frame_item`` with rasterized truth-labels.
 
@@ -945,7 +951,7 @@ class TruthMixin:
                 if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
 
-                if self.dist_weights:
+                if truth_info['dist_weights']:
                     # New feature where we encode that we care much more about
                     # segmenting the inside of the object than the outside.
                     # Effectively boundaries become uncertain.
@@ -1032,7 +1038,7 @@ class TruthMixin:
                 if weight != 1:
                     poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
 
-                if self.dist_weights:
+                if truth_info['dist_weights']:
                     # New feature where we encode that we care much more about
                     # segmenting the inside of the object than the outside.
                     # Effectively boundaries become uncertain.
@@ -1700,8 +1706,13 @@ class GetItemMixin(TruthMixin):
 
         resolution_info = self._resolve_resolution(target_, video)
 
+        # Resolve per-target parameters
         allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
         target_['allow_augment'] = allow_augment
+
+        if not self.inference_only:
+            target_['dist_weights'] = target_.get('dist_weights', self.dist_weights)
+
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
 
