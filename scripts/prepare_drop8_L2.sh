@@ -661,7 +661,7 @@ python -c "if 1:
 
     import simple_dvc as sdvc
     dvc_repo = sdvc.SimpleDVC.coerce(root)
-    dvc_repo.add(to_add, verbose=3)
+    dvc_repo.add(to_add, verbose=0)
 "
 
 git commit -m "Update Drop8 Crop SC" && \

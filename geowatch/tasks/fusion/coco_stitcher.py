@@ -149,6 +149,11 @@ class CocoStitchingManager(object):
         device ('numpy' | torch.device):
             Device to stitch on.
 
+        memmap (bool | PathLike):
+            if truthy, the stitcher will use a memory map. If this
+            pathlike, then we use this as the directory for the memmap.
+            If True, a temp directory is used.
+
         thresh (float):
             if making hard decisions, determines the threshold for converting a
             soft mask into a hard mask, which can be converted into a polygon.

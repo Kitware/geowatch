@@ -182,6 +182,13 @@ class PredictConfig(DataModuleConfigMixin):
         using any weights coming out of the torch dataset.
         '''))
 
+    memmap = scfg.Value(None, help=ub.paragraph(
+        '''
+        if truthy, the stitcher will use a memory map. If this pathlike, then
+        we use this as the directory for the memmap.  If True, a temp directory
+        is used.
+        '''))
+
 
 def build_stitching_managers(config, model, result_dataset, writer_queue=None):
     # could be torch on-device stitching
@@ -205,6 +212,7 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         expected_minmax=(0, 1),
         writer_queue=writer_queue,
         assets_dname='_assets',
+        memmap=config.memmap,
     )
 
     # If we only care about some predictions from the model, then keep track of
