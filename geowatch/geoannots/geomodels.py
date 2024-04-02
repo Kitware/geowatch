@@ -833,7 +833,8 @@ class RegionModel(_Model):
 
     def remove_invalid_properties(self):
         """
-        Remove invalid properties from this region model
+        Remove invalid properties from this region model that have caused
+        issues in the past.
         """
         props = self.header['properties']
         bad_region_header_properties = ['validated', 'score', 'site_id', 'status', 'socre']
