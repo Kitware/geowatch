@@ -263,7 +263,7 @@ export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Cropped2GSD-V1
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Cropped2GSD-V1
 
 export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
 export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
@@ -294,7 +294,9 @@ REGION_IDS_STR=$(python -c "if 1:
     for region_name in region_names:
         coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
         if coco_fpath.exists():
-            final_names.append(region_name)
+            if not all(p.is_file() for p in list(coco_fpath.parent.glob('*'))):
+                # should at least be some subdirectory if the region has images
+                final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
 #REGION_IDS_STR="CN_C000 KW_C001 SA_C001 CO_C001 VN_C002"
@@ -446,7 +448,7 @@ export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Median10GSD-V1
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1
 
 export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
 export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
@@ -486,7 +488,9 @@ export REGION_IDS_STR=$(python -c "if 1:
     for region_name in region_names:
         coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
         if coco_fpath.exists():
-            final_names.append(region_name)
+            if not all(p.is_file() for p in list(coco_fpath.parent.glob('*'))):
+                # should at least be some subdirectory if the region has images
+                final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
 #export REGION_IDS_STR="KR_R001"
@@ -572,4 +576,3 @@ git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
 
-python -m geowatch.cli.cluster_sites --src /data2/projects/smart/smart_phase3_data/annotations/drop8-v1/region_models/AE_R001.geojson --minimum_size 256x256@2GSD --dst_dpath /flash/smart_phase3_data/Drop8-Cropped2GSD-V1/AE_R001/clusters
