@@ -1958,7 +1958,7 @@ def extract_image_job(img,
 
     dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
     dst_dpath_ = ub.Path(dst_dpath)
-    error_fpath = dst_dpath_.parent / (dst_dpath_.name + '.error')
+    error_fpath = dst_dpath_ / (f'{name}.error')
 
     job_list = []
 
@@ -1976,10 +1976,8 @@ def extract_image_job(img,
     for obj_group in ub.ProgIter(obj_groups, desc=f'submit warp assets in {new_vidname}', verbose=verbose):
         job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
-            dst_dpath, space_region, space_box, align_method,
-            is_multi_image,
-            local_epsg=local_epsg,
-            asset_config=asset_config,
+            dst_dpath, space_region, space_box, align_method, is_multi_image,
+            local_epsg=local_epsg, asset_config=asset_config,
         )
         job_list.append(job)
 

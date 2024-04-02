@@ -111,15 +111,65 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
 
 
 background_cleanup(){
-
+    __doc__="
+    The prepare-ta2-dataset task can generate temporary files which may not be
+    cleaned up if there is an error. Running a task in the background to check
+    for these can prevent excess disk usage. In the future, the coco-align
+    script may be improved to clean these files up better (it currently
+    does make some effort), but for now this is a simple workaround.
+    "
     # shellcheck disable=SC2155
     export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
     export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-    # Run in background to deal with temp cleanup
     python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py \
         --dpath "$SRC_BUNDLE_DPATH" \
         --age_thresh "1 hour"
+}
 
+
+collect_errors(){
+    __doc__="
+    This crawls the output directory to gather error reports and summarize
+    them.
+    "
+    # shellcheck disable=SC2155
+    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+    python -c "if 1:
+        import os
+        import ubelt as ub
+        import json
+        dpath = ub.Path(os.environ.get('SRC_BUNDLE_DPATH'))
+
+        image_error_fpaths = []
+        asset_error_fpaths = []
+        for r, ds, fs in dpath.walk():
+            for fname in fs:
+                if fname.endswith('.error'):
+                    fpath = r / fname
+                    if fpath.name == 'affine_warp.error':
+                        image_error_fpaths.append(fpath)
+                    else:
+                        asset_error_fpaths.append(fpath)
+
+        num_errors = len(error_fpaths)
+        print(f'Number of error files: {num_errors}')
+
+        error_type_hist = ub.ddict(int)
+        for fpath in error_fpaths:
+            if fpath.name == 'affine_warp.error':
+                error_type_hist['image_errors'] += 1
+            else:
+                error_type_hist['asset_errors'] += 1
+            data = json.loads(fpath.read_text())
+            ex = data['ex']
+            err_type = ex['type']
+            error_type_hist[err_type] += 1
+
+        print(ub.urepr(error_type_hist))
+
+
+    "
 }
 
 # Add regions where kwcoco files exist
