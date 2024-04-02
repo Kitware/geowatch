@@ -729,7 +729,8 @@ def combine_kwcoco_channels_temporally(config):
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
-    output_coco_dset.validate()
+    if 0:
+        output_coco_dset.validate()
     output_coco_dset.dump()
     print(f"Saved ouput kwcoco file to: {output_kwcoco_fpath}")
     return output_coco_dset

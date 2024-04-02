@@ -33,6 +33,8 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
 
     io_workers = scfg.Value('avail', help='number of workers for parallel io')
 
+    validate = scfg.Value(False, help='if True, validate the region/site models')
+
 
 def main(cmdline=1, **kwargs):
     """
@@ -97,6 +99,12 @@ def main(cmdline=1, **kwargs):
         region_to_sites[site.region_id].append(site)
     for region in region_models:
         region_to_regions[region.region_id].append(region)
+
+    if config.validate:
+        for site in site_models:
+            site.validate()
+        for region in region_models:
+            region.validate()
 
     unique_region_ids = sorted(set(region_to_regions.keys()) | set(region_to_sites.keys()))
     print('unique_region_ids = {}'.format(ub.urepr(unique_region_ids, nl=1)))

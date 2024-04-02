@@ -489,7 +489,7 @@ export REGION_IDS_STR=$(python -c "if 1:
             final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
-export REGION_IDS_STR="KR_R001"
+#export REGION_IDS_STR="KR_R001"
 
 # Dump regions to a file
 # FIXME: tmp_region_names.yaml is not a robust interchange.
@@ -531,7 +531,7 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --backend=tmux \
     --skip_existing=1 \
     --cache=1 \
-    --run=0 --print-commands
+    --run=1 --print-commands
 
 
 python -m cmd_queue new "reproject_for_bas"
@@ -572,18 +572,4 @@ git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
 
-
-python -m geowatch.cli.coco_time_combine \
-    --kwcoco_fpath="/home/joncrall/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/imgonly-KR_R001-rawbands.kwcoco.zip" \
-    --output_kwcoco_fpath="/flash/smart_phase3_data/Drop8-Median10GSD-V1/KR_R001/_unfielded_imgonly-KR_R001-rawbands.kwcoco.zip" \
-    --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
-    --resolution="10GSD" \
-    --time_window=6months \
-    --remove_seasons=None \
-    --merge_method=median \
-    --spatial_tile_size=1024 \
-    --mask_low_quality=True \
-    --max_images_per_group=7 \
-    --start_time=2010-03-01 \
-    --assets_dname="raw_bands" \
-    --workers=4
+python -m geowatch.cli.cluster_sites --src /data2/projects/smart/smart_phase3_data/annotations/drop8-v1/region_models/AE_R001.geojson --minimum_size 256x256@2GSD --dst_dpath /flash/smart_phase3_data/Drop8-Cropped2GSD-V1/AE_R001/clusters
