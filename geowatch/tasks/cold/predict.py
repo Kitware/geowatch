@@ -18,76 +18,16 @@ SeeAlso:
 
 CommandLine:
 
-    ##############
-    ### SMALL TEST
-    ##############
-
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-
-    mkdir -p $DATA_DVC_DPATH/Drop6-SMALL
-    kwcoco subset \
-        --src "$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --dst "$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
-        --select_images '(.sensor_coarse == "L8")'
-
-    # Pull out a small selection of images just so we can test.
-    python -c "if 1:
-        import ubelt as ub
-        import kwcoco
-        dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
-        from kwutil import util_time
-        images = dset.images()
-        dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
-        flags = [d.year < 2017 for d in dates]
-        chosen = images.compress(flags)
-        sub = dset.subset(chosen)
-        sub.fpath = dset.fpath
-        sub.dump()
-    "
-
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m geowatch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
-        --sensors='L8' \
-        --resolution=30GSD \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
-        --adj_cloud=False \
-        --method='COLD' \
-        --prob=0.99 \
-        --conse=6 \
-        --cm_interval=60 \
-        --year_lowbound=None \
-        --year_highbound=None \
-        --coefs=cv \
-        --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=False \
-        --workermode='process' \
-        --workers=16
-
-    kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json \
-        --dst="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
-        --old_prefix="KR_R001" --new_prefix="../KR_R001"
-
-    geowatch visualize \
-        "$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_cv|green_COLD_cv|blue_COLD_cv)" \
-        --exclude_sensors="S2" \
-        --smart=True --skip_aggressive=True
-
     ###################################################################################
     ### FULL REGION TEST: COLD FEATURES WITH HIGH TEMPORAL RESOLUTION (HTR) + L8/S2 ###
     ###################################################################################
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase3_expt --hardware="auto")
     python -m geowatch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop7/_pycold_L8S2_HTR" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly_KR_R001_cold-L8S2-HTR.kwcoco.zip" \
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/_pycold_Drop8" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly_KR_R001_cold-biyearly.kwcoco.zip" \
         --sensors='L8,S2' \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --prob=0.99 \
@@ -95,6 +35,7 @@ CommandLine:
         --coefs_bands=0,1,2,3,4,5 \
         --combine=False \
         --resolution='10GSD' \
+        --cold_time_span='6months' \
         --workermode='process' \
         --workers=8
 
@@ -102,20 +43,20 @@ CommandLine:
     ### FULL REGION TEST: TRANSFER COLD FEATURE FROM RAW TO COMBINED INPUT
     ######################################################################
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase3_expt --hardware="auto")
     python -m geowatch.tasks.cold.transfer_features \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
-        --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly_KR_R001_cold-biyearly.kwcoco.zip" \
+        --combine_fpath="$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imgonly-KR_R001.kwcoco.zip" \
+        --new_coco_fpath="$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
 
-    kwcoco stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
-    geowatch stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
-    kwcoco validate "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+    kwcoco stats "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
+    geowatch stats "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
+    kwcoco validate "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
     geowatch visualize \
-        "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip" \
+        "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \
         --smart=True
