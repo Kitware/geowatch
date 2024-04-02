@@ -533,6 +533,9 @@ def combine_kwcoco_channels_temporally(config):
     coco_dset = kwcoco.CocoDataset.coerce(config.input_kwcoco_fpath)
     print(f'coco_dset = {ub.urepr(coco_dset, nl=1)}')
 
+    if coco_dset.n_images == 0:
+        raise ValueError('Input kwcoco dataset contains no images')
+
     selected_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
         include_sensors=config['include_sensors'],
@@ -544,6 +547,9 @@ def combine_kwcoco_channels_temporally(config):
     # Optional: Filter image IDs by season.
     if config.filter_season is not None:
         selected_gids = filter_image_ids_by_season(coco_dset, selected_gids, config.filter_season)
+
+    if len(selected_gids) == 0:
+        raise ValueError('Input kwcoco dataset contained images, but no images were selected')
 
     if selected_gids is not None:
         coco_dset = coco_dset.subset(selected_gids)
