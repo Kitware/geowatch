@@ -1622,8 +1622,25 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         Fixup the site summary
         """
         self._update_cache_key()
+        self._remove_invalid_properties()
         # self.ensure_isodates()
         return self
+
+    def _remove_invalid_properties(self):
+        """
+        Remove invalid properties from this region model that have caused
+        issues in the past.
+        """
+        bad_sitesum_keys = ['region_id', 'validate', 'validated',
+                            'predicted_phase_transition',
+                            'predicted_phase_transition_date']
+        non_nullable_sitesum_keys = ['score']
+        siteprops = self['properties']
+        for key in bad_sitesum_keys:
+            siteprops.pop(key, None)
+        for key in non_nullable_sitesum_keys:
+            if key in siteprops and siteprops[key] is None:
+                siteprops.pop(key, None)
 
     @classmethod
     def coerce(cls, data):
