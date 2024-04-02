@@ -126,52 +126,6 @@ background_cleanup(){
         --age_thresh "1 hour"
 }
 
-
-collect_errors(){
-    __doc__="
-    This crawls the output directory to gather error reports and summarize
-    them.
-    "
-    # shellcheck disable=SC2155
-    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
-    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-    python -c "if 1:
-        import os
-        import ubelt as ub
-        import json
-        dpath = ub.Path(os.environ.get('SRC_BUNDLE_DPATH'))
-
-        image_error_fpaths = []
-        asset_error_fpaths = []
-        for r, ds, fs in dpath.walk():
-            for fname in fs:
-                if fname.endswith('.error'):
-                    fpath = r / fname
-                    if fpath.name == 'affine_warp.error':
-                        image_error_fpaths.append(fpath)
-                    else:
-                        asset_error_fpaths.append(fpath)
-
-        num_errors = len(error_fpaths)
-        print(f'Number of error files: {num_errors}')
-
-        error_type_hist = ub.ddict(int)
-        for fpath in error_fpaths:
-            if fpath.name == 'affine_warp.error':
-                error_type_hist['image_errors'] += 1
-            else:
-                error_type_hist['asset_errors'] += 1
-            data = json.loads(fpath.read_text())
-            ex = data['ex']
-            err_type = ex['type']
-            error_type_hist[err_type] += 1
-
-        print(ub.urepr(error_type_hist))
-
-
-    "
-}
-
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
@@ -215,6 +169,73 @@ dvc push -r aws -- */L8.dvc && \
 dvc push -r aws -- */S2.dvc && \
 dvc push -r aws -- */WV.dvc
 
+
+collect_errors(){
+    __doc__="
+    This crawls the output directory to gather error reports and summarize
+    them.
+    "
+    # shellcheck disable=SC2155
+    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+    python -c "if 1:
+        import os
+        import ubelt as ub
+        import json
+        dpath = ub.Path(os.environ.get('SRC_BUNDLE_DPATH'))
+
+        asset_error_fpaths = []
+        for r, ds, fs in dpath.walk():
+            for fname in fs:
+                if fname.endswith('.error'):
+                    fpath = r / fname
+                    if fpath.name == 'affine_warp.error':
+                        ...
+                    else:
+                        asset_error_fpaths.append(fpath)
+
+        num_asset_errors = len(asset_error_fpaths)
+        print(f'Number of asset errors files: {num_asset_errors}')
+
+        error_details = []
+        for fpath in asset_error_fpaths:
+            data = json.loads(fpath.read_text())
+            fpath.parent.name
+            image_name = fpath.parent.name
+            sensor = fpath.parent.parent.parent.name
+            region_id = fpath.parent.parent.parent.parent.name
+            channel = fpath.name.split('.')[-3].split('_')[-1]
+
+            num_source_rasters = len(data['input_gpaths'])
+            row = {
+                'image_name': image_name,
+                'num_source_rasters': num_source_rasters,
+                'channel': channel,
+                'sensor': sensor,
+                'region_id': region_id,
+                'fpath': fpath,
+                'data': data,
+            }
+            error_details.append(row)
+
+        ub.dict_hist([r['image_name'] for r in error_details])
+
+        error_histograms = ub.ddict(lambda: ub.ddict(int))
+        for row in error_details:
+            data = row['data']
+            ex = data['ex']
+            err_type = ex['type']
+            error_histograms['error_type'][err_type] += 1
+            error_histograms['region'][row['region_id']] += 1
+            error_histograms['sensor'][row['sensor']] += 1
+            error_histograms['channel'][row['channel']] += 1
+            error_histograms['num_source_rasters'][row['num_source_rasters']] += 1
+
+        error_histograms = ub.udict(error_histograms).map_values(lambda x: ub.udict(x).sorted_values())
+        print(ub.urepr(error_histograms, align=':'))
+    "
+}
+
 #
 # -- to pull
 #
@@ -256,6 +277,9 @@ DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
 
 TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
 "
+
+mkdir -p "$DST_BUNDLE_DPATH"
+cd "$DST_BUNDLE_DPATH"
 
 REGION_IDS_STR=$(python -c "if 1:
     import pathlib
@@ -465,7 +489,7 @@ export REGION_IDS_STR=$(python -c "if 1:
             final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
-#export REGION_IDS_STR="CN_C000 KW_C001 CO_C001"
+export REGION_IDS_STR="KR_R001"
 
 # Dump regions to a file
 # FIXME: tmp_region_names.yaml is not a robust interchange.
@@ -501,12 +525,13 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --mask_low_quality=True \
     --tmux_workers=8 \
     --time_window=6months \
+    --max_images_per_group=7 \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
     --skip_existing=1 \
     --cache=1 \
-    --run=1 --print-commands
+    --run=0 --print-commands
 
 
 python -m cmd_queue new "reproject_for_bas"
@@ -546,3 +571,19 @@ dvc add -v -- \
 git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
+
+
+python -m geowatch.cli.coco_time_combine \
+    --kwcoco_fpath="/home/joncrall/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/imgonly-KR_R001-rawbands.kwcoco.zip" \
+    --output_kwcoco_fpath="/flash/smart_phase3_data/Drop8-Median10GSD-V1/KR_R001/_unfielded_imgonly-KR_R001-rawbands.kwcoco.zip" \
+    --channels="red|green|blue|nir|swir16|swir22|pan|coastal|cirrus|B05|B06|B07|B8A|B09" \
+    --resolution="10GSD" \
+    --time_window=6months \
+    --remove_seasons=None \
+    --merge_method=median \
+    --spatial_tile_size=1024 \
+    --mask_low_quality=True \
+    --max_images_per_group=7 \
+    --start_time=2010-03-01 \
+    --assets_dname="raw_bands" \
+    --workers=4

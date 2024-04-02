@@ -590,10 +590,11 @@ def combine_kwcoco_channels_temporally(config):
 
     n_combined_images = 0
     n_failed_merges = 0
+    max_percent = 0
 
     with pman:
 
-        for video_id in pman.progiter(video_ids, desc='Combining channel info within temporal windows'):
+        for video_id in pman.progiter(video_ids, desc='Average across time for each video'):
             # Get all image ids for the video.
             images = coco_dset.images(video_id=video_id)
 
@@ -684,7 +685,6 @@ def combine_kwcoco_channels_temporally(config):
                                   config=config)
                 job.merge_images = merge_images
 
-            max_percent = 0
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
@@ -702,8 +702,8 @@ def combine_kwcoco_channels_temporally(config):
                     f'''
                     {n_combined_images=}
                     {n_failed_merges=}
-                    Memory Percent: {curr_percent}
-                    Max Percent: {max_percent}
+                    Memory Percent: {curr_percent}%
+                    Max Percent: {max_percent}%
                     '''))
 
     if n_combined_images == 0:
