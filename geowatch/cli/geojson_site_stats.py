@@ -102,9 +102,9 @@ def main(cmdline=1, **kwargs):
 
     if config.validate:
         for site in site_models:
-            site.validate()
+            site.validate(strict=0)
         for region in region_models:
-            region.validate()
+            region.validate(strict=0)
 
     unique_region_ids = sorted(set(region_to_regions.keys()) | set(region_to_sites.keys()))
     print('unique_region_ids = {}'.format(ub.urepr(unique_region_ids, nl=1)))

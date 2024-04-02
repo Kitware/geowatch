@@ -57,7 +57,7 @@
     },
     "annotation_originator": {
       "if": {"properties": {"model_content": {"const": "annotation"}}},
-      "then": {"properties": {"originator": {"enum": ["te", "iMERIT", "pmo", "kit"]}}}
+      "then": {"properties": {"originator": {"enum": ["te", "iMERIT", "pmo"]}}}
     },
     "proposed_originator": {
       "if": {"properties": {"model_content": {"const": "proposed"}}},
