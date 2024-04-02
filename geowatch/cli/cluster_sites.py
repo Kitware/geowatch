@@ -277,12 +277,9 @@ def main(cmdline=1, **kwargs):
             site_summaries = list(geomodels.SiteSummary.from_geopandas_frame(contained_sites))
 
             if 1:
-                # huh?
-                import xdev
-                with xdev.embed_on_exception_context:
-                    for s in site_summaries:
-                        s.fixup()
-                        s.validate(strict=0)
+                for s in site_summaries:
+                    s.fixup()
+                    s.validate(strict=0)
 
             if len(start_dates) and config.crop_time:
                 start_date = start_dates.min()
