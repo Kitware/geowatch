@@ -252,6 +252,10 @@ class Pipeline:
         """
         Update the DAG configuration
 
+        Note:
+            Currently, this will completely reset the config, and not update
+            it. This behavior will change in the future
+
         Example:
             >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> self = Pipeline.demo()
@@ -279,6 +283,11 @@ class Pipeline:
                 node = self.proc_graph.nodes[node_name]['node']
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
+        else:
+            # Hack: if config is not given, update the cache state only.
+            for node_name in nx.topological_sort(self.proc_graph):
+                node = self.proc_graph.nodes[node_name]['node']
+                node.configure(config=node.config, cache=cache)
 
     def print_process_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
         import rich

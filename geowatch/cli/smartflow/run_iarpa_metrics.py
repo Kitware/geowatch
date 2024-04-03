@@ -3,15 +3,33 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-__ignore__ = """
-config = dict(
-    region_id = 'KR_R001',
-    true_annot_dpath='s3://smart-imagery/annotations/',
-    pred_site_dpath='s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v179/batch/kit/KR_R001/consolidated_output_bas/site_models/',
-    outbucket='s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v179/batch/kit/KR_R001/metrics_bas/',
-    input_region_path='s3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v179/batch/kit/KR_R001/split_input/52SDG66/region_models/KR_R001.geojson'
-)
-config = RunMetricsCLI(**config)
+__ignore__ = r"""
+
+
+docker run \
+    --runtime=nvidia \
+    --volume "$HOME/temp/debug_smartflow_v2/ingress":/tmp/ingress \
+    --volume $HOME/.aws:/root/.aws:ro \
+    --volume "$HOME/code":/extern_code:ro \
+    --volume "$HOME/data":/extern_data:ro \
+    --volume "$HOME"/.cache/pip:/pip_cache \
+    --env AWS_PROFILE=iarpa \
+    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-00f39677f-strict-pyenv3.11.2-20240403T153409-0400-from-0da55667 bash
+
+
+from geowatch.cli.smartflow.run_iarpa_metrics import *  # NOQA"
+config = RunIARPAMetricsCLI(**{
+    'region_id': 'KR_R001',
+    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/split_input/52SDG77/region_models/KR_R001.geojson',
+    'true_annot_dpath': 's3://smart-imagery/annotations',
+    'pred_site_dpath': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/consolidated_output_bas/site_models',
+    'outbucket': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/metrics_bas',
+    'output_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/metrics_bas/items.jsonl',
+    'aws_profile': None,
+})
+cls = RunIARPAMetricsCLI
+cmdline = 0
+kwargs = dict(config)
 """
 
 
@@ -138,6 +156,8 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         ub.cmd(command, check=True, verbose=3, system=True)
 
         node_state.print_current_state(ingress_dir)
+
+        node_state.print_directory_contents(eval_dpath)
 
         assets_to_egress = {
             'eval_dpath': eval_dpath,

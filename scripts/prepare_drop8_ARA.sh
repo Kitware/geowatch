@@ -434,7 +434,7 @@ python -c "if 1:
 "
 git commit -m "Update Drop8 Crop SC" && \
 git push && \
-dvc push -r aws -R . -vvv
+dvc push -r aws -R .
 
 
 ##########################
@@ -485,7 +485,11 @@ export REGION_IDS_STR=$(python -c "if 1:
     region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
     region_names = [p.stem for p in region_fpaths]
     final_names = []
+    ignore_regions = {'VN_C002'}
+    #ignore_regions = {}
     for region_name in region_names:
+        if region_name in ignore_regions:
+            continue
         coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
         if coco_fpath.exists():
             if not all(p.is_file() for p in list(coco_fpath.parent.glob('*'))):
@@ -564,14 +568,16 @@ python -m geowatch.cli.queue_cli.prepare_splits \
     --splits split6 \
     --run=1
 
+cd "$DST_BUNDLE_DPATH"
 
-dvc add -v -- \
+dvc add -- \
     */raw_bands \
     */imgonly-*-rawbands.kwcoco.zip \
     */imganns-*-rawbands.kwcoco.zip \
     data_train_rawbands_split6_*.kwcoco.zip \
     data_vali_rawbands_split6_*.kwcoco.zip
 
+#git pull
 git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
