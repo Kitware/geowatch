@@ -2520,7 +2520,8 @@ class BalanceMixin:
         video_ids = [v['video_id'] for v in new_sample_grid['targets']]
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
-        observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
+        #observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
+        observed_annots = [v['annot_info']['main_gid_catnames'] for v in new_sample_grid['targets']]
         observed_phases = list(map(lambda x: ub.dict_subset(x, set(heuristics.PHASES).intersection(x.keys())), observed_annots))
 
         # associate target window with positive / negative

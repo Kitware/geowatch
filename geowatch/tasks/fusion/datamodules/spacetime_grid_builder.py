@@ -722,8 +722,9 @@ def _sample_single_video_spacetime_targets(
                                           verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
-                    video_id, infos, video_gids, vidspace_window_dims,
-                    time_sampler)
+                        dset, use_annot_info, qtree, video_id, infos,
+                        video_gids, vidspace_window_dims,
+                        time_sampler)
                 new_targets = list(new_targets)
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
@@ -738,8 +739,9 @@ def _sample_single_video_spacetime_targets(
                                          verbose=verbose * (len(loose_aid_to_infos) > 4 and probably_slow)):
                 infos = [info]
                 new_targets = _build_targets_around_track(
-                    video_id, infos, video_gids, vidspace_window_dims,
-                    time_sampler)
+                        dset, use_annot_info, qtree, video_id, infos,
+                        video_gids, vidspace_window_dims,
+                        time_sampler)
                 new_targets = list(new_targets)
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
@@ -772,7 +774,7 @@ def _sample_single_video_spacetime_targets(
 
 
 @profile
-def _build_targets_around_track(video_id, infos, video_gids,
+def _build_targets_around_track(dset, use_annot_info, qtree, video_id, infos, video_gids,
                                 vidspace_window_dims, time_sampler):
     """
     Given information about a track, build targets to ensure the network trains
@@ -802,7 +804,27 @@ def _build_targets_around_track(video_id, infos, video_gids,
         if _hack2:
             gids = _hack2[_hack_main_idx]
             label = 'positive_center'
+            annot_info = None
             vidspace_region = vidspace_ann_box.to_slice()
+
+            # Find all annotations that pass through this spatial region
+            vidspace_box = kwimage.Box.from_slice(vidspace_region).to_ltrb()
+            query = vidspace_box.data
+            isect_aids = list(qtree.intersect(query))
+            isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
+            isect_aids_catnames = dset.annots(isect_aids).category_names
+            aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
+            gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+            gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
+
+            if use_annot_info:
+                annot_info = {
+                    'isect_aids': isect_aids,
+                    'isect_aids_catnames': isect_aids_catnames,
+                    'gid_to_aids': ub.dict_subset(gid_to_aids, gids, default=[]),
+                    'gid_to_catnames': ub.dict_subset(gid_to_catnames, gids, default=[]),
+                    'main_gid_catnames': ub.dict_hist(list(ub.take(gid_to_catnames, [main_gid], default=[]))[0]),
+                }
 
             target = {
                 'main_idx': _hack_main_idx,
@@ -812,6 +834,7 @@ def _build_targets_around_track(video_id, infos, video_gids,
                 'space_slice': vidspace_region,
                 'label': label,
                 'resampled': -1,
+                'annot_info': annot_info,
             }
             yield target
 
@@ -837,6 +860,10 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         query = vidspace_box.data
         isect_aids = list(qtree.intersect(query))
         isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
+        isect_aids_catnames = dset.annots(isect_aids).category_names
+        aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
+        gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+        gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
 
     if respect_valid_regions:
         # Reselect the keyframes if we overlap an invalid region (as
@@ -869,6 +896,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
     for main_idx, gids in main_idx_to_gids2.items():
         main_gid = time_sampler.video_gids[main_idx]
         label = 'unknown'
+        annot_info = None
 
         if use_annot_info:
             if isect_aids:
@@ -881,6 +909,14 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                 # Hack: exclude all annotated regions from negative sampling
                 label = 'negative_grid'
 
+            annot_info = {
+                'isect_aids': isect_aids,
+                'isect_aids_catnames': isect_aids_catnames,
+                'gid_to_aids': ub.dict_subset(gid_to_aids, gids, default=[]),
+                'gid_to_catnames': ub.dict_subset(gid_to_catnames, gids, default=[]),
+                'main_gid_catnames': ub.dict_hist(list(ub.take(gid_to_catnames, [main_gid], default=[]))[0]),
+            }
+
         target = {
             'main_idx': main_idx,
             'video_id': video_id,
@@ -889,6 +925,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
             'space_slice': vidspace_region,
             'resampled': resampled,
             'label': label,
+            'annot_info': annot_info,
         }
         yield target
 
