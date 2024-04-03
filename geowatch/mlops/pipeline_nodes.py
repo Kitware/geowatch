@@ -83,6 +83,7 @@ class Pipeline:
         self.config = None
 
         self._dirty = True
+        self._unique_hanes = set()
 
         if self.nodes:
             self.build_nx_graphs()
@@ -102,6 +103,11 @@ class Pipeline:
         """
         Dynamically create a new unique process node and add it to the dag
         """
+        name = kwargs.get('name', None)
+        if name is not None:
+            if name in self._unique_hanes:
+                raise Exception(name)
+            self._unique_hanes.add(name)
         task = ProcessNode(executable=executable, **kwargs)
         self.nodes.append(task)
         self._dirty = True
@@ -115,7 +121,7 @@ class Pipeline:
             node_names = [node.name for node in self.nodes]
             if len(node_names) != len(set(node_names)):
                 print('node_names = {}'.format(ub.urepr(node_names, nl=1)))
-                raise AssertionError(f'{len(node_names)}, {len(set(node_names))}')
+                raise AssertionError(f'Non unique nodes detected: {len(node_names)}, {len(set(node_names))}')
             node_dict = dict(zip(node_names, self.nodes))
         return node_dict
 

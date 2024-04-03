@@ -131,6 +131,7 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
             'true_region_dpath': true_region_dpath,
             'eval_dpath': eval_dpath,
             'eval_fpath': eval_fpath,
+            'enable_viz': True,  # todo: expose
         })
         command = eval_node.command().rstrip('\\')
         print(command)
