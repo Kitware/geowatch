@@ -42,7 +42,12 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
 
     batch_size = scfg.Value(4, type=int, help=None)
 
-    pin_memory = scfg.Value(True, type=bool, help=None)
+    pin_memory = scfg.Value(True, isflag=True, type=bool, help=ub.paragraph(
+        '''
+        Can increase speed, but is potentially unstable. For details, 
+        see https://pytorch.org/docs/stable/data.html#memory-pinning
+        '''
+    )
 
     normalize_inputs = scfg.Value(True, help=ub.paragraph(
             '''
