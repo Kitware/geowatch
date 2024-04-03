@@ -44,7 +44,7 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
 
     pin_memory = scfg.Value(True, isflag=True, type=bool, help=ub.paragraph(
         '''
-        Can increase speed, but is potentially unstable. For details, 
+        Can increase speed, but is potentially unstable. For details,
         see https://pytorch.org/docs/stable/data.html#memory-pinning
         '''
     ))
