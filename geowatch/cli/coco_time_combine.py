@@ -663,48 +663,49 @@ def combine_kwcoco_channels_temporally(config):
 
             jobs = ub.JobPool(mode='process', max_workers=workers)
 
-            # 3. For each temporal window, combine the spatial data from each channel.
-            chunk_image_idxs = list(groupid_to_idxs.values())
-            prog = pman.progiter(chunk_image_idxs, transient=True, desc='Submit combine within temporal windows jobs')
-            for chunk_image_idxs in prog:
-                # if len(chunk_image_idxs) == 1:
-                #     import xdev
-                #     xdev.embed()
-                # else:
-                #     continue
-                window_images = images.take(chunk_image_idxs)
-                window_coco_images = window_images.coco_images
-                # Detach for process parallelization
-                window_coco_images = [g.detach() for g in window_coco_images]
+            with jobs:
+                # 3. For each temporal window, combine the spatial data from each channel.
+                chunk_image_idxs = list(groupid_to_idxs.values())
+                prog = pman.progiter(chunk_image_idxs, transient=True, desc='Submit combine within temporal windows jobs')
+                for chunk_image_idxs in prog:
+                    # if len(chunk_image_idxs) == 1:
+                    #     import xdev
+                    #     xdev.embed()
+                    # else:
+                    #     continue
+                    window_images = images.take(chunk_image_idxs)
+                    window_coco_images = window_images.coco_images
+                    # Detach for process parallelization
+                    window_coco_images = [g.detach() for g in window_coco_images]
 
-                job = jobs.submit(merge_images, window_coco_images,
-                                  merge_method, requested_chans, space,
-                                  resolution, new_bundle_dpath,
-                                  mask_low_quality, sensor_weights,
-                                  og_kwcoco_fpath, spatial_tile_size,
-                                  config=config)
-                job.merge_images = merge_images
+                    job = jobs.submit(merge_images, window_coco_images,
+                                      merge_method, requested_chans, space,
+                                      resolution, new_bundle_dpath,
+                                      mask_low_quality, sensor_weights,
+                                      og_kwcoco_fpath, spatial_tile_size,
+                                      config=config)
+                    job.merge_images = merge_images
 
-            for job in pman.progiter(jobs.as_completed(),
-                                     total=len(jobs),
-                                     desc='Collect combine within temporal windows jobs'):
-                new_img = job.result()
-                if new_img is None:
-                    n_failed_merges += 1
-                    continue
-                output_coco_dset.add_image(**new_img)
-                n_combined_images += 1
+                for job in pman.progiter(jobs.as_completed(),
+                                         total=len(jobs),
+                                         desc='Collect combine within temporal windows jobs'):
+                    new_img = job.result()
+                    if new_img is None:
+                        n_failed_merges += 1
+                        continue
+                    output_coco_dset.add_image(**new_img)
+                    n_combined_images += 1
 
-                mem_info = util_hardware.get_mem_info()
-                curr_percent = mem_info['percent']
-                max_percent = max(max_percent, curr_percent)
-                pman.update_info(ub.codeblock(
-                    f'''
-                    {n_combined_images=}
-                    {n_failed_merges=}
-                    Memory Percent: {curr_percent}%
-                    Max Percent: {max_percent}%
-                    '''))
+                    mem_info = util_hardware.get_mem_info()
+                    curr_percent = mem_info['percent']
+                    max_percent = max(max_percent, curr_percent)
+                    pman.update_info(ub.codeblock(
+                        f'''
+                        {n_combined_images=}
+                        {n_failed_merges=}
+                        Memory Percent: {curr_percent}%
+                        Max Percent: {max_percent}%
+                        '''))
 
     if n_combined_images == 0:
         raise ValueError('No images were combined with non-NaN values')
