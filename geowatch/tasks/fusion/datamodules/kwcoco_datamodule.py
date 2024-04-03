@@ -47,7 +47,7 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
         Can increase speed, but is potentially unstable. For details, 
         see https://pytorch.org/docs/stable/data.html#memory-pinning
         '''
-    )
+    ))
 
     normalize_inputs = scfg.Value(True, help=ub.paragraph(
             '''
