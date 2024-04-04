@@ -197,9 +197,9 @@ class PrepareTA2Config(CMDQueueConfig):
             image asset before giving up
             '''))
 
-    ignore_duplicates = scfg.Value(1, help='workers for align script')
+    ignore_duplicates = scfg.Value(True, help='workers for align script')
 
-    visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
+    visualize = scfg.Value(False, isflag=True, help='if True runs visualize')
 
     visualize_only_boxes = scfg.Value(True, isflag=1, help='if False will draw full polygons')
 
@@ -208,7 +208,7 @@ class PrepareTA2Config(CMDQueueConfig):
             help control verbosity (just align for now)
             '''))
 
-    requester_pays = scfg.Value(0, help=ub.paragraph(
+    requester_pays = scfg.Value(False, help=ub.paragraph(
             '''
             if True, turn on requester_pays in ingress. Needed for
             official L1/L2 catalogs.
@@ -231,6 +231,11 @@ class PrepareTA2Config(CMDQueueConfig):
             '''
             if the coco align script caches or recomputes images / rois
             '''), choices=['img', 'img-roi', 'none', None])
+
+    align_skip_previous_errors = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        Skip assets where we can detect a previous error occurred.
+        '''))
 
     force_nodata = scfg.Value(None, group='align', help=ub.paragraph(
             '''
@@ -264,7 +269,7 @@ class PrepareTA2Config(CMDQueueConfig):
             caused by permission errors on S3)
             '''))
 
-    cache = scfg.Value(1, isflag=1, group='queue-related', help=ub.paragraph(
+    cache = scfg.Value(True, isflag=True, group='queue-related', help=ub.paragraph(
             '''
             If 1 or 0 globally enable/disable caching. If a comma
             separated list of strings, only cache those stages
@@ -729,6 +734,7 @@ def main(cmdline=False, **kwargs):
                     --force_min_gsd="{config.force_min_gsd}" \
                     --workers={config.align_workers} \
                     --tries="{config.align_tries}" \
+                    --skip_previous_errors="{config.align_skip_previous_errors}" \
                     --cooldown="10" \
                     --backoff="3" \
                     --unsigned_nodata="{config.unsigned_nodata}" \

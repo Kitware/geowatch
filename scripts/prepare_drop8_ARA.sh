@@ -87,8 +87,8 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --convert_workers=0 \
     --align_workers=4 \
     --align_aux_workers=0 \
+    --align_skip_previous_errors=True \
     --ignore_duplicates=1 \
-    --visualize=0 \
     --target_gsd="10GSD" \
     --cache=$CACHE_STEPS \
     --verbose=100 \

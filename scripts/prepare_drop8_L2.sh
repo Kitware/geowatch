@@ -59,13 +59,14 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --regions="$REGION_GLOBSTR" \
     --sites="$SITE_GLOBSTR" \
     --requester_pays=$REQUESTER_PAYS \
+    --qa_encoding='L2' \
     --fields_workers=8 \
     --convert_workers=0 \
     --align_workers=4 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
-    --visualize=0 \
     --target_gsd="10GSD" \
+    --align_skip_previous_errors=True \
     --cache=0 \
     --verbose=100 \
     --skip_existing=0 \
