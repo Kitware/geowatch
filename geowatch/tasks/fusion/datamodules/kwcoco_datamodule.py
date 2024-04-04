@@ -42,6 +42,13 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
 
     batch_size = scfg.Value(4, type=int, help=None)
 
+    pin_memory = scfg.Value(True, isflag=True, type=bool, help=ub.paragraph(
+        '''
+        Can increase speed, but is potentially unstable. For details,
+        see https://pytorch.org/docs/stable/data.html#memory-pinning
+        '''
+    ))
+
     normalize_inputs = scfg.Value(True, help=ub.paragraph(
             '''
             if True, computes the mean/std for this dataset on each mode
@@ -286,7 +293,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # Unfortunately lightning seems to only enable / disables
         # validation depending on the methods that are defined, so we are
         # not able to statically define them.
-        ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
+        ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True, pin_memory=self.config['pin_memory']), 'train_dataloader')
 
         # Store train / test / vali
         self.torch_datasets: Dict[str, KWCocoVideoDataset] = {}
@@ -423,7 +430,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
                 self.torch_datasets['vali'] = vali_dataset
-                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
+                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False, pin_memory=self.config['pin_memory']), 'val_dataloader')
 
         if stage == 'test' or stage is None:
             test_coco_dset = _read_kwcoco_split('test')
@@ -435,7 +442,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler, mode='test', **self.test_dataset_config,
             )
-            ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
+            ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False, pin_memory=self.config['pin_memory']), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.urepr(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
@@ -461,7 +468,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
     def vali_dataset(self):
         return self.torch_datasets.get('vali', None)
 
-    def _make_dataloader(self, stage, shuffle=False):
+    def _make_dataloader(self, stage, shuffle=False, pin_memory=True):
         """
         If the stage doesn't exist, resturns None.
 
@@ -475,7 +482,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=shuffle,
-            pin_memory=True,
+            pin_memory=pin_memory,
         )
         return loader
 
