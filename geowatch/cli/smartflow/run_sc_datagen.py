@@ -68,10 +68,10 @@ class ACSCDatasetConfig(scfg.DataConfig):
 def main():
     config = ACSCDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
-    run_generate_sc_cropped_kwcoco(config)
+    run_generate_acsc_cropped_kwcoco(config)
 
 
-def run_generate_sc_cropped_kwcoco(config):
+def run_generate_acsc_cropped_kwcoco(config):
     from kwutil.util_yaml import Yaml
     from geowatch.utils import util_framework
     from geowatch.cli import coco_align

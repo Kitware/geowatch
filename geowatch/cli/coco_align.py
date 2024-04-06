@@ -270,7 +270,7 @@ class AssetExtractConfig(scfg.DataConfig):
         in input image with a 0.5 GSD will have it set to 10.0 during cropping)
         '''))
 
-    skip_previous_errors = scfg.Value(False, help=ub.paragraph(
+    skip_previous_errors = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         Skip assets where we can detect a previous error occurred.
         '''))

@@ -422,7 +422,7 @@ python -c "if 1:
     regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip')})
     for dpath in regions_dpaths_with_kwcoco:
         to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
-        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('imganns-*-rawbands.kwcoco.zip'))
         to_add += list(dpath.glob('*/L8'))
         to_add += list(dpath.glob('*/S2'))
         to_add += list(dpath.glob('*/WV'))
