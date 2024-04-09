@@ -2051,7 +2051,7 @@ model:
     class_loss: dicefocal
     class_weights: auto
     config: null
-    continual_learning: true
+    continual_learning: 0
     decoder: mlp
     decouple_resolution: false
     dropout: 0.1
