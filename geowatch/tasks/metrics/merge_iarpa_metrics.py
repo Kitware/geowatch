@@ -474,16 +474,15 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
         fp = concat_df['fp sites']
         fn = concat_df['fn sites']
         ftp = (1 + fbeta**2) * tp
-        concat_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta**2 * fn) + fp)), 0)
+        concat_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta ** 2 * fn) + fp)), 0)
 
         # (_, tp), (_, fp), (_, fn) = micro_df[
         #     ['tp sites', 'fp sites', 'fn sites']].iteritems()
         tp = concat_df['tp sites']
         fp = concat_df['fp sites']
         fn = concat_df['fn sites']
-
-        ftp = (1 + fbeta**2) * tp
-        micro_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta**2 * fn) + fp)), 0)
+        ftp = (1 + fbeta ** 2) * tp
+        micro_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta ** 2 * fn) + fp)), 0)
 
         mean_cols.append(f'F{fbeta:.2f}')
 
