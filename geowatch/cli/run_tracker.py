@@ -1040,7 +1040,7 @@ def assign_sites_to_videos(coco_dset, site_summaries, viz_out_dir=None):
             figman = util_kwplot.FigureManager(dpath=viz_out_dir, verbose=1)
             fig = figman.figure(fnum=1, doclf=True)
             ax = fig.gca()
-            bounds = kwimage.Boxes(np.array([
+            bounds = kwimage.Boxes(np.concatenate([
                 video_gdf.geometry.bounds.values,
                 sitesum_gdf.geometry.bounds.values,
             ]), 'ltrb')
