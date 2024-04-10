@@ -843,9 +843,12 @@ class NodeStateDebugger:
             print('To run in a similar environment locally:')
             create_local_env_command = ub.codeblock(
                 fr'''
+                LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
+                mkdir -p $LOCAL_WORK_DPATH
+                cd $LOCAL_WORK_DPATH
                 docker run \
                     --runtime=nvidia \
-                    --volume "$HOME/temp/debug_smartflow_v2/ingress":/tmp/ingress \
+                    --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
                     --volume $HOME/.aws:/root/.aws:ro \
                     --volume "$HOME/code":/extern_code:ro \
                     --volume "$HOME/data":/extern_data:ro \
