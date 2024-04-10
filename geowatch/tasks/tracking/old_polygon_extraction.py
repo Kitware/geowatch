@@ -184,6 +184,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             msg = ('need valid site boundaries!')
             warnings.warn(msg)
             # raise AssertionError(msg)
+            return []
         else:
             gids = raw_boundary_tracks['gid'].unique()
             print('generating polys in bounds: number of bounds: ',
