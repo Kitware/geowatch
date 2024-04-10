@@ -80,6 +80,12 @@ class ClusterSiteConfig(scfg.DataConfig):
 
     context_factor = scfg.Value(1.5, help='extra padding around each site')
 
+    ignore_status = scfg.Value(['system_rejected'], required=False, help=ub.paragraph(
+        '''
+        A YAML list of status values that should be ignored by the clustering
+        algorithm.  Defaults to ["system_rejected"].
+        '''))
+
 
 def main(cmdline=1, **kwargs):
     """
@@ -149,6 +155,7 @@ def main(cmdline=1, **kwargs):
     import geopandas as gpd
     import kwimage
     from kwutil import util_time
+    from kwutil import util_yaml
 
     from geowatch import heuristics
     from geowatch.geoannots import geomodels
@@ -191,6 +198,8 @@ def main(cmdline=1, **kwargs):
 
     all_final_site_summaries = []
 
+    ignore_status = util_yaml.Yaml.coerce(config.ignore_status)
+
     for input_region_model in input_region_models:
 
         input_region_model.fixup()
@@ -205,6 +214,11 @@ def main(cmdline=1, **kwargs):
         region_id = input_region_model.region_id
         region_header = input_region_model.pandas_region()
         region_sites = input_region_model.pandas_summaries()
+
+        if ignore_status:
+            # Remove any sites that have a status marked as ignored.
+            keep_flags = region_sites['status'].apply(lambda s: s not in ignore_status)
+            region_sites = region_sites[keep_flags]
 
         region_sites_utm = util_gis.project_gdf_to_local_utm(region_sites, mode=1, tolerance=None)
 
@@ -387,8 +401,7 @@ def main(cmdline=1, **kwargs):
 
         # print('all_final_site_summaries = {}'.format(ub.urepr(all_final_site_summaries, nl=1)))
 
-        SHOW_SUBREGIONS = config.draw_clusters
-        if SHOW_SUBREGIONS:
+        if config.draw_clusters:
             status_list = region_sites_utm['status']
             color_list = []
             for status in status_list:

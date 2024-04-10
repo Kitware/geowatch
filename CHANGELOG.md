@@ -24,6 +24,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Updated wrapper scoring code to support latest IARPA metrics.
 * Moved `prepare-ta2-dataset`, `prepare-splits`, and `prepare-teamfeats` to `cli/queue_cli`
 
+### Fixed
+* Cluster sites no longer includes system-rejected sites
+
 ### Removed
 * Remove visualize option from coco-align.
 
