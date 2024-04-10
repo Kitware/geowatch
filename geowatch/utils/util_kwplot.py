@@ -2,8 +2,42 @@ import ubelt as ub
 import matplotlib as mpl
 import matplotlib.text  # NOQA
 
+class TitleBuilder:
+    """
+    Simple class for adding information to a line, and then adding new lines.
+    """
+    def __init__(self):
+        self._row = []
+        self.title_rows = [self._row]
+
+    def __str__(self):
+        return self.finalize()
+
+    def __repr__(self):
+        return repr(self.title_rows)
+
+    def add_part(self, part):
+        self._row.append(part)
+
+    def newline(self):
+        self._row = []
+        self.title_rows.append(self._row)
+
+    def ensure_newline(self):
+        if len(self._row):
+            self.newline()
+
+    def finalize(self):
+        lines = [', '.join(r) for r in self.title_rows]
+        text = '\n'.join(lines)
+        return text
+
 
 def phantom_legend(label_to_color, mode='line', ax=None, legend_id=None, loc=0):
+    """
+    Creates a matplotlib legend based on a explicit mapping of labels to
+    colors.
+    """
     import kwplot
     import kwimage
     plt = kwplot.autoplt()
@@ -410,11 +444,13 @@ class FigureFinalizer(ub.NiceRepr):
         size_inches=None,
         cropwhite=True,
         tight_layout=True,
+        verbose=0,
         **kwargs
     ):
         locals_ = ub.udict(locals())
         locals_ -= {'self', 'kwargs'}
         locals_.update(kwargs)
+        self.verbose = verbose
         self.update(locals_)
 
     def __nice__(self):
@@ -449,6 +485,8 @@ class FigureFinalizer(ub.NiceRepr):
 
         dpath = ub.Path(config['dpath']).ensuredir()
         final_fpath = dpath / fpath
+        if self.verbose:
+            print(f'Write: {final_fpath}')
         savekw = {}
         if config.get('dpi', None) is not None:
             savekw['dpi'] = config['dpi']
@@ -1095,3 +1133,24 @@ def autompl2():
     except NameError:
         ...
     kwplot.autompl()
+
+
+class FigureManager:
+
+    def __init__(figman, **kwargs):
+        figman.finalizer = FigureFinalizer(**kwargs)
+        figman.labels = LabelModifier()
+        figman.fig = None
+
+    def figure(figman, *args, **kwargs):
+        import kwplot
+        fig = kwplot.figure(*args, **kwargs)
+        figman.fig = fig
+        return fig
+
+    def finalize(self, fpath, **kwargs):
+        self.finalizer.finalize(self.fig, fpath, **kwargs)
+
+    def set_figtitle(self, *args, **kwargs):
+        import kwplot
+        kwplot.set_figtitle(*args, **kwargs, fig=self.fig)

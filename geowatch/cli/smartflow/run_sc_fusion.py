@@ -54,15 +54,27 @@ import sys, ubelt
 sys.path.append(ubelt.expandpath('~/code/geowatch'))
 from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
 
+
+EVAL20_IMAGE=registry.smartgitlab.com/kitware/geowatch:0.15.1-9ac5e9593-strict-pyenv3.11.2-20240228T111012-0500-from-b56e9b3d
+CHOSEN_IMAGE=$EVAL20_IMAGE
+INGRESS_PATH="$HOME/temp/debug_smartflow_eval20/ingress"
+
+LATEST_IMAGE=registry.smartgitlab.com/kitware/geowatch:0.16.2-25a5e7234-strict-pyenv3.11.2-20240404T161916-0400-from-0da55667
+CHOSEN_IMAGE=$LATEST_IMAGE
+INGRESS_PATH="$HOME/temp/debug_smartflow_latest/ingress"
+
+mkdir -p $INGRESS_PATH
+cd $INGRESS_PATH
+
 docker run \
     --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow_v2/ingress":/tmp/ingress \
+    --volume "$INGRESS_PATH":/tmp/ingress \
     --volume $HOME/.aws:/root/.aws:ro \
     --volume "$HOME/code":/extern_code:ro \
     --volume "$HOME/data":/extern_data:ro \
     --volume "$HOME"/.cache/pip:/pip_cache \
     --env AWS_PROFILE=iarpa \
-    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-25a5e7234-strict-pyenv3.11.2-20240404T161916-0400-from-0da55667 bash
+    -it $CHOSEN_IMAGE bash
 
 from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
 config = SCFusionConfig(**{
@@ -75,8 +87,8 @@ config = SCFusionConfig(**{
     'ta2_s3_collation_bucket'       : None,
     'sc_pxl_config'                 : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 8\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
     'sc_poly_config'                : 'boundaries_as: bounds\nmin_area_square_meters: 7200\nnew_algo: crall\npolygon_simplify_tolerance: 1\nresolution: 8GSD\nsite_score_thresh: 0.3\nsmoothing: 0.0\nthresh: 0.3',
-    'input_region_models_asset_name': 'sv_out_region_models',
-    'input_site_models_asset_name'  : 'sv_out_site_models',
+    # 'input_region_models_asset_name': 'sv_out_region_models',
+    # 'input_site_models_asset_name'  : 'sv_out_site_models',
     'egress_intermediate_outputs'   : 1,
 })
 """
@@ -173,13 +185,16 @@ def run_sc_fusion_for_baseline(config):
     # ingress_dir = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/temp').ensuredir()
     ingress_dir = ub.Path('/tmp/ingress')
 
+    input_region_asset_name = 'sv_out_region_models'
+    # input_region_asset_name = config.input_region_models_asset_name
+
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
         assets=[
             # {'key': 'cropped_region_models_bas'},
             # {'key': 'sv_out_region_models', 'allow_missing': False},
 
-            {'key': config.input_region_models_asset_name, 'allow_missing': False},
+            {'key': input_region_asset_name, 'allow_missing': False},
 
             # {'key': 'cropped_kwcoco_for_sc'},
             # {'key': 'cropped_kwcoco_for_sc_assets'}
@@ -192,7 +207,7 @@ def run_sc_fusion_for_baseline(config):
         dryrun=config.dryrun
     )
 
-    input_site_summary_dpath = ingressed_assets[config.input_region_models_asset_name]
+    input_site_summary_dpath = ingressed_assets[input_region_asset_name]
     assert os.path.exists(input_site_summary_dpath)
     print(f'Found input site summary dpath: {input_site_summary_dpath}')
 
