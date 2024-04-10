@@ -164,6 +164,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
     import rich
     config = PolygonExtractConfig(**kwargs)
 
+    print(f'config.use_boundaries={config.use_boundaries}')
     if config.use_boundaries:  # for SC
         raw_boundary_tracks = score_track_polys(sub_dset, video_id, [SITE_SUMMARY_CNAME],
                                                 resolution=config.resolution)

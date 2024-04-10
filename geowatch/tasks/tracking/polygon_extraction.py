@@ -272,7 +272,9 @@ class PolygonExtractor:
         PRINT_STEP('Max Saliency')
         max_saliency = cube1.heatmap_thwc.max(axis=0)[..., 0]
         max_saliency_stats = kwarray.stats_dict(max_saliency)
-        print('max_saliency_stats = {}'.format(ub.urepr(max_saliency_stats, nl=1)))
+
+        if 0:
+            print('max_saliency_stats = {}'.format(ub.urepr(max_saliency_stats, nl=1)))
 
         PRINT_STEP('Volume Labeling')
         vol_label, label_count = ndimage.label(cube8.heatmap_thwc > thresh)
