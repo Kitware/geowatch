@@ -902,24 +902,6 @@ class PrintLogger:
         print(msg % args)
 
 
-def _devcheck_retry():
-    class Dummy:
-        def __init__(self):
-            self.count = 0
-
-        def func_to_run(self):
-            self.count += 1
-            if self.count < 3:
-                raise Exception('exception')
-    self = Dummy()
-    from retry.api import retry_call
-
-    logger = PrintLogger()
-    retry_call(self.func_to_run, fargs=[],
-               fkwargs=dict(), tries=4,
-               exceptions=(Exception,), delay=3, logger=logger)
-
-
 def _test_s3_hack():
     """
     An issue that can occur in will manifest as:
