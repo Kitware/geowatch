@@ -82,12 +82,15 @@ def upload_to_rgd(input_site_models_s3,
                   rgd_endpoint_override=None,
                   expiration_time=None):
 
+    from geowatch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()
 
     if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
@@ -120,7 +123,8 @@ def upload_to_rgd(input_site_models_s3,
     # Check that our run doesn't already exist
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
 
-    from retry.api import retry_call
+    # from retry.api import retry_call
+    from geowatch.utils.util_retry import retry_call
     from geowatch.utils import util_framework
     logger = util_framework.PrintLogger()
     request_results = retry_call(
@@ -166,8 +170,8 @@ def upload_to_rgd(input_site_models_s3,
 
         model_run_id = post_model_result.json()['id']
 
-    post_site_url =\
-        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/"
+    post_site_url = (
+        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/")
 
     executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
                            max_workers=jobs)
