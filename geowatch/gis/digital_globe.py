@@ -70,6 +70,7 @@ class DigitalGlobeBundle(ub.NiceRepr):
 
     def parse_delivery_metadata(self):
         import shapefile
+        import kwimage
         delivery_metadata_fpath = self.data['delivery_metadata_fpath']
         dpath = dirname(delivery_metadata_fpath)
 
@@ -88,7 +89,6 @@ class DigitalGlobeBundle(ub.NiceRepr):
             product_meta = product.copy()
             prod_files = product_meta.pop('productFile')
 
-            import kwimage
             # Find the files associated with the order AOI
             aoi_fpaths = {
                 'shp': None,
@@ -145,7 +145,7 @@ class DigitalGlobeBundle(ub.NiceRepr):
 
             aoi_files = {key: open(val, 'rb') for key, val in aoi_fpaths.items()}
             try:
-                shp_wkt = ub.ensure_unicode(aoi_files['prj'].read())
+                shp_wkt = ensure_unicode(aoi_files['prj'].read())
                 shp_reader = shapefile.Reader(
                     shp=aoi_files['shp'],
                     dbf=aoi_files['dbf'],
@@ -239,3 +239,33 @@ def search_path_ancestors(path, fname, stop_fname=None, max_steps=1000):
             raise Exception('reached the root, cannot find {}'.format(fname))
         dpath = dpath_next
     return found
+
+
+def ensure_unicode(text):
+    r"""
+    Casts bytes into utf8 (mostly for python2 compatibility).
+
+    Args:
+        text (str | bytes):
+            text to ensure is decoded as unicode
+
+    Returns:
+        str
+
+    References:
+        .. [SO_12561063] http://stackoverflow.com/questions/12561063/extract-data-from-file
+
+    Example:
+        >>> import codecs  # NOQA
+        >>> assert ensure_unicode('my ünicôdé strįng') == 'my ünicôdé strįng'
+        >>> assert ensure_unicode('text1') == 'text1'
+        >>> assert ensure_unicode('text1'.encode('utf8')) == 'text1'
+        >>> assert ensure_unicode('ï»¿text1'.encode('utf8')) == 'ï»¿text1'
+        >>> assert (codecs.BOM_UTF8 + 'text»¿'.encode('utf8')).decode('utf8')
+    """
+    if isinstance(text, str):
+        return text
+    elif isinstance(text, bytes):
+        return text.decode('utf8')
+    else:  # nocover
+        raise ValueError('unknown input type {!r}'.format(text))

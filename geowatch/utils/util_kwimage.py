@@ -1273,6 +1273,13 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
         >>> polygons.draw(color='pink')
         >>> keep_bbs.draw(color='orange', setlim=1)
         >>> plt.gca().set_title('find_low_overlap_covering_boxes')
+
+    Example:
+        >>> # Empty test case
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
+        >>> keep_bbs, overlap_idxs = find_low_overlap_covering_boxes([], 1, 0, 1)
+        >>> assert len(keep_bbs) == 0
+        >>> assert len(overlap_idxs) == 0
     """
     import kwimage
     import kwarray
