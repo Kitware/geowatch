@@ -1029,7 +1029,7 @@ def assign_sites_to_videos(coco_dset, site_summaries, viz_out_dir=None):
     rich.print(f'There were {n_assigned_vids} / {n_total_vids} assigned videos')
 
     if viz_out_dir is not None:
-        rich.print(f'Drawing assignments')
+        rich.print('Drawing assignments')
         # Draw assignments
         import kwplot
         from geowatch.utils import util_kwplot
@@ -1051,7 +1051,6 @@ def assign_sites_to_videos(coco_dset, site_summaries, viz_out_dir=None):
             sitesum_gdf.geometry.plot(ax=ax, facecolor='none', edgecolor='blue')
             figman.set_figtitle('Tracking Bounds-to-Cluster Assignment')
             figman.finalize('tracking_bounds_to_cluster_assignment.png')
-
 
     return site_idx_to_vidid
 

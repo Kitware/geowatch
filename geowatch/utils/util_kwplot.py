@@ -2,6 +2,7 @@ import ubelt as ub
 import matplotlib as mpl
 import matplotlib.text  # NOQA
 
+
 class TitleBuilder:
     """
     Simple class for adding information to a line, and then adding new lines.

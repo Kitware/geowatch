@@ -87,7 +87,7 @@ class TrackFunction:
                 'video_id': video_id,
                 'image_ids': gids,
             })
-            rich.print(f'[blue]----')
+            rich.print('[blue]----')
 
         # Tracks were either updated or added.
         # In the case they were updated the existing track ids should

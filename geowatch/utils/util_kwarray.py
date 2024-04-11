@@ -6,6 +6,8 @@ import functools
 import math
 import ubelt as ub
 import warnings
+import os
+import itertools as it
 
 try:
     from packaging.version import parse as Version
@@ -1011,10 +1013,6 @@ The :class:`SlidingWindow` generates a grid of slices over an
 data. The :class:`Stitcher` can then take these results and recombine them into
 a final result that matches the larger array.
 """
-import ubelt as ub
-import os
-import numpy as np
-import itertools as it
 
 
 class SlidingWindow(ub.NiceRepr):
@@ -1069,7 +1067,6 @@ class SlidingWindow(ub.NiceRepr):
               on the right and bottom when the slider overshoots.
 
     Example:
-        >>> from kwarray.util_slider import *  # NOQA
         >>> shape = (10, 10)
         >>> window = (5, 5)
         >>> self = SlidingWindow(shape, window)
@@ -1081,7 +1078,6 @@ class SlidingWindow(ub.NiceRepr):
         i=3, index=(slice(5, 10, None), slice(5, 10, None))
 
     Example:
-        >>> from kwarray.util_slider import *  # NOQA
         >>> shape = (16, 16)
         >>> window = (4, 4)
         >>> self = SlidingWindow(shape, window, overlap=(.5, .25))
@@ -1311,14 +1307,6 @@ class SlidingWindow(ub.NiceRepr):
             center = tuple(sl_.start + (sl_.stop - sl_.start - 1) / 2
                            for sl_ in slices)
             yield center
-
-
-__devnote__ = '''
-TODO:
-    - [ ] Look at the old "add_fast" code in the netharn version and see if
-          it is worth porting. This code is kept in the dev folder in
-          ../dev/_dev_slider.py
-'''
 
 
 class Stitcher(ub.NiceRepr):
