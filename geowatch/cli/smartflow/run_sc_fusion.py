@@ -303,8 +303,8 @@ def run_sc_fusion_for_baseline(config):
     # ingress_dir = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/temp').ensuredir()
     ingress_dir = ub.Path('/tmp/ingress')
 
-    input_region_asset_name = 'sv_out_region_models'
-    # input_region_asset_name = config.input_region_models_asset_name
+    # input_region_asset_name = 'sv_out_region_models'
+    input_region_asset_name = config.input_region_models_asset_name
 
     ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
