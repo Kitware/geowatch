@@ -738,20 +738,35 @@ def combine_kwcoco_channels_temporally(config):
 
 
 @profile
-def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None):
-    """Get a binary mask of the quality data.
+def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, crop_slice=None, qa_scale=None):
+    """
+    Get a binary mask of the quality data.
 
     Args:
-        coco_image (kwcoco.coco_image.CocoImage): Object that contains references to the image and assets including the quality mask.
-        space (str): The space that the quality mask will be loaded in. Choices: 'image', 'video', 'asset'
-        resolution (str, int): The resolution that the quality mask will be loaded in. E.g. '10GSD'.
-        avoid_quality_values (list, optional): The values to include as bad quality according to the bitmask. Defaults to ['cloud', 'cloud_shadow', 'cloud_adjacent'].
-        crop_slice (tuple(slice, slice), optional): The height and width crop slices to load from quality mask. Defaults to None, which loads full quality mask.
+        coco_image (kwcoco.coco_image.CocoImage):
+            Object that contains references to the image and assets including the quality mask.
+
+        space (str):
+            The space that the quality mask will be loaded in. Choices: 'image', 'video', 'asset'
+
+        resolution (str | int):
+            The resolution that the quality mask will be loaded in. E.g. '10GSD'.
+
+        avoid_quality_values (list | None):
+            The values to include as bad quality according to the bitmask. Defaults to ['cloud', 'cloud_shadow', 'cloud_adjacent'].
+
+        crop_slice (Tuple[slice, slice] | None):
+            The height and width crop slices to load from quality mask. Defaults to None, which loads full quality mask.
+
     Returns:
         np.ndarray: A binary numpy array of shape [H, W, 1] where the 1 values corresponds to a quality pixel vice versa for 0 values.
     """
     from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     from geowatch import heuristics
+    import numpy as np
+    # spec_name = coco_image.img.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
+    # sensor = coco_image.img.get('sensor_coarse', '*')
+
     delay = coco_image.imdelay('quality',
                                space=space,
                                interpolation='nearest',
@@ -759,12 +774,28 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
                                resolution=resolution)
     if crop_slice:
         delay = delay.crop(crop_slice)
+    if qa_scale:
+        delay = delay.scale(qa_scale)
+
+    qa_asset = coco_image.find_asset('quality')
+    if qa_asset is None:
+        # No quality mask is available, don't finalize, return 1s.
+        quality_mask = np.ones(delay.shape, dtype=np.uint8)
+        return quality_mask
+
     qa_data = delay.finalize(antialias=False, interpolation='nearest',
                              nodata_method='ma')
-    is_nodata = qa_data.mask
+    if hasattr(qa_data, 'mask'):
+        is_nodata = qa_data.mask
+    else:
+        is_nodata = None
+        import warnings
+        warnings.warn(
+            'Warning: nodata_method was ma, but we didnt get a mask back. '
+            'This is likely a delayed-image issue')
 
-    spec_name = coco_image.img.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
-    sensor = coco_image.img.get('sensor_coarse', '*')
+    spec_name = qa_asset.get('qa_encoding', heuristics.DEFAULT_QA_ENCODING)
+    sensor = qa_asset.get('sensor_coarse', '*')
     try:
         table = QA_SPECS.find_table(spec_name, sensor)
     except AssertionError as ex:
@@ -772,9 +803,13 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=None, c
         is_iffy = None
     else:
         is_iffy = table.mask_any(qa_data.data, avoid_quality_values)
-    is_iffy |= is_nodata
+    if is_nodata is not None:
+        is_iffy |= is_nodata
 
-    quality_mask = (1 - is_iffy)
+    if is_iffy is None:
+        quality_mask = np.ones(delay.shape, dtype=np.uint8)
+    else:
+        quality_mask = (1 - is_iffy)
     return quality_mask
 
 
@@ -784,57 +819,45 @@ def estimate_top_quality_images(window_coco_images, max_images_per_group, avoid_
     Heuristic to subselect top images.
     """
     import numpy as np
-    # We can try to use QA bands if we have those
-    from geowatch.tasks.fusion.datamodules.qa_bands import QA_SPECS
 
     assert len(window_coco_images) > max_images_per_group
 
-    use_qa_bands = True
-    qa_assets = [coco_img.find_asset('quality')
-                 for coco_img in window_coco_images]
+    qa_assets = [coco_image.find_asset('quality')
+                 for coco_image in window_coco_images]
     has_known_encoding = [
         qa_asset is not None and 'qa_encoding' in qa_asset
         for qa_asset in qa_assets
     ]
+    # We can try to use QA bands if we have those
     use_qa_bands = all(has_known_encoding)
-    estimated_iffyness = []
+    estimated_quality = []
 
+    # Use an overview to estimate quality
     qa_scale = 0.25
 
     if use_qa_bands:
-        for coco_img in window_coco_images:
-            qa_asset = coco_img.find_asset('quality')
-            spec_name = qa_asset['qa_encoding']
-            sensor = qa_asset['sensor_coarse']
-            table = QA_SPECS.find_table(spec_name, sensor)
-
+        for coco_image in window_coco_images:
             # Note: might want to configure the resolution we are loading at
-            qa_delay = coco_img.imdelay('quality',
-                                        space='video',
-                                        interpolation='nearest',
-                                        antialias=False)
-            # Use an overview to estimate quality
-            qa_delay = qa_delay.scale(qa_scale)
-            qa_data = qa_delay.finalize(antialias=False, interpolation='nearest',
-                                        nodata_method='ma')
-            is_nodata = qa_data.mask
-            is_iffy = table.mask_any(qa_data.data, avoid_quality_values)
-            is_iffy |= is_nodata
-            iffyness = is_iffy.sum() / is_iffy.size
-            estimated_iffyness.append(iffyness)
+            quality_mask = get_quality_mask(
+                coco_image, space='video', resolution=None,
+                avoid_quality_values=avoid_quality_values, qa_scale=qa_scale,
+                crop_slice=None)
+
+            quality = quality_mask.sum() / quality_mask.size
+            estimated_quality.append(quality)
     else:
         # If we have no information on QA bands, we can use the coarse stac
         # properties of the larger images
         inf = float('inf')
-        for coco_img in window_coco_images:
+        for coco_image in window_coco_images:
             # FIXME, non general hard-coded properties used here
             ave_cloudcover = np.nanmean([
                 prop.get('eo:cloud_cover', inf) / 100
-                for prop in coco_img.img.get('parent_stac_properties', [])
+                for prop in coco_image.img.get('parent_stac_properties', [])
             ])
-            estimated_iffyness.append(ave_cloudcover)
+            estimated_quality.append(1 - ave_cloudcover)
 
-    ranked_idxs = np.argsort(estimated_iffyness)
+    ranked_idxs = np.argsort(estimated_quality)[::-1]
     top_idxs = ranked_idxs[:max_images_per_group]
     chosen = list(ub.take(window_coco_images, top_idxs))
     chosen_window_coco_images = sorted(chosen, key=lambda x: x.datetime)
