@@ -857,20 +857,37 @@ class NodeStateDebugger:
         TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
         create_local_env_command = ub.codeblock(
             fr'''
+            # Set these environment variables to reasonable locations on your
+            # host machine.
             LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
+            LOCAL_CODE_DPATH=$HOME/code
+            LOCAL_DATA_DPATH=$HOME/data
+
+            # Run the docker image
             mkdir -p $LOCAL_WORK_DPATH
             cd $LOCAL_WORK_DPATH
             docker run \
                 --runtime=nvidia \
                 --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
+                --volume "$LOCAL_CODE_DPATH":/extern_code:ro \
+                --volume "$LOCAL_DATA_DPATH":/extern_data:ro \
                 --volume $HOME/.aws:/root/.aws:ro \
-                --volume "$HOME/code":/extern_code:ro \
-                --volume "$HOME/data":/extern_data:ro \
                 --volume "$HOME"/.cache/pip:/pip_cache \
                 --env AWS_PROFILE=iarpa \
+                --env TASK_IMAGE_NAME={TASK_IMAGE_NAME} \
                 -it {TASK_IMAGE_NAME} bash
             ''')
         print(create_local_env_command)
+
+        if 1:
+            helper_text = ub.codeblock(
+                '''
+                # Point the container repo at the repo on your host
+                # system to pull in any updates for testing.
+                git remote add host /extern_code/geowatch/.git
+                git fetch host
+                ''')
+            return helper_text
 
         # node_modname = 'geowatch.cli.smartflow.run_sc_datagen'
         if config is not None:
@@ -878,10 +895,13 @@ class NodeStateDebugger:
             ipython_setup_command = ub.codeblock(
                 f'''
                 # In IPython
+                %load_ext autoreload
+                %autoreload 2
                 from {node_modname} import *
                 ''')
             config_text = 'config = ' + ub.urepr(config, nl=1)
             ipython_setup_command = ipython_setup_command + '\n' + config_text
+            print()
             print(ipython_setup_command)
 
     def print_current_state(self, dpath):
