@@ -431,7 +431,7 @@ def run_sc_fusion_for_baseline(config):
 
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models_sc'
     cropped_region_models_outdir = ingress_dir / 'cropped_region_models_sc'
-    sc_heatmap_dpath = ingress_dir / '_assets'
+    sc_heatmap_dpath = (ingress_dir / '_assets').ensuredir()
 
     cropped_site_models_outdir.ensuredir()
     cropped_region_models_outdir.ensuredir()
