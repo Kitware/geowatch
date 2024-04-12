@@ -85,6 +85,7 @@ def run_generate_acsc_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation()
 
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
@@ -153,6 +154,11 @@ def run_generate_acsc_cropped_kwcoco(config):
         acsc_cluster_config['dst_dpath'] = cluster_region_dpath
         acsc_cluster_config['dst_region_fpath'] = cluster_region_fpath
         site_clustering.configure(acsc_cluster_config)
+
+        print('Show stats about cluster inputs:')
+        ub.cmd('geowatch site_stats ' + input_region_path, verbose=3, system=True)
+
+        print('Execute clustering')
         ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
     else:
         cluster_region_dpath = None

@@ -807,7 +807,9 @@ class NodeStateDebugger:
         self.current_iteration = 0
 
     def print_environment(self):
-        # Print info about what version of the code we are running on
+        """
+        Print info about what version of the code we are running on
+        """
         import os
         import geowatch
         print(' --- <NODE_ENV> --- ')
@@ -825,38 +827,62 @@ class NodeStateDebugger:
 
         TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
         if TASK_IMAGE_NAME:
-            # Print out a command to help developers debug this image in a
-            # local environment.
-            # TODO: make this more generic for other people.
-            # This is somewhat ill-defined because we can't know which
-            # local machine the user will want to run on but here are issues
-            # with the current command:
-            # * the external code / data is jon-specific,
-            # * the location of the mapped ingress directory is arbitrary.
-            # * the location of the local .aws directory is usually correct.
-            # * Not every image needs runtime=nvidia
-            # * pip cache is only necessary if installing new packages, but
-            #   location is a reasonable default.
-            # * there may be environment variables passed by smartflow that
-            #   also need to be passed here, but we dont want to have a huge
-            #   command, so there is a tradeoff.
-            print('To run in a similar environment locally:')
-            create_local_env_command = ub.codeblock(
-                fr'''
-                LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
-                mkdir -p $LOCAL_WORK_DPATH
-                cd $LOCAL_WORK_DPATH
-                docker run \
-                    --runtime=nvidia \
-                    --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
-                    --volume $HOME/.aws:/root/.aws:ro \
-                    --volume "$HOME/code":/extern_code:ro \
-                    --volume "$HOME/data":/extern_data:ro \
-                    --volume "$HOME"/.cache/pip:/pip_cache \
-                    --env AWS_PROFILE=iarpa \
-                    -it {TASK_IMAGE_NAME} bash
+            self.print_local_invocation()
+
+    def print_local_invocation(self, config=None):
+        """
+        Attempt to build a string that will allow the user to start stepping
+        through a local run of this smartflow step in IPython.
+
+        Args:
+            config (scriptconfig.DataConfig):
+                the config used to invoke the script
+        """
+        # Print out a command to help developers debug this image in a
+        # local environment.
+        # TODO: make this more generic for other people.
+        # This is somewhat ill-defined because we can't know which
+        # local machine the user will want to run on but here are issues
+        # with the current command:
+        # * the external code / data is jon-specific,
+        # * the location of the mapped ingress directory is arbitrary.
+        # * the location of the local .aws directory is usually correct.
+        # * Not every image needs runtime=nvidia
+        # * pip cache is only necessary if installing new packages, but
+        #   location is a reasonable default.
+        # * there may be environment variables passed by smartflow that
+        #   also need to be passed here, but we dont want to have a huge
+        #   command, so there is a tradeoff.
+        print('To run in a similar environment locally:')
+        TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
+        create_local_env_command = ub.codeblock(
+            fr'''
+            LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
+            mkdir -p $LOCAL_WORK_DPATH
+            cd $LOCAL_WORK_DPATH
+            docker run \
+                --runtime=nvidia \
+                --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
+                --volume $HOME/.aws:/root/.aws:ro \
+                --volume "$HOME/code":/extern_code:ro \
+                --volume "$HOME/data":/extern_data:ro \
+                --volume "$HOME"/.cache/pip:/pip_cache \
+                --env AWS_PROFILE=iarpa \
+                -it {TASK_IMAGE_NAME} bash
+            ''')
+        print(create_local_env_command)
+
+        # node_modname = 'geowatch.cli.smartflow.run_sc_datagen'
+        if config is not None:
+            node_modname = config.__class__.__module__
+            ipython_setup_command = ub.codeblock(
+                f'''
+                # In IPython
+                from {node_modname} import *
                 ''')
-            print(create_local_env_command)
+            config_text = 'config = ' + ub.urepr(config, nl=1)
+            ipython_setup_command = ipython_setup_command + '\n' + config_text
+            print(ipython_setup_command)
 
     def print_current_state(self, dpath):
         print(f' --- <NODE_STATE iter={self.current_iteration}> --- ')
