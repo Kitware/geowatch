@@ -29,9 +29,11 @@ class Retry:
             try:
                 return func(*args, **kwargs)
             except self.exceptions as ex:
-                self.logger.warning(f'ex={ex}: retry after delay={current_delay:0.2f} seconds')
                 if try_num >= self.tries:
+                    self.logger.warning(f'Error on try {try_num}/{self.tries}. ex={ex!r}, giving up.')
                     raise
+                else:
+                    self.logger.warning(f'Error on try {try_num}/{self.tries}. ex={ex!r}, retry after delay={current_delay:0.2f} seconds')
             time.sleep(current_delay)
             current_delay *= self.backoff
 
