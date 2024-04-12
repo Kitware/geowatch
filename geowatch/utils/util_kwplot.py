@@ -1150,7 +1150,8 @@ class FigureManager:
         return fig
 
     def finalize(self, fpath, **kwargs):
-        self.finalizer.finalize(self.fig, fpath, **kwargs)
+        final_fpath = self.finalizer.finalize(self.fig, fpath, **kwargs)
+        return final_fpath
 
     def set_figtitle(self, *args, **kwargs):
         import kwplot

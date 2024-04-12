@@ -91,7 +91,7 @@ def main(cmdline=1, **kwargs):
     """
     CommandLine:
         xdoctest -m geowatch.cli.cluster_sites main:0
-        xdoctest -m geowatch.cli.cluster_sites main:1
+        xdoctest -m geowatch.cli.cluster_sites main:2
 
     Example:
         >>> from geowatch.cli.cluster_sites import *  # NOQA

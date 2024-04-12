@@ -725,8 +725,13 @@ class RegionModel(_Model):
             gdf = gpd.GeoDataFrame.from_features(site_summaries, crs=crs84)
         else:
             # TODO: could infer more columns here.
+            default_sitesum_columns = [
+                'geometry', 'type', 'status', 'version', 'site_id', 'mgrs',
+                'start_date', 'end_date', 'score', 'originator', 'model_content',
+            ]
             gdf = gpd.GeoDataFrame.from_features(
-                [], crs=crs84, columns=['geometry'])
+                [], crs=crs84, columns=default_sitesum_columns)
+
         return gdf
 
     def pandas_region(self):

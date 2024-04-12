@@ -112,11 +112,11 @@ class DrawRegionCLI(scfg.DataConfig):
             dataframes['sites'] += [site.pandas_site()]
 
         # if dataframes['region']:
-        region_df = pd.concat(dataframes['region'])
-        summary_df = pd.concat(dataframes['site_summary'])
+        _region_df = pd.concat(dataframes['region'])
+        _summary_df = pd.concat(dataframes['site_summary'], axis=0)
 
-        region_df = util_gis.project_gdf_to_local_utm(region_df)
-        summary_df = summary_df.to_crs(region_df.crs)
+        region_df = util_gis.project_gdf_to_local_utm(_region_df)
+        summary_df = _summary_df.to_crs(region_df.crs)
 
         # if config.viz_dpath is None:
         #     config.viz_dpath = ub.Path('.').resolve()
@@ -201,7 +201,9 @@ class DrawRegionCLI(scfg.DataConfig):
             ax.set_ylim(miny, maxy)
 
             fpath = config.fpath
-            figman.finalize(fpath)
+            final_fpath = figman.finalize(fpath)
+            dpath = final_fpath.absolute().parent
+            rich.print(f'Wrote to: [link={dpath}]{dpath}[/link]')
 
         else:
             raise NotImplementedError
