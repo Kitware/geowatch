@@ -893,6 +893,11 @@ class NodeStateDebugger:
         # node_modname = 'geowatch.cli.smartflow.run_sc_datagen'
         if config is not None:
             node_modname = config.__class__.__module__
+            if node_modname == '__main__':
+                # Try to get the real name
+                import sys
+                node_modname = ub.modpath_to_modname(sys.modules[node_modname].__file__)
+
             ipython_setup_command = ub.codeblock(
                 f'''
                 # In IPython

@@ -3,10 +3,6 @@ import sys
 import subprocess
 import json
 import traceback
-from concurrent.futures import as_completed
-from glob import glob
-import os
-
 import requests
 import ubelt as ub
 import scriptconfig as scfg
@@ -49,8 +45,8 @@ class UploadRGDConfig(scfg.DataConfig):
         '''))
 
 
-def main():
-    config = UploadRGDConfig.cli()
+def main(cmdline=1, **kwargs):
+    config = UploadRGDConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     assert config.rgd_aws_region is not None
     assert config.input_site_models_s3 is not None
@@ -61,13 +57,10 @@ def main():
 
 
 def get_model_results(model_run_results_url):
-    try:
-        model_runs_result = requests.get(model_run_results_url, params={
-            'limit': '0'})
-        request_json = model_runs_result.json()
-        request_results = request_json.get('results', ())
-    except Exception:
-        raise
+    model_runs_result = requests.get(model_run_results_url, params={
+        'limit': '0'})
+    request_json = model_runs_result.json()
+    request_results = request_json.get('results', ())
     return request_results
 
 
@@ -98,13 +91,13 @@ def upload_to_rgd(config):
         aws_base_command = ['aws', 's3', 'cp']
 
     local_site_models_dir = '/tmp/site_models'
-    subprocess.run([*aws_base_command, '--recursive',
-                    input_site_models_s3, local_site_models_dir],
-                   check=True)
+    ub.cmd([*aws_base_command, '--recursive',
+            input_site_models_s3, local_site_models_dir],
+           check=True, verbose=3)
 
     if rgd_endpoint_override is None:
         try:
-            endpoint_result = subprocess.run(
+            endpoint_result = ub.cmd(
                 ['aws',
                  *(('--profile', aws_profile)
                    if aws_profile is not None else ()),
@@ -113,7 +106,7 @@ def upload_to_rgd(config):
                  '--region', rgd_aws_region,
                  '--names', "{}-internal-alb".format(rgd_deployment_name)],
                 check=True,
-                capture_output=True)
+                verbose=3)
         except subprocess.CalledProcessError as e:
             print(e.stderr, file=sys.stderr)
             raise e
@@ -130,10 +123,14 @@ def upload_to_rgd(config):
     from geowatch.utils.util_retry import retry_call
     from geowatch.utils import util_framework
     logger = util_framework.PrintLogger()
+    print('\nAttempt to post to RGD model results endpoint')
+    print(f'model_run_results_url = {ub.urepr(model_run_results_url, nl=1)}')
+
     request_results = retry_call(
         get_model_results, fargs=[model_run_results_url], tries=3,
         exceptions=(Exception,), delay=3, logger=logger)
 
+    print('Got Results')
     existing_model_run = None
 
     for model_run in request_results:
@@ -176,14 +173,14 @@ def upload_to_rgd(config):
     post_site_url = (
         f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/")
 
-    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
-                           max_workers=jobs)
-    site_post_jobs = [executor.submit(post_site, post_site_url, site_filepath)
-                      for site_filepath in glob(os.path.join(
-                          local_site_models_dir, '*.geojson'))]
+    local_site_models_dir = ub.Path(local_site_models_dir)
 
-    for site_post_job in ub.ProgIter(as_completed(site_post_jobs),
-                                     total=len(site_post_jobs),
+    jobs = ub.JobPool(mode='process', max_workers=jobs)
+    for site_filepath in local_site_models_dir.glob('*.geojson'):
+        jobs.submit(post_site, post_site_url, site_filepath)
+
+    for site_post_job in ub.ProgIter(jobs.as_completed(),
+                                     total=len(jobs),
                                      desc='Uploading sites..'):
         try:
             result = site_post_job.result()
