@@ -13,27 +13,39 @@ class TeamFeatLandcover(scfg.DataConfig):
     Run DZYNE landcover feature computation as baseline framework component
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
+
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
+
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
+        '''
+        Output as simple newline separated STAC items
+        '''))
+
     expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
 
 

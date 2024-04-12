@@ -17,36 +17,36 @@ class PseudoliveConsolidateConfig(scfg.DataConfig):
     """
     region_id = scfg.Value(None, type=str, position=1, required=True, help='Region ID')
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
     previous_consolidated_output = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
-            '''
-            S3 path to consolidated regions / sites from previous
-            iteration
-            '''))
+        '''
+        S3 path to consolidated regions / sites from previous
+        iteration
+        '''))
     current_output = scfg.Value(None, type=str, position=4, required=True, help=ub.paragraph(
-            '''
-            S3 path to regions / sites from current iteration
-            '''))
+        '''
+        S3 path to regions / sites from current iteration
+        '''))
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     performer_suffix = scfg.Value(None, type=str, short_alias=['s'], help='Performer suffix if present, e.g. KIT')
     iou_threshold = scfg.Value(0.5, type=float, short_alias=['i'], help=ub.paragraph(
-            '''
-            IOU Threshold for determining duplicates(default: 0.5)
-            '''))
+        '''
+        IOU Threshold for determining duplicates(default: 0.5)
+        '''))
     just_deconflict = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Don't copy previous sites, just deconflict current site IDs
-            with respect to previous
-            '''))
+        '''
+        Don't copy previous sites, just deconflict current site IDs
+        with respect to previous
+        '''))
 
 
 def main():

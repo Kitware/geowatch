@@ -7,82 +7,6 @@ from geowatch.cli.smartflow_egress import smartflow_egress
 
 __debugging__ = r"""
 
-
-IMAGE_NAME=watch:0.11.0-42f5cc56a-strict-pyenv3.11.2-20231013T095024-0400-from-dc16b29e
-
-docker run \
-    --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow/ingress":/tmp/ingress \
-    --volume $HOME/.aws:/root/.aws:ro \
-    --volume "$HOME/code":/extern_code:ro \
-    --volume "$HOME/data":/extern_data:ro \
-    --volume "$HOME"/.cache/pip:/pip_cache \
-    --env AWS_PROFILE=iarpa \
-    -it "$IMAGE_NAME" bash
-
-(cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
-(cd /root/code/watch && git fetch tmp)
-(cd /root/code/watch && git checkout dev/0.11.0)
-(cd /root/code/watch && git pull tmp)
-
-(cd /root/data/smart_expt_dvc && dvc remote add tmp /extern_data/dvc-repos/smart_expt_dvc/.dvc/cache)
-(cd /root/data/smart_expt_dvc && dvc pull -r tmp models/wu/wu_mae_2023_04_21.dvc)
-
-ipython
-
-import sys, ubelt
-sys.path.append(ubelt.expandpath('~/code/watch'))
-from geowatch.cli.smartflow.run_teamfeat_mae import *  # NOQA
-
-
-# Copied from a smartflow run that failed,
-
-config = TeamFeatMAE(**{
-    'input_path'       : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/site-cropped-kwcoco/items.jsonl',
-    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson',
-    'output_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/acsc_mae/items.jsonl',
-    'aws_profile'      : None,
-    'dryrun'           : False,
-    'outbucket'        : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/KR_R001/2021-08-31/split/mono/products/acsc_mae',
-    'newline'          : True,
-    'expt_dvc_dpath'   : '/root/data/smart_expt_dvc',
-})
-
-
-###
-
-python -m geowatch.tasks.mae.predict \
-        --input_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc.json \
-        --mae_ckpt_path=/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt \
-        --output_kwcoco=/tmp/ingress/cropped_kwcoco_for_sc_wu_mae.kwcoco.zip \
-        --workers=2 \
-        --assets_dname=_teamfeats
-
-
-
-import sys, ubelt
-sys.path.append(ubelt.expandpath('~/code/watch'))
-from geowatch.tasks.mae.predict import *  # NOQA
-kwargs = {
-    'device': 'cuda:0',
-    'mae_ckpt_path': '/root/data/smart_expt_dvc/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt',
-    'batch_size': 1,
-    'workers': 2,
-    'io_workers': 8,
-    'window_resolution': 1.0,
-    'sensor': [
-        'S2',
-        'L8',
-    ],
-    'bands': [
-        'shared',
-    ],
-    'patch_overlap': 0.25,
-    'input_kwcoco': '/tmp/ingress/cropped_kwcoco_for_sc.json',
-    'output_kwcoco': '/tmp/ingress/cropped_kwcoco_for_sc_wu_mae.kwcoco.zip',
-    'assets_dname': '_teamfeats',
-}
-
 """
 
 
@@ -90,27 +14,34 @@ class TeamFeatMAE(scfg.DataConfig):
     """
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
+        '''
+        Output as simple newline separated STAC items
+        '''))
 
     expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
 

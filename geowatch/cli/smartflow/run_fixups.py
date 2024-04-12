@@ -9,36 +9,43 @@ class FixupConfig(scfg.DataConfig):
     final cleanups that need to happen before submitting to T&E validation.
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
 
     ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Location for collated TA-2 output (bucket name should
-            include up to eval name)
-            '''))
+        '''
+        S3 Location for collated TA-2 output (bucket name should
+        include up to eval name)
+        '''))
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
 
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATED.')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
 
     input_region_models_asset_name = scfg.Value('cropped_region_models_sc', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to ingress and fix up
-            '''), alias=['region_models_asset_name'])
+        '''
+        Which region model assets to ingress and fix up
+        '''), alias=['region_models_asset_name'])
 
     input_site_models_asset_name = scfg.Value('cropped_site_models_sc', type=str, required=False, help=ub.paragraph(
         '''
@@ -46,9 +53,9 @@ class FixupConfig(scfg.DataConfig):
         '''), alias=['site_models_asset_name'])
 
     performer_suffix = scfg.Value('KIT', type=str, required=True, help=ub.paragraph(
-            '''
-            Performer suffix for output files
-            '''))
+        '''
+        Performer suffix for output files
+        '''))
 
 
 def main(cmdline=1, **kwargs):

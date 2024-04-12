@@ -46,47 +46,55 @@ class SVDatasetConfig(scfg.DataConfig):
     Generate cropped KWCOCO dataset for SC
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
+        '''
+        Output as simple newline separated STAC items
+        '''))
     jobs = scfg.Value(1, type=int, short_alias=['j'], help='UNUSED AND WILL BE REMOVED')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Will not recompute if output_path already exists
-            '''))
+        '''
+        Will not recompute if output_path already exists
+        '''))
     sv_cropping_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for SV_Cropping.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for SV_Cropping.
+        '''))
 
     input_region_models_asset_name = scfg.Value('cropped_region_models_bas', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to use as input
-            '''))
+        '''
+        Which region model assets to use as input
+        '''))
 
     input_site_models_asset_name = scfg.Value('cropped_site_models_bas', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to to use as input
-            '''))
+        '''
+        Which site model assets to to use as input
+        '''))
 
 
 def main():

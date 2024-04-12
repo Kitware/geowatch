@@ -33,182 +33,6 @@ docker run \
 ipython
 
 from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
-
-
------
-
-# Copied from a smartflow run that failed,
-cmdline = 0
-kwargs = {
-    'input_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/acsc_mae/items.jsonl',
-    'input_region_path'      : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/input/mono/region_models/NZ_R001.geojson',
-    'output_path'            : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion/items.jsonl',
-    'aws_profile'            : None,
-    'dryrun'                 : False,
-    'outbucket'              : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v103/batch/kit/NZ_R001/2021-08-31/split/mono/products/sc-fusion',
-    'ta2_s3_collation_bucket': None,
-    'sc_pxl_config'          : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 12\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/wu/acsc/wu_mae_epoch=125-step=2772.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
-    'sc_poly_config'         : 'boundaries_as: polys\nmin_area_square_meters: 7200\nresolution: 8GSD\nsite_score_thresh: 0.375\nsmoothing: null\nthresh: 0.07',
-}
-
-
-import sys, ubelt
-sys.path.append(ubelt.expandpath('~/code/geowatch'))
-from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
-
-
-EVAL20_IMAGE=registry.smartgitlab.com/kitware/geowatch:0.15.1-9ac5e9593-strict-pyenv3.11.2-20240228T111012-0500-from-b56e9b3d
-CHOSEN_IMAGE=$EVAL20_IMAGE
-INGRESS_PATH="$HOME/temp/debug_smartflow_eval20/ingress"
-
-LATEST_IMAGE=registry.smartgitlab.com/kitware/geowatch:0.16.2-25a5e7234-strict-pyenv3.11.2-20240404T161916-0400-from-0da55667
-CHOSEN_IMAGE=$LATEST_IMAGE
-INGRESS_PATH="$HOME/temp/debug_smartflow_latest/ingress"
-
-mkdir -p $INGRESS_PATH
-cd $INGRESS_PATH
-
-docker run \
-    --runtime=nvidia \
-    --volume "$INGRESS_PATH":/tmp/ingress \
-    --volume $HOME/.aws:/root/.aws:ro \
-    --volume "$HOME/code":/extern_code:ro \
-    --volume "$HOME/data":/extern_data:ro \
-    --volume "$HOME"/.cache/pip:/pip_cache \
-    --env AWS_PROFILE=iarpa \
-    -it $CHOSEN_IMAGE bash
-
-from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
-config = SCFusionConfig(**{
-    'input_path'                    : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R001/split_work/52SDG76/products/site-cropped-kwcoco/items.jsonl',
-    'input_region_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R001/split_input/52SDG76/region_models/KR_R001.geojson',
-    'output_path'                   : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R001/split_work/52SDG76/products/sc-fusion/items.jsonl',
-    'aws_profile'                   : None,
-    'dryrun'                        : False,
-    'outbucket'                     : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R001/split_work/52SDG76/products/sc-fusion',
-    'ta2_s3_collation_bucket'       : None,
-    'sc_pxl_config'                 : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 8\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
-    'sc_poly_config'                : 'boundaries_as: bounds\nmin_area_square_meters: 7200\nnew_algo: crall\npolygon_simplify_tolerance: 1\nresolution: 8GSD\nsite_score_thresh: 0.3\nsmoothing: 0.0\nthresh: 0.3',
-    # 'input_region_models_asset_name': 'sv_out_region_models',
-    # 'input_site_models_asset_name'  : 'sv_out_site_models',
-    'egress_intermediate_outputs'   : 1,
-})
-
-
------
-
-
-cd /home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval21_batch_v191/KR_R002/split_work/52SDG98/products/sc-fusion/
-geowatch draw_region cropped_region_models_sc/KR_R002.geojson --fpath cropped_region_models_sc.png
-geowatch draw_region sv_out_region_models/KR_R002.geojson --fpath sv_out_region_models.png
-kwimage stack_images --input_fpaths sv_out_region_models.png cropped_region_models_sc.png --axis=1 --out before_after.png
-
-mkdir -p $HOME/temp/debug_smartflow_KR_R002_52SDG98/ingress
-cd $HOME/temp/debug_smartflow_KR_R002_52SDG98/ingress
-docker run \
-    --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow_KR_R002_52SDG98/ingress":/tmp/ingress \
-    --volume $HOME/.aws:/root/.aws:ro \
-    --volume "$HOME/code":/extern_code:ro \
-    --volume "$HOME/data":/extern_data:ro \
-    --volume "$HOME"/.cache/pip:/pip_cache \
-    --env AWS_PROFILE=iarpa \
-    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-25a5e7234-strict-pyenv3.11.2-20240404T161916-0400-from-0da55667 ipython -i -c "
-
-from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
-config = SCFusionConfig(**{
-    'input_path'                    : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R002/split_work/52SDG98/products/site-cropped-kwcoco/items.jsonl',
-    'input_region_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R002/split_input/52SDG98/region_models/KR_R002.geojson',
-    'output_path'                   : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R002/split_work/52SDG98/products/sc-fusion/items.jsonl',
-    'aws_profile'                   : None,
-    'dryrun'                        : False,
-    'outbucket'                     : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v191/batch/kit/KR_R002/split_work/52SDG98/products/sc-fusion',
-    'ta2_s3_collation_bucket'       : None,
-    'sc_pxl_config'                 : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 8GSD\nmask_low_quality: true\nnum_workers: 8\nobservable_threshold: 0.0\noutput_space_scale: 8GSD\npackage_fpath: /root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 8GSD\nwrite_workers: 0',
-    'sc_poly_config'                : 'boundaries_as: bounds\nmin_area_square_meters: 7200\nnew_algo: crall\npolygon_simplify_tolerance: 1\nresolution: 8GSD\nsite_score_thresh: 0.3\nsmoothing: 0.0\nthresh: 0.3',
-    'input_region_models_asset_name': 'sv_out_region_models',
-    'input_site_models_asset_name'  : 'sv_out_site_models',
-    'egress_intermediate_outputs'   : 1,
-})
-
-import rich
-rich.print(ub.urepr(config))
-rich.print(config['sc_pxl_config'])
-rich.print(config['sc_poly_config'])
-"
-
-
-git remote add local /extern_code/geowatch/.git
-
-+-----------------+-----------+
-|      HEAD       | Has Issue |
-+-----------------+-----------+
-|   v0.13.3       |     False |
-+-----------------+-----------+
-| dev/0.14.0      |     False |
-+-----------------+-----------+
-| dev/0.14.1      |     False |
-+-----------------+-----------+
-| 0.14.1-6c22806b |     False |
-+-----------------+-----------+
-| 0.14.1-64c93bcc |     error |
-+-----------------+-----------+
-| 0.14.1-4fbb3c97 |     False |
-+-----------------+-----------+
-| 0.14.1-64b8e804 |     error |
-+-----------------+-----------+
-| 0.14.1-0dabdab3 |      True |
-+-----------------+-----------+
-| 0.14.1-ee2710d  |      True |
-+-----------------+-----------+
-| dev/0.14.4      |      True |
-+-----------------+-----------+
-| dev/0.15.1      |      True |
-+-----------------+-----------+
-
-cd022d432bec5eea49f11a00c89c661f112e2fc2
-0dabdab3ebce83b897a221d41523ef4b0a2c0427
-
-rm -rf /tmp/ingress/*_bisect*
-python -m geowatch.cli.run_tracker \
-    --input_kwcoco "/tmp/ingress/sc_fusion_kwcoco.json" \
-    --default_track_fn class_heatmaps \
-    --track_kwargs '{"boundaries_as": "bounds", "min_area_square_meters": 7200, "new_algo": "crall", "polygon_simplify_tolerance": 1, "resolution": "8GSD", "thresh": 0.3}' \
-    --clear_annots=True \
-    --out_site_summaries_fpath "/tmp/ingress/sc_out_region_models_manifest_bisect.json" \
-    --out_site_summaries_dir "/tmp/ingress/sc_out_region_models_bisect" \
-    --out_sites_fpath "/tmp/ingress/tracking_manifests_sc/site_models_manifest_bisect.json" \
-    --out_sites_dir "/tmp/ingress/sc_out_site_models_bisect" \
-    --out_kwcoco "/tmp/ingress/sc_fusion_kwcoco_tracked_bisect.json" \
-    --site_summary='/tmp/ingress/sv_out_region_models/*.geojson' \
-    --append_mode=True \
-    --site_score_thresh=0.3 \
-    --smoothing=0.0 \
-    --boundary_region=None
-
-
-rm -rf *_local*
-python -m geowatch.cli.run_tracker \
-    --input_kwcoco "sc_fusion_kwcoco.json" \
-    --default_track_fn class_heatmaps \
-    --track_kwargs '{"boundaries_as": "bounds", "min_area_square_meters": 7200, "new_algo": "crall", "polygon_simplify_tolerance": 1, "resolution": "8GSD", "thresh": 0.3}' \
-    --clear_annots=True \
-    --out_site_summaries_fpath "sc_out_region_models_manifest_local.json" \
-    --out_site_summaries_dir "sc_out_region_models_local" \
-    --out_sites_fpath "tracking_manifests_sc/site_models_manifest_local.json" \
-    --out_sites_dir "sc_out_site_models_local" \
-    --out_kwcoco "sc_fusion_kwcoco_tracked_local.json" \
-    --site_summary='sv_out_region_models/*.geojson' \
-    --append_mode=True \
-    --site_score_thresh=0.3 \
-    --smoothing=0.0 \
-    --boundary_region=None \
-    --viz_out_dir local_viz
-
-geowatch draw_region sc_out_region_models_local/KR_R002.geojson
-
-
-
 """
 
 
@@ -217,52 +41,59 @@ class SCFusionConfig(scfg.DataConfig):
     Run TA-2 SC fusion as baseline framework component
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATED. DO NOT USE')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
 
     ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Location for collated TA-2 output (bucket name should
-            include up to eval name)
-            '''))
+        '''
+        S3 Location for collated TA-2 output (bucket name should
+        include up to eval name)
+        '''))
 
     sc_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for fusion.predict.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for fusion.predict.
+        '''))
 
     sc_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for SC tracking.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for SC tracking.
+        '''))
 
     input_region_models_asset_name = scfg.Value('sv_out_region_models', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to use as input
-            '''))
+        '''
+        Which region model assets to use as input
+        '''))
 
     input_site_models_asset_name = scfg.Value('sv_out_site_models', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to to use as input
-            '''))
+        '''
+        Which site model assets to to use as input
+        '''))
 
     egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''

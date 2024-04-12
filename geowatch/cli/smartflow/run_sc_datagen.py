@@ -15,13 +15,21 @@ class ACSCDatasetConfig(scfg.DataConfig):
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
         '''
-        Path to input T&E Baseline Framework JSON
-        '''))
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
         '''
         Path to input T&E Baseline Framework Region definition JSON
         '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
         '''
         AWS Profile to use for AWS S3 CLI commands

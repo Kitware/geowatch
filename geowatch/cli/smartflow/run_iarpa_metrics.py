@@ -52,11 +52,20 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
     true_annot_dpath = None
     pred_site_dpath = None
     outbucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
-    output_path = scfg.Value(None, type=str, help='S3 path for output JSON')
-    aws_profile = None
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
+
+    output_path = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
+    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
 
     # input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
     #         '''

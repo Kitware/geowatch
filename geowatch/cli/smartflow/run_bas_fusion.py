@@ -21,56 +21,61 @@ class BasFusionConfig(scfg.DataConfig):
     """
 
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
 
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
 
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands.
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands.
+        '''))
 
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATED. DO NOT USE.')
 
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
 
     ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Location for collated TA-2 output (bucket name should
-            include up to eval name)
-            '''))
+        '''
+        S3 Location for collated TA-2 output (bucket name should
+        include up to eval name)
+        '''))
 
     previous_bas_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Output directory for previous interval BAS fusion output
-            '''))
+        '''
+        S3 Output directory for previous interval BAS fusion output
+        '''))
 
     bas_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for fusion.predict.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for fusion.predict.
+        '''))
 
     bas_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for bas tracking.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for bas tracking.
+        '''))
 
     time_dense = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Use time_dense imagery. Defaults to False and uses time averaged data.
-            '''))
+        '''
+        Use time_dense imagery. Defaults to False and uses time averaged data.
+        '''))
 
     egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
