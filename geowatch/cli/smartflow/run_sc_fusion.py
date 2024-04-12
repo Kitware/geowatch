@@ -345,9 +345,7 @@ def run_sc_fusion_for_baseline(config):
     region_id = determine_region_id(local_region_path)
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
-
-    tracked_sc_kwcoco_path = '_tracked'.join(
-        os.path.splitext(sc_fusion_kwcoco_path))
+    tracked_sc_kwcoco_path = sc_fusion_kwcoco_path.augment(stemsuffix='_tracked')
 
     site_models_outdir = (ingress_dir / 'sc_out_site_models').ensuredir()
     region_models_outdir = (ingress_dir / 'sc_out_region_models').ensuredir()
@@ -408,8 +406,6 @@ def run_sc_fusion_for_baseline(config):
 
             # Params are fully specified in the DAG
             sc_track_kwargs = Yaml.coerce(config.sc_poly_config or {})
-            tracked_sc_kwcoco_path = '_tracked'.join(
-                os.path.splitext(sc_fusion_kwcoco_path))
             final_sc_poly_config = {
                 'pred_pxl_fpath': sc_fusion_kwcoco_path,               # Sets --input_kwcoco
                 'site_summaries_fpath': region_models_manifest_fpath,  # Sets --out_site_summaries_fpath
@@ -427,10 +423,6 @@ def run_sc_fusion_for_baseline(config):
             ub.cmd(command, check=True, verbose=3, system=True)
 
             node_state.print_current_state(ingress_dir)
-
-            # Add in intermediate outputs for debugging
-            ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
-            ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
 
             ub.cmd(f'kwcoco stats {tracked_sc_kwcoco_path}', verbose=3)
             ub.cmd(f'geowatch stats {tracked_sc_kwcoco_path}', verbose=3)
@@ -476,10 +468,12 @@ def run_sc_fusion_for_baseline(config):
     EGRESS_INTERMEDIATE_OUTPUTS = config.egress_intermediate_outputs
     if EGRESS_INTERMEDIATE_OUTPUTS:
         # Reroot kwcoco files to make downloaded results easier to work with
-        ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
-        ub.cmd(['kwcoco', 'reroot', f'--src={tracked_sc_kwcoco_path}', '--inplace=1', '--absolute=0'])
-        ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
-        ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+        if sc_fusion_kwcoco_path.exists():
+            ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+            ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
+        if tracked_sc_kwcoco_path.exists():
+            ub.cmd(['kwcoco', 'reroot', f'--src={tracked_sc_kwcoco_path}', '--inplace=1', '--absolute=0'])
+            ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
         ingressed_assets['sc_heatmap_assets'] = sc_heatmap_dpath
         ingressed_assets['sc_tracking_manifest_dpath'] = site_models_manifest_outdir
         if region_models_manifest_fpath.exists():
