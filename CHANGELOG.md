@@ -26,6 +26,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * Cluster sites no longer includes system-rejected sites
+* Fix issue in cluster-sites where incorrect start/end dates could be written
 
 ### Removed
 * Remove visualize option from coco-align.
