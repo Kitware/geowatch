@@ -800,6 +800,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
 
     memory_monitor_timer = ub.Timer().tic()
     memory_monitor_interval_seconds = 60
+    with_memory_units = bool(ub.modname_to_modpath('pint'))
 
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
@@ -891,7 +892,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                     # are about to run out of memory, and maybe do something to
                     # handle it.
                     from geowatch.utils import util_hardware
-                    mem_info = util_hardware.get_mem_info()
+                    mem_info = util_hardware.get_mem_info(with_units=with_memory_units)
                     print(f'\n\nmem_info = {ub.urepr(mem_info, nl=1)}\n\n')
                     memory_monitor_timer.tic()
 

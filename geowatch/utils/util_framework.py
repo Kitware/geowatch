@@ -916,7 +916,8 @@ class NodeStateDebugger:
         ub.cmd('df -h', verbose=3)
 
         from geowatch.utils import util_hardware
-        mem_info = util_hardware.get_mem_info()
+        with_units = bool(ub.modname_to_modpath('pint'))
+        mem_info = util_hardware.get_mem_info(with_units=with_units)
         print('mem_info = {}'.format(ub.urepr(mem_info, nl=1, align=':')))
 
         print(f' --- </NODE_STATE iter={self.current_iteration}> --- ')
