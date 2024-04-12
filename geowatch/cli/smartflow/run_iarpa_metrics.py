@@ -88,6 +88,7 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         from geowatch.utils.util_framework import NodeStateDebugger
         node_state = NodeStateDebugger()
         node_state.print_environment()
+        node_state.print_local_invocation(config)
 
         from geowatch.utils.util_framework import download_region
         from geowatch.mlops import smart_pipeline

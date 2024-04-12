@@ -74,6 +74,7 @@ def main():
 
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

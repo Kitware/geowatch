@@ -58,6 +58,7 @@ def main(cmdline=1, **kwargs):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     from geowatch.cli.smartflow_ingress import smartflow_ingress
     from geowatch.cli.smartflow_egress import smartflow_egress

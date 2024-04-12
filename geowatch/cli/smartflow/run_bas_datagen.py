@@ -186,6 +186,7 @@ def run_stac_to_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.

@@ -21,14 +21,14 @@ class UploadRGDConfig(scfg.DataConfig):
     rgd_aws_region = scfg.Value(None, type=str, help='AWS region where RGD instance is running')
 
     rgd_deployment_name = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Name of RGD deployment (e.g. 'resonantgeodatablue'
-            '''))
+        '''
+        Name of RGD deployment (e.g. 'resonantgeodatablue'
+        '''))
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
 
     title = scfg.Value(None, type=str, help='Title of the model run')
 
@@ -37,16 +37,16 @@ class UploadRGDConfig(scfg.DataConfig):
     performer_shortcode = scfg.Value('KIT', type=str, help='Performer shortcode (e.g. "KIT")')
 
     rgd_endpoint_override = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Use this RGD URL instead of looking up via aws tools
-            '''))
+        '''
+        Use this RGD URL instead of looking up via aws tools
+        '''))
 
     jobs = scfg.Value(8, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
 
     expiration_time = scfg.Value(None, type=int, short_alias=['x'], help=ub.paragraph(
-            '''
-            Number of days to keep system run output in RGD
-            '''))
+        '''
+        Number of days to keep system run output in RGD
+        '''))
 
 
 def main():
@@ -57,7 +57,7 @@ def main():
     assert config.rgd_deployment_name is not None
     assert config.title is not None
     assert config.region_id is not None
-    upload_to_rgd(**config)
+    upload_to_rgd(config)
 
 
 def get_model_results(model_run_results_url):
@@ -71,20 +71,23 @@ def get_model_results(model_run_results_url):
     return request_results
 
 
-def upload_to_rgd(input_site_models_s3,
-                  rgd_aws_region,
-                  rgd_deployment_name,
-                  title,
-                  region_id,
-                  aws_profile=None,
-                  performer_shortcode='KIT',
-                  jobs=8,
-                  rgd_endpoint_override=None,
-                  expiration_time=None):
+def upload_to_rgd(config):
+
+    input_site_models_s3 = config.input_site_models_s3
+    rgd_aws_region = config.rgd_aws_region
+    rgd_deployment_name = config.rgd_deployment_name
+    title = config.title
+    region_id = config.region_id
+    aws_profile = config.aws_profile
+    performer_shortcode = config.performer_shortcode
+    jobs = config.jobs
+    rgd_endpoint_override = config.rgd_endpoint_override
+    expiration_time = config.expiration_time
 
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()

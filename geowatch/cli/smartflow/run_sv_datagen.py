@@ -121,6 +121,7 @@ def run_generate_sv_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     if dont_recompute:
         output_path = util_fsspec.FSPath.coerce(output_path)

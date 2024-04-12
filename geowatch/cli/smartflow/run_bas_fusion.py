@@ -116,6 +116,7 @@ def run_bas_fusion_for_baseline(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     input_path = config.input_path
     input_region_path = config.input_region_path

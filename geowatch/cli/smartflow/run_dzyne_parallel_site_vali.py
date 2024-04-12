@@ -127,6 +127,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

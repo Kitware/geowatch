@@ -824,10 +824,9 @@ class NodeStateDebugger:
             ub.cmd('date -u', verbose=3)
             ub.cmd('curl http://s3.amazonaws.com -v', verbose=3)
         print(' --- </NODE_ENV> --- ')
-
-        TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
-        if TASK_IMAGE_NAME:
-            self.print_local_invocation()
+        # TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
+        # if TASK_IMAGE_NAME:
+        #     self.print_local_invocation()
 
     def print_local_invocation(self, config=None):
         """
@@ -877,6 +876,7 @@ class NodeStateDebugger:
                 --env TASK_IMAGE_NAME={TASK_IMAGE_NAME} \
                 -it {TASK_IMAGE_NAME} bash
             ''')
+        print()
         print(create_local_env_command)
 
         if 1:
@@ -887,7 +887,8 @@ class NodeStateDebugger:
                 git remote add host /extern_code/geowatch/.git
                 git fetch host
                 ''')
-            return helper_text
+            print()
+            print(helper_text)
 
         # node_modname = 'geowatch.cli.smartflow.run_sc_datagen'
         if config is not None:
