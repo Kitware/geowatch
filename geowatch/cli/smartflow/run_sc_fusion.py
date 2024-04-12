@@ -13,26 +13,39 @@ import ubelt as ub
 
 
 __debugging__ = r"""
-IMAGE_NAME=watch:0.11.0-431640169-strict-pyenv3.11.2-20231013T170828-0400-from-86ab77d4
+
+LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2_kr2-sv/ingress
+mkdir -p $LOCAL_WORK_DPATH
+cd $LOCAL_WORK_DPATH
 
 docker run \
     --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow/ingress":/tmp/ingress \
+    --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
     --volume $HOME/.aws:/root/.aws:ro \
     --volume "$HOME/code":/extern_code:ro \
     --volume "$HOME/data":/extern_data:ro \
     --volume "$HOME"/.cache/pip:/pip_cache \
     --env AWS_PROFILE=iarpa \
-    -it "$IMAGE_NAME" bash
-
-(cd /root/code/watch && git remote add tmp /extern_code/watch/.git)
-(cd /root/code/watch && git fetch tmp)
-(cd /root/code/watch && git checkout dev/0.11.0)
-(cd /root/code/watch && git pull tmp)
+    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-17a6765ff-strict-pyenv3.11.2-20240410T192350-0400-from-0da55667 bash
 
 ipython
-
 from geowatch.cli.smartflow.run_sc_fusion import *  # NOQA
+
+config = SCFusionConfig(**{
+    'input_path'                    : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/split_work/52SDG98/products/ac_datagen/items.jsonl',
+    'input_region_path'             : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/split_input/52SDG98/region_models/KR_R002.geojson',
+    'output_path'                   : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/split_work/52SDG98/products/sc-fusion/items.jsonl',
+    'aws_profile'                   : None,
+    'dryrun'                        : False,
+    'outbucket'                     : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/split_work/52SDG98/products/sc-fusion',
+    'ta2_s3_collation_bucket'       : None,
+    'sc_pxl_config'                 : 'batch_size: 1\nchip_dims: auto\nchip_overlap: 0.3\ndrop_unused_frames: true\ninput_space_scale: 4GSD\nmask_low_quality: true\nnum_workers: 8\nobservable_threshold: 0.0\noutput_space_scale: 4GSD\npackage_fpath: /root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt\nresample_invalid_frames: 3\nset_cover_algo: null\ntta_fliprot: 0.0\ntta_time: 0.0\nwindow_space_scale: 4GSD\nwrite_workers: 0',
+    'sc_poly_config'                : 'boundaries_as: bounds\nmin_area_square_meters: 7200\nnew_algo: crall\npolygon_simplify_tolerance: 1\nresolution: 8GSD\nsite_score_thresh: 0.3\nsmoothing: 0.0\nthresh: 0.3',
+    'input_region_models_asset_name': 'sv_out_region_models',
+    'input_site_models_asset_name'  : 'sv_out_site_models',
+    'egress_intermediate_outputs'   : 1,
+})
+
 """
 
 

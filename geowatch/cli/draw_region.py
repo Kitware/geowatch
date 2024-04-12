@@ -45,6 +45,8 @@ class DrawRegionCLI(scfg.DataConfig):
 
     io_workers = scfg.Value('avail', help='number of workers for parallel io')
 
+    with_timeline = scfg.Value(True, help='if True draw the timeline')
+
     fpath = scfg.Value('region.png', help='path to write viz to')
 
     @classmethod
@@ -110,21 +112,44 @@ class DrawRegionCLI(scfg.DataConfig):
 
         for site in site_models:
             dataframes['sites'] += [site.pandas_site()]
+            # dataframes['observations'] += [site.pandas_observations()]
 
         # if dataframes['region']:
-        _region_df = pd.concat(dataframes['region'])
-        _summary_df = pd.concat(dataframes['site_summary'], axis=0)
+        if len(dataframes['region']):
+            _region_df = pd.concat(dataframes['region'])
+            _summary_df = pd.concat(dataframes['site_summary'], axis=0)
+            region_df = util_gis.project_gdf_to_local_utm(_region_df)
+            summary_df = _summary_df.to_crs(region_df.crs)
+        else:
+            region_df = None
+            summary_df = None
 
-        region_df = util_gis.project_gdf_to_local_utm(_region_df)
-        summary_df = _summary_df.to_crs(region_df.crs)
+        if len(dataframes['sites']):
+            _site_df = pd.concat(dataframes['sites'])
+            site_df = util_gis.project_gdf_to_local_utm(_site_df)
+        else:
+            site_df = None
 
         # if config.viz_dpath is None:
         #     config.viz_dpath = ub.Path('.').resolve()
 
+        region_ids = set()
+        if region_df is not None:
+            region_ids.update(set(region_df['region_id']))
+        if site_df is not None:
+            region_ids.update(set(site_df['region_id']))
+
+        unique_status = set()
+        if summary_df is not None:
+            unique_status.update(summary_df['status'].unique())
+        if site_df is not None:
+            unique_status.update(site_df['status'].unique())
+
         draw_backend = 'cv2'
         draw_backend = 'mpl'
         if draw_backend == 'mpl':
-            kwplot.autompl()
+            sns = kwplot.autosns()
+
             title = util_kwplot.TitleBuilder()
 
             if len(str(config.models)) < 255:
@@ -132,7 +157,7 @@ class DrawRegionCLI(scfg.DataConfig):
                 title.add_part(str(config.models))
                 title.ensure_newline()
 
-            region_ids = region_df['region_id']
+            region_ids = sorted(set(region_ids))
             if len(region_ids) == 1:
                 region_title = f'Region: {region_ids[0]}'
             else:
@@ -146,7 +171,7 @@ class DrawRegionCLI(scfg.DataConfig):
             title.add_part(extra_header)
             # extra_header = 'Latest'
             # title_row.append(f'{geowatch.__version__=}')
-            unique_status = summary_df['status'].unique()
+
             unique_colors = [kwimage.Color.coerce(status_to_color.get(s, 'cyan')) for s in unique_status]
             unique_status_to_color = ub.dzip(unique_status, unique_colors)
             legend_canvas = kwplot.make_legend_img(unique_status_to_color, dpi=600)
@@ -154,51 +179,79 @@ class DrawRegionCLI(scfg.DataConfig):
             # Assign colors to each site summary
             unique_status_to_face_color01 = {s: c.as01() for s, c in unique_status_to_color.items()}
             unique_status_to_edge_color01 = {s: c.adjust(lighten=-.05).as01() for s, c in unique_status_to_color.items()}
-            summary_df['face_color'] = summary_df['status'].apply(unique_status_to_face_color01.__getitem__)
-            summary_df['edge_color'] = summary_df['status'].apply(unique_status_to_edge_color01.__getitem__)
+            if summary_df is not None:
+                summary_df['face_color'] = summary_df['status'].apply(unique_status_to_face_color01.__getitem__)
+                summary_df['edge_color'] = summary_df['status'].apply(unique_status_to_edge_color01.__getitem__)
+            if site_df is not None:
+                site_df['face_color'] = site_df['status'].apply(unique_status_to_face_color01.__getitem__)
+                site_df['edge_color'] = site_df['status'].apply(unique_status_to_edge_color01.__getitem__)
 
+            num_rows = 2 if config.with_timeline else 1
             figman = util_kwplot.FigureManager(
                 dpath=ub.Path('.'),
                 dpi=300,
                 size_inches=(12, 8),
                 verbose=True,
             )
-            fig = figman.figure(fnum=1, pnum=(2, 2, 1), doclf=True)
+            fig = figman.figure(fnum=1, pnum=(num_rows, 2, 1), doclf=True)
             ax = fig.gca()
 
             # Plot Region Bounds
-            region_df['geometry'].plot(
-                facecolor='none',
-                edgecolor='black',
-                ax=ax
-            )
-            # Plot Site Summary Bounds
-            summary_df['geometry'].plot(
-                facecolor=summary_df['face_color'],
-                edgecolor=summary_df['edge_color'],
-                # linewidth=1,
-                alpha=0.5,
-                ax=ax
-            )
-            miny, maxy = ax.get_ylim()
+            if region_df is not None:
+                region_df['geometry'].plot(
+                    facecolor='none',
+                    edgecolor='black',
+                    ax=ax
+                )
 
-            ax = figman.figure(fnum=1, pnum=(2, 2, 2)).gca()
+            if summary_df is not None:
+                # Plot Site Summary Bounds
+                summary_df['geometry'].plot(
+                    facecolor=summary_df['face_color'],
+                    edgecolor=summary_df['edge_color'],
+                    # linewidth=1,
+                    alpha=0.5,
+                    ax=ax
+                )
+            if site_df is not None:
+                # Plot Site Bounds
+                # Note: if both sites and sites summary exist, this will
+                # overlay both, which might not look very nice.
+                site_df['geometry'].plot(
+                    facecolor=site_df['face_color'],
+                    edgecolor=site_df['edge_color'],
+                    # linewidth=1,
+                    alpha=0.5,
+                    ax=ax
+                )
+
+            miny, maxy = ax.get_ylim()
+            ax = figman.figure(fnum=1, pnum=(num_rows, 2, 2)).gca()
             kwplot.imshow(legend_canvas, ax=ax)
 
             figman.set_figtitle(str(title))
 
-            centroid = summary_df.geometry.centroid
+            if config.with_timeline:
+                ax = kwplot.figure(fnum=1, pnum=(num_rows, 1, 2), docla=1).gca()
 
-            summary_df['y'] = centroid.y
-            sub = summary_df[['site_id', 'y']]
-            stacked = pd.concat([sub] * 2, ignore_index=True)
-            stacked['date'] = pd.concat([summary_df.start_date, summary_df.end_date], ignore_index=True)
-            stacked['frame_idx'] = np.concatenate([[0] * len(summary_df), [1] * len(summary_df)])
+                if site_df is not None:
+                    centroid = site_df.geometry.centroid
+                    site_df['y'] = centroid.y
+                    sub = site_df[['site_id', 'y']]
+                    stacked = pd.concat([sub] * 2, ignore_index=True)
+                    stacked['date'] = pd.concat([site_df.start_date, site_df.end_date], ignore_index=True)
+                    stacked['frame_idx'] = np.concatenate([[0] * len(site_df), [1] * len(site_df)])
+                    sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
 
-            sns = kwplot.autosns()
-            ax = kwplot.figure(fnum=1, pnum=(2, 1, 2), docla=1).gca()
-            sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
-            ax.set_ylim(miny, maxy)
+                if summary_df is not None:
+                    centroid = summary_df.geometry.centroid
+                    summary_df['y'] = centroid.y
+                    sub = summary_df[['site_id', 'y']]
+                    stacked = pd.concat([sub] * 2, ignore_index=True)
+                    stacked['date'] = pd.concat([summary_df.start_date, summary_df.end_date], ignore_index=True)
+                    stacked['frame_idx'] = np.concatenate([[0] * len(summary_df), [1] * len(summary_df)])
+                    sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
+                ax.set_ylim(miny, maxy)
 
             fpath = config.fpath
             final_fpath = figman.finalize(fpath)

@@ -141,14 +141,15 @@ def run_generate_sv_cropped_kwcoco(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['kwcoco_for_sc',
-         config.input_region_models_asset_name,
-         config.input_site_models_asset_name,
-         ],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'kwcoco_for_sc',
+            config.input_region_models_asset_name,
+            config.input_site_models_asset_name,
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")

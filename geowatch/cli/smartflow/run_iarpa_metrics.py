@@ -6,27 +6,32 @@ import ubelt as ub
 __ignore__ = r"""
 
 
+LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_metrics/ingress
+mkdir -p $LOCAL_WORK_DPATH
+cd $LOCAL_WORK_DPATH
 docker run \
     --runtime=nvidia \
-    --volume "$HOME/temp/debug_smartflow_v2/ingress":/tmp/ingress \
+    --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
     --volume $HOME/.aws:/root/.aws:ro \
     --volume "$HOME/code":/extern_code:ro \
     --volume "$HOME/data":/extern_data:ro \
     --volume "$HOME"/.cache/pip:/pip_cache \
     --env AWS_PROFILE=iarpa \
-    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-00f39677f-strict-pyenv3.11.2-20240403T153409-0400-from-0da55667 bash
+    -it registry.smartgitlab.com/kitware/geowatch:0.16.2-17a6765ff-strict-pyenv3.11.2-20240410T192350-0400-from-0da55667 bash
+
 
 
 from geowatch.cli.smartflow.run_iarpa_metrics import *  # NOQA"
 config = RunIARPAMetricsCLI(**{
-    'region_id': 'KR_R001',
-    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/split_input/52SDG77/region_models/KR_R001.geojson',
+    'region_id': 'KR_R002',
+    'input_region_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/split_input/52SDG98/region_models/KR_R002.geojson',
     'true_annot_dpath': 's3://smart-imagery/annotations',
-    'pred_site_dpath': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/consolidated_output_bas/site_models',
-    'outbucket': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/metrics_bas',
-    'output_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v188/batch/kit/KR_R001/metrics_bas/items.jsonl',
+    'pred_site_dpath': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/consolidated_output_sv/site_models',
+    'outbucket': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/metrics_sv',
+    'output_path': 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval21_batch_v193/batch/kit/KR_R002/metrics_sv/items.jsonl',
     'aws_profile': None,
 })
+
 cls = RunIARPAMetricsCLI
 cmdline = 0
 kwargs = dict(config)
