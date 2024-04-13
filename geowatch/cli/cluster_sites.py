@@ -80,7 +80,7 @@ class ClusterSiteConfig(scfg.DataConfig):
 
     context_factor = scfg.Value(1.5, help='extra padding around each site')
 
-    ignore_status = scfg.Value(['system_rejected'], required=False, help=ub.paragraph(
+    ignore_status = scfg.Value("['system_rejected']", type=str, help=ub.paragraph(
         '''
         A YAML list of status values that should be ignored by the clustering
         algorithm.  Defaults to ["system_rejected"].
@@ -180,12 +180,16 @@ def main(cmdline=1, **kwargs):
     """
     config = ClusterSiteConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    from rich.markup import escape
+    rich.print('config = {}'.format(escape(ub.urepr(config, nl=1))))
 
     from kwutil import util_yaml
     from geowatch.geoannots import geomodels
     from geowatch.utils import process_context
     from geowatch.utils import util_resolution
+
+    config.ignore_status = util_yaml.Yaml.coerce(config.ignore_status)
+    print(f'config.ignore_status = {ub.urepr(config.ignore_status, nl=1)}')
 
     # import pandas as pd
     if config.dst_dpath is None:
@@ -224,8 +228,6 @@ def main(cmdline=1, **kwargs):
     print(f'Looping over {len(input_region_models)} region')
 
     # all_final_site_summaries = []
-
-    config.ignore_status = util_yaml.Yaml.coerce(config.ignore_status)
 
     # Note: this should only ever be a single item in this loop.  outputs will
     # clobber each other. The code is setup to allow flexability to draw

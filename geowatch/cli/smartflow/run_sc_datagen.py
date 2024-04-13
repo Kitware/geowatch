@@ -53,8 +53,10 @@ class ACSCDatasetConfig(scfg.DataConfig):
 
     acsc_cluster_config = scfg.Value(None, help=ub.paragraph(
         '''
-        The configuration for the site-cluster-step.
-        If None, then no site clustering is done.
+        The configuration for the site-cluster-step passed to
+        geowatch.cli.cluster_sites.
+        If None, then no site clustering is done, and a kwcoco video is
+        produced for each individual site.
         '''))
 
     acsc_align_config = scfg.Value(None, help=ub.paragraph(
@@ -167,7 +169,8 @@ def run_generate_acsc_cropped_kwcoco(config):
         ub.cmd('geowatch site_stats ' + input_region_path, verbose=3, system=True)
 
         print('Execute clustering')
-        ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
+        cluster_command = site_clustering._raw_command()
+        ub.cmd(cluster_command, check=True, verbose=3, system=True)
 
         print('Show stats about cluster outputs:')
         ub.cmd('geowatch site_stats ' + cluster_region_fpath, verbose=3, system=True)
