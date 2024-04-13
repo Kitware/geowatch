@@ -236,6 +236,11 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             total_size = (total_bytes * ureg.bytes).to('gigabytes')
             print(f'Loading heatmaps will use {total_size} in memory')
 
+            # TODO: dynamic resolution reduction
+            if total_size.m > 32:
+                print('WARNING: heatmaps will take more than 32GB of memory. '
+                      'You may want to lower resolution')
+
             problem_likelihood = ''
             if mem_info['available'] < total_size:
                 problem_likelihood = 'is VERY likely to overload memory'
