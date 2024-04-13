@@ -69,9 +69,8 @@ def get_mem_info(with_units=False):
             total_vms += proc.memory_info().vms
 
     if with_units:
-        import pint
-        ureg = pint.UnitRegistry()
-
+        from geowatch.utils import util_units
+        ureg = util_units.unit_registry()
         bytes_keys = [
             'total', 'available', 'used', 'free', 'active', 'inactive',
             'buffers', 'cached', 'shared', 'slab', 'wired',
