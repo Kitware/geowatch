@@ -135,6 +135,12 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
             pred_site_dpath = FSPath.coerce(ingress_dir / 'site_models')
             remote_pred_site_dpath.copy(pred_site_dpath, verbose=3)
 
+            if 0:
+                # HACK
+                remote_pred_region_dpath = remote_pred_site_dpath.parent / 'region_models'
+                pred_region_dpath = FSPath.coerce(ingress_dir / 'region_models')
+                remote_pred_region_dpath.copy(pred_region_dpath)
+
             # Copy truth to local node
             for fpath in ub.ProgIter(remote_true_site_fpaths, desc='pull site truth', verbose=3):
                 fpath.copy(true_site_dpath / fpath.name)
