@@ -70,7 +70,7 @@ def get_mem_info(with_units=False):
 
     if with_units:
         from geowatch.utils import util_units
-        ureg = util_units.unit_registry()
+        ureg = util_units.unit_registery()
         bytes_keys = [
             'total', 'available', 'used', 'free', 'active', 'inactive',
             'buffers', 'cached', 'shared', 'slab', 'wired',

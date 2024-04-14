@@ -2,7 +2,7 @@ import ubelt as ub
 
 
 @ub.memoize
-def unit_registry():
+def unit_registery():
     """
     A memoized unit registery
     """
