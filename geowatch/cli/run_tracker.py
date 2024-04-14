@@ -1349,7 +1349,15 @@ def main(argv=None, **kwargs):
         # Workaround an issue in scriptconfig tha twill be fixed in 0.7.8
         # after that, remove cmdline completely
         cmdline = False
-    args = KWCocoToGeoJSONConfig.cli(cmdline=cmdline, argv=argv, data=kwargs, strict=True)
+
+    try:
+        args = KWCocoToGeoJSONConfig.cli(cmdline=cmdline, argv=argv, data=kwargs, strict=True)
+    except Exception:
+        print(f'kwargs = {ub.urepr(kwargs, nl=1)}')
+        print(f'argv = {ub.urepr(argv, nl=1)}')
+        print(f'cmdline = {ub.urepr(cmdline, nl=1)}')
+        print('Error when parsing CLI arguments')
+        raise
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
