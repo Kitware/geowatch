@@ -260,7 +260,12 @@ def cluster_single_region_sites(input_region_model, scale, min_box_dim, max_box_
         # Remove any sites that have a status marked as ignored.
         if 'status' in region_sites.columns:
             keep_flags = region_sites['status'].apply(lambda s: s not in config.ignore_status)
-            region_sites = region_sites[keep_flags]
+            # For some reason this returns a dataframe instead of a
+            # geodataframe if all flags are false Using an index with loc seems
+            # to work around this.
+            keep_indexes = keep_flags.index[keep_flags.index]
+            region_sites = region_sites.loc[keep_indexes]
+
     region_sites_utm = util_gis.project_gdf_to_local_utm(region_sites, mode=1, tolerance=None)
     polygons = kwimage.PolygonList([kwimage.Polygon.from_shapely(s)
                                     for s in region_sites_utm.geometry])

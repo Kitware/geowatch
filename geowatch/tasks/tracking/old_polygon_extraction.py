@@ -121,8 +121,6 @@ class PolygonExtractConfig(scfg.DataConfig):
         '''))
 
 
-
-
 def _gids_polys(sub_dset, video_id, **kwargs):
     """
     This is associated with :class:`PolygonExtractConfig`
