@@ -29,7 +29,7 @@ class CleanupGdalTmpFileWatcherCLI(scfg.DataConfig):
         rich.print('config = ' + ub.urepr(config, nl=1))
         dpath = ub.Path(config.dpath)
 
-        ureg = kwutil.util_time._time_unit_registery()
+        ureg = kwutil.util_time._time_unit_registry()
 
         age_threshold = kwutil.util_time.timedelta.coerce(config.age_thresh)
 

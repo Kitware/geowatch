@@ -2,9 +2,9 @@ import ubelt as ub
 
 
 @ub.memoize
-def unit_registery():
+def unit_registry():
     """
-    A memoized unit registery
+    A memoized unit registry
     """
     import pint
     ureg = pint.UnitRegistry()

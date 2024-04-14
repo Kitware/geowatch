@@ -232,7 +232,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             bytes_per_cell = np.dtype('float32').itemsize
             num_raster_cells = sum([np.prod(delayed.shape) for delayed in delayed_images])
             total_bytes = num_raster_cells * bytes_per_cell
-            ureg = util_units.unit_registery()
+            ureg = util_units.unit_registry()
             total_size = (total_bytes * ureg.bytes).to('gigabytes')
             print(f'Loading heatmaps will use {total_size} in memory')
 
