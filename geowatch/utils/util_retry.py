@@ -82,4 +82,3 @@ def retry_call(f, fargs=None, fkwargs=None, exceptions=Exception, tries=-1,
     fargs = fargs or []
     fkwargs = fkwargs or {}
     return retry_obj(f, *fargs, **fkwargs)
-

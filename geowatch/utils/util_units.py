@@ -9,4 +9,3 @@ def unit_registry():
     import pint
     ureg = pint.UnitRegistry()
     return ureg
-
