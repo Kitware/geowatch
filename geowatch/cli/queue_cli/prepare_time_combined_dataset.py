@@ -2,7 +2,7 @@
 """
 SeeAlso:
     ~/code/watch/geowatch/cli/coco_time_combine.py
-    ~/code/watch/geowatch/cli/prepare_teamfeats.py
+    ~/code/watch/geowatch/cli/queue_cli/prepare_teamfeats.py
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -37,6 +37,15 @@ class PrepareTimeAverages(CMDQueueConfig):
     reproject = scfg.Value(False, isflag=True, help='Enable reprojection of annotations. Requires true_site_dpath and true_region_dpath be specified')
     true_site_dpath = scfg.Value(None)
     true_region_dpath = scfg.Value(None)
+
+    max_images_per_group = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, the averaging operation (e.g. mean/median) will only
+        consider a subset of the images within each temporal window.  This can
+        greatly reduce the resources required to run this script at the cost of
+        quality. Currently a heuristic is used to select the "highest quality"
+        subset of images.
+        '''))
 
     queue_name = scfg.Value('time-ave-queue', help='overwrite the default queue name', group='cmd-queue')
 
@@ -155,6 +164,7 @@ def main(cmdline=1, **kwargs):
                 --merge_method=$merge_method \
                 --spatial_tile_size=$spatial_tile_size \
                 --mask_low_quality=$mask_low_quality \
+                --max_images_per_group=$max_images_per_group \
                 --start_time=2010-03-01 \
                 --assets_dname="raw_bands" \
                 --workers=$combine_workers
@@ -244,7 +254,7 @@ export CUDA_VISIBLE_DEVICES="0,1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \
@@ -257,7 +267,7 @@ python -m geowatch.cli.prepare_teamfeats \
     --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
 
 # DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-# python -m geowatch.cli.prepare_splits \
+# python -m geowatch.cli.queue_cli.prepare_splits \
 #     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_L*.kwcoco.zip \
 #     --constructive_mode=True \
 #     --suffix=L \
@@ -265,7 +275,7 @@ python -m geowatch.cli.prepare_teamfeats \
 #     --run=1
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_I2L*.kwcoco.zip \
     --constructive_mode=True \
     --suffix=I2L \
@@ -273,7 +283,7 @@ python -m geowatch.cli.prepare_splits \
     --run=1
 
 # DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-# python -m geowatch.cli.prepare_splits \
+# python -m geowatch.cli.queue_cli.prepare_splits \
 #     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/imganns-*.kwcoco.zip \
 #     --constructive_mode=True \
 #     --suffix=rawbands \
@@ -327,7 +337,7 @@ if __name__ == '__main__':
             --run=1
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m geowatch.cli.prepare_splits \
+        python -m geowatch.cli.queue_cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=rawbands \
@@ -341,7 +351,7 @@ if __name__ == '__main__':
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
             --expt_dvc_dpath="$DVC_EXPT_DPATH" \
             --with_landcover=1 \
@@ -354,7 +364,7 @@ if __name__ == '__main__':
             --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m geowatch.cli.prepare_splits \
+        python -m geowatch.cli.queue_cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=I2L \

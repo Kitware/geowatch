@@ -44,9 +44,9 @@ Submodules
    geowatch.cli.merge_region_models
    geowatch.cli.mlops_cli
    geowatch.cli.predict
-   geowatch.cli.prepare_splits
-   geowatch.cli.prepare_ta2_dataset
-   geowatch.cli.prepare_teamfeats
+   geowatch.cli.queue_cli.prepare_splits
+   geowatch.cli.queue_cli.prepare_ta2_dataset
+   geowatch.cli.queue_cli.prepare_teamfeats
    geowatch.cli.pseudolive_consolidate
    geowatch.cli.reproject_annotations
    geowatch.cli.run_fusion_predict

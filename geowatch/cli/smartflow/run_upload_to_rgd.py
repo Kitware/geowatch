@@ -3,10 +3,6 @@ import sys
 import subprocess
 import json
 import traceback
-from concurrent.futures import as_completed
-from glob import glob
-import os
-
 import requests
 import ubelt as ub
 import scriptconfig as scfg
@@ -21,14 +17,14 @@ class UploadRGDConfig(scfg.DataConfig):
     rgd_aws_region = scfg.Value(None, type=str, help='AWS region where RGD instance is running')
 
     rgd_deployment_name = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Name of RGD deployment (e.g. 'resonantgeodatablue'
-            '''))
+        '''
+        Name of RGD deployment (e.g. 'resonantgeodatablue'
+        '''))
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
 
     title = scfg.Value(None, type=str, help='Title of the model run')
 
@@ -37,68 +33,71 @@ class UploadRGDConfig(scfg.DataConfig):
     performer_shortcode = scfg.Value('KIT', type=str, help='Performer shortcode (e.g. "KIT")')
 
     rgd_endpoint_override = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Use this RGD URL instead of looking up via aws tools
-            '''))
+        '''
+        Use this RGD URL instead of looking up via aws tools
+        '''))
 
     jobs = scfg.Value(8, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
 
     expiration_time = scfg.Value(None, type=int, short_alias=['x'], help=ub.paragraph(
-            '''
-            Number of days to keep system run output in RGD
-            '''))
+        '''
+        Number of days to keep system run output in RGD
+        '''))
 
 
-def main():
-    config = UploadRGDConfig.cli()
+def main(cmdline=1, **kwargs):
+    config = UploadRGDConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     assert config.rgd_aws_region is not None
     assert config.input_site_models_s3 is not None
     assert config.rgd_deployment_name is not None
     assert config.title is not None
     assert config.region_id is not None
-    upload_to_rgd(**config)
+    upload_to_rgd(config)
 
 
 def get_model_results(model_run_results_url):
-    try:
-        model_runs_result = requests.get(model_run_results_url, params={
-            'limit': '0'})
-        request_json = model_runs_result.json()
-        request_results = request_json.get('results', ())
-    except Exception:
-        raise
+    model_runs_result = requests.get(model_run_results_url, params={
+        'limit': '0'})
+    request_json = model_runs_result.json()
+    request_results = request_json.get('results', ())
     return request_results
 
 
-def upload_to_rgd(input_site_models_s3,
-                  rgd_aws_region,
-                  rgd_deployment_name,
-                  title,
-                  region_id,
-                  aws_profile=None,
-                  performer_shortcode='KIT',
-                  jobs=8,
-                  rgd_endpoint_override=None,
-                  expiration_time=None):
+def upload_to_rgd(config):
+
+    input_site_models_s3 = config.input_site_models_s3
+    rgd_aws_region = config.rgd_aws_region
+    rgd_deployment_name = config.rgd_deployment_name
+    title = config.title
+    region_id = config.region_id
+    aws_profile = config.aws_profile
+    performer_shortcode = config.performer_shortcode
+    jobs = config.jobs
+    rgd_endpoint_override = config.rgd_endpoint_override
+    expiration_time = config.expiration_time
+
+    from geowatch.utils.util_framework import NodeStateDebugger
+    node_state = NodeStateDebugger()
+    node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()
 
     if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
     local_site_models_dir = '/tmp/site_models'
-    subprocess.run([*aws_base_command, '--recursive',
-                    input_site_models_s3, local_site_models_dir],
-                   check=True)
+    ub.cmd([*aws_base_command, '--recursive',
+            input_site_models_s3, local_site_models_dir],
+           check=True, verbose=3)
 
     if rgd_endpoint_override is None:
         try:
-            endpoint_result = subprocess.run(
+            endpoint_result = ub.cmd(
                 ['aws',
                  *(('--profile', aws_profile)
                    if aws_profile is not None else ()),
@@ -107,7 +106,7 @@ def upload_to_rgd(input_site_models_s3,
                  '--region', rgd_aws_region,
                  '--names', "{}-internal-alb".format(rgd_deployment_name)],
                 check=True,
-                capture_output=True)
+                verbose=3)
         except subprocess.CalledProcessError as e:
             print(e.stderr, file=sys.stderr)
             raise e
@@ -120,13 +119,18 @@ def upload_to_rgd(input_site_models_s3,
     # Check that our run doesn't already exist
     model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
 
-    from retry.api import retry_call
+    # from retry.api import retry_call
+    from geowatch.utils.util_retry import retry_call
     from geowatch.utils import util_framework
     logger = util_framework.PrintLogger()
+    print('\nAttempt to post to RGD model results endpoint')
+    print(f'model_run_results_url = {ub.urepr(model_run_results_url, nl=1)}')
+
     request_results = retry_call(
         get_model_results, fargs=[model_run_results_url], tries=3,
         exceptions=(Exception,), delay=3, logger=logger)
 
+    print('Got Results')
     existing_model_run = None
 
     for model_run in request_results:
@@ -166,17 +170,17 @@ def upload_to_rgd(input_site_models_s3,
 
         model_run_id = post_model_result.json()['id']
 
-    post_site_url =\
-        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/"
+    post_site_url = (
+        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/")
 
-    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
-                           max_workers=jobs)
-    site_post_jobs = [executor.submit(post_site, post_site_url, site_filepath)
-                      for site_filepath in glob(os.path.join(
-                          local_site_models_dir, '*.geojson'))]
+    local_site_models_dir = ub.Path(local_site_models_dir)
 
-    for site_post_job in ub.ProgIter(as_completed(site_post_jobs),
-                                     total=len(site_post_jobs),
+    jobs = ub.JobPool(mode='process', max_workers=jobs)
+    for site_filepath in local_site_models_dir.glob('*.geojson'):
+        jobs.submit(post_site, post_site_url, site_filepath)
+
+    for site_post_job in ub.ProgIter(jobs.as_completed(),
+                                     total=len(jobs),
                                      desc='Uploading sites..'):
         try:
             result = site_post_job.result()

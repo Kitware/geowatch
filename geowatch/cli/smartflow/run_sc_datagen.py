@@ -14,39 +14,49 @@ class ACSCDatasetConfig(scfg.DataConfig):
     Generate cropped KWCOCO dataset for SC
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATD. DO NOT USE')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
+        '''
+        Output as simple newline separated STAC items
 
-            UNUSED.
-            '''))
+        UNUSED.
+        '''))
     jobs = scfg.Value(1, type=int, short_alias=['j'], help='DO NOT USE. SET WORKERS IN acsc_align_config instead')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Will not recompute if output_path already exists
-            '''))
+        '''
+        Will not recompute if output_path already exists
+        '''))
 
     acsc_cluster_config = scfg.Value(None, help=ub.paragraph(
         '''
-        The configuration for the site-cluster-step.
-        If None, then no site clustering is done.
+        The configuration for the site-cluster-step passed to
+        geowatch.cli.cluster_sites.
+        If None, then no site clustering is done, and a kwcoco video is
+        produced for each individual site.
         '''))
 
     acsc_align_config = scfg.Value(None, help=ub.paragraph(
@@ -55,23 +65,23 @@ class ACSCDatasetConfig(scfg.DataConfig):
         '''))
 
     input_region_models_asset_name = scfg.Value('sv_out_region_models', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to use as input
-            '''))
+        '''
+        Which region model assets to use as input
+        '''))
 
     input_site_models_asset_name = scfg.Value('sv_out_site_models', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to to use as input
-            '''))
+        '''
+        Which site model assets to to use as input
+        '''))
 
 
 def main():
     config = ACSCDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
-    run_generate_sc_cropped_kwcoco(config)
+    run_generate_acsc_cropped_kwcoco(config)
 
 
-def run_generate_sc_cropped_kwcoco(config):
+def run_generate_acsc_cropped_kwcoco(config):
     from kwutil.util_yaml import Yaml
     from geowatch.utils import util_framework
     from geowatch.cli import coco_align
@@ -85,6 +95,7 @@ def run_generate_sc_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     if config.dont_recompute:
         output_path = util_fsspec.FSPath.coerce(config.output_path)
@@ -153,7 +164,16 @@ def run_generate_sc_cropped_kwcoco(config):
         acsc_cluster_config['dst_dpath'] = cluster_region_dpath
         acsc_cluster_config['dst_region_fpath'] = cluster_region_fpath
         site_clustering.configure(acsc_cluster_config)
-        ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
+
+        print('Show stats about cluster inputs:')
+        ub.cmd('geowatch site_stats ' + input_region_path, verbose=3, system=True)
+
+        print('Execute clustering')
+        cluster_command = site_clustering._raw_command()
+        ub.cmd(cluster_command, check=True, verbose=3, system=True)
+
+        print('Show stats about cluster outputs:')
+        ub.cmd('geowatch site_stats ' + cluster_region_fpath, verbose=3, system=True)
     else:
         cluster_region_dpath = None
         tocrop_region_fpath = input_region_path

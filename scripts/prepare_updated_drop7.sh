@@ -66,7 +66,7 @@ REGIONS="
 "
 
 # Construct the TA2-ready dataset
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \
@@ -223,7 +223,7 @@ python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-V2/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-V2 \
     --suffix=rawbands \

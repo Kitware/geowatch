@@ -35,7 +35,7 @@ export TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_depth_vali.kwcoco.json
 
 if [[ ! -f "$TRAIN_FPATH" || ! -f "$VALI_FPATH" || ! -f "$TEST_FPATH" ]]; then
     # split depth kwcoco file into training and vali datasets
-    (cd "$KWCOCO_BUNDLE_DPATH"; python3 -m watch.cli.prepare_splits --base_fpath="$DEPTH_KWCOCO_FPATH")
+    (cd "$KWCOCO_BUNDLE_DPATH"; python3 -m watch.cli.queue_cli.prepare_splits --base_fpath="$DEPTH_KWCOCO_FPATH")
 fi
 
 # 3 - run fusion experiment

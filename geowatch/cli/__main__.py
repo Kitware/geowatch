@@ -20,6 +20,7 @@ def main(cmdline=True, **kw):
         'validate_annotation_schemas',
         'torch_model_stats',
         'coco_spectra',
+        'draw_region',
 
         # 'geotiffs_to_kwcoco'  # TODO: cleanup and add
 

@@ -83,6 +83,7 @@ class Pipeline:
         self.config = None
 
         self._dirty = True
+        self._unique_hanes = set()
 
         if self.nodes:
             self.build_nx_graphs()
@@ -102,6 +103,11 @@ class Pipeline:
         """
         Dynamically create a new unique process node and add it to the dag
         """
+        name = kwargs.get('name', None)
+        if name is not None:
+            if name in self._unique_hanes:
+                raise Exception(name)
+            self._unique_hanes.add(name)
         task = ProcessNode(executable=executable, **kwargs)
         self.nodes.append(task)
         self._dirty = True
@@ -115,7 +121,7 @@ class Pipeline:
             node_names = [node.name for node in self.nodes]
             if len(node_names) != len(set(node_names)):
                 print('node_names = {}'.format(ub.urepr(node_names, nl=1)))
-                raise AssertionError(f'{len(node_names)}, {len(set(node_names))}')
+                raise AssertionError(f'Non unique nodes detected: {len(node_names)}, {len(set(node_names))}')
             node_dict = dict(zip(node_names, self.nodes))
         return node_dict
 
@@ -246,6 +252,10 @@ class Pipeline:
         """
         Update the DAG configuration
 
+        Note:
+            Currently, this will completely reset the config, and not update
+            it. This behavior will change in the future
+
         Example:
             >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
             >>> self = Pipeline.demo()
@@ -273,25 +283,39 @@ class Pipeline:
                 node = self.proc_graph.nodes[node_name]['node']
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
+        else:
+            # Hack: if config is not given, update the cache state only.
+            for node_name in nx.topological_sort(self.proc_graph):
+                node = self.proc_graph.nodes[node_name]['node']
+                node.configure(config=node.config, cache=cache)
+
+    def print_process_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
+        import rich
+        from cmd_queue.util import util_networkx
+        self._ensure_clean()
+        _labelize_graph(self.proc_graph, shrink_labels, show_types, smart_colors)
+        print('')
+        print('Process Graph')
+        util_networkx.write_network_text(self.proc_graph, path=rich.print, end='', vertical_chains=True)
+
+    def print_io_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
+        import rich
+        from cmd_queue.util import util_networkx
+        self._ensure_clean()
+        _labelize_graph(self.io_graph, shrink_labels, show_types, smart_colors, color_procs=True)
+        print('')
+        print('IO Graph')
+        util_networkx.write_network_text(self.io_graph, path=rich.print, end='', vertical_chains=True)
 
     def print_graphs(self, shrink_labels=1, show_types=0, smart_colors=0):
         """
         Prints the Process and IO graph for the DAG.
         """
-        self._ensure_clean()
-
-        _labelize_graph(self.io_graph, shrink_labels, show_types, smart_colors, color_procs=True)
-        _labelize_graph(self.proc_graph, shrink_labels, show_types, smart_colors)
-
-        import rich
-        from cmd_queue.util import util_networkx
-        print('')
-        print('Process Graph')
-        util_networkx.write_network_text(self.proc_graph, path=rich.print, end='', vertical_chains=True)
-
-        print('')
-        print('IO Graph')
-        util_networkx.write_network_text(self.io_graph, path=rich.print, end='', vertical_chains=True)
+        self.print_process_graph(shrink_labels=shrink_labels,
+                                 show_types=show_types,
+                                 smart_colors=smart_colors)
+        self.print_io_graph(shrink_labels=shrink_labels, show_types=show_types,
+                            smart_colors=smart_colors)
 
     @profile
     def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,

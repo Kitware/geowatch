@@ -45,7 +45,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
 # Construct the TA2-ready dataset.
 # This is a cmdqueue pipeline of simpler commands
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --cloud_cover=30 \
     --stac_query_mode=auto \
@@ -89,7 +89,7 @@ python -m geowatch.cli.coco_time_combine \
 # COLD FEATURES on original data
 #
 # Helper to generate the raw commands
-# python -m geowatch.cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+# python -m geowatch.cli.queue_cli.prepare_teamfeats --src_kwcocos "$IMGONLY_COCO_FPATH" --expt_dvc_dpath="$DVC_EXPT_DPATH" \
 #    --with_cold=1 --skip_existing=1 --gres=0,1 --tmux_workers=4 \
 #    --backend=tmux --run=0 --print-commands
 

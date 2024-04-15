@@ -56,7 +56,7 @@ CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_materials=1 \

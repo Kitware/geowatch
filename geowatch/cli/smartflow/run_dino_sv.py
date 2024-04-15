@@ -20,47 +20,54 @@ class DinoSVConfig(scfg.DataConfig):
     Run TA-2 SC fusion as baseline framework component
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     dino_detect_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for DinoBoxDetector.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for DinoBoxDetector.
+        '''))
     dino_filter_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for SV_DinoFilter.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for SV_DinoFilter.
+        '''))
     skip_on_fail = scfg.Value(False, help=ub.paragraph(
-            '''
-            If an error occurs, pass through input region / sites unchanged.
-            '''))
+        '''
+        If an error occurs, pass through input region / sites unchanged.
+        '''))
 
     input_region_models_asset_name = scfg.Value('depth_filtered_regions', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to use as input
-            '''))
+        '''
+        Which region model assets to use as input
+        '''))
 
     input_site_models_asset_name = scfg.Value('depth_filtered_sites', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to to use as input
-            '''))
+        '''
+        Which site model assets to to use as input
+        '''))
 
 
 def main():
@@ -90,6 +97,7 @@ def run_dino_sv(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

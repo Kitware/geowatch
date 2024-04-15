@@ -213,8 +213,8 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     print('Add tracks to dset')
     print(f'bg_key={bg_key}')
     print(f'key={key}')
-    print('tracks:')
-    print(tracks)
+    # print('tracks:')
+    # print(tracks)
 
     if tracks.empty:
         print('no tracks to add!')
@@ -610,7 +610,7 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
                                  modulate=modulate)
 
     rich.print('[green]Finished computing track scores:')
-    rich.print(_TRACKS)
+    # rich.print(_TRACKS)
     if _TRACKS.empty:
         return _TRACKS
 
@@ -657,7 +657,7 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
     # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
     rich.print('[green]Returning Tracks')
-    rich.print(_TRACKS)
+    # rich.print(_TRACKS)
     return _TRACKS
 
 
@@ -825,8 +825,8 @@ class TimeAggregatedBAS(TrackFnWithSV):
     def create_tracks(self, sub_dset, video_id):
         aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
         tracks = time_aggregated_polys(sub_dset, video_id, **aggkw)
-        print('Tracks:')
-        print(tracks)
+        # print('Tracks:')
+        # print(tracks)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -901,8 +901,8 @@ class TimeAggregatedSC(TrackFnWithSV):
             aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
             aggkw['use_boundaries'] = str(self.get('boundaries_as', 'none')).lower() not in {'none', 'null'}
             tracks = time_aggregated_polys(sub_dset, video_id, **aggkw)
-        print('Tracks:')
-        print(tracks)
+        # print('Tracks:')
+        # print(tracks)
         rich.print('[white] ---')
         return tracks
 
@@ -929,7 +929,7 @@ class TimeAggregatedSC(TrackFnWithSV):
         thresh = self.thresh
         key = self.key
         bg_key = self.bg_key
-        print(tracks)
+        # print(tracks)
         sub_dset = _add_tracks_to_dset(sub_dset, tracks=tracks, thresh=thresh,
                                        key=key, bg_key=bg_key, **kwargs)
         if self.site_validation:

@@ -8,8 +8,8 @@ Setting up the AWS bucket and DVC repo
 source "$HOME"/code/watch-smartflow-dags/secrets/secrets
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
-#SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
-SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4"
+SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4,ta1-wv-ara-4"
+#SENSORS="ta1-ls-ara-4,ta1-pd-ara-4,ta1-s2-ara-4"
 
 DATASET_SUFFIX=Drop8-ARA
 
@@ -33,6 +33,9 @@ sdvc unprotect -- "$DVC_DATA_DPATH"/Aligned-$DATASET_SUFFIX/*/*.kwcoco*.zip
 # All Regions
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_*0*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
+
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/US_T001.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/US_T001_*.geojson"
 
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/CO_C009.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/CO_C009_*.geojson"
@@ -61,11 +64,12 @@ export REQUESTER_PAYS=False
 
 echo "
 DVC_DATA_DPATH=$DVC_DATA_DPATH
-DVC_DATA_DPATH=$DVC_DATA_DPATH
 "
 
+CACHE_STEPS="stac-search,baseline_ingress,stac_to_kwcoco,coco_add_watch_fields"
+
 # Construct the TA2-ready dataset
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \
@@ -78,14 +82,15 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --site_globstr="$SITE_GLOBSTR" \
     --requester_pays=$REQUESTER_PAYS \
     --unsigned_nodata=0 \
+    --qa_encoding='ARA-4' \
     --fields_workers=8 \
     --convert_workers=0 \
     --align_workers=4 \
     --align_aux_workers=0 \
+    --align_skip_previous_errors=True \
     --ignore_duplicates=1 \
-    --visualize=0 \
     --target_gsd="10GSD" \
-    --cache=0 \
+    --cache=$CACHE_STEPS \
     --verbose=100 \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
@@ -95,7 +100,7 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=6 \
+    --tmux_workers=1 \
     --run=1
     #--sensor_to_time_window='
     #    #S2: 2 weeks
@@ -103,6 +108,23 @@ python -m geowatch.cli.prepare_ta2_dataset \
     #    #PD: 2 weeks
     #    #WV: 2 weeks
     #' \
+
+
+background_cleanup(){
+    __doc__="
+    The prepare-ta2-dataset task can generate temporary files which may not be
+    cleaned up if there is an error. Running a task in the background to check
+    for these can prevent excess disk usage. In the future, the coco-align
+    script may be improved to clean these files up better (it currently
+    does make some effort), but for now this is a simple workaround.
+    "
+    # shellcheck disable=SC2155
+    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+    python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py \
+        --dpath "$SRC_BUNDLE_DPATH" \
+        --age_thresh "1 hour"
+}
 
 # Add regions where kwcoco files exist
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="hdd")
@@ -147,6 +169,73 @@ dvc push -r aws -- */L8.dvc && \
 dvc push -r aws -- */S2.dvc && \
 dvc push -r aws -- */WV.dvc
 
+
+collect_errors(){
+    __doc__="
+    This crawls the output directory to gather error reports and summarize
+    them.
+    "
+    # shellcheck disable=SC2155
+    export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
+    python -c "if 1:
+        import os
+        import ubelt as ub
+        import json
+        dpath = ub.Path(os.environ.get('SRC_BUNDLE_DPATH'))
+
+        asset_error_fpaths = []
+        for r, ds, fs in dpath.walk():
+            for fname in fs:
+                if fname.endswith('.error'):
+                    fpath = r / fname
+                    if fpath.name == 'affine_warp.error':
+                        ...
+                    else:
+                        asset_error_fpaths.append(fpath)
+
+        num_asset_errors = len(asset_error_fpaths)
+        print(f'Number of asset errors files: {num_asset_errors}')
+
+        error_details = []
+        for fpath in asset_error_fpaths:
+            data = json.loads(fpath.read_text())
+            fpath.parent.name
+            image_name = fpath.parent.name
+            sensor = fpath.parent.parent.parent.name
+            region_id = fpath.parent.parent.parent.parent.name
+            channel = fpath.name.split('.')[-3].split('_')[-1]
+
+            num_source_rasters = len(data['input_gpaths'])
+            row = {
+                'image_name': image_name,
+                'num_source_rasters': num_source_rasters,
+                'channel': channel,
+                'sensor': sensor,
+                'region_id': region_id,
+                'fpath': fpath,
+                'data': data,
+            }
+            error_details.append(row)
+
+        ub.dict_hist([r['image_name'] for r in error_details])
+
+        error_histograms = ub.ddict(lambda: ub.ddict(int))
+        for row in error_details:
+            data = row['data']
+            ex = data['ex']
+            err_type = ex['type']
+            error_histograms['error_type'][err_type] += 1
+            error_histograms['region'][row['region_id']] += 1
+            error_histograms['sensor'][row['sensor']] += 1
+            error_histograms['channel'][row['channel']] += 1
+            error_histograms['num_source_rasters'][row['num_source_rasters']] += 1
+
+        error_histograms = ub.udict(error_histograms).map_values(lambda x: ub.udict(x).sorted_values())
+        print(ub.urepr(error_histograms, align=':'))
+    "
+}
+
 #
 # -- to pull
 #
@@ -174,7 +263,7 @@ export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Cropped2GSD-V1
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Cropped2GSD-V1
 
 export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
 export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
@@ -189,6 +278,9 @@ DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
 TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
 "
 
+mkdir -p "$DST_BUNDLE_DPATH"
+cd "$DST_BUNDLE_DPATH"
+
 REGION_IDS_STR=$(python -c "if 1:
     import pathlib
     import os
@@ -202,7 +294,9 @@ REGION_IDS_STR=$(python -c "if 1:
     for region_name in region_names:
         coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
         if coco_fpath.exists():
-            final_names.append(region_name)
+            if not all(p.is_file() for p in list(coco_fpath.parent.glob('*'))):
+                # should at least be some subdirectory if the region has images
+                final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
 #REGION_IDS_STR="CN_C000 KW_C001 SA_C001 CO_C001 VN_C002"
@@ -259,8 +353,8 @@ for REGION_ID in "${REGION_IDS_ARR[@]}"; do
                     --geo_preprop=False \
                     --sensor_to_time_window "
                         S2: 1month
-                        PD: 1month
                         L8: 1month
+                        PD: 1month
                     " \
                     --keep img
                     #--exclude_sensors=L8 \
@@ -286,37 +380,6 @@ done
 python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run --workers=8 "crop_for_sc_queue"
 
-## FIXUP to remove the nan images
-#python -m cmd_queue new "fixup_remove_nan_images"
-#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-#    #echo "REGION_ID = $REGION_ID"
-#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    if test -f "$DST_KWCOCO_FPATH"; then
-#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
-#        python -m cmd_queue submit --jobname="fixup-nan-$REGION_ID" -- fixup_remove_nan_images \
-#            python ~/code/watch/dev/poc/find_and_remove_unregistered_images.py --src "$DST_KWCOCO_FPATH" --yes=True
-#    fi
-#done
-#python -m cmd_queue show "fixup_remove_nan_images"
-#python -m cmd_queue run --workers=8 "fixup_remove_nan_images"
-
-
-## Hack fixup
-#python -m cmd_queue new "crop_for_sc_queue"
-## sdvc unprotect -- */*.kwcoco*.zip
-#for REGION_ID in "${REGION_IDS_ARR[@]}"; do
-#    REGION_GEOJSON_FPATH=$TRUTH_REGION_DPATH/$REGION_ID.geojson
-#    REGION_CLUSTER_DPATH=$DST_BUNDLE_DPATH/$REGION_ID/clusters
-#    SRC_KWCOCO_FPATH=$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-
-#    CRP_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/_cropped_imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    DST_KWCOCO_FPATH=$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip
-#    if test -f "$DST_KWCOCO_FPATH"; then
-#        mv "$DST_KWCOCO_FPATH" "$CRP_KWCOCO_FPATH"
-#        #echo "DST_KWCOCO_FPATH = $DST_KWCOCO_FPATH"
-#    fi
-#done
-
 
 ### Reproject Annotation Jobs
 python -m cmd_queue new "reproject_for_sc"
@@ -339,7 +402,7 @@ python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=16 "reproject_for_sc"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -347,30 +410,7 @@ python -m geowatch.cli.prepare_splits \
     --splits split6 \
     --run=1
 
-
-
-
-
-#dvc add -vvv -- */clusters
-#dvc add -vvv -- \
-#    */*/L8 \
-#    */*/S2 \
-#    */*/WV \
-#    */*/PD
-#dvc add -vvv -- \
-#    */imgonly-*-rawbands.kwcoco.zip \
-#    */imganns-*-rawbands.kwcoco.zip
-
 cd "$DST_BUNDLE_DPATH"
-
-#dvc add -vvv -- \
-#    *_rawbands_*.kwcoco.zip \
-#    */imgonly-*-rawbands.kwcoco.zip \
-#    */imganns-*-rawbands.kwcoco.zip \
-#    */*/L8 \
-#    */*/S2 \
-#    */*/WV \
-#    */*/PD && \
 
 python -c "if 1:
     import ubelt as ub
@@ -382,7 +422,7 @@ python -c "if 1:
     regions_dpaths_with_kwcoco = sorted({p.parent for p in root.glob('*/*.kwcoco.zip')})
     for dpath in regions_dpaths_with_kwcoco:
         to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
-        to_add += list(dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+        to_add += list(dpath.glob('imganns-*-rawbands.kwcoco.zip'))
         to_add += list(dpath.glob('*/L8'))
         to_add += list(dpath.glob('*/S2'))
         to_add += list(dpath.glob('*/WV'))
@@ -394,7 +434,7 @@ python -c "if 1:
 "
 git commit -m "Update Drop8 Crop SC" && \
 git push && \
-dvc push -r aws -R . -vvv
+dvc push -r aws -R .
 
 
 ##########################
@@ -408,7 +448,7 @@ export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-Median10GSD-V1
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1
 
 export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
 export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
@@ -445,13 +485,19 @@ export REGION_IDS_STR=$(python -c "if 1:
     region_fpaths = list(region_dpath.glob('*_[RC]*.geojson'))
     region_names = [p.stem for p in region_fpaths]
     final_names = []
+    ignore_regions = {'VN_C002'}
+    #ignore_regions = {}
     for region_name in region_names:
+        if region_name in ignore_regions:
+            continue
         coco_fpath = src_bundle / region_name / f'imgonly-{region_name}-rawbands.kwcoco.zip'
         if coco_fpath.exists():
-            final_names.append(region_name)
+            if not all(p.is_file() for p in list(coco_fpath.parent.glob('*'))):
+                # should at least be some subdirectory if the region has images
+                final_names.append(region_name)
     print(' '.join(sorted(final_names)))
     ")
-#export REGION_IDS_STR="CN_C000 KW_C001 CO_C001"
+#export REGION_IDS_STR="KR_R001"
 
 # Dump regions to a file
 # FIXME: tmp_region_names.yaml is not a robust interchange.
@@ -487,6 +533,7 @@ python -m geowatch.cli.queue_cli.prepare_time_combined_dataset \
     --mask_low_quality=True \
     --tmux_workers=8 \
     --time_window=6months \
+    --max_images_per_group=7 \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
@@ -513,7 +560,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -521,14 +568,17 @@ python -m geowatch.cli.prepare_splits \
     --splits split6 \
     --run=1
 
+cd "$DST_BUNDLE_DPATH"
 
-dvc add -v -- \
+dvc add -- \
     */raw_bands \
     */imgonly-*-rawbands.kwcoco.zip \
     */imganns-*-rawbands.kwcoco.zip \
     data_train_rawbands_split6_*.kwcoco.zip \
     data_vali_rawbands_split6_*.kwcoco.zip
 
+#git pull
 git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
+

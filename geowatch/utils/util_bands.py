@@ -521,7 +521,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from geowatch.utils.util_bands import *  # NOQA
-        >>> from simple_dvc.registery import find_dvc_dpath
+        >>> from simple_dvc.registry import find_dvc_dpath
         >>> import kwcoco
         >>> import ubelt as ub
         >>> dvc_dpath = find_dvc_dpath()
@@ -845,7 +845,7 @@ def specialized_index_bands2(delayed=None):
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from geowatch.utils.util_bands import *  # NOQA
-        >>> from simple_dvc.registery import find_dvc_dpath
+        >>> from simple_dvc.registry import find_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'

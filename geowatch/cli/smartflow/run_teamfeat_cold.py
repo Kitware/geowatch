@@ -74,6 +74,7 @@ def main():
 
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -133,7 +134,7 @@ def main():
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
-    from geowatch.cli import prepare_teamfeats
+    from geowatch.cli.queue_cli import prepare_teamfeats
     base_fpath = ub.Path(full_input_kwcoco_fpath)
     prepare_teamfeats.main(
         cmdline=0,

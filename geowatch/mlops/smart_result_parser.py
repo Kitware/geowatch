@@ -532,7 +532,7 @@ def _load_json(fpath):
 
 def find_track_item(tracker_info):
     tracker_alias = {
-        'geowatch.cli.run_tracker',
+        'watch.cli.run_tracker',
         'geowatch.cli.run_tracker',
     }
     track_items = list(find_info_items(
@@ -546,7 +546,6 @@ def find_track_item(tracker_info):
             We should be able to find exactly 1 tracker process item,
             but instead we found {len(track_items)}
             '''))
-        ...
     track_item = track_items[0]
     return track_item
 
@@ -566,7 +565,6 @@ def find_metrics_framework_item(info):
             We should be able to find exactly 1 tracker process item,
             but instead we found {len(items)}
             '''))
-        ...
     item = items[0]
     return item
 
@@ -586,50 +584,5 @@ def find_pxl_eval_item(info):
             We should be able to find exactly 1 tracker process item,
             but instead we found {len(items)}
             '''))
-        ...
     item = items[0]
     return item
-
-
-def shrink_channels(x):
-    import kwcoco
-    aliases = {
-        'blue': 'B',
-        'red': 'R',
-        'green': 'G',
-        'nir': 'N',
-        'swir16': 'S',
-        'swir22': 'H',
-    }
-    for idx, part in enumerate('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field'.split('|')):
-        aliases[part] =  'land.{}'.format(idx)
-    stream_parts = []
-    sensorchan = kwcoco.SensorChanSpec.coerce(x)
-    # spec = kwcoco.ChannelSpec.coerce(x)
-    for stream in sensorchan.streams():
-        fused_parts = []
-        for c in stream.chans.as_list():
-            c = aliases.get(c, c)
-            c = c.replace('matseg_', 'matseg.')
-            fused_parts.append(c)
-        fused = '|'.join(fused_parts)
-        fused = fused.replace('B|G|R|N', 'BGRN')
-        fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
-        fused = fused.replace('R|G|B', 'RGB')
-        fused = fused.replace('B|G|R', 'BGR')
-        stream_parts.append(stream.sensor.spec + ':' + fused)
-    new = ','.join(stream_parts)
-    x = kwcoco.SensorChanSpec.coerce(new).concise().spec
-    return x
-
-
-def is_teamfeat(sensorchan):
-    """
-    Check if the sensorchan spec contains a hard coded value we know is a team
-    feature
-    """
-    import math
-    unique_chans = sum([s.chans for s in sensorchan.streams()]).fuse().to_set()
-    if isinstance(unique_chans, float) and math.isnan(unique_chans):
-        return False
-    return any([a in unique_chans for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])

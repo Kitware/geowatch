@@ -8,7 +8,8 @@ import ubelt as ub
 
 
 class CleanupGdalTmpFileWatcherCLI(scfg.DataConfig):
-    dpath = scfg.Value('/home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_data/Aligned-Drop8-L2', help='param1')
+    dpath = scfg.Value('/data2/projects/smart/smart_phase3_data/Aligned-Drop8-ARA', help='param1')
+    age_thresh = scfg.Value('1 minute')
 
     @classmethod
     def main(cls, cmdline=1, **kwargs):
@@ -28,9 +29,11 @@ class CleanupGdalTmpFileWatcherCLI(scfg.DataConfig):
         rich.print('config = ' + ub.urepr(config, nl=1))
         dpath = ub.Path(config.dpath)
 
-        ureg = kwutil.util_time._time_unit_registery()
+        ureg = kwutil.util_time._time_unit_registry()
 
-        age_threshold = 12 * ureg.hours
+        age_threshold = kwutil.util_time.timedelta.coerce(config.age_thresh)
+
+        # 12 * ureg.hours
         wait_time = 10 * ureg.seconds
 
         while True:
@@ -44,8 +47,8 @@ class CleanupGdalTmpFileWatcherCLI(scfg.DataConfig):
                         mtime = kwutil.util_time.datetime.coerce(fpath.stat().st_mtime)
                         now_time = kwutil.util_time.datetime.coerce('now')
                         age_delta = kwutil.util_time.timedelta.coerce(now_time - mtime)
-                        age = age_delta.total_seconds() * ureg.seconds
-                        if age > age_threshold:
+                        # age = age_delta.total_seconds() * ureg.seconds
+                        if age_delta > age_threshold:
                             print(f'Found old tmp file: {fpath}')
                             num_removed += 1
                             fpath.delete()
@@ -65,7 +68,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py
-        python -m cleanup_gdal_tmp_file_watcher
+        python ~/code/geowatch/dev/poc/cleanup_gdal_tmp_file_watcher.py \
+            --dpath /data2/projects/smart/smart_phase3_data/Aligned-Drop8-ARA \
+            --age_thresh "1 hour"
     """
     main()

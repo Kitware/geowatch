@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""
 Performs the stac search to create the .input file needed for
-:mod:`geowatch.cli.prepare_ta2_dataset`.
+:mod:`geowatch.cli.queue_cli.prepare_ta2_dataset`.
 
 
 SeeAlso:
@@ -46,7 +46,7 @@ CommandLine:
         -o "${RESULT_FPATH}"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath "${RESULT_FPATH}" \
         --collated False \

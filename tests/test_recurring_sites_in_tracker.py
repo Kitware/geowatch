@@ -2,6 +2,7 @@
 
 def test_tracker_time_split_thresh():
     import json
+    import os
     import kwcoco
     import ubelt as ub
     from geowatch.cli import run_tracker
@@ -19,13 +20,13 @@ def test_tracker_time_split_thresh():
 
     # Run BAS
     bas_argv = [
-        '--in_file', coco_dset.fpath,
+        '--in_file', os.fspath(coco_dset.fpath),
         '--out_site_summaries_dir', str(regions_dir),
         '--out_site_summaries_fpath',  str(bas_fpath),
         '--out_kwcoco', str(bas_coco_fpath),
         '--track_fn', 'saliency_heatmaps',
         '--sensor_warnings', '0',
-        '--viz_out_dir', viz_outdir,
+        '--viz_out_dir', os.fspath(viz_outdir),
         '--track_kwargs', json.dumps({
             'thresh': 0.3,
             'time_thresh': .8,
@@ -36,7 +37,7 @@ def test_tracker_time_split_thresh():
             'time_split_thresh': 0.5,
         }),
     ]
-    run_tracker.main(bas_argv)
+    run_tracker.main(argv=bas_argv)
 
     bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
 

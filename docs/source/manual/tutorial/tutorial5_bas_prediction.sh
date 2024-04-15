@@ -66,7 +66,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 # This is a cmd_queue CLI.  This will generate a DAG of bash commands and
 # optionally execute them. Set --run=0 to do a dry run to see what will try to
 # do before it does.
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --cloud_cover=5 \
     --stac_query_mode=auto \

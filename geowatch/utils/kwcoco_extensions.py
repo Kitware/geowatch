@@ -2091,16 +2091,8 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
 
 
 def _introspect_num_bands(fpath):
-    try:
-        shape = kwimage.load_image_shape(fpath)
-    except Exception:
-        from osgeo import gdal
-        try:
-            gdalfile = gdal.Open(fpath)
-            shape = (gdalfile.RasterYSize, gdalfile.RasterXSize, gdalfile.RasterCount)
-        except Exception:
-            print('failed to introspect shape of fpath = {!r}'.format(fpath))
-            return None
+    from geowatch.utils import util_kwimage
+    shape = util_kwimage.load_image_shape(fpath, backend=['gdal', 'pil'])
     if len(shape) == 1:
         return 1
     elif len(shape) == 3:

@@ -3,7 +3,7 @@ __doc__="
 The script that builds the drop4 dataset and contains debugging information
 
 See Also:
-    ~/code/watch/watch/cli/prepare_ta2_dataset.py
+    ~/code/watch/watch/cli/queue_cli/prepare_ta2_dataset.py
 "
 
 
@@ -32,7 +32,7 @@ SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
 # Construct the TA2-ready dataset
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=30 \
@@ -68,7 +68,7 @@ build_drop4_BAS(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=20 \
@@ -108,7 +108,7 @@ build_drop4_v2_BAS(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -147,7 +147,7 @@ build_drop4_v2_SC(){
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -218,7 +218,7 @@ dvc_add_SC(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
     __hack__="
     import shutil
@@ -293,7 +293,7 @@ rgb_medium_drop4_only(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=10 \
@@ -339,7 +339,7 @@ small_onesite(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=10 \
@@ -379,7 +379,7 @@ small_teregions(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
@@ -412,7 +412,7 @@ small_allsites(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
@@ -445,7 +445,7 @@ small_allsites(){
     #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=40 \
@@ -490,7 +490,7 @@ dvc_add(){
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m geowatch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    python -m geowatch.cli.queue_cli.prepare_splits data.kwcoco.json --cache=0 --run=1
     #--backend=serial
 
     mkdir -p viz512_anns
@@ -540,7 +540,7 @@ prepare_qfabric(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=80 \
@@ -583,7 +583,7 @@ prepare_qfabric_horologic(){
     #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=80 \

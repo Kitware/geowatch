@@ -2,7 +2,7 @@
 
 PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
 cd "$PHASE2_DATA_DPATH_SSD/Drop6"
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --base_fpath "combo_imganns-*_L.kwcoco.json" \
     --suffix=fixquant \
     --constructive_mode=True

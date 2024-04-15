@@ -164,7 +164,8 @@ def _gids_polys(sub_dset, video_id, **kwargs):
     import rich
     config = PolygonExtractConfig(**kwargs)
 
-    if config.use_boundaries:  # for SC
+    print(f'config.use_boundaries={config.use_boundaries}')
+    if config.use_boundaries:  # for AC/SC
         raw_boundary_tracks = score_track_polys(sub_dset, video_id, [SITE_SUMMARY_CNAME],
                                                 resolution=config.resolution)
 
@@ -183,6 +184,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             msg = ('need valid site boundaries!')
             warnings.warn(msg)
             # raise AssertionError(msg)
+            return []
         else:
             gids = raw_boundary_tracks['gid'].unique()
             print('generating polys in bounds: number of bounds: ',
@@ -212,12 +214,59 @@ def _gids_polys(sub_dset, video_id, **kwargs):
     print(f'Reading heatmaps with: channels={channels}')
 
     with load_jobs:
-        for coco_img in ub.ProgIter(coco_images, desc='submit heatmap jobs'):
+
+        delayed_images = []
+        for coco_img in coco_images:
             delayed = coco_img.imdelay(channels=channels, space='video', resolution=config.resolution)
+            delayed_images.append(delayed)
+
+        # Some configurations can blow out memory here.
+        # Check how much data would be loaded before we do it.
+        CHECK_LOAD_MEMORY = 1
+        if CHECK_LOAD_MEMORY:
+            from geowatch.utils import util_units
+            from geowatch.utils import util_hardware
+            mem_info = util_hardware.get_mem_info(with_units=True)
+            bytes_per_cell = np.dtype('float32').itemsize
+            num_raster_cells = sum([np.prod(delayed.shape) for delayed in delayed_images])
+            total_bytes = num_raster_cells * bytes_per_cell
+            ureg = util_units.unit_registry()
+            total_size = (total_bytes * ureg.bytes).to('gigabytes')
+            print(f'Loading heatmaps will use {total_size} in memory')
+
+            # TODO: dynamic resolution reduction
+            if total_size.m > 32:
+                print('WARNING: heatmaps will take more than 32GB of memory. '
+                      'You may want to lower resolution')
+
+            problem_likelihood = ''
+            if mem_info['available'] < total_size:
+                problem_likelihood = 'is VERY likely to overload memory'
+            elif mem_info['available'] < (total_size * 1.5):
+                problem_likelihood = 'is likely to overload memory'
+            elif mem_info['available'] < (total_size * 2):
+                # Warn if we don't have twice as much space, this accounts for
+                # things like copies, which may happen.
+                problem_likelihood = 'uncomfortably close to overloading memory'
+            elif mem_info['available'] < (total_size * 2.5):
+                # Warn if we don't have twice as much space, this accounts for
+                # things like copies, which may happen.
+                problem_likelihood = 'may overload memory'
+            if problem_likelihood:
+                print(f'mem_info = {ub.urepr(mem_info, nl=1)}')
+                msg = ub.paragraph(
+                    '''
+                    !!! Warning !!!
+                    The set of images about to be loaded {problem_likelihood}
+                    ''')
+                print(msg)
+                warnings.warn(msg)
+
+        for delayed in delayed_images:
             load_jobs.submit(delayed.finalize)
 
         _heatmaps = []
-        for job in ub.ProgIter(load_jobs.jobs, desc='collect heatmap jobs'):
+        for job in ub.ProgIter(load_jobs.jobs, desc='Load heatmap'):
             _heatmap = job.result()
             _heatmaps.append(_heatmap)
 

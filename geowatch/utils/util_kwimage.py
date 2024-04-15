@@ -1226,6 +1226,13 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
         min_box_dim (float): minimum side length of a returned box
         max_box_dim (float): maximum side length of a returned box
 
+    Returns:
+        Tuple[Boxes, List[ndarray]]:
+            keep_bbs: The chosen boxes that cover the inputs
+            overlap_idxs: Corresponding list indicating which of the original
+                inputs overlaps the each covering box.
+
+
     References:
         https://aip.scitation.org/doi/pdf/10.1063/1.5090003?cookieSet=1
         Mercantile - https://pypi.org/project/mercantile/0.4/
@@ -1266,6 +1273,13 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
         >>> polygons.draw(color='pink')
         >>> keep_bbs.draw(color='orange', setlim=1)
         >>> plt.gca().set_title('find_low_overlap_covering_boxes')
+
+    Example:
+        >>> # Empty test case
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
+        >>> keep_bbs, overlap_idxs = find_low_overlap_covering_boxes([], 1, 0, 1)
+        >>> assert len(keep_bbs) == 0
+        >>> assert len(overlap_idxs) == 0
     """
     import kwimage
     import kwarray
@@ -1274,6 +1288,11 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
     import ubelt as ub
     from geowatch.utils import util_gis
     import networkx as nx
+
+    if len(polygons) == 0:
+        empty_boxes = kwimage.Boxes(np.empty((0, 4)), 'xywh')
+        empty_ixs = []
+        return empty_boxes, empty_ixs
 
     polygons_sh = [p.to_shapely() for p in polygons]
     polygons_gdf = gpd.GeoDataFrame(geometry=polygons_sh)
@@ -1658,3 +1677,106 @@ def exactly_1channel(image, ndim=2):
         if ndim == 3:
             image = image[:, :, None]
     return image
+
+
+def load_image_shape(fpath, backend='auto', include_channels=True):
+    """
+    Version from kwimage dev/0.9.26
+
+    Determine the height/width/channels of an image without reading the entire
+    file.
+
+    Args:
+        fpath (str): path to an image
+        backend (str | List[str]): can be "auto", "pil", or "gdal".
+            Can also be a list of which backends to try in which order.
+        include_channels (bool): if False, only reads the height, width.
+
+    Returns:
+        Tuple[int, int, int] - shape of the image
+            Recall this library uses the convention that "shape" is refers to
+            height,width,channels array-style ordering and "size" is
+            width,height cv2-style ordering.
+
+    Example:
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
+        >>> import ubelt as ub
+        >>> import kwimage
+        >>> dpath = ub.Path.appdir('kwimage/tests', type='cache').ensuredir()
+        >>> fpath = dpath / 'foo.tif'
+        >>> kwimage.imwrite(fpath, np.random.rand(64, 64, 3))
+        >>> shape1 = load_image_shape(fpath, backend=['pil', 'gdal'])
+        >>> shape2 = load_image_shape(fpath, backend=['gdal', 'pil'])
+        >>> assert shape1 == shape2 == (64, 64, 3)
+    """
+    import os
+
+    if backend == 'auto':
+        backend = ['pil', 'gdal']
+
+    if isinstance(backend, list):
+        candidate_errors = []
+        success = False
+        for candidate_backend in backend:
+            if candidate_backend == 'gdal':
+                if not _have_gdal():
+                    continue
+            try:
+                shape = load_image_shape(fpath, backend=candidate_backend,
+                                         include_channels=include_channels)
+            except Exception as ex:
+                candidate_errors.append((candidate_backend, ex))
+            else:
+                success = True
+                break
+        if not success:
+            if len(candidate_errors) == 0:
+                raise Exception('Unable to try an candidates')
+            else:
+                raise candidate_errors[-1]
+    elif backend == 'pil':
+        # TODO: can we prevent pil from logging to stdout here on failure?
+        # This will often print "More samples per pixel than can be decoded"
+        # which gives little context and is ultimately not an issue if we can
+        # fallback on gdal.
+        from PIL import Image
+        fpath = os.fspath(fpath)
+        with Image.open(fpath) as pil_img:
+            width, height = pil_img.size
+            if include_channels:
+                num_channels = len(pil_img.getbands())
+                shape = (height, width, num_channels)
+            else:
+                shape = (height, width)
+    elif backend == 'gdal':
+        from osgeo import gdal
+        fpath = os.fspath(fpath)
+        gdal_dset = gdal.Open(fpath, gdal.GA_ReadOnly)
+        if gdal_dset is None:
+            raise Exception(gdal.GetLastErrorMsg())
+        width = gdal_dset.RasterXSize
+        height = gdal_dset.RasterYSize
+        if include_channels:
+            num_channels = gdal_dset.RasterCount
+            shape = (height, width, num_channels)
+        else:
+            shape = (height, width)
+        gdal_dset = None
+    elif backend == 'imagesize':
+        import imagesize
+        if include_channels:
+            raise NotImplementedError('no way to get number of channels with imagesize')
+        width, height = imagesize.get(fpath)
+        shape = (height, width)
+    else:
+        raise KeyError(backend)
+    return shape
+
+
+def _have_gdal():
+    try:
+        from osgeo import gdal  # NOQA
+    except Exception:
+        return False
+    else:
+        return True

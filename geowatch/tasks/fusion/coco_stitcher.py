@@ -26,6 +26,7 @@ import kwimage
 import kwarray
 import warnings
 from os.path import relpath
+from geowatch.utils import util_kwarray
 
 
 def demo_coco_stitching_manager():
@@ -147,6 +148,11 @@ class CocoStitchingManager(object):
 
         device ('numpy' | torch.device):
             Device to stitch on.
+
+        memmap (bool | PathLike):
+            if truthy, the stitcher will use a memory map. If this
+            pathlike, then we use this as the directory for the memmap.
+            If True, a temp directory is used.
 
         thresh (float):
             if making hard decisions, determines the threshold for converting a
@@ -277,6 +283,7 @@ class CocoStitchingManager(object):
                  chan_code=None,
                  stiching_space='video',
                  device='numpy',
+                 memmap=None,
                  thresh=0.5,
                  write_probs=True,
                  write_preds=False,
@@ -309,6 +316,7 @@ class CocoStitchingManager(object):
         self.expected_minmax = expected_minmax
         self.write_prediction_attrs = write_prediction_attrs
         self.dtype = dtype
+        self.memmap = memmap
         self.assets_dname = assets_dname
 
         if writer_queue is None:
@@ -432,8 +440,13 @@ class CocoStitchingManager(object):
                     else:
                         raise NotImplementedError
                 asset_dims = (height, width, self.num_bands)
-                self.image_stitchers[gid] = kwarray.Stitcher(
-                    asset_dims, device=self.device, dtype=self.dtype)
+
+                # sticher_cls = kwarray.Stitcher
+                sticher_cls = util_kwarray.Stitcher
+
+                self.image_stitchers[gid] = sticher_cls(
+                    asset_dims, device=self.device, dtype=self.dtype,
+                    memmap=self.memmap)
                 self._image_scales[gid] = scale_asset_from_stitchspace
 
             if is_ready == 'auto':

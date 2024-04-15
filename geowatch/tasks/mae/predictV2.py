@@ -631,12 +631,12 @@ def main():
 if __name__ == '__main__':
     """
     SeeAlso:
-        ../../cli/prepare_teamfeats.py
+        ../../cli/queue_cli/prepare_teamfeats.py
 
         # Team Features on Drop3
         DVC_DPATH=$(geowatch_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
-        python -m geowatch.cli.prepare_teamfeats \
+        python -m geowatch.cli.queue_cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --with_depth=0 \
             --with_landcover=0 \

@@ -115,7 +115,6 @@ CommandLine:
         --force_nodata=None \
         --include_channels="None" \
         --exclude_channels="None" \
-        --visualize=False \
         --debug_valid_regions=False \
         --rpc_align_method orthorectify \
         --sensor_to_time_window "None" \
@@ -236,6 +235,18 @@ class AssetExtractConfig(scfg.DataConfig):
         This is only used if ``force_nodata`` is specified.
         '''))
 
+    qa_encoding = scfg.Value(None, help=ub.paragraph(
+        '''
+        TEMPORARY WORKAROUND.
+        The value of this parameter will be set as the "qa_encoding" for any
+        assets with the "quality" role. Ideally this information is determined
+        from the input kwcoco, which itself should be derived from the STAC
+        catalog. There is no reason to assume this is uniform.
+        Additionally, when we do add logic that enriches the input with this
+        metadata, that will no remove the requirement for the "unsigned_nodata"
+        argument, as it should be able to be inferred at that point.
+        '''))
+
     tries = scfg.Value(2, help=ub.paragraph(
         '''
         The maximum number of times to retry failed gdal warp commands before
@@ -259,6 +270,11 @@ class AssetExtractConfig(scfg.DataConfig):
         in input image with a 0.5 GSD will have it set to 10.0 during cropping)
         '''))
 
+    skip_previous_errors = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        Skip assets where we can detect a previous error occurred.
+        '''))
+
     hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         Hack lazy is a proof of concept with the intent on speeding up the
@@ -277,6 +293,7 @@ class AssetExtractConfig(scfg.DataConfig):
     def __post_init__(config):
         from geowatch.utils.util_resolution import ResolvedUnit
         if config['force_min_gsd'] is not None:
+            # FIXME: unit should be "meters" or "mGSD"
             resolution = ResolvedUnit.coerce(config['force_min_gsd'], default_unit='GSD')
             assert resolution.unit == 'GSD'
             config['force_min_gsd'] = resolution.mag
@@ -289,11 +306,11 @@ class ImageExtractConfig(AssetExtractConfig):
     # TODO: change this name to just align-method or something
     rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
         '''
-        Can be one of: (1) orthorectify - which uses gdalwarp with -rpc if
-        available otherwise falls back to affine transform, (2) pixel_crop -
-        which warps annotations onto pixel with RPCs but only crops the
-        original image without distortion, (3) affine_warp - which ignores RPCs
-        and uses the affine transform in the geotiff metadata.
+        Can be one of:
+        (1) orthorectify - which uses gdalwarp with -rpc if available otherwise
+        falls back to affine transform,
+        (2) affine_warp - which ignores RPCs and uses the affine transform in
+        the geotiff metadata.
         '''))
 
     aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs')
@@ -327,12 +344,6 @@ class ExtractConfig(ImageExtractConfig):
         '''
         if True, writes a separate kwcoco file for every discovered
         ROI in addition to the final kwcoco file.
-        '''))
-
-    visualize = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
-        DEPRECATED: simply call visualize on the subdata kwcoco files as
-        they are written. If set to true an error will be raised.
         '''))
 
     img_workers = scfg.Value(0, type=str, help=ub.paragraph(
@@ -451,7 +462,13 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         '''
         What to do when input contain no regions to crops. Can be "ignore"
         to write an empty kwcoco file or "raise" to throw an Exception.
-        '''))
+        '''), choices=['raise', 'ignore'])
+
+    image_error_policy = scfg.Value('raise', help=ub.paragraph(
+        '''
+        What to do when input contain no regions to crops. Can be "ignore"
+        to write an empty kwcoco file or "raise" to throw an Exception.
+        '''), choices=['raise', 'ignore'])
 
 
 @profile
@@ -596,7 +613,6 @@ def main(cmdline=True, **kw):
         >>>     'convexify_regions': True,
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
-        >>>     'visualize': False,
         >>>     'force_min_gsd': 60.0,
         >>> }
         >>> cmdline = False
@@ -668,19 +684,10 @@ def main(cmdline=True, **kw):
         >>>     'src': new_dset,
         >>>     'viz_dpath': viz_dpath,
         >>> })
-
-        print(ub.cmd(['gdalinfo', parent_fpath])['out'])
-        print(ub.cmd(['gdalinfo', crop_fpath])['out'])
-
-        df1 = covered_annot_geo_regions(coco_dset)
-        df2 = covered_image_geo_regions(coco_dset)
     """
     config = CocoAlignGeotiffConfig.cli(data=kw, cmdline=cmdline, strict=True)
     import rich
     rich.print(ub.urepr(config))
-
-    if config.visualize:
-        raise Exception('The visualize option was deprecated and will be removed')
 
     from kwcoco.util.util_json import ensure_json_serializable
     from geowatch.utils import util_gis
@@ -1185,15 +1192,15 @@ class SimpleDataCube:
 
             CHECK_THIN_REGIONS = True
             if CHECK_THIN_REGIONS:
+                import cv2
+                from collections import namedtuple
+                import numpy as np
+                from shapely import validation
                 # Try and detect thin regions and then add context
                 region_row_df_utm = _region_row_df.to_crs(local_epsg)
                 region_utm_geom = region_row_df_utm['geometry'].iloc[0]
                 # poly = kwimage.Polygon.coerce(region_utm_geom)
-                import cv2
-                from collections import namedtuple
-                import numpy as np
                 OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
-                from shapely import validation
                 if not region_utm_geom.is_valid:
                     warnings.warn('Region query is invalid: ' + str(validation.explain_validity(region_utm_geom)))
                     continue
@@ -1366,17 +1373,19 @@ class SimpleDataCube:
             >>>                       new_dset=new_dset,
             >>>                       extract_config=extract_config)
         """
-        from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        from kwutil import util_time
-        from kwutil.util_yaml import Yaml
-        from geowatch.utils import util_gis
-        from geowatch.utils import kwcoco_extensions
         import kwcoco
         import kwimage
+        import math
+        import numpy as np
         import pandas as pd
         import subprocess
         from concurrent.futures import TimeoutError
+        from geowatch.utils import kwcoco_extensions
+        from geowatch.utils import util_gis
+        from kwcoco.util.util_json import ensure_json_serializable
+        from kwutil import util_time
+        from kwutil.util_yaml import Yaml
         coco_dset = cube.coco_dset
         assert extract_config is not None
 
@@ -1430,8 +1439,6 @@ class SimpleDataCube:
                 sensor_to_time_window = None
 
         TIME_WINDOW_FILTER = 1
-        import math
-        import numpy as np
         nan = float('nan')
 
         if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
@@ -1459,6 +1466,7 @@ class SimpleDataCube:
 
                         if 'parent_stac_properties' in img:
                             for prop in img['parent_stac_properties']:
+                                # FIXME, non general hard-coded properties used here
                                 _cloudcover = prop.get('eo:cloud_cover', nan) / 100
                                 _contamination = prop.get('quality_info:contaminated_percentage', nan) / 100
                                 cloudcover = np.nanmin([cloudcover, _cloudcover])
@@ -1522,21 +1530,14 @@ class SimpleDataCube:
         # can force pandas to be less smart.
         if True:
             from kwcoco.util.util_json import find_json_unserializable
-            from datetime import datetime as datetime_cls
             issues = list(find_json_unserializable(video_props))
-
-            def normalize_timestamp(ts):
-                if isinstance(ts, datetime_cls):
-                    return ts.isoformat()
-                else:
-                    return ts
             timestamp_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
             for issue in issues:
                 found = False
                 for k in timestamp_keys:
                     if issue['loc'] == [k]:
                         ts = video_props[k]
-                        video_props[k] = normalize_timestamp(ts)
+                        video_props[k] = util_time.datetime.coerce(ts).isoformat()
                         found = True
                 if not found:
                     raise Exception(f'Unhandled issues {issues}')
@@ -1554,11 +1555,9 @@ class SimpleDataCube:
 
         bundle_dpath = coco_dset.bundle_dpath
         new_bundle_dpath = new_dset.bundle_dpath
-        new_anns = []
 
         # Manage new ids such that parallelization does not impact their order
         start_gid = new_dset._next_ids.get('images')
-        start_aid = new_dset._next_ids.get('annotations')
 
         # parallelize over images
         image_jobs = ub.JobPool(mode='thread', max_workers=extract_config.img_workers)
@@ -1637,15 +1636,6 @@ class SimpleDataCube:
                 img = coco_dset.imgs[main_gid]
                 other_imgs = [coco_dset.imgs[x] for x in other_gids]
 
-                # There is an issue of merging annotations here
-                anns = [coco_dset.index.anns[aid] for aid in
-                        coco_dset.index.gid_to_aids[main_gid]]
-                if 0:
-                    # FIXME: do we do this? Rectification step?
-                    for other_gid in other_gids:
-                        anns += [coco_dset.index.anns[aid] for aid in
-                                 coco_dset.index.gid_to_aids[other_gid]]
-
                 sensor_coarse = img.get('sensor_coarse', 'unknown')
                 # Construct a name for the subregion to extract.
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
@@ -1665,7 +1655,6 @@ class SimpleDataCube:
                     extract_image_job,
                     img=img,
                     other_imgs=other_imgs,
-                    anns=anns,
                     bundle_dpath=bundle_dpath,
                     new_bundle_dpath=new_bundle_dpath,
                     name=name,
@@ -1679,25 +1668,19 @@ class SimpleDataCube:
                     space_region=space_region,
                     space_box=space_box,
                     start_gid=start_gid,
-                    start_aid=start_aid,
                     local_epsg=local_epsg,
                     img_config=img_config)
                 job.request_idx = request_idx
                 start_gid = start_gid + 1
-                start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
 
-        # return
-
         sub_new_gids = []
-        sub_new_aids = []
         if extract_config.image_timeout is not None:
             image_timeout = util_time.coerce_timedelta(extract_config.image_timeout).total_seconds()
 
         if extract_config.hack_lazy:
             lazy_commands = []
 
-        # image_jobs.as_completed(desc='collect extract jobs', progkw={'clearline': False}, timeout=image_timeout)
         img_iter = image_jobs.as_completed(timeout=image_timeout)
         img_prog = ub.ProgIter(
             img_iter, desc='collect extract jobs', total=len(image_jobs),
@@ -1705,7 +1688,7 @@ class SimpleDataCube:
 
         for job in img_prog:
             try:
-                new_img, new_anns = job.result(timeout=image_timeout)
+                new_img = job.result(timeout=image_timeout)
             except SkipImage:
                 # TODO: if we are only requesting a subset of images we may
                 # want to submit a new image job to take the place of this
@@ -1741,12 +1724,6 @@ class SimpleDataCube:
             new_gid = new_dset.add_image(**new_img)
             sub_new_gids.append(new_gid)
 
-            for ann in new_anns:
-                ann.pop('id', None)  # quick hack fix
-                ann['image_id'] = new_gid
-                new_aid = new_dset.add_annotation(**ann)
-                sub_new_aids.append(new_aid)
-
         if extract_config.hack_lazy:
             # Skip the rest in this hack lazy mode
             return lazy_commands
@@ -1771,42 +1748,6 @@ class SimpleDataCube:
 
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=extract_config.target_gsd, video_id=new_vidid)
-
-        # Enable if serialization is breaking
-        if False:
-            for new_gid in sub_new_gids:
-                # Fix json serializability
-                new_img = new_dset.index.imgs[new_gid]
-                new_objs = [new_img] + new_img.get('auxiliary', [])
-                unserializable = list(util_json.find_json_unserializable(new_img))
-                if unserializable:
-                    print('new_img = {}'.format(ub.urepr(new_img, nl=1)))
-                    raise AssertionError('unserializable(gid={}) = {}'.format(
-                        new_gid, ub.urepr(unserializable, nl=0)))
-
-            for new_aid in sub_new_aids:
-                new_ann = new_dset.index.anns[new_aid]
-                unserializable = list(util_json.find_json_unserializable(new_ann))
-                if unserializable:
-                    print('new_ann = {}'.format(ub.urepr(new_ann, nl=1)))
-                    raise AssertionError('unserializable(aid={}) = {}'.format(
-                        new_aid, ub.urepr(unserializable, nl=1)))
-
-            for new_vidid in [new_vidid]:
-                new_video = new_dset.index.videos[new_vidid]
-                unserializable = list(util_json.find_json_unserializable(new_video))
-                if unserializable:
-                    print('new_video = {}'.format(ub.urepr(new_video, nl=1)))
-                    unserializable_repr = ub.urepr(unserializable, nl=1)
-                    raise AssertionError(
-                        f'unserializable(video_id={new_vidid}) = {unserializable_repr}')
-
-        # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
-        # if unserializable:
-        #     raise AssertionError('unserializable = {}'.format(ub.urepr(unserializable, nl=1)))
-
-        if extract_config.visualize:
-            raise Exception('The visualize option was deprecated and will be removed')
 
         if extract_config.write_subsets:
             print('Writing data subset')
@@ -1905,26 +1846,12 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
             'other_gids': final_gids[1:],
             'sensor_coarse': sensor_coarse,
         })
-        # Output a visualization of this group and its overlaps but
-        # only if we have that info
-        can_vis_geos = any(row['geometry'] is not None for row in rows)
-        if extract_config.debug_valid_regions:
-            prog.ensure_newline()
-            print('debug_valid_regions = {!r}'.format(extract_config.debug_valid_regions))
-            print('can_vis_geos = {!r}'.format(can_vis_geos))
-        if extract_config.debug_valid_regions and can_vis_geos:
-            _debug_valid_regions(
-                cube, coco_dset, space_region_crs84,
-                space_region_local, final_gids, rows,
-                sh_space_region_local, local_epsg, extract_dpath,
-                video_name, iso_time, space_str, sensor_coarse)
     return groups
 
 
 @profile
 def extract_image_job(img,
                       other_imgs,
-                      anns,
                       bundle_dpath,
                       new_bundle_dpath,
                       name,
@@ -1938,14 +1865,13 @@ def extract_image_job(img,
                       space_region,
                       space_box,
                       start_gid,
-                      start_aid,
                       local_epsg=None,
                       img_config=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
     Returns:
-        Tuple[Dict, Dict] : new_img, new_anns
+        Dict : new_img
     """
     # from tempenv import TemporaryEnvironment  # NOQA
     # Does this resolve import issues?
@@ -1961,10 +1887,10 @@ def extract_image_job(img,
     #     ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
     #     ```
     # When the cache is not computed and workers > 0
+    import json
     from geowatch.utils import kwcoco_extensions
     from kwutil import util_time
     from osgeo import osr
-    import kwimage
     osr.GetPROJSearchPaths()
     from kwcoco.coco_image import CocoImage
 
@@ -2004,6 +1930,8 @@ def extract_image_job(img,
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
     obj_groups = list(channels_to_objs.values())
+
+    # True if there are multiple assets written for this image.
     is_multi_image = len(obj_groups) > 1
 
     is_rpc = False
@@ -2029,6 +1957,8 @@ def extract_image_job(img,
         align_method = 'affine_warp'
 
     dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
+    dst_dpath_ = ub.Path(dst_dpath)
+    error_fpath = dst_dpath_ / (f'{name}.error')
 
     job_list = []
 
@@ -2046,10 +1976,8 @@ def extract_image_job(img,
     for obj_group in ub.ProgIter(obj_groups, desc=f'submit warp assets in {new_vidname}', verbose=verbose):
         job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
-            dst_dpath, space_region, space_box, align_method,
-            is_multi_image,
-            local_epsg=local_epsg,
-            asset_config=asset_config,
+            dst_dpath, space_region, space_box, align_method, is_multi_image,
+            local_epsg=local_epsg, asset_config=asset_config,
         )
         job_list.append(job)
 
@@ -2057,45 +1985,64 @@ def extract_image_job(img,
     for job in asset_jobs.as_completed(desc='collect warp assets {}'.format(name),
                                        timeout=img_config.image_timeout,
                                        progkw=dict(enabled=DEBUG, verbose=verbose)):
-        dst = job.result(timeout=img_config.asset_timeout)
+        try:
+            dst = job.result(timeout=img_config.asset_timeout)
+        except Exception as ex:
+            # Write a file to disk to indicate an error in builting this image.
+            error_summary = {
+                'ex': {
+                    'type': str(type(ex)),
+                    'str': str(ex),
+                },
+                # TODO: what information is relevant here?
+                'num_object_groups': len(obj_groups),
+                'sensor_coarse': sensor_coarse,
+                'frame_index': frame_index,
+                'name': name,
+                'num': num,
+                'datetime_': str(datetime_),
+                'new_vidid': new_vidid,
+                'new_vidname': new_vidname,
+                'space_str': space_str,
+                'local_epsg': local_epsg,
+                'is_rpc': is_rpc,
+            }
+            error_fpath.write_text(json.dumps(error_summary, indent='    '))
+            print(f'Log Image Error: {error_fpath}')
+
+            if img_config.image_error_policy == 'ignore':
+                raise SkipImage
+            else:
+                raise
         dst_list.append(dst)
 
     if img_config.hack_lazy:
-        return dst_list, None
+        return dst_list
 
     new_gid = start_gid
 
     if verbose > 2:
         print(f'Finish channel crop jobs: {new_gid} in {new_vidname}')
 
-    if align_method != 'pixel_crop':
-        # If we are a pixel crop, we can transform directly
-        for dst in dst_list:
-            if dst is not None:
-                # TODO: We should not populate this for computed features!
-                # hack this in for heuristics
-                if 'sensor_coarse' in img:
-                    dst['sensor_coarse'] = img['sensor_coarse']
-                # We need to overwrite because we changed the bounds
-                # Note: if band info is not popluated above, this
-                # might write bad data based on hueristics
-                # TODO:
-                # We need to remove all spatial metadata from the base image that a
-                # crop would invalidate, otherwise we will propogate bad info.
-                kwcoco_extensions._populate_canvas_obj(
-                    bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
-        if DEBUG:
-            print(f'Finish repopulate canvas jobs: {new_gid}')
+    # If we are a pixel crop, we can transform directly
+    for dst in dst_list:
+        if dst is not None:
+            # TODO: We should not populate this for computed features!
+            # hack this in for heuristics
+            if 'sensor_coarse' in img:
+                dst['sensor_coarse'] = img['sensor_coarse']
+            # We need to overwrite because we changed the bounds
+            # Note: if band info is not popluated above, this
+            # might write bad data based on hueristics
+            # TODO:
+            # We need to remove all spatial metadata from the base image that a
+            # crop would invalidate, otherwise we will propogate bad info.
+            kwcoco_extensions._populate_canvas_obj(
+                bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
+    if DEBUG:
+        print(f'Finish repopulate canvas jobs: {new_gid}')
 
     assert len(dst_list) == len(obj_groups)
-    # Hack because heurstics break when fnames change
-    if 0:
-        for old_aux_group, new_aux in zip(obj_groups, dst_list):
-            if new_aux is not None:
-                if len(old_aux_group) > 1:
-                    new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-                else:
-                    new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     new_img = {
         'id': new_gid,
@@ -2111,15 +2058,10 @@ def extract_image_job(img,
         elif 'parent_stac_properties' in _parent:
             parent_stac_properties.extend(_parent['parent_stac_properties'])
 
-    # if 'stac_properties' in img:
-    #     # Transfer stack properties from the parent
-    #     new_img['stac_properties'] = img
-
     if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
         new_img.update(base_dst)
         aux_dst = []
-        # dst_list[1:]
     else:
         aux_dst = dst_list
 
@@ -2147,11 +2089,6 @@ def extract_image_job(img,
 
     # Carry over appropriate metadata from original image
     new_img.update(carry_over)
-    # new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
-    # new_img['parent_name'] = img.get('name', None)  # remember which image this came from
-    # new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
-
-    # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = datetime_.timestamp()
 
@@ -2170,136 +2107,9 @@ def extract_image_job(img,
     # Note this takes 61% of the time when images are already cached.
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
-    # TODO: deprecate and remove annotation handling in this tool to simplify
-    # it.  Force the user to always reproject annotations after a coco-align
-    # step.
-    new_anns = []
-
-    HANDLE_ANNOTATIONS = 0
-    if HANDLE_ANNOTATIONS:
-        # HANDLE ANNOTATIONS
-        # Note: this is more generally handled by the project annotation script.
-        # We can add an option to ignore annotations here.
-        """
-        It would probably be better to warp pixel coordinates using the
-        same transform found by gdalwarp, but I'm not sure how to do
-        that. Thus we transform the geocoordinates to the new extracted
-        img coords instead. Hopefully gdalwarp preserves metadata
-        enough to do this.
-        """
-        geo_poly_list = []
-        for ann in anns:
-            # FIXME: there might be an issue in subsequent usage here.
-            # Q: WHAT FORMAT ARE THESE COORDINATES IN?
-            # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
-            # We convert them to authority compliant WGS84 (lat-lon)
-            # Hack to support real and orig drop0 geojson
-            # FIXME: simply use crs84
-            geo = _fix_geojson_poly(ann['segmentation_geos'])
-            geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
-            geo_poly_list.append(geo_poly)
-        geo_polys = kwimage.SegmentationList(geo_poly_list)
-
-        if align_method == 'orthorectify':
-            # Is the affine mapping in the destination image good
-            # enough after the image has been orthorectified?
-            pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
-        elif align_method == 'pixel_crop':
-            raise NotImplementedError('fixme')
-            yoff, xoff = new_img['transform']['st_offset']
-            orig_pxl_poly_list = []
-            for ann in anns:
-                old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
-                orig_pxl_poly_list.append(old_poly)
-            orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
-            pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
-        elif align_method == 'affine_warp':
-            # Warp Auth-WGS84 to whatever the image world space is,
-            # and then from there to pixel space.
-            pxl_polys = geo_polys.warp(
-                new_img['wgs84_to_wld']
-            ).warp(new_img['wld_to_pxl'])
-        else:
-            raise KeyError(align_method)
-
-        def _test_inbounds(pxl_multi_poly):
-            is_any = False
-            is_all = True
-            for pxl_poly in pxl_multi_poly.data:
-                xs, ys = pxl_poly.data['exterior'].data.T
-                flags_x1 = xs < 0
-                flags_y1 = ys < 0
-                flags_x2 = xs >= new_img['width']
-                flags_y2 = ys >= new_img['height']
-                flags = flags_x1 | flags_x2 | flags_y1 | flags_y2
-                n_oob = flags.sum()
-                is_any &= (n_oob > 0)
-                is_all &= (n_oob == len(flags))
-            return is_any, is_all
-
-        flags = [not _test_inbounds(p)[1] for p in pxl_polys]
-
-        valid_anns = [ann.copy() for ann in ub.compress(anns, flags)]
-        valid_pxl_polys = list(ub.compress(pxl_polys, flags))
-
-        new_aid = start_aid
-        for ann, pxl_poly in zip(valid_anns, valid_pxl_polys):
-            ann.pop('image_id', None)
-            ann['segmentation'] = pxl_poly.to_coco(style='new')
-            pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
-            xywh = list(pxl_box.to_coco())[0]
-            ann['bbox'] = xywh
-            ann['image_id'] = new_gid
-            ann['id'] = new_aid
-            new_aid = new_aid + 1
-            new_anns.append(ann)
-
     if DEBUG:
         print(f'Finished extract img job: {new_gid} in {new_vidname}')
-    return new_img, new_anns
-
-
-def _fix_geojson_poly(geo):
-    """
-    We were given geojson polygons with one fewer layers of nesting than
-    the spec allows for. Fix this.
-
-    Example:
-        >>> import kwimage
-        >>> geo1 = kwimage.Polygon.random().to_geojson()
-        >>> fixed1 = _fix_geojson_poly(geo1)
-        >>> #
-        >>> geo2 = {'type': 'Polygon', 'coordinates': geo1['coordinates'][0]}
-        >>> fixed2 = _fix_geojson_poly(geo2)
-        >>> assert fixed1 == fixed2
-        >>> assert fixed1 == geo1
-        >>> assert fixed2 != geo2
-    """
-    def check_leftmost_depth(data):
-        # quick check leftmost depth of a nested struct
-        item = data
-        depth = 0
-        while isinstance(item, list):
-            if len(item) == 0:
-                raise Exception('no child node')
-            item = item[0]
-            depth += 1
-        return depth
-    if geo['type'] == 'Polygon':
-        data = geo['coordinates']
-        depth = check_leftmost_depth(data)
-        if depth == 2:
-            # correctly format by adding the outer nesting
-            fixed = geo.copy()
-            fixed['coordinates'] = [geo['coordinates']]
-        elif depth == 3:
-            # already correct
-            fixed = geo
-        else:
-            raise Exception(depth)
-    else:
-        fixed = geo
-    return fixed
+    return new_img
 
 
 @profile
@@ -2326,6 +2136,7 @@ def _aligncrop(obj_group,
             commands that would be executed.
     """
     import geowatch
+    import json
     import kwcoco
     from geowatch.utils import util_gdal
     from os.path import join
@@ -2359,6 +2170,7 @@ def _aligncrop(obj_group,
             return None
 
     if is_multi_image:
+        # Multiple assets for this image.
         multi_dpath = ub.ensuredir((dst_dpath, name))
         dst_gpath = ub.Path(multi_dpath) / (name + '_' + chan_pname + '.tif')
     else:
@@ -2383,6 +2195,9 @@ def _aligncrop(obj_group,
 
     dst['parent_file_names'] = [o.get('file_name', None) for o in obj_group]
 
+    if 'quality' in roles:
+        dst['qa_encoding'] = asset_config.qa_encoding
+
     already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
 
@@ -2400,13 +2215,16 @@ def _aligncrop(obj_group,
             else:
                 ref = None
 
+    out_fpath = dst_gpath
+    error_fpath = out_fpath.parent / (out_fpath.name + '.error')
+
+    if asset_config.skip_previous_errors:
+        raise SkipImage('Attempting to grab this asset previously failed, skipping')
+
     if not needs_recompute:
         if verbose > 2:
             print('cache hit dst = {!r}'.format(dst))
         return dst
-
-    if align_method == 'pixel_crop':
-        raise NotImplementedError('no longer supported')
 
     if align_method == 'orthorectify':
         if 'geotiff_metadata' in first_obj:
@@ -2415,8 +2233,10 @@ def _aligncrop(obj_group,
             info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
         # No RPCS exist, use affine-warp instead
         rpcs = info['rpc_transform']
-    else:
+    elif align_method == 'affine_warp':
         rpcs = None
+    else:
+        raise KeyError(align_method)
 
     duplicates = ub.find_duplicates(input_gpaths)
     if duplicates:
@@ -2438,7 +2258,6 @@ def _aligncrop(obj_group,
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
-    out_fpath = dst_gpath
     if verbose > 2:
         print(
             'start gdal warp in_fpaths = {}'.format(ub.urepr(input_gpaths, nl=1)) +
@@ -2537,6 +2356,25 @@ def _aligncrop(obj_group,
         print(f'gdalkw = {ub.urepr(gdalkw, nl=1)}')
         print('!!!!!!')
         print('!!!!!!')
+        DUMP_ERRORS = True
+        if DUMP_ERRORS:
+            # If there is an error write out a file
+            serialized_box = serialize_kwimage_boxes(gdalkw['space_box'])
+            fixed_gdalkw = gdalkw.copy()
+            fixed_gdalkw['space_box'] = serialized_box
+            error_summary = {
+                'ex': {
+                    'type': str(type(ex)),
+                    'str': str(ex),
+                },
+                'input_gpaths': [os.fspath(p) for p in input_gpaths],
+                'gdalkw': fixed_gdalkw,
+                'out_fpath': os.fspath(out_fpath),
+            }
+            error_summary['gdalkw'] = fixed_gdalkw
+            error_text = json.dumps(error_summary, indent='  ')
+            error_fpath.write_text(error_text)
+            print(f'Log Asset Error: {error_fpath}')
         raise
 
     if asset_config.hack_lazy:
@@ -2547,106 +2385,18 @@ def _aligncrop(obj_group,
     return dst
 
 
-def _debug_valid_regions(cube, coco_dset, space_region_crs84,
-                         space_region_local, final_gids, rows,
-                         sh_space_region_local, local_epsg, extract_dpath,
-                         video_name, iso_time, space_str, sensor_coarse):
+def serialize_kwimage_boxes(boxes):
     """
-    Debugging helper. Outputs images corresponding with crop regions
-    as well as code to help introspect internals of this file easier.
-    This can be removed if it's to bloaty.
+    TODO: port to kwimage.Boxes.__json__
     """
-    import kwplot
-    import shapely
-    import geopandas as gpd
-    from shapely.ops import unary_union
-    group_local_df = gpd.GeoDataFrame(rows, crs=local_epsg)
-    print('\n\n')
-    print(group_local_df)
-
-    debug_dpath = ub.Path(extract_dpath) / '_debug_regions'
-    debug_dpath.mkdir(exist_ok=True)
-    with kwplot.BackendContext('agg'):
-
-        debug_name = '{}_{}_{}_{}'.format(video_name, iso_time, space_str, sensor_coarse)
-
-        # Dump a visualization of the bounds of the
-        # valid region for debugging.
-        wld_map_crs84_gdf = gpd.read_file(
-            gpd.datasets.get_path('naturalearth_lowres')
-        ).to_crs('crs84')
-        sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows if row['geometry'] is not None])
-        sh_total_bounds_local = shapely.affinity.scale(sh_tight_bounds_local.convex_hull, 2.5, 2.5)
-        total_bounds_local = gpd.GeoDataFrame({'geometry': [sh_total_bounds_local]}, crs=local_epsg)
-
-        subimg_crs84_df = cube.img_geos_df.loc[[r['gid'] for r in rows]]
-        subimg_local_df = subimg_crs84_df.to_crs(local_epsg)
-
-        wld_map_local_gdf = wld_map_crs84_gdf.to_crs(local_epsg)
-
-        ax = kwplot.figure(doclf=True, fnum=2).gca()
-        ax.set_title(f'Local CRS: {local_epsg}\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
-        wld_map_local_gdf.plot(ax=ax)
-        subimg_local_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
-        group_local_df.plot(ax=ax, color='pink', alpha=0.6)
-        space_region_local.plot(ax=ax, color='green', alpha=0.6)
-        bounds = total_bounds_local.bounds.iloc[0]
-        ax.set_xlim(bounds.minx, bounds.maxx)
-        ax.set_ylim(bounds.miny, bounds.maxy)
-        fname = f'debug_{debug_name}_local.jpg'
-        debug_fpath = debug_dpath / fname
-        kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
-        ax.figure.savefig(debug_fpath)
-
-        group_crs84_df = group_local_df.to_crs('crs84')
-        total_bounds_crs84 = total_bounds_local.to_crs('crs84')
-        ax = kwplot.figure(doclf=True, fnum=3).gca()
-        ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
-        wld_map_crs84_gdf.plot(ax=ax)
-        subimg_crs84_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
-        group_crs84_df.plot(ax=ax, color='pink', alpha=0.6)
-        space_region_crs84.plot(ax=ax, color='green', alpha=0.6)
-        bounds = total_bounds_crs84.bounds.iloc[0]
-        ax.set_xlim(bounds.minx, bounds.maxx)
-        ax.set_ylim(bounds.miny, bounds.maxy)
-        fname = f'debug_{debug_name}_crs84.jpg'
-        debug_fpath = debug_dpath / fname
-        kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
-        ax.figure.savefig(debug_fpath)
-
-        debug_info = {
-            'coco_fpath': os.path.abspath(coco_dset.fpath),
-            'gids': final_gids,
-            'rows': [ub.dict_diff(row, {'geometry'}) for row in rows],
+    json_boxes = {
+        'type': 'kwimage.Boxes',
+        'properties': {
+            'data': boxes.data.tolist(),
+            'format': boxes.format,
         }
-        fname = f'debug_{debug_name}_text.py'
-        debug_fpath = debug_dpath / fname
-        datastr = ub.urepr(debug_info, nl=2)
-        debug_text = ub.codeblock(
-            '''
-            """
-            See ~/code/watch/dev/debug_coco_geo_img.py
-            """
-            debug_info = {datastr}
-
-
-            def main():
-                import kwcoco
-                from geowatch.utils import kwcoco_extensions
-                parent_dset = kwcoco.CocoDataset(debug_info['coco_fpath'])
-                coco_imgs = parent_dset.images(debug_info['gids']).coco_images
-
-                for coco_img in coco_imgs:
-                    gid = coco_img.img['id']
-                    kwcoco_extensions.coco_populate_geo_img_heuristics2(
-                        coco_img, overwrite=True)
-
-            if __name__ == '__main__':
-                main()
-            ''').format(datastr=datastr)
-        print('write debug_fpath = {!r}'.format(debug_fpath))
-        with open(debug_fpath, 'w') as file:
-            file.write(debug_text + '\n')
+    }
+    return json_boxes
 
 
 class SkipImage(Exception):

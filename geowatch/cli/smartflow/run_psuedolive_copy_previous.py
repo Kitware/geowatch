@@ -20,21 +20,21 @@ class PsuedoliveCopyPreviousConfig(scfg.DataConfig):
     Download, update, and upload region model for pseudo-live
     """
     input_region_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     updated_end_date = scfg.Value(None, type=str, required=True, short_alias=['e'], help=ub.paragraph(
-            '''
-            Set uploaded region model end date to this value
-            '''))
+        '''
+        Set uploaded region model end date to this value
+        '''))
 
 
 def main():

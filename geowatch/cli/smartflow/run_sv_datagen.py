@@ -32,7 +32,6 @@ config = {
     'dryrun'            : False,
     'outbucket'         : 's3://smartflow-023300502152-us-west-2/smartflow/env/kw-v3-0-0/work/preeval17_batch_v134/batch/kit/KR_R001/2021-08-31/split/mono/products/site-cropped-kwcoco-for-sv',
     'newline'           : True,
-    'jobs'              : 16,
     'dont_recompute'    : False,
     'sv_cropping_config': 'context_factor: 1.6\nforce_min_gsd: 1GSD\nminimum_size: 256x256@3GSD\nnum_end_frames: 3.0\nnum_start_frames: 3.0\ntarget_gsd: 2GSD',
 }
@@ -46,47 +45,54 @@ class SVDatasetConfig(scfg.DataConfig):
     Generate cropped KWCOCO dataset for SC
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
+
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
+
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='UNUSED AND WILL BE REMOVED')
+        '''
+        Output as simple newline separated STAC items
+        '''))
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Will not recompute if output_path already exists
-            '''))
+        '''
+        Will not recompute if output_path already exists
+        '''))
     sv_cropping_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for SV_Cropping.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for SV_Cropping.
+        '''))
 
     input_region_models_asset_name = scfg.Value('cropped_region_models_bas', type=str, required=False, help=ub.paragraph(
-            '''
-            Which region model assets to use as input
-            '''))
+        '''
+        Which region model assets to use as input
+        '''))
 
     input_site_models_asset_name = scfg.Value('cropped_site_models_bas', type=str, required=False, help=ub.paragraph(
-            '''
-            Which site model assets to to use as input
-            '''))
+        '''
+        Which site model assets to to use as input
+        '''))
 
 
 def main():
@@ -121,6 +127,7 @@ def run_generate_sv_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     if dont_recompute:
         output_path = util_fsspec.FSPath.coerce(output_path)
@@ -132,14 +139,15 @@ def run_generate_sv_cropped_kwcoco(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
-        input_path,
-        ['kwcoco_for_sc',
-         config.input_region_models_asset_name,
-         config.input_site_models_asset_name,
-         ],
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=input_path,
+        assets=[
+            'kwcoco_for_sc',
+            config.input_region_models_asset_name,
+            config.input_site_models_asset_name,
+        ],
+        outdir=ingress_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -168,12 +176,14 @@ def run_generate_sv_cropped_kwcoco(config):
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
     sv_cropping = smart_pipeline.SV_Cropping(root_dpath=ingress_dir)
-    sv_cropping.configure({
+    sv_cropping.configure(sv_cropping_config | {
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,
         'crop_dst_fpath': ta1_sv_cropped_kwcoco_path})
 
-    ub.cmd(sv_cropping.command(), check=True, verbose=3, system=True)
+    sv_crop_command = sv_cropping.command()
+    print(sv_crop_command)
+    ub.cmd(sv_crop_command, check=True, verbose=3, system=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

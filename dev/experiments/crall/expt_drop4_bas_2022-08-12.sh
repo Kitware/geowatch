@@ -1476,7 +1476,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 #data_train_PE_C001.kwcoco.json
 
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath \
         "$DVC_DATA_DPATH/Drop4-BAS/data_train_PE_C001.kwcoco.json" \
         "$DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json" \
@@ -1494,7 +1494,7 @@ python -m geowatch.cli.prepare_teamfeats \
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m geowatch.cli.prepare_teamfeats \
+python -m geowatch.cli.queue_cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
@@ -2818,7 +2818,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc-ssd/Drop6/./_assets "$PHASE2
 
 PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
 cd "$PHASE2_DATA_DPATH_SSD/Drop6"
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --base_fpath "combo_imganns-*_L.kwcoco.json" \
     --suffix=fixquant \
     --constructive_mode=True

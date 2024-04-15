@@ -858,7 +858,7 @@ class SSHPath(RemotePath):
 
 class _BROKEN_SSHURI(RemotePath):
     """
-    The idea here is to do something like the bucket registery in S3Path, but
+    The idea here is to do something like the bucket registry in S3Path, but
     weird corner cases pop up here making the path forward not easy to
     identify.
 

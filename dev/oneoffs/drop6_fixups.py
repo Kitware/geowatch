@@ -590,7 +590,7 @@ def check_missing_image_against_dmj():
 
     command = ub.codeblock(
         fr'''
-        python -m geowatch.cli.prepare_splits \
+        python -m geowatch.cli.queue_cli.prepare_splits \
             --base_fpath="{hdd_bundle_dpath}/imganns*.kwcoco.*" \
             --workers=5 \
             --constructive_mode=True --run=1
@@ -694,7 +694,7 @@ def reprocess_all_kwcoco_files():
 
     command = ub.codeblock(
         fr'''
-        python -m geowatch.cli.prepare_splits \
+        python -m geowatch.cli.queue_cli.prepare_splits \
             --base_fpath="{HDD.hdd_bundle_dpath}/imganns*.kwcoco.zip" \
             --workers=5 \
             --constructive_mode=True --run=1

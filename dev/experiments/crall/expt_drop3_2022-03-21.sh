@@ -10,7 +10,7 @@ SeeAlso:
 data_splits(){
     DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    python -m geowatch.cli.prepare_splits \
+    python -m geowatch.cli.queue_cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/combo_LM.kwcoco.json" \
         --run=0 --backend=tmux
 }
@@ -21,7 +21,7 @@ prep_teamfeat_drop3(){
     #DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres="2,3" \
         --with_landcover=1 \
@@ -32,7 +32,7 @@ prep_teamfeat_drop3(){
         --depth_workers=0 \
         --cache=1 --run=1 --backend=tmux
         #--backend=slurm
-        #python -m geowatch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+        #python -m geowatch.cli.queue_cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 }
 
 grab_feats_from_horologic(){

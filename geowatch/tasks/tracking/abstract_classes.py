@@ -54,6 +54,7 @@ class TrackFunction:
         """
         import kwcoco
         from geowatch.utils import kwcoco_extensions
+        import rich
 
         # Note (2024-01-24): previously this was implemented in a way that
         # broke up a larger coco dataset into one for each video, but we have
@@ -72,6 +73,8 @@ class TrackFunction:
                                           desc='apply_per_video',
                                           verbose=3):
 
+            rich.print(f'[blue]-- Apply Tracking Function to Video {video_id}')
+
             # Beware, in the past there was a crash here that required
             # wrapping the rest of this loop in a try/except. -csg
             sub_dset = self.safe_apply(coco_dset, video_id, gids,
@@ -84,6 +87,7 @@ class TrackFunction:
                 'video_id': video_id,
                 'image_ids': gids,
             })
+            rich.print('[blue]----')
 
         # Tracks were either updated or added.
         # In the case they were updated the existing track ids should

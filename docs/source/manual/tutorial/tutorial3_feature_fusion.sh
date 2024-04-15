@@ -120,7 +120,7 @@ individually. You can specify a pattern as the input to this tool.
 
 .. code:: bash
 
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath \
             "$DATA_DVC_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
             "$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \

@@ -23,60 +23,65 @@ class BASDatasetConfig(scfg.DataConfig):
     Generate cropped KWCOCO dataset for BAS from STAC
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework JSON
-            '''))
+        '''
+        Path to the STAC items this step can use as inputs.
+        This is usually an S3 Path.
+        '''), alias=['input_stac_path'])
 
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
-            '''
-            Path to input T&E Baseline Framework Region definition JSON
-            '''))
+        '''
+        Path to input T&E Baseline Framework Region definition JSON
+        '''))
 
-    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+    output_path = scfg.Value(None, type=str, position=3, required=True, help=ub.paragraph(
+        '''
+        Path to the STAC items that register the outputs of this stage.
+        This is usually an S3 Path.
+        '''), alias=['output_stac_path'])
 
     from_collated = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Data to convert has been run through TA-1 collation
-            '''))
+        '''
+        Data to convert has been run through TA-1 collation
+        '''))
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            AWS Profile to use for AWS S3 CLI commands
-            '''))
+        '''
+        AWS Profile to use for AWS S3 CLI commands
+        '''))
 
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
 
     virtual = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Ingress will be virtual (using GDAL's virtual file system)
-            '''))
+        '''
+        Ingress will be virtual (using GDAL's virtual file system)
+        '''))
 
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
-            '''
-            S3 Output directory for STAC item / asset egress
-            '''))
+        '''
+        S3 Output directory for STAC item / asset egress
+        '''))
 
     requester_pays = scfg.Value(False, isflag=True, short_alias=['r'], help=ub.paragraph(
-            '''
-            Run AWS CLI commands with `--requestor_payer requester` flag
-            '''))
+        '''
+        Run AWS CLI commands with `--requestor_payer requester` flag
+        '''))
 
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
+        '''
+        Output as simple newline separated STAC items
+        '''))
 
     jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
 
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Will not recompute if output_path already exists
-            '''))
+        '''
+        Will not recompute if output_path already exists
+        '''))
 
     previous_interval_output = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Output path for previous interval BAS DatasetGen step
-            '''))
+        '''
+        Output path for previous interval BAS DatasetGen step
+        '''))
 
     bas_align_config = scfg.Value(None, type=str, help=ub.paragraph(
         '''
@@ -90,9 +95,9 @@ class BASDatasetConfig(scfg.DataConfig):
         '''), alias=['time_combine'])
 
     skip_timecombine_on_fail = scfg.Value(False, help=ub.paragraph(
-            '''
-            If an error occurs during the timecombine call, output empty KWCOCO.
-            '''))
+        '''
+        If an error occurs during the timecombine call, output empty KWCOCO.
+        '''))
 
     def __post_init__(self):
         if self.time_combine_config in {False, None, 'False', 'None'}:
@@ -181,6 +186,7 @@ def run_stac_to_cropped_kwcoco(config):
     from geowatch.utils.util_framework import NodeStateDebugger
     node_state = NodeStateDebugger()
     node_state.print_environment()
+    node_state.print_local_invocation(config)
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.

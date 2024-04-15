@@ -39,7 +39,7 @@ CommandLine:
     export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
     # Construct the TA2-ready dataset
-    python -m geowatch.cli.prepare_ta2_dataset \
+    python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --cloud_cover=100 \
         --stac_query_mode=auto \
@@ -69,10 +69,10 @@ TODO:
     handle GE01 and WV01 platforms
 
 CommandLine:
-    xdoctest -m geowatch.cli.prepare_ta2_dataset __doc__:0
+    xdoctest -m geowatch.cli.queue_cli.prepare_ta2_dataset __doc__:0
 
 Example:
-    >>> from geowatch.cli.prepare_ta2_dataset import *  # NOQA
+    >>> from geowatch.cli.queue_cli.prepare_ta2_dataset import *  # NOQA
     >>> import ubelt as ub
     >>> dpath = ub.Path.appdir('geowatch/tests/prep_ta2_dataset').delete().ensuredir()
     >>> from geowatch.geoannots import geomodels
@@ -197,9 +197,9 @@ class PrepareTA2Config(CMDQueueConfig):
             image asset before giving up
             '''))
 
-    ignore_duplicates = scfg.Value(1, help='workers for align script')
+    ignore_duplicates = scfg.Value(True, help='workers for align script')
 
-    visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
+    visualize = scfg.Value(False, isflag=True, help='if True runs visualize')
 
     visualize_only_boxes = scfg.Value(True, isflag=1, help='if False will draw full polygons')
 
@@ -208,15 +208,10 @@ class PrepareTA2Config(CMDQueueConfig):
             help control verbosity (just align for now)
             '''))
 
-    requester_pays = scfg.Value(0, help=ub.paragraph(
+    requester_pays = scfg.Value(False, help=ub.paragraph(
             '''
             if True, turn on requester_pays in ingress. Needed for
             official L1/L2 catalogs.
-            '''))
-
-    debug = scfg.Value(False, isflag=1, help=ub.paragraph(
-            '''
-            if enabled, turns on debug visualizations
             '''))
 
     select_images = scfg.Value(False, help='if enabled only uses select images')
@@ -236,6 +231,11 @@ class PrepareTA2Config(CMDQueueConfig):
             '''
             if the coco align script caches or recomputes images / rois
             '''), choices=['img', 'img-roi', 'none', None])
+
+    align_skip_previous_errors = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        Skip assets where we can detect a previous error occurred.
+        '''))
 
     force_nodata = scfg.Value(None, group='align', help=ub.paragraph(
             '''
@@ -269,7 +269,7 @@ class PrepareTA2Config(CMDQueueConfig):
             caused by permission errors on S3)
             '''))
 
-    cache = scfg.Value(1, isflag=1, group='queue-related', help=ub.paragraph(
+    cache = scfg.Value(True, isflag=True, group='queue-related', help=ub.paragraph(
             '''
             If 1 or 0 globally enable/disable caching. If a comma
             separated list of strings, only cache those stages
@@ -320,6 +320,9 @@ class PrepareTA2Config(CMDQueueConfig):
             construct the aligned kwcoco dataset as normal.
             '''))
 
+    unsigned_nodata = scfg.Value(256, help=ub.paragraph('''See Coco Align'''))
+    qa_encoding = scfg.Value(None, help=ub.paragraph('''See Coco Align'''))
+
     @classmethod
     def _register_main(cls, func):
         cls.main = func
@@ -339,7 +342,7 @@ def main(cmdline=False, **kwargs):
     """
 
     Ignore:
-        from geowatch.cli.prepare_ta2_dataset import *  # NOQA
+        from geowatch.cli.queue_cli.prepare_ta2_dataset import *  # NOQA
         cmdline = False
         kwargs = {
             'dataset_suffix': 'TA1_FULL_SEQ_KR_S001_CLOUD_LT_10',
@@ -352,16 +355,18 @@ def main(cmdline=False, **kwargs):
 
     """
     config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
     from kwutil import slugify_ext
     from geowatch.utils import util_gis
-    import rich
     from geowatch.mlops.pipeline_nodes import Pipeline
-    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    from geowatch.monkey import monkey_kwutil
+    monkey_kwutil.patch_kwutil_toplevel()
 
     out_dpath = config['out_dpath']
     if out_dpath == 'auto':
-        import geowatch
-        out_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        raise Exception('the "auto" argument is deprecated')
     out_dpath = ub.Path(out_dpath)
 
     aws_profile = config['aws_profile']
@@ -369,12 +374,8 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    if 1:
-        uncropped_dpath = out_dpath / uncropped_bundle_name
-        aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
-    else:
-        uncropped_dpath = ub.Path('.') / uncropped_bundle_name
-        aligned_kwcoco_bundle = ub.Path('.') / aligned_bundle_name
+    uncropped_dpath = out_dpath / uncropped_bundle_name
+    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
 
     uncropped_query_dpath = uncropped_dpath / '_query/items'
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
@@ -403,7 +404,7 @@ def main(cmdline=False, **kwargs):
     environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
     if api_key is not None and api_key.startswith('env:'):
         import os
-        # NOTE!!!
+        # NOTE!!! WARNING!!!
         # THIS WILL LOG YOUR SECRET KEY IN PLAINTEXT!!!
         # TODO: figure out how to pass the in-environment secret key
         # to the tmux sessions.
@@ -702,8 +703,6 @@ def main(cmdline=False, **kwargs):
         site_globstr = info['site_globstr']
         parent_node = info['node']
 
-        debug_valid_regions = config.debug
-        align_visualize = config.debug
         include_channels = config.include_channels
         exclude_channels = config.exclude_channels
 
@@ -711,7 +710,7 @@ def main(cmdline=False, **kwargs):
         # Crop big images to the geojson regions
         import kwutil
         if config.sensor_to_time_window:
-            sensor_to_time_window = kwutil.util_yaml.Yaml.dumps(kwutil.util_yaml.Yaml.loads(config.sensor_to_time_window))
+            sensor_to_time_window = kwutil.Yaml.dumps(kwutil.util_yaml.Yaml.loads(config.sensor_to_time_window))
             sensor_to_time_window = "\n" + ub.indent(sensor_to_time_window, ' ' * (4 * 6))
         else:
             sensor_to_time_window = config.sensor_to_time_window
@@ -727,8 +726,6 @@ def main(cmdline=False, **kwargs):
                     --force_nodata={config.force_nodata} \
                     --include_channels="{include_channels}" \
                     --exclude_channels="{exclude_channels}" \
-                    --visualize={align_visualize} \
-                    --debug_valid_regions={debug_valid_regions} \
                     --rpc_align_method {config.rpc_align_method} \
                     --sensor_to_time_window "{sensor_to_time_window}" \
                     --verbose={config.verbose} \
@@ -737,8 +734,11 @@ def main(cmdline=False, **kwargs):
                     --force_min_gsd="{config.force_min_gsd}" \
                     --workers={config.align_workers} \
                     --tries="{config.align_tries}" \
+                    --skip_previous_errors="{config.align_skip_previous_errors}" \
                     --cooldown="10" \
                     --backoff="3" \
+                    --unsigned_nodata="{config.unsigned_nodata}" \
+                    --qa_encoding="{config.qa_encoding}" \
                     --asset_timeout="{config.asset_timeout}" \
                     --image_timeout="{config.image_timeout}" \
                     --hack_lazy={config.hack_lazy}
@@ -885,6 +885,24 @@ def main(cmdline=False, **kwargs):
         cache=config.cache
     )
 
+    hanlde_custom_cache = isinstance(cache, list)
+    if hanlde_custom_cache:
+        # The old version of this script had customized per-node caching,
+        # this is a small workaround to add that feature to the new pipeline
+        import networkx as nx
+        from geowatch.utils import util_dotdict
+        self = new_pipeline
+        dotconfig = util_dotdict.DotDict(config)
+
+        for node_name in nx.topological_sort(self.proc_graph):
+            # non-robust hack to grab the generic process type by removing the
+            # region part
+            proc_type = node_name.rsplit('-', 1)[0]
+            hacked_cache_flag = proc_type in cache
+            node = self.proc_graph.nodes[node_name]['node']
+            node_config = dict(dotconfig.prefix_get(node.name, {}))
+            node.configure(node_config, cache=hacked_cache_flag)
+
     # new_pipeline.inspect_configurables()
     # new_pipeline.print_graphs()
 
@@ -906,7 +924,6 @@ def main(cmdline=False, **kwargs):
         from geowatch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
             aligned_final_fpath, queue, depends=[aligned_final_nodes])
-
         # TODO: use this instead
         # prepare_splits._submit_constructive_split_jobs(
         #     base_fpath, dst_dpath, suffix, queue, config
@@ -942,14 +959,6 @@ def main(cmdline=False, **kwargs):
         'exclude_tags': ['boilerplate'],
     }
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
-    # if config.rprint:
-    #     queue.print_graph()
-    #     queue.rprint()
-    # if config.run:
-    #     # This logic will exist in cmd-queue itself
-    #     other_session_handler = config.other_session_handler
-    #     queue.run(block=True, system=True, with_textual=config.with_textual,
-    #               other_session_handler=other_session_handler)
 
     # TODO: team features
     """
@@ -957,7 +966,7 @@ def main(cmdline=False, **kwargs):
     DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.zip \
         --gres=0, \
         --with_depth=0 \
@@ -968,32 +977,9 @@ def main(cmdline=False, **kwargs):
         --do_splits=1  --cache=1 --run=0
     """
 
-# dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
-# #dvc_dpath=$(geowatch_dvc)
-# #s3_dpath=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
-# query_basename=$(basename "$s3_fpath")
-# aligned_bundle_name=aligned-$dataset_suffix
-# uncropped_bundle_name=uncropped-$dataset_suffix
-
-# #region_models=$dvc_dpath'/annotations/region_models/*.geojson'
-# region_models=$dvc_dpath/annotations/region_models/kr_r002.geojson
-# # helper variables
-# uncropped_dpath=$dvc_dpath/$uncropped_bundle_name
-# uncropped_query_dpath=$uncropped_dpath/_query/items
-# uncropped_ingress_dpath=$uncropped_dpath/ingress
-# uncropped_kwcoco_fpath=$uncropped_dpath/data.kwcoco.zip
-# aligned_kwcoco_bundle=$dvc_dpath/$aligned_bundle_name
-# aligned_kwcoco_fpath=$aligned_kwcoco_bundle/data.kwcoco.zip
-# uncropped_query_fpath=$uncropped_query_dpath/$query_basename
-# uncropped_catalog_fpath=$uncropped_ingress_dpath/catalog.json
-
-# export AWS_DEFAULT_PROFILE=iarpa
-#     pass
-
-
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/geowatch/cli/prepare_ta2_dataset.py
+        python ~/code/watch/geowatch/cli/queue_cli/prepare_ta2_dataset.py
     """
     main(cmdline=True)

@@ -1,6 +1,8 @@
 r"""
 Split a coco dataset into one per video.
 
+TODO: deprecate this?
+
 Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     python -m geowatch.cli.split_videos \

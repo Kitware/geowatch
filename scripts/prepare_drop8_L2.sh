@@ -47,7 +47,7 @@ export REQUESTER_PAYS=True
 #export SMART_STAC_API_KEY=""
 
 # Construct the TA2-ready dataset
-python -m geowatch.cli.prepare_ta2_dataset \
+python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=20 \
@@ -59,13 +59,14 @@ python -m geowatch.cli.prepare_ta2_dataset \
     --regions="$REGION_GLOBSTR" \
     --sites="$SITE_GLOBSTR" \
     --requester_pays=$REQUESTER_PAYS \
+    --qa_encoding='L2' \
     --fields_workers=8 \
     --convert_workers=0 \
     --align_workers=4 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
-    --visualize=0 \
     --target_gsd="10GSD" \
+    --align_skip_previous_errors=True \
     --cache=0 \
     --verbose=100 \
     --skip_existing=0 \
@@ -308,7 +309,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -433,7 +434,7 @@ python -m cmd_queue show "reproject_for_bas"
 python -m cmd_queue run --workers=8 "reproject_for_bas"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -621,7 +622,7 @@ python -m cmd_queue show "reproject_for_sc"
 python -m cmd_queue run --workers=16 "reproject_for_sc"
 
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --src_kwcocos "$DST_BUNDLE_DPATH"/*/imganns*-rawbands.kwcoco.zip \
     --dst_dpath "$DST_BUNDLE_DPATH" \
     --suffix=rawbands \
@@ -661,7 +662,7 @@ python -c "if 1:
 
     import simple_dvc as sdvc
     dvc_repo = sdvc.SimpleDVC.coerce(root)
-    dvc_repo.add(to_add, verbose=3)
+    dvc_repo.add(to_add, verbose=0)
 "
 
 git commit -m "Update Drop8 Crop SC" && \

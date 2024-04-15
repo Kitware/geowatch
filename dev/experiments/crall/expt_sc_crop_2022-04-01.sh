@@ -215,7 +215,7 @@ prep_features(){
 
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
         --gres="0,1" \
@@ -516,7 +516,7 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-python -m geowatch.cli.prepare_splits \
+python -m geowatch.cli.queue_cli.prepare_splits \
     --base_fpath="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
     --run=0 --backend=serial
 

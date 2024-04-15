@@ -333,7 +333,6 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> # sites4 = list(SiteModel.coerce_multiple(sites))
             >>> # assert len(regions4) == len(regions)
             >>> # assert len(sites4) == len(sites)
-
         """
         from geowatch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
@@ -725,8 +724,13 @@ class RegionModel(_Model):
             gdf = gpd.GeoDataFrame.from_features(site_summaries, crs=crs84)
         else:
             # TODO: could infer more columns here.
+            default_sitesum_columns = [
+                'geometry', 'type', 'status', 'version', 'site_id', 'mgrs',
+                'start_date', 'end_date', 'score', 'originator', 'model_content',
+            ]
             gdf = gpd.GeoDataFrame.from_features(
-                [], crs=crs84, columns=['geometry'])
+                [], crs=crs84, columns=default_sitesum_columns)
+
         return gdf
 
     def pandas_region(self):
@@ -833,20 +837,25 @@ class RegionModel(_Model):
 
     def remove_invalid_properties(self):
         """
-        Remove invalid properties from this region model
+        Remove invalid properties from this region model that have caused
+        issues in the past.
         """
         props = self.header['properties']
         bad_region_header_properties = ['validated', 'score', 'site_id', 'status', 'socre']
         for key in bad_region_header_properties:
             props.pop(key, None)
 
-        bad_sitesum_features = ['region_id', 'validate', 'validated',
-                                'predicted_phase_transition',
-                                'predicted_phase_transition_date']
+        bad_sitesum_keys = ['region_id', 'validate', 'validated',
+                            'predicted_phase_transition',
+                            'predicted_phase_transition_date']
+        non_nullable_sitesum_keys = ['score']
         for sitesum in self.body_features():
             siteprops = sitesum['properties']
-            for key in bad_sitesum_features:
+            for key in bad_sitesum_keys:
                 siteprops.pop(key, None)
+            for key in non_nullable_sitesum_keys:
+                if key in siteprops and siteprops[key] is None:
+                    siteprops.pop(key, None)
 
     def ensure_comments(self):
         props = self.header['properties']
@@ -1617,8 +1626,25 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         Fixup the site summary
         """
         self._update_cache_key()
+        self._remove_invalid_properties()
         # self.ensure_isodates()
         return self
+
+    def _remove_invalid_properties(self):
+        """
+        Remove invalid properties from this region model that have caused
+        issues in the past.
+        """
+        bad_sitesum_keys = ['region_id', 'validate', 'validated',
+                            'predicted_phase_transition',
+                            'predicted_phase_transition_date']
+        non_nullable_sitesum_keys = ['score']
+        siteprops = self['properties']
+        for key in bad_sitesum_keys:
+            siteprops.pop(key, None)
+        for key in non_nullable_sitesum_keys:
+            if key in siteprops and siteprops[key] is None:
+                siteprops.pop(key, None)
 
     @classmethod
     def coerce(cls, data):

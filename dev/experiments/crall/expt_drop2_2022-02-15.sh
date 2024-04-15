@@ -9,7 +9,7 @@ prep_teamfeat_drop2(){
     DVC_DPATH=$(geowatch_dvc --hardware=hdd)
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
-    python -m geowatch.cli.prepare_teamfeats \
+    python -m geowatch.cli.queue_cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres="0,1" \
         --with_landcover=1 \
@@ -19,7 +19,7 @@ prep_teamfeat_drop2(){
         --do_splits=1 \
         --depth_workers=0 \
         --cache=0 --run=1 --serial=1
-    #python -m geowatch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+    #python -m geowatch.cli.queue_cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }
 

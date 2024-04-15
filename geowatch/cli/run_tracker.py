@@ -969,7 +969,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
     return site_summaries
 
 
-def assign_sites_to_videos(coco_dset, site_summaries):
+def assign_sites_to_videos(coco_dset, site_summaries, viz_out_dir=None):
     """
     Compute assignments between which sites summaries should be projected onto
     which videos for scoring.
@@ -1027,12 +1027,38 @@ def assign_sites_to_videos(coco_dset, site_summaries):
     rich.print(f'{color}There were {n_unassigned_sites} sites that has no video overlaps{punc}')
     rich.print(f'There were {n_assigned_sites} / {n_total_sites} assigned site summaries')
     rich.print(f'There were {n_assigned_vids} / {n_total_vids} assigned videos')
+
+    if viz_out_dir is not None:
+        rich.print('Drawing assignments')
+        # Draw assignments
+        import kwplot
+        from geowatch.utils import util_kwplot
+        import kwimage
+        import numpy as np
+        # kwplot.autompl()
+        with kwplot.BackendContext(backend='agg'):
+            figman = util_kwplot.FigureManager(dpath=viz_out_dir, verbose=1)
+            fig = figman.figure(fnum=1, doclf=True)
+            ax = fig.gca()
+            bounds = kwimage.Boxes(np.concatenate([
+                video_gdf.geometry.bounds.values,
+                sitesum_gdf.geometry.bounds.values,
+            ]), 'ltrb')
+            minx, miny, maxx, maxy = bounds.bounding_box().data[0]
+            ax.set_xlim(minx, maxx)
+            ax.set_ylim(miny, maxy)
+            video_gdf.geometry.plot(ax=ax, facecolor='none', edgecolor='black')
+            sitesum_gdf.geometry.plot(ax=ax, facecolor='none', edgecolor='blue')
+            figman.set_figtitle('Tracking Bounds-to-Cluster Assignment')
+            figman.finalize('tracking_bounds_to_cluster_assignment.png')
+
     return site_idx_to_vidid
 
 
 def add_site_summary_to_kwcoco(possible_summaries,
                                coco_dset,
-                               default_region_id=None):
+                               default_region_id=None,
+                               viz_out_dir=None):
     """
     Add a site summary(s) to a kwcoco dataset as a set of polygon annotations.
     These annotations will have category "Site Boundary", 1 track per summary.
@@ -1072,7 +1098,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
     # Also, should probably do this in UTM instead of CRS84
 
     # Compute Assignment between site summaries / coco videos.
-    site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries)
+    site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries,
+                                               viz_out_dir=viz_out_dir)
 
     print('warping site boundaries to pxl space...')
 
@@ -1322,7 +1349,15 @@ def main(argv=None, **kwargs):
         # Workaround an issue in scriptconfig tha twill be fixed in 0.7.8
         # after that, remove cmdline completely
         cmdline = False
-    args = KWCocoToGeoJSONConfig.cli(cmdline=cmdline, argv=argv, data=kwargs, strict=True)
+
+    try:
+        args = KWCocoToGeoJSONConfig.cli(cmdline=cmdline, argv=argv, data=kwargs, strict=True)
+    except Exception:
+        print('Error when parsing CLI arguments')
+        print(f'kwargs = {ub.urepr(kwargs, nl=1)}')
+        print(f'argv = {ub.urepr(argv, nl=1)}')
+        print(f'cmdline = {ub.urepr(cmdline, nl=1)}')
+        raise
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
@@ -1485,7 +1520,8 @@ def main(argv=None, **kwargs):
     if args.site_summary is not None:
 
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
-                                               args.region_id)
+                                               args.region_id,
+                                               viz_out_dir=args.viz_out_dir)
         if 0:
             # Going to test to see if removing this helps anything
             cid = coco_dset.name_to_cat[geowatch.heuristics.SITE_SUMMARY_CNAME]['id']

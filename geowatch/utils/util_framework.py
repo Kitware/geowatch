@@ -807,7 +807,9 @@ class NodeStateDebugger:
         self.current_iteration = 0
 
     def print_environment(self):
-        # Print info about what version of the code we are running on
+        """
+        Print info about what version of the code we are running on
+        """
         import os
         import geowatch
         print(' --- <NODE_ENV> --- ')
@@ -822,6 +824,91 @@ class NodeStateDebugger:
             ub.cmd('date -u', verbose=3)
             ub.cmd('curl http://s3.amazonaws.com -v', verbose=3)
         print(' --- </NODE_ENV> --- ')
+        # TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
+        # if TASK_IMAGE_NAME:
+        #     self.print_local_invocation()
+
+    def print_local_invocation(self, config=None):
+        """
+        Attempt to build a string that will allow the user to start stepping
+        through a local run of this smartflow step in IPython.
+
+        Args:
+            config (scriptconfig.DataConfig):
+                the config used to invoke the script
+        """
+        # Print out a command to help developers debug this image in a
+        # local environment.
+        # TODO: make this more generic for other people.
+        # This is somewhat ill-defined because we can't know which
+        # local machine the user will want to run on but here are issues
+        # with the current command:
+        # * the external code / data is jon-specific,
+        # * the location of the mapped ingress directory is arbitrary.
+        # * the location of the local .aws directory is usually correct.
+        # * Not every image needs runtime=nvidia
+        # * pip cache is only necessary if installing new packages, but
+        #   location is a reasonable default.
+        # * there may be environment variables passed by smartflow that
+        #   also need to be passed here, but we dont want to have a huge
+        #   command, so there is a tradeoff.
+        print('To run in a similar environment locally:')
+        TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
+        create_local_env_command = ub.codeblock(
+            fr'''
+            # Set these environment variables to reasonable locations on your
+            # host machine.
+            LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
+            LOCAL_CODE_DPATH=$HOME/code
+            LOCAL_DATA_DPATH=$HOME/data
+
+            # Run the docker image
+            mkdir -p $LOCAL_WORK_DPATH
+            cd $LOCAL_WORK_DPATH
+            docker run \
+                --runtime=nvidia \
+                --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
+                --volume "$LOCAL_CODE_DPATH":/extern_code:ro \
+                --volume "$LOCAL_DATA_DPATH":/extern_data:ro \
+                --volume $HOME/.aws:/root/.aws:ro \
+                --volume "$HOME"/.cache/pip:/pip_cache \
+                --env AWS_PROFILE=iarpa \
+                --env TASK_IMAGE_NAME={TASK_IMAGE_NAME} \
+                -it {TASK_IMAGE_NAME} bash
+            ''')
+        print()
+        print(create_local_env_command)
+
+        if 1:
+            helper_text = ub.codeblock(
+                '''
+                # Point the container repo at the repo on your host
+                # system to pull in any updates for testing.
+                git remote add host /extern_code/geowatch/.git
+                git fetch host
+                ''')
+            print()
+            print(helper_text)
+
+        # node_modname = 'geowatch.cli.smartflow.run_sc_datagen'
+        if config is not None:
+            node_modname = config.__class__.__module__
+            if node_modname == '__main__':
+                # Try to get the real name
+                import sys
+                node_modname = ub.modpath_to_modname(sys.modules[node_modname].__file__)
+
+            ipython_setup_command = ub.codeblock(
+                f'''
+                # In IPython
+                %load_ext autoreload
+                %autoreload 2
+                from {node_modname} import *
+                ''')
+            config_text = 'config = ' + ub.urepr(config, nl=1)
+            ipython_setup_command = ipython_setup_command + '\n' + config_text
+            print()
+            print(ipython_setup_command)
 
     def print_current_state(self, dpath):
         print(f' --- <NODE_STATE iter={self.current_iteration}> --- ')
@@ -834,7 +921,8 @@ class NodeStateDebugger:
         ub.cmd('df -h', verbose=3)
 
         from geowatch.utils import util_hardware
-        mem_info = util_hardware.get_mem_info()
+        with_units = bool(ub.modname_to_modpath('pint'))
+        mem_info = util_hardware.get_mem_info(with_units=with_units)
         print('mem_info = {}'.format(ub.urepr(mem_info, nl=1, align=':')))
 
         print(f' --- </NODE_STATE iter={self.current_iteration}> --- ')
@@ -865,24 +953,6 @@ class PrintLogger:
         print(msg % args)
     def critical(self, msg, *args, **kwargs):
         print(msg % args)
-
-
-def _devcheck_retry():
-    class Dummy:
-        def __init__(self):
-            self.count = 0
-
-        def func_to_run(self):
-            self.count += 1
-            if self.count < 3:
-                raise Exception('exception')
-    self = Dummy()
-    from retry.api import retry_call
-
-    logger = PrintLogger()
-    retry_call(self.func_to_run, fargs=[],
-               fkwargs=dict(), tries=4,
-               exceptions=(Exception,), delay=3, logger=logger)
 
 
 def _test_s3_hack():

@@ -73,7 +73,7 @@ CommandLine:
 
 SeeAlso:
     ~/code/watch/geowatch/cli/stac_search.py
-    ~/code/watch/geowatch/cli/prepare_ta2_dataset.py
+    ~/code/watch/geowatch/cli/queue_cli/prepare_ta2_dataset.py
 """
 import os
 import re

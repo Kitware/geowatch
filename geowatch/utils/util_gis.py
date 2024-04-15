@@ -356,8 +356,6 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
     """
     Find the local UTM zone for a geo data frame and project to it.
 
-    Assumes geometry is in CRS-84.
-
     All geometry in the GDF must be in the same UTM zone.
 
     Args:
@@ -380,7 +378,16 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
             Only used in mode 1.
 
     Returns:
-        geopandas.GeoDataFrame
+        geopandas.GeoDataFrame:
+            The a copy of the input dataframe with projected geometry.
+
+    Notes:
+
+        Assumes input geometry is in CRS-84.
+
+        If an empty dataframe is given as input, it is returned as-is. No copy
+        is made.
+
 
     Example:
         >>> import geopandas as gpd
@@ -461,6 +468,9 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
     # try:
     #     gdf_crs84.estimate_utm_crs()
     # except Exception:
+
+    if len(gdf_crs84) == 0:
+        return gdf_crs84
 
     if mode == 0:
         epsg_zones = []

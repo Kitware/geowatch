@@ -172,7 +172,7 @@ def check_paths_are_ok():
         print(f'connect to host={host}')
         host_to_fs[host] = fsspec_shh_connect(host)
 
-    # Use simple_dvc registery / geowatch_dvc to find the paths to the DVC
+    # Use simple_dvc registry / geowatch_dvc to find the paths to the DVC
     # repos on other machines.
     items = []
     for host, fs in host_to_fs.items():

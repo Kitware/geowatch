@@ -1,3 +1,6 @@
+import os
+
+
 def test_tracker_with_sv():
     """
     Tests tracker with site verification on
@@ -39,7 +42,7 @@ def test_tracker_with_sv():
     sv_fpath = dpath / 'sv_sites.json'
     # Run BAS
     bas_argv = [
-        '--in_file', coco_dset.fpath,
+        '--in_file', os.fspath(coco_dset.fpath),
         '--out_site_summaries_dir', str(regions_dir),
         '--out_site_summaries_fpath',  str(bas_fpath),
         '--out_kwcoco', str(bas_coco_fpath),
@@ -64,7 +67,7 @@ def test_tracker_with_sv():
     # Run SC on the same dset
     sites_dir = dpath / 'sites'
     sc_argv = [
-        '--in_file', coco_dset.fpath,
+        '--in_file', os.fspath(coco_dset.fpath),
         '--out_sites_dir', str(sites_dir),
         '--out_sites_fpath', str(sc_fpath),
         '--out_kwcoco', str(sc_coco_fpath),
@@ -233,7 +236,7 @@ def test_tracker_bas_with_boundary_region():
     bas_coco_fpath1 = dpath1 / 'bas_output.kwcoco.json'
     bas_fpath1 = dpath1 / 'bas_sites.json'
     bas_argv1 = [
-        '--in_file', in_coco_fpath1,
+        '--in_file', os.fspath(in_coco_fpath1),
         '--out_site_summaries_dir', str(regions_dir1),
         '--out_site_summaries_fpath',  str(bas_fpath1),
         '--out_kwcoco', str(bas_coco_fpath1),
@@ -355,7 +358,7 @@ def test_tracker_nan_params():
     bas_fpath = dpath / 'bas_sites.json'
     # Run BAS
     bas_argv = [
-        '--in_file', coco_dset.fpath,
+        '--in_file', os.fspath(coco_dset.fpath),
         '--out_site_summaries_dir', str(regions_dir),
         '--out_site_summaries_fpath',  str(bas_fpath),
         '--out_kwcoco', str(bas_coco_fpath),
@@ -491,8 +494,8 @@ def test_tracker_ac_refinement():
     out_site_fpath = dpath / 'out_sites.json'
     out_sites_dir = dpath / 'out_sites'
     ac_argv = [
-        '--input_kwcoco', in_coco_fpath,
-        '--in_site_summaries', in_region_models_dpath,
+        '--input_kwcoco', os.fspath(in_coco_fpath),
+        '--in_site_summaries', os.fspath(in_region_models_dpath),
         '--out_sites_dir', str(out_sites_dir),
         '--out_sites_fpath', str(out_site_fpath),
         '--out_site_summaries_dir', str(out_sitesum_dpath),
