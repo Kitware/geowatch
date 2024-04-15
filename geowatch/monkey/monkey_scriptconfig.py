@@ -32,7 +32,7 @@ else:
 # Or if we are higher than 3.12.3
 # https://github.com/python/cpython/pull/115674
 HAS_ARGPARSE_GH_114180 = (
-    (sys.version_info[0:2] == (3, 11) and sys.version_info[2] > 9) or
+    (sys.version_info[0:2] == (3, 11) and sys.version_info[2] >= 9) or
     (sys.version_info[0:3] >= (3, 12, 3))
 )
 
