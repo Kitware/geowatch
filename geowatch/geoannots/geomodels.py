@@ -333,7 +333,6 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> # sites4 = list(SiteModel.coerce_multiple(sites))
             >>> # assert len(regions4) == len(regions)
             >>> # assert len(sites4) == len(sites)
-
         """
         from geowatch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
