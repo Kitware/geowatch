@@ -7,7 +7,7 @@ import kwimage
 # noinspection PyUnresolvedReferences
 import vtkmodules.vtkInteractionStyle
 # noinspection PyUnresolvedReferences
-import vtkmodules.vtkRenderingOpenGL2
+import vtkmodules.vtkRenderingOpenGL2  # NOQA
 from vtkmodules.vtkCommonColor import vtkNamedColors
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
@@ -155,6 +155,10 @@ def main():
     import shapely
     site_models = list(SiteModel.coerce_multiple('/home/joncrall/temp/debug_smartflow_v2/ingress/sc_out_site_models/'))
 
+    import ubelt as ub
+    site_models_dpath = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/_airflow/preeval21_batch_v197/KR_R002/consolidated_output/site_models/')
+    site_models = list(SiteModel.coerce_multiple(site_models_dpath))
+
     site_geoms = []
     for site_idx, site in enumerate(site_models):
         site_geoms.append(site.geometry)
@@ -199,7 +203,6 @@ def main():
         face2 = twoface[1]
 
         # Create extrusion faces
-        import ubelt as ub
         face1_window = list(ub.iter_window(face1, wrap=True))
         face2_window = list(ub.iter_window(face2, wrap=True))
         for w1, w2 in zip(face1_window, face2_window):
@@ -275,7 +278,7 @@ def main():
 
     # https://discourse.vtk.org/t/scaling-a-rendering-scene/173/2
 
-    exterior_pts.max(axis=0)
+    # exterior_pts.max(axis=0)
 
     cam = renderer.GetActiveCamera()
     transform = vtk.vtkTransform()

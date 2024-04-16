@@ -64,32 +64,95 @@ class DataFrame(pd.DataFrame):
         labels = existing.intersection(labels)
         return self.drop(labels, axis=axis)
 
-    def reorder(self, labels, axis=0, intersect=False):
+    def reorder(self, head=None, tail=None, axis=0, missing='error', fill_value=float('nan')):
         """
         Change the order of the row or column index. Unspecified labels will
         keep their existing order after the specified labels.
 
         Args:
-            intersect (bool):
-                if True ignores labels that doen't exist, otherwise an error
-                will occur if a label is specified that does not exist.
+            head (List | None):
+                The order of the labels to put at the start of the re-indexed
+                data frame. Unspecified labels keep their relative order and
+                are placed after specified these "head" labels.
+
+            tail (List | None):
+                The order of the labels to put at the end of the re-indexed
+                data frame. Unspecified labels keep their relative order and
+                are placed after before these "tail" labels.
+
+            axis (int):
+                The axis 0 for rows, 1 for columns to reorder.
+
+            missing (str):
+                Policy to handle specified labels that do not exist in the
+                specified axies. Can be either "error", "drop", or "fill".
+                If "drop", then drop any specified labels that do not exist.
+                If "error", then raise an error non-existing labels are given.
+                If "fill", then fill in values for labels that do not exist.
+
+            fill_value (Any):
+                fill value to use when missing is "fill".
+
+        Returns:
+            Self - DataFrame with modified indexes
 
         Example:
             >>> from geowatch.utils import util_pandas
-            >>> self = util_pandas.DataFrame.random(columns=['a', 'b', 'c', 'd', 'e', 'f'])
-            >>> self.reorder(['b', 'c'], axis=1)
-            >>> self.reorder([1, 0], axis=0)
-            >>> self.reorder(['q'], axis=1)
-            >>> self.reorder(['q'], axis=1, intersect=True)
+            >>> self = util_pandas.DataFrame.random(rows=5, columns=['a', 'b', 'c', 'd', 'e', 'f'])
+            >>> new = self.reorder(['b', 'c'], axis=1)
+            >>> assert list(new.columns) == ['b', 'c', 'a', 'd', 'e', 'f']
+            >>> # Set the order of the first and last of the columns
+            >>> new = self.reorder(head=['b', 'c'], tail=['e', 'd'], axis=1)
+            >>> assert list(new.columns) == ['b', 'c', 'a', 'f', 'e', 'd']
+            >>> # Test reordering the rows
+            >>> new = self.reorder([1, 0], axis=0)
+            >>> assert list(new.index) == [1, 0, 2, 3, 4]
+            >>> # Test reordering with a non-existent column
+            >>> new = self.reorder(['q'], axis=1, missing='drop')
+            >>> assert list(new.columns) == ['a', 'b', 'c', 'd', 'e', 'f']
+            >>> new = self.reorder(['q'], axis=1, missing='fill')
+            >>> assert list(new.columns) == ['q', 'a', 'b', 'c', 'd', 'e', 'f']
+            >>> import pytest
+            >>> with pytest.raises(ValueError):
+            >>>     self.reorder(['q'], axis=1, missing='error')
+            >>> # Should error if column is given in both head and tail
+            >>> with pytest.raises(ValueError):
+            >>>     self.reorder(['c'], ['c'], axis=1, missing='error')
         """
         existing = self.axes[axis]
-        if intersect:
-            resolved_labels = ub.oset(labels) & ub.oset(list(existing))
+        if head is None:
+            head = []
+        if tail is None:
+            tail = []
+        head_set = set(head)
+        tail_set = set(tail)
+        duplicate_labels = head_set & tail_set
+        if duplicate_labels:
+            raise ValueError(
+                'Cannot specify the same label in both the head and tail.'
+                f'Duplicate labels: {duplicate_labels}')
+        if missing == 'drop':
+            orig_order = ub.oset(list(existing))
+            resolved_head = ub.oset(head) & orig_order
+            resolved_tail = ub.oset(tail) & orig_order
+        elif missing == 'error':
+            requested = (head_set | tail_set)
+            unknown = requested - set(existing)
+            if unknown:
+                raise ValueError(
+                    f"Requested labels that don't exist unknown={unknown}. "
+                    "Specify intersect=True to ignore them.")
+            resolved_head = head
+            resolved_tail = tail
+        elif missing == 'fill':
+            resolved_head = head
+            resolved_tail = tail
         else:
-            resolved_labels = labels
-        remain = existing.difference(resolved_labels)
-        new_labels = list(resolved_labels) + list(remain)
-        return self.reindex(labels=new_labels, axis=axis)
+            raise KeyError(missing)
+        remain = existing.difference(resolved_head).difference(resolved_tail)
+        new_labels = list(resolved_head) + list(remain) + list(resolved_tail)
+        return self.reindex(labels=new_labels, axis=axis,
+                            fill_value=fill_value)
 
     def _orig_groupby(self, by=None, **kwargs):
         return super().groupby(by=by, **kwargs)

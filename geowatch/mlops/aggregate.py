@@ -750,7 +750,7 @@ class AggregatorAnalysisMixin:
                 param_table = pd.DataFrame.from_dict(top_param_lut).T
                 param_table.index.name = 'param_hashid'
                 param_table = util_pandas.DataFrame(param_table)
-                param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
+                param_table = param_table.reorder(varied_keys, axis=1, missing='drop')
                 print(ub.paragraph(
                     '''
                     Note, to paste into sheets, there will be an icon after you
