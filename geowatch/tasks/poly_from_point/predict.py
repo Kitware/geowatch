@@ -347,13 +347,18 @@ def main():
 
 
     Ignore:
-        python -m geowatch.tasks.poly_from_point.predict --method 'box' \
-            --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip" \
+        python -m geowatch.tasks.poly_from_point.predict \
+            --method 'sam' \
+            --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
             --filepath_to_points "$HOME/data/dvc-repos/smart_phase3_data/annotations/point_based_annotations.zip" \
-            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson"
+            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R001.geojson" \
+            --filepath_to_sam /home/joncrall/data/dvc-repos/smart_phase3_expt/models/sam/sam_vit_h_4b8939.pth
 
     """
     config = HeatMapConfig.cli(cmdline=1)
+    import rich
+    from rich.markup import escape
+    rich.print(f'config = {escape(ub.urepr(config, nl=1))}')
 
     box_width = config.box_size[0]
     box_height = config.box_size[1]
@@ -404,7 +409,11 @@ def main():
         count = 0
         geo_polygons_total = []
         count_individual_mask = 0
-        # average_image = kwarray.Stitcher((video_obj["height"], video_obj["width"]))
+
+        # import kwarray
+        # average_image = kwarray.Stitcher((
+        #     video_obj["height"],
+        #     video_obj["width"]))
         all_predicted_regions = np.zeros(
             (len(region_points_gdf_vidspace), video_obj["height"], video_obj["width"])
         )
@@ -431,9 +440,13 @@ def main():
             # us visualize data with false color.
             canvas = kwimage.normalize_intensity(imdata, axis=2)
             img = np.ascontiguousarray(canvas)
+
+            # On Jon's machine SAM wants uint8 for some reason
+            img = kwimage.ensure_uint255(img)
             predictor.set_image(img, "RGB")
             regions = kwimage.Boxes(
-                [[p.x, p.y, box_width, box_height] for p in region_points_gdf_imgspace],
+                [[p.x, p.y, box_width, box_height]
+                 for p in region_points_gdf_imgspace],
                 "cxywh",
             )
             regions = regions.to_ltrb()
@@ -477,7 +490,6 @@ def main():
         result = convert_polygons_to_region_model(
             polygons,
             main_region_header,
-            region_points_gdf_imgspace,
             warp_vid_from_wld,
             region_gdf_utm,
             region_gdf_crs84,
