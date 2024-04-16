@@ -335,7 +335,7 @@ def get_points(video_obj, filepath_to_points):
 
 
 # TODO: add hard coded to config
-if __name__ == "__main__":
+def main():
 
     """
     IGNORE:
@@ -441,3 +441,7 @@ if __name__ == "__main__":
     )
     print(result.dumps())
     ub.writeto(output, result.dumps())
+
+
+if __name__ == "__main__":
+    main()
