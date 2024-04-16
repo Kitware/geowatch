@@ -42,23 +42,14 @@ import numpy as np
 import torch
 
 # from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
-import argparse
 import geopandas as gpd
-import geowatch
 import kwcoco
 import kwimage
-import os
-import PIL
-import shutil
-import sys
 import ubelt as ub
 from geowatch.utils import util_gis
-from PIL import Image, ImageDraw
 from sklearn.cluster import KMeans
-from tqdm import tqdm
 from geowatch.geoannots.geomodels import RegionModel, SiteSummary
 import kwutil
-from shapely.geometry import Polygon, MultiPolygon
 
 # import matplotlib.pyplot as plt
 
@@ -66,7 +57,7 @@ from shapely.geometry import Polygon, MultiPolygon
 # Region, SiteSummary ->
 # SiteModel: Site Type, Observation Type -> S
 # SITE: Just contain overiew geometry. Geometry can change at timestamp
-import kwplot
+# import kwplot
 
 """
     >>> # xdoctest: +REQUIRES(env:HAS_DVC)
@@ -130,23 +121,24 @@ def extract_sam_polygons(
     warp_vid_from_wld,
     region_gdf_utm,
 ):
-    default = np.zeros(polygons[0].shape)
-    default = default > 1
-    default[0:9, 0:9] = True
-    mask = kwimage.Mask(default, "c_mask")
-    default_polygon = mask.to_multi_polygon()
-    default_polygon = default_polygon.convex_hull
+    # default = np.zeros(polygons[0].shape)
+    # default = default > 1
+    # default[0:9, 0:9] = True
+    # mask = kwimage.Mask(default, "c_mask")
+    # default_polygon = mask.to_multi_polygon()
+    # default_polygon = default_polygon.convex_hull
 
     for idx, mask in enumerate(all_predicted_regions):
         try:
             res = mask > (45 * (image_id + 1)) / 100
-            point_row = region_gdf_utm.iloc[idx]
+            # point_row = region_gdf_utm.iloc[idx]
             mask = kwimage.Mask(res, "c_mask")
             polygon = mask.to_multi_polygon()
-            polygon_video_space = polygon.convex_hull
+            # polygon_video_space = polygon.convex_hull
             polygon.to_shapely()
             yield polygon
         except Exception:
+            # TODO: add default polygon
             ...
 
 
@@ -197,7 +189,7 @@ def convert_polygons_to_region_model(
             )
             vid_space_geometries.append(polygon_video_space)
             print(polygon)
-        except:
+        except Exception:
             vid_space_summaries.append(
                 {
                     "type": "site_summary",
@@ -216,7 +208,8 @@ def convert_polygons_to_region_model(
                     },
                 }
             )
-            vid_space_geometries.append(default_polygon)
+            raise NotImplementedError('fixme')
+            # vid_space_geometries.append(default_polygon)
     wld_space_geometries = [
         p.warp(warp_vid_from_wld).to_shapely() for p in vid_space_geometries
     ]
@@ -232,25 +225,6 @@ def convert_polygons_to_region_model(
     new_region_model.fixup()
     new_region_model.validate(strict=False)
     return new_region_model
-
-
-def extract_polygons(im):
-    data = im > 0.5
-    mask = kwimage.Mask(data, "c_mask")
-    polygon = mask.to_multi_polygon()
-
-    return polygon
-
-
-def image_predicted(
-    im,
-    geo_polygons_image,
-    filename,
-):
-    im = np.zeros((len(im), len(im[0])))
-    for mask in geo_polygons_image:
-        np.logical_or(im, mask, out=im)
-    kwimage.imwrite(filename, im * 255)
 
 
 def extract_polygons(im):
@@ -292,6 +266,10 @@ def read_points_anns(filepath_to_points):
 
 
 def load_sam(filepath_to_sam):
+    segment_anything = geowatch_tpl.import_submodule("segment_anything")
+    # SamAutomaticMaskGenerator = segment_anything.SamAutomaticMaskGenerator
+    SamPredictor = segment_anything.SamPredictor
+    sam_model_registry = segment_anything.sam_model_registry
 
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     MODEL_TYPE = "vit_h"
@@ -309,10 +287,10 @@ def comput_average_boxes(dset):
     total = []
     for gid in range(len(dset.images().coco_images)):
         coco_img = dset.images().coco_images[gid]
-        imgspace_dets = coco_img.annots().detections
-        vidspace_dets = imgspace_dets.warp(coco_img.warp_vid_from_img)
-        total_iou = 0
-        count = 0
+        # imgspace_dets = coco_img.annots().detections
+        # vidspace_dets = imgspace_dets.warp(coco_img.warp_vid_from_img)
+        # total_iou = 0
+        # count = 0
         det_obj = coco_img._detections_for_resolution(space="video")
         det_class_names = [det_obj.classes[idx] for idx in det_obj.class_idxs]
         class_of_intrest = {
@@ -330,6 +308,7 @@ def comput_average_boxes(dset):
     all_w_h = all_boxes.to_xywh().data[:, 2:4]
     kmeans = KMeans(n_clusters=1, random_state=0, n_init="auto").fit(all_w_h)
     Bounding_Boxes = kmeans.cluster_centers_
+    print(Bounding_Boxes)
 
 
 # TODO: GENERALIZE FOR ALL REGIONS
@@ -371,9 +350,13 @@ def main():
         from geowatch.tasks.poly_from_point.predict import *
 
 
-    """
-    import kwarray
+    Ignore:
+        python -m geowatch.tasks.poly_from_point.predict --method 'box' \
+            --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip" \
+            --filepath_to_points "$HOME/data/dvc-repos/smart_phase3_data/annotations/point_based_annotations.zip" \
+            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson" \
 
+    """
     config = HeatMapConfig.cli(cmdline=1)
     box_width = config.box_size[0]
     box_height = config.box_size[1]
@@ -421,19 +404,15 @@ def main():
 
         ...
     if method == "sam":
-        average_image = kwarray.Stitcher((video_obj["height"], video_obj["width"]))
+        # average_image = kwarray.Stitcher((video_obj["height"], video_obj["width"]))
         all_predicted_regions = np.zeros(
             (len(region_points_gdf_vidspace), video_obj["height"], video_obj["width"])
         )
-        segment_anything = geowatch_tpl.import_submodule("segment_anything")
-        SamAutomaticMaskGenerator = segment_anything.SamAutomaticMaskGenerator
-        SamPredictor = segment_anything.SamPredictor
-        sam_model_registry = segment_anything.sam_model_registry
         predictor = load_sam(filepath_to_sam)
 
         for image_id in ub.ProgIter(video_image_ids, desc="Looping Over Videos..."):
-            geo_polygons_image = []
-            im = np.zeros((video_obj["height"], video_obj["width"]), dtype=np.uint8)
+            # geo_polygons_image = []
+            # im = np.zeros((video_obj["height"], video_obj["width"]), dtype=np.uint8)
             coco_image = dset.coco_image(image_id)
 
             # Get the transform from video space to image space
@@ -479,7 +458,7 @@ def main():
                 # geo_masks_image.append(mask)
                 # geo_masks_total.append(mask)
 
-            filename = f"{count}_sam_image_mask.png"
+            # filename = f"{count}_sam_image_mask.png"
             # data = image_predicted(im,geo_polygons_image,filename)
             count = count + 1
         # geo_masks_total=np.reshape(geo_masks_total,(image_id+1,len(region_points_gdf_imgspace)))
