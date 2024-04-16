@@ -72,7 +72,8 @@ class DataFrame(pd.DataFrame):
         labels = existing.intersection(labels)
         return self.drop(labels, axis=axis)
 
-    def reorder(self, head=None, tail=None, axis=0, missing='error', fill_value=float('nan')):
+    def reorder(self, head=None, tail=None, axis=0, missing='error',
+                fill_value=float('nan'), **kwargs):
         """
         Change the order of the row or column index. Unspecified labels will
         keep their existing order after the specified labels.
@@ -127,6 +128,11 @@ class DataFrame(pd.DataFrame):
             >>> with pytest.raises(ValueError):
             >>>     self.reorder(['c'], ['c'], axis=1, missing='error')
         """
+        if 'intersect' in kwargs:
+            raise Exception('The intersect argument was removed. Set missing=drop')
+        if kwargs:
+            raise ValueError(f'got unknown kwargs: {list(kwargs.keys())}')
+
         existing = self.axes[axis]
         if head is None:
             head = []
