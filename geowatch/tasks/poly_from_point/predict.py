@@ -116,10 +116,8 @@ class HeatMapConfig(scfg.DataConfig):
 
 
 def extract_sam_polygons(
-    image_id,
     all_predicted_regions,
     main_region_header,
-    region_points_gdf_imgspace,
     warp_vid_from_wld,
     region_gdf_utm,
 ):
@@ -132,15 +130,16 @@ def extract_sam_polygons(
 
     for idx, mask in enumerate(all_predicted_regions):
         try:
-            res = mask > (45 * (image_id + 1)) / 100
+            res = mask > (.45) 
             # point_row = region_gdf_utm.iloc[idx]
             mask = kwimage.Mask(res, "c_mask")
             polygon = mask.to_multi_polygon()
-            # polygon_video_space = polygon.convex_hull
+            polygon = polygon.convex_hull
             polygon.to_shapely()
             yield polygon
         except Exception:
             # TODO: add default polygon
+            yield None
             ...
 
 
@@ -173,7 +172,6 @@ def convert_polygons_to_region_model(
         mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
         start_date = mid_date - time_pad
         end_date = mid_date + time_pad
-        polygon_video_space = polygon.convex_hull
         properties = {
             "type": "site_summary",
             "status": "positive_annotated",
@@ -192,15 +190,22 @@ def convert_polygons_to_region_model(
             },
         }
         try:
+            if polygon is None :
+                raise Exception
+            polygon_video_space = polygon.convex_hull
             polygon_video_space.to_shapely()
+            
         except Exception:
-            vid_space_summaries.append(properties)
+            continue
             raise NotImplementedError('fixme define default polygon')
             default_polygon = NotImplemented
             polygon_video_space = default_polygon
-
-        vid_space_summaries.append(properties)
-        vid_space_geometries.append(polygon_video_space)
+            vid_space_summaries.append(properties)
+            vid_space_geometries.append(polygon_video_space)
+  
+        else:
+            vid_space_summaries.append(properties)
+            vid_space_geometries.append(polygon_video_space)
 
     # Warp the videospace polygons back into UTM world space.
     warp_world_from_vid = warp_vid_from_wld.inv()
@@ -367,7 +372,7 @@ def main():
     filepath_to_points = config.filepath_to_points
     filepath_to_region = config.filepath_to_region
     method = config.method
-    output = config.file_output
+    output = ub.Path(config.file_output)
     main_region = RegionModel.coerce(filepath_to_region)
     main_region_header = main_region.header
     time_pad = kwutil.util_time.timedelta.coerce(config.time_pad)
@@ -406,8 +411,6 @@ def main():
 
         ...
     if method == "sam":
-        count = 0
-        geo_polygons_total = []
         count_individual_mask = 0
 
         # import kwarray
@@ -428,9 +431,9 @@ def main():
             # Note that each point is associated with a date, so not all the
             # points warped here are actually associated with this image.
             warp_img_from_vid = coco_image.warp_img_from_vid
-            region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
-                warp_img_from_vid.to_shapely()
-            )
+            #region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
+             #   warp_img_from_vid.to_shapely()
+            #)
 
             delayed_img = coco_image.imdelay("red|green|blue", space="video")
             imdata = delayed_img.finalize()
@@ -446,14 +449,16 @@ def main():
             predictor.set_image(img, "RGB")
             regions = kwimage.Boxes(
                 [[p.x, p.y, box_width, box_height]
-                 for p in region_points_gdf_imgspace],
+                 for p in region_points_gdf_vidspace],
                 "cxywh",
             )
             regions = regions.to_ltrb()
 
             for count_individual_mask, (point, box) in enumerate(
-                zip(region_points_gdf_imgspace, regions)
+                zip(region_points_gdf_vidspace, regions)
             ):
+                #if count_individual_mask >10:
+                 #   break
                 masks, scores, logits = predictor.predict(
                     point_coords=np.array([[point.x, point.y]]),
                     point_labels=np.array([1]),
@@ -465,23 +470,18 @@ def main():
                 binarized_mask = masks[0] > 0.5
                 all_predicted_regions[count_individual_mask] += binarized_mask
 
-                mask = masks[0]
-                data = extract_polygons(mask)
-                geo_polygons_total.append(data)
                 # geo_masks_image.append(mask)
                 # geo_masks_total.append(mask)
 
             # filename = f"{count}_sam_image_mask.png"
             # data = image_predicted(im,geo_polygons_image,filename)
-            count = count + 1
+            #count = count + 1
         # geo_masks_total=np.reshape(geo_masks_total,(image_id+1,len(region_points_gdf_imgspace)))
-
+        all_predicted_regions /= len(video_image_ids)
         polygons = list(
             extract_sam_polygons(
-                image_id,
                 all_predicted_regions,
                 main_region_header,
-                region_points_gdf_imgspace,
                 warp_vid_from_wld,
                 region_gdf_utm,
             )
