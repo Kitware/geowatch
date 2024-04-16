@@ -748,6 +748,9 @@ class RegionModel(_Model):
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
 
+    pandas_header = pandas_region
+    pandas_body = pandas_summaries
+
     @classmethod
     def random(cls, with_sites=False, **kwargs):
         """
@@ -1010,6 +1013,9 @@ class SiteModel(_Model):
         crs84 = util_gis.get_crs84()
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
+
+    pandas_header = pandas_site
+    pandas_body = pandas_observations
 
     @classmethod
     def random(cls, rng=None, region=None, site_poly=None, **kwargs):
