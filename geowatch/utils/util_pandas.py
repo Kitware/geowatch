@@ -11,7 +11,10 @@ from geowatch.utils.util_stringalgo import shortest_unique_suffixes
 
 class DataFrame(pd.DataFrame):
     """
-    https://stackoverflow.com/questions/22155951/how-can-i-subclass-a-pandas-dataframe
+    Extension of pandas dataframes with quality-of-life improvements.
+
+    Refernces:
+        .. [SO22155951] https://stackoverflow.com/questions/22155951/how-can-i-subclass-a-pandas-dataframe
 
     Example:
         from geowatch.utils.util_pandas import *  # NOQA
@@ -28,6 +31,8 @@ class DataFrame(pd.DataFrame):
     @classmethod
     def random(cls, rows=10, columns='abcde', rng=None):
         """
+        Create a random data frame for testing.
+
         rows=10
         columns='abcde'
         rng = None
@@ -49,6 +54,9 @@ class DataFrame(pd.DataFrame):
 
     def safe_drop(self, labels, axis=0):
         """
+        Like :func:`self.drop`, but does not error if the specified labels do
+        not exist.
+
         Args:
             df (pd.DataFrame): df
             labels (List): ...
