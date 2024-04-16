@@ -112,6 +112,8 @@ class HeatMapConfig(scfg.DataConfig):
         "sam", choices=["sam", "box"], help="Method for extracting polygons from points"
     )
 
+    time_pad = scfg.Value('1 year', help='time prior before and after')
+
 
 def extract_sam_polygons(
     image_id,
@@ -147,11 +149,10 @@ def convert_polygons_to_region_model(
     main_region_header,
     warp_vid_from_wld,
     region_gdf_utm,
+    region_gdf_crs84,
+    time_pad,
 ):
     print(f"{len(polygons)=}")
-    time_pad = kwutil.util_time.timedelta.coerce("1 year")
-    vid_space_summaries = []
-    vid_space_geometries = []
     """
     default = np.zeros(polygons[0].shape)
     default = default > 1
@@ -161,61 +162,56 @@ def convert_polygons_to_region_model(
     default_polygon = default_polygon.convex_hull
     """
 
+    assert len(region_gdf_utm) == len(polygons)
+
+    vid_space_summaries = []
+    vid_space_geometries = []
     for idx, polygon in enumerate(polygons):
+        point_row_utm = region_gdf_utm.iloc[idx]
+        point_row_crs84 = region_gdf_crs84.iloc[idx]
+        assert point_row_crs84['site_id'] == point_row_utm['site_id']
+        mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
+        start_date = mid_date - time_pad
+        end_date = mid_date + time_pad
+        polygon_video_space = polygon.convex_hull
+        properties = {
+            "type": "site_summary",
+            "status": "positive_annotated",
+            "version": "2.0.1",
+            "site_id": point_row_utm["site_id"],
+            "mgrs": main_region_header["properties"]["mgrs"],
+            "start_date": start_date.date().isoformat(),
+            "end_date": end_date.date().isoformat(),
+            "score": 1,
+            "originator": "Rutgers_SAM",
+            "model_content": "annotation",
+            "validated": "False",
+            "cache": {
+                "orig_point_utm": str(point_row_utm.geometry),
+                "orig_point_crs84": str(point_row_crs84.geometry),
+            },
+        }
         try:
-            point_row = region_gdf_utm.iloc[idx]
-            mid_date = kwutil.util_time.datetime.coerce(point_row["date"])
-            start_date = mid_date - time_pad
-            end_date = mid_date + time_pad
-            polygon_video_space = polygon.convex_hull
-            polygon.to_shapely()
-            vid_space_summaries.append(
-                {
-                    "type": "site_summary",
-                    "status": "positive_annotated",
-                    "version": "2.0.1",
-                    "site_id": point_row["site_id"],
-                    "mgrs": main_region_header["properties"]["mgrs"],
-                    "start_date": start_date.date().isoformat(),
-                    "end_date": end_date.date().isoformat(),
-                    "score": 1,
-                    "originator": "Rutgers_SAM",
-                    "model_content": "annotation",
-                    "validated": "False",
-                    "cache": {
-                        "orig_point": str(point_row.geometry),
-                    },
-                }
-            )
-            vid_space_geometries.append(polygon_video_space)
-            print(polygon)
+            polygon_video_space.to_shapely()
         except Exception:
-            vid_space_summaries.append(
-                {
-                    "type": "site_summary",
-                    "status": "positive_annotated",
-                    "version": "2.0.1",
-                    "site_id": point_row["site_id"],
-                    "mgrs": main_region_header["properties"]["mgrs"],
-                    "start_date": start_date.date().isoformat(),
-                    "end_date": end_date.date().isoformat(),
-                    "score": 1,
-                    "originator": "Rutgers_SAM_Default",
-                    "model_content": "annotation",
-                    "validated": "False",
-                    "cache": {
-                        "orig_point": str(point_row.geometry),
-                    },
-                }
-            )
-            raise NotImplementedError('fixme')
-            # vid_space_geometries.append(default_polygon)
-    wld_space_geometries = [
-        p.warp(warp_vid_from_wld).to_shapely() for p in vid_space_geometries
+            vid_space_summaries.append(properties)
+            raise NotImplementedError('fixme define default polygon')
+            default_polygon = NotImplemented
+            polygon_video_space = default_polygon
+
+        vid_space_summaries.append(properties)
+        vid_space_geometries.append(polygon_video_space)
+
+    # Warp the videospace polygons back into UTM world space.
+    warp_world_from_vid = warp_vid_from_wld.inv()
+
+    utm_space_geometries = [
+        p.warp(warp_world_from_vid).to_shapely() for p in vid_space_geometries
     ]
     wld_gdf = gpd.GeoDataFrame(
-        dict(geometry=wld_space_geometries), crs=region_gdf_utm.crs
+        dict(geometry=utm_space_geometries), crs=region_gdf_utm.crs
     )
+    # Finally convert back to CRS84 to create site summaries
     crs84_gdf = wld_gdf.to_crs("crs84")
     site_sums = []
     for props, geom in zip(vid_space_summaries, crs84_gdf.geometry):
@@ -336,12 +332,12 @@ def get_points(video_obj, filepath_to_points):
         warp_vid_from_wld.to_shapely()
     )
 
-    return region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm
+    return region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84
 
 
 # TODO: add hard coded to config
 def main():
-    """
+    r"""
     IGNORE:
         black /mnt/ssd2/data/test/geowatch/geowatch/tasks/poly_from_point/predict.py
         pyenv shell 3.10.5
@@ -354,10 +350,11 @@ def main():
         python -m geowatch.tasks.poly_from_point.predict --method 'box' \
             --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip" \
             --filepath_to_points "$HOME/data/dvc-repos/smart_phase3_data/annotations/point_based_annotations.zip" \
-            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson" \
+            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson"
 
     """
     config = HeatMapConfig.cli(cmdline=1)
+
     box_width = config.box_size[0]
     box_height = config.box_size[1]
     filepath_to_images = config.filepath_to_images
@@ -368,6 +365,7 @@ def main():
     output = config.file_output
     main_region = RegionModel.coerce(filepath_to_region)
     main_region_header = main_region.header
+    time_pad = kwutil.util_time.timedelta.coerce(config.time_pad)
 
     main_region_header["properties"]["originator"] = "Rutgers"
     main_region_header["properties"]["comments"] = "SAM Points"
@@ -380,12 +378,9 @@ def main():
     video_obj = list(dset.videos().objs)[0]
     video_image_ids = dset.images(video_id=video_obj["id"])
 
-    region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm = get_points(
+    region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84 = get_points(
         video_obj, filepath_to_points
     )
-    count = 0
-    geo_polygons_total = []
-    count_individual_mask = 0
     if method == "box":
         regions = kwimage.Boxes(
             [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
@@ -398,12 +393,17 @@ def main():
             main_region_header,
             warp_vid_from_wld,
             region_gdf_utm,
+            region_gdf_crs84,
+            time_pad,
         )
         output = ub.Path(output)
         output.write_text(result.dumps())
 
         ...
     if method == "sam":
+        count = 0
+        geo_polygons_total = []
+        count_individual_mask = 0
         # average_image = kwarray.Stitcher((video_obj["height"], video_obj["width"]))
         all_predicted_regions = np.zeros(
             (len(region_points_gdf_vidspace), video_obj["height"], video_obj["width"])
@@ -480,6 +480,8 @@ def main():
             region_points_gdf_imgspace,
             warp_vid_from_wld,
             region_gdf_utm,
+            region_gdf_crs84,
+            time_pad,
         )
         print(result.dumps())
         output.write_text(result.dumps())
