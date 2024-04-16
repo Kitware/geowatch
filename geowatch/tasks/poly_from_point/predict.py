@@ -35,11 +35,13 @@ SeeAlso:
     :mod:`geowatch.cli.reproject_annotations` - for logic we use to reproject
     polygon annotations on to pixel datasets.
 """
+
 import geowatch_tpl  # NOQA
 import scriptconfig as scfg
 import numpy as np
 import torch
-#from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
+
+# from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
 import argparse
 import geopandas as gpd
 import geowatch
@@ -109,13 +111,16 @@ class HeatMapConfig(scfg.DataConfig):
         "/mnt/ssd3//segment-anything/demo/model/sam_vit_h_4b8939.pth",
         help="Filepath to SAM model",
     )
-    file_output = scfg.Value("KR_R002-SAM.geojson" ,help="Output dest")
+    file_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
     box_size = scfg.Value(
         [20.06063, 20.0141229],
         help="Specify Bounding Box for SAM to use during prediction",
     )
 
-    method =scfg.Value("sam",choices=['sam','box'], help="Method for extracting polygons from points")
+    method = scfg.Value(
+        "sam", choices=["sam", "box"], help="Method for extracting polygons from points"
+    )
+
 
 def extract_sam_polygons(
     image_id,
@@ -125,26 +130,33 @@ def extract_sam_polygons(
     warp_vid_from_wld,
     region_gdf_utm,
 ):
-    for idx, mask in enumerate(all_predicted_regions):
-    
-        res = mask > (45 * (image_id + 1)) / 100
-        point_row = region_gdf_utm.iloc[idx]
-        mask = kwimage.Mask(res, "c_mask")
-        polygon = mask.to_multi_polygon()
-        polygon_video_space = polygon.convex_hull
-        polygon.to_shapely()
-        yield polygon
+    default = np.zeros(polygons[0].shape)
+    default = default > 1
+    default[0:9, 0:9] = True
+    mask = kwimage.Mask(default, "c_mask")
+    default_polygon = mask.to_multi_polygon()
+    default_polygon = default_polygon.convex_hull
 
-    ...
+    for idx, mask in enumerate(all_predicted_regions):
+        try:
+            res = mask > (45 * (image_id + 1)) / 100
+            point_row = region_gdf_utm.iloc[idx]
+            mask = kwimage.Mask(res, "c_mask")
+            polygon = mask.to_multi_polygon()
+            polygon_video_space = polygon.convex_hull
+            polygon.to_shapely()
+            yield polygon
+        except Exception:
+            ...
+
+
 def convert_polygons_to_region_model(
     polygons,
     main_region_header,
-    region_points_gdf_imgspace,
     warp_vid_from_wld,
     region_gdf_utm,
 ):
     print(f"{len(polygons)=}")
-    print(f"{len(region_points_gdf_imgspace)=}")
     time_pad = kwutil.util_time.timedelta.coerce("1 year")
     vid_space_summaries = []
     vid_space_geometries = []
@@ -157,7 +169,7 @@ def convert_polygons_to_region_model(
     default_polygon = default_polygon.convex_hull
     """
 
-    for idx,polygon in enumerate(polygons):
+    for idx, polygon in enumerate(polygons):
         try:
             point_row = region_gdf_utm.iloc[idx]
             mid_date = kwutil.util_time.datetime.coerce(point_row["date"])
@@ -350,9 +362,9 @@ def get_points(video_obj, filepath_to_points):
 
 # TODO: add hard coded to config
 def main():
-
     """
     IGNORE:
+        black /mnt/ssd2/data/test/geowatch/geowatch/tasks/poly_from_point/predict.py
         pyenv shell 3.10.5
         source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
         python -m geowatch.tasks.poly_from_point.predict --method 'box'
@@ -377,7 +389,6 @@ def main():
     main_region_header["properties"]["originator"] = "Rutgers"
     main_region_header["properties"]["comments"] = "SAM Points"
 
-
     # Now for each image we can project the points into its on-disk coordinates
     # (Note: if we have already sampled image data in video space, you can use the
     #  above points directly, but for completeness this example demonstrates
@@ -392,39 +403,33 @@ def main():
     count = 0
     geo_polygons_total = []
     count_individual_mask = 0
-    if(method =='box'):
+    if method == "box":
         regions = kwimage.Boxes(
             [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
             "cxywh",
-            )
+        )
         polygons = regions.to_polygons()
 
         result = convert_polygons_to_region_model(
             polygons,
             main_region_header,
-            region_points_gdf_imgspace,
             warp_vid_from_wld,
             region_gdf_utm,
         )
         output = ub.Path(output)
         output.write_text(result.dumps())
 
-
-            
-
-
         ...
-    if(method == 'sam'):
+    if method == "sam":
         average_image = kwarray.Stitcher((video_obj["height"], video_obj["width"]))
         all_predicted_regions = np.zeros(
-        (len(region_points_gdf_vidspace), video_obj["height"], video_obj["width"])
-         )
-        segment_anything = geowatch_tpl.import_submodule('segment_anything')
-        SamAutomaticMaskGenerator =segment_anything.SamAutomaticMaskGenerator
-        SamPredictor =segment_anything.SamPredictor
+            (len(region_points_gdf_vidspace), video_obj["height"], video_obj["width"])
+        )
+        segment_anything = geowatch_tpl.import_submodule("segment_anything")
+        SamAutomaticMaskGenerator = segment_anything.SamAutomaticMaskGenerator
+        SamPredictor = segment_anything.SamPredictor
         sam_model_registry = segment_anything.sam_model_registry
         predictor = load_sam(filepath_to_sam)
-
 
         for image_id in ub.ProgIter(video_image_ids, desc="Looping Over Videos..."):
             geo_polygons_image = []
@@ -479,14 +484,16 @@ def main():
             count = count + 1
         # geo_masks_total=np.reshape(geo_masks_total,(image_id+1,len(region_points_gdf_imgspace)))
 
-        polygons = list(extract_sam_polygons(
-    image_id,
-    all_predicted_regions,
-    main_region_header,
-    region_points_gdf_imgspace,
-    warp_vid_from_wld,
-    region_gdf_utm,
-        ))
+        polygons = list(
+            extract_sam_polygons(
+                image_id,
+                all_predicted_regions,
+                main_region_header,
+                region_points_gdf_imgspace,
+                warp_vid_from_wld,
+                region_gdf_utm,
+            )
+        )
 
         result = convert_polygons_to_region_model(
             polygons,
