@@ -362,6 +362,11 @@ def main():
             --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
             --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
+
+        python -m geowatch.tasks.poly_from_point.predict \
+            --method 'box' \
+            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
     """
     config = HeatMapConfig.cli(cmdline=1)
     import rich
@@ -400,19 +405,6 @@ def main():
             "cxywh",
         )
         polygons = regions.to_polygons()
-
-        result = convert_polygons_to_region_model(
-            polygons,
-            main_region_header,
-            warp_vid_from_wld,
-            region_gdf_utm,
-            region_gdf_crs84,
-            time_pad,
-        )
-        output = ub.Path(output)
-        output.write_text(result.dumps())
-
-        ...
     if method == "sam":
         count_individual_mask = 0
 
@@ -490,16 +482,15 @@ def main():
             )
         )
 
-        result = convert_polygons_to_region_model(
-            polygons,
-            main_region_header,
-            warp_vid_from_wld,
-            region_gdf_utm,
-            region_gdf_crs84,
-            time_pad,
-        )
-        print(result.dumps())
-        output.write_text(result.dumps())
+    result = convert_polygons_to_region_model(
+        polygons,
+        main_region_header,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+        time_pad,
+    )
+    output.write_text(result.dumps())
 
 
 if __name__ == "__main__":
