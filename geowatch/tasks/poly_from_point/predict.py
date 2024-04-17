@@ -103,16 +103,25 @@ class HeatMapConfig(scfg.DataConfig):
         help="Filepath to SAM model",
     )
     file_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
-    box_size = scfg.Value(
-        [20.06063, 20.0141229],
-        help="Specify Bounding Box for SAM to use during prediction",
+
+    size_prior = scfg.Value(
+        "20.06063 x 20.0141229 @ 10mGSD",
+        help=ub.paragraph(
+            '''
+            The expected size of the objects in world coorindates.
+            Must be specified as
+            ``<w> x <h> @ <magnitude> <resolution>``. E.g.  ``20x25@10mGSD``
+            will assume objects 200 by 250 meters.
+            '''
+        ),
+        alias=['box_size']
     )
 
     method = scfg.Value(
-        "sam", choices=["sam", "box"], help="Method for extracting polygons from points"
+        "sam", choices=["sam", "box", "ellipse"], help="Method for extracting polygons from points"
     )
 
-    time_pad = scfg.Value('1 year', help='time prior before and after')
+    time_prior = scfg.Value('1 year', help='time prior before and after', alias=['time_pad'])
 
 
 def extract_sam_polygons(
@@ -149,7 +158,7 @@ def convert_polygons_to_region_model(
     warp_vid_from_wld,
     region_gdf_utm,
     region_gdf_crs84,
-    time_pad,
+    time_prior,
 ):
     print(f"{len(polygons)=}")
     """
@@ -170,8 +179,8 @@ def convert_polygons_to_region_model(
         point_row_crs84 = region_gdf_crs84.iloc[idx]
         assert point_row_crs84['site_id'] == point_row_utm['site_id']
         mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
-        start_date = mid_date - time_pad
-        end_date = mid_date + time_pad
+        start_date = mid_date - time_prior
+        end_date = mid_date + time_prior
 
         status = point_row_crs84.status
         if status == 'positive':
@@ -370,8 +379,9 @@ def main():
             --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
 
         python -m geowatch.tasks.poly_from_point.predict \
-            --method 'box' \
+            --method 'ellipse' \
             --file_output KR_R001-genpoints.geojson \
+            --size_prior "20@10mGSD" \
             --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
             --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
@@ -381,10 +391,12 @@ def main():
     config = HeatMapConfig.cli(cmdline=1)
     import rich
     from rich.markup import escape
+
     rich.print(f'config = {escape(ub.urepr(config, nl=1))}')
 
-    box_width = config.box_size[0]
-    box_height = config.box_size[1]
+    from geowatch.utils import util_resolution
+    size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
+
     filepath_to_images = config.filepath_to_images
     filepath_to_sam = config.filepath_to_sam
     filepath_to_points = config.filepath_to_points
@@ -393,7 +405,7 @@ def main():
     output = ub.Path(config.file_output)
     main_region = RegionModel.coerce(filepath_to_region)
     main_region_header = main_region.header
-    time_pad = kwutil.util_time.timedelta.coerce(config.time_pad)
+    time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
 
     main_region_header["properties"]["originator"] = "Rutgers"
     main_region_header["properties"]["comments"] = "SAM Points"
@@ -403,18 +415,31 @@ def main():
     #  above points directly, but for completeness this example demonstrates
     #  how to warp them all the way down to the image level.)
     dset = kwcoco.CocoDataset(filepath_to_images)
+
+    assert dset.n_videos == 1, 'only handling 1 video for now'
+
     video_obj = list(dset.videos().objs)[0]
     video_image_ids = dset.images(video_id=video_obj["id"])
+
+    video_space_gsd = util_resolution.ResolvedUnit.coerce(str(video_obj['target_gsd']) + ' mGSD')
+
+    # Convert the size prior to video space
+    vidspace_size_prior = size_prior.at_resolution(video_space_gsd)
+    prior_width, prior_height = vidspace_size_prior.window
 
     region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84 = get_points(
         video_obj, filepath_to_points
     )
     if method == "box":
-        regions = kwimage.Boxes(
-            [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
+        polygons = kwimage.Boxes(
+            [[p.x, p.y, prior_width, prior_height] for p in region_points_gdf_vidspace],
             "cxywh",
-        )
-        polygons = regions.to_polygons()
+        ).to_polygons()
+    if method == "ellipse":
+        polygons = [
+            kwimage.Polygon.circle(xy=(p.x, p.y), r=(prior_width, prior_height))
+            for p in region_points_gdf_vidspace
+        ]
     if method == "sam":
         count_individual_mask = 0
 
@@ -498,7 +523,7 @@ def main():
         warp_vid_from_wld,
         region_gdf_utm,
         region_gdf_crs84,
-        time_pad,
+        time_prior,
     )
     print(f'Writing output to {output}')
     output.write_text(result.dumps())
