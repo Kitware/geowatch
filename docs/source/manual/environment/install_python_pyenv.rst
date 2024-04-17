@@ -5,7 +5,7 @@ An fully FOSS alternative to a conda environment is pyenv.
 The only real drawback to pyenv is that you must be able to compile Python
 itself.
 
-On ubuntu this can be setup as follows:
+On Ubuntu this can be setup as follows:
 
 .. code:: bash
 

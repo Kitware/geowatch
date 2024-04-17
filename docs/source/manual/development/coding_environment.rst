@@ -8,7 +8,8 @@ Enable Argcomplete
 ==================
 
 Like all scriptconfig powered CLIs, the geowatch CLI uses `argcomplete <https://pypi.org/project/argcomplete/>`_.
-To gain the tab-complete feature in bash run:
+
+For BASH environments, to enable the tab-complete feature run:
 
 .. code-block:: bash
 
@@ -27,6 +28,9 @@ Then to gain the feature in new shells put the following lines in your .bashrc:
 
 If you know of a way to have this feature "install itself" or avoid requiring
 this manual step, please submit an MR!
+
+For non-BASH environemts like Zsh refer to the
+`argcomplete documentation <https://kislyuk.github.io/argcomplete/#activating-global-completion>`_.
 
 
 Useful Aliases
