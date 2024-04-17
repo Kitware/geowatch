@@ -351,7 +351,7 @@ def main():
 
 
     Ignore:
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
         echo "$DVC_DATA_DPATH"
         echo "$DVC_EXPT_DPATH"
@@ -365,8 +365,12 @@ def main():
 
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'box' \
+            --file_output KR_R001-genpoints.geojson \
+            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
             --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+
+        geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
     """
     config = HeatMapConfig.cli(cmdline=1)
     import rich
@@ -490,6 +494,7 @@ def main():
         region_gdf_crs84,
         time_pad,
     )
+    print(f'Writing output to {output}')
     output.write_text(result.dumps())
 
 
