@@ -471,7 +471,7 @@ def main():
             # Get the transform from video space to image space
             # Note that each point is associated with a date, so not all the
             # points warped here are actually associated with this image.
-            warp_img_from_vid = coco_image.warp_img_from_vid
+            # warp_img_from_vid = coco_image.warp_img_from_vid
             # region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
             #   warp_img_from_vid.to_shapely()
             # )
@@ -489,7 +489,7 @@ def main():
             img = kwimage.ensure_uint255(img)
             predictor.set_image(img, "RGB")
             regions = kwimage.Boxes(
-                [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
+                [[p.x, p.y, prior_width, prior_height] for p in region_points_gdf_vidspace],
                 "cxywh",
             )
             regions = regions.to_ltrb()
