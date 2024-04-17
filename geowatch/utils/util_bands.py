@@ -914,7 +914,6 @@ def specialized_index_bands2(delayed=None):
         >>> }
         >>> kwplot.figure(fnum=2)
         >>> sns.histplot(data=df, x='value', hue='variable', palette=palette)
-
         >>> kwplot.figure(fnum=4)
         >>> raw = {
         >>>     'Red': Red,
