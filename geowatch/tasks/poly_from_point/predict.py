@@ -172,16 +172,22 @@ def convert_polygons_to_region_model(
         mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
         start_date = mid_date - time_pad
         end_date = mid_date + time_pad
+
+        status = point_row_crs84.status
+        if status == 'positive':
+            # Translate to a valid T&E positive name
+            status = 'positive_pending'
+
         properties = {
             "type": "site_summary",
-            "status": "positive_annotated",
+            "status": status,
             "version": "2.0.1",
             "site_id": point_row_utm["site_id"],
             "mgrs": main_region_header["properties"]["mgrs"],
             "start_date": start_date.date().isoformat(),
             "end_date": end_date.date().isoformat(),
             "score": 1,
-            "originator": "Rutgers_SAM",
+            "originator": "poly_from_point",  # TODO: add some config info here
             "model_content": "annotation",
             "validated": "False",
             "cache": {
