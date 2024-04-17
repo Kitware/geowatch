@@ -6,6 +6,25 @@ import ubelt as ub
 class RecommendSizeAdjustmentsCLI(scfg.DataConfig):
     """
     Helper to recommend adjustments to network size parameters
+
+    Example:
+
+        MAX_STEPS=10000
+        MAX_EPOCHS=720
+        TRAIN_BATCHES_PER_EPOCH=2666
+        ACCUMULATE_GRAD_BATCHES=32
+        BATCH_SIZE=6
+        TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+        python -m geowatch.cli.experimental.recommend_size_adjustments \
+            --MAX_STEPS=$MAX_STEPS \
+            --MAX_EPOCHS=$MAX_EPOCHS \
+            --BATCH_SIZE=$BATCH_SIZE \
+            --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+            --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+            --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+
     """
     MAX_STEPS               = scfg.Value(None, help='The number of optimizer steps to be taken')
     MAX_EPOCHS              = scfg.Value(None, help='The maximum number of train epochs')

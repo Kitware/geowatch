@@ -137,6 +137,9 @@ virtual environment.
     # Set your shell to use this pyenv shim
     pyenv shell $CHOSEN_PYTHON_VERSION
 
+    # Use global instead of shell to ensure your prefered version is permanent
+    # pyenv global $CHOSEN_PYTHON_VERSION
+
     # Create the virtual environment
     python -m venv $(pyenv prefix)/envs/pyenv-geowatch
 
