@@ -173,7 +173,6 @@ Alternatively, for a fully featured install of GeoWATCH run:
 
 .. code:: bash
 
-   # OR for a more fully featured install use:
    pip install geowatch[headless,optional,development,tests]
 
 
@@ -196,8 +195,10 @@ GeoWATCH provides a tool to install them and complete its installation.
     geowatch finish_install
 
 If you use the fully featured install command (which can be run even if
-GeoWATCH is already installed), you can test that your install is functioning
-correctly by running the doctests in the ``geowatch`` module:
+GeoWATCH is already installed), or have at least installed
+`xdoctest <https://github.com/Erotemic/xdoctest>`_, you can test that your
+install is functioning correctly by running the doctests in the ``geowatch``
+module:
 
 .. code:: bash
 
