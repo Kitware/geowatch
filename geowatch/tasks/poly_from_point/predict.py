@@ -130,7 +130,7 @@ def extract_sam_polygons(
 
     for idx, mask in enumerate(all_predicted_regions):
         try:
-            res = mask > (.45) 
+            res = mask > (.45)
             # point_row = region_gdf_utm.iloc[idx]
             mask = kwimage.Mask(res, "c_mask")
             polygon = mask.to_multi_polygon()
@@ -194,7 +194,7 @@ def convert_polygons_to_region_model(
                 raise Exception
             polygon_video_space = polygon.convex_hull
             polygon_video_space.to_shapely()
-            
+
         except Exception:
             continue
             raise NotImplementedError('fixme define default polygon')
@@ -202,7 +202,7 @@ def convert_polygons_to_region_model(
             polygon_video_space = default_polygon
             vid_space_summaries.append(properties)
             vid_space_geometries.append(polygon_video_space)
-  
+
         else:
             vid_space_summaries.append(properties)
             vid_space_geometries.append(polygon_video_space)
@@ -340,7 +340,6 @@ def get_points(video_obj, filepath_to_points):
     return region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84
 
 
-# TODO: add hard coded to config
 def main():
     r"""
     IGNORE:
@@ -352,13 +351,17 @@ def main():
 
 
     Ignore:
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+        echo "$DVC_DATA_DPATH"
+        echo "$DVC_EXPT_DPATH"
+
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'sam' \
-            --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
-            --filepath_to_points "$HOME/data/dvc-repos/smart_phase3_data/annotations/point_based_annotations.zip" \
-            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R001.geojson" \
-            --filepath_to_sam /home/joncrall/data/dvc-repos/smart_phase3_expt/models/sam/sam_vit_h_4b8939.pth
-
+            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
+            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+            --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
     """
     config = HeatMapConfig.cli(cmdline=1)
     import rich
