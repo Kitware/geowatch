@@ -107,21 +107,25 @@ class HeatMapConfig(scfg.DataConfig):
     size_prior = scfg.Value(
         "20.06063 x 20.0141229 @ 10mGSD",
         help=ub.paragraph(
-            '''
+            """
             The expected size of the objects in world coorindates.
             Must be specified as
             ``<w> x <h> @ <magnitude> <resolution>``. E.g.  ``20x25@10mGSD``
             will assume objects 200 by 250 meters.
-            '''
+            """
         ),
-        alias=['box_size']
+        alias=["box_size"],
     )
 
     method = scfg.Value(
-        "sam", choices=["sam", "box", "ellipse"], help="Method for extracting polygons from points"
+        "sam",
+        choices=["sam", "box", "ellipse"],
+        help="Method for extracting polygons from points",
     )
 
-    time_prior = scfg.Value('1 year', help='time prior before and after', alias=['time_pad'])
+    time_prior = scfg.Value(
+        "1 year", help="time prior before and after", alias=["time_pad"]
+    )
 
 
 def extract_sam_polygons(
@@ -139,7 +143,7 @@ def extract_sam_polygons(
 
     for idx, mask in enumerate(all_predicted_regions):
         try:
-            res = mask > (.45)
+            res = mask > (0.45)
             # point_row = region_gdf_utm.iloc[idx]
             mask = kwimage.Mask(res, "c_mask")
             polygon = mask.to_multi_polygon()
@@ -177,15 +181,15 @@ def convert_polygons_to_region_model(
     for idx, polygon in enumerate(polygons):
         point_row_utm = region_gdf_utm.iloc[idx]
         point_row_crs84 = region_gdf_crs84.iloc[idx]
-        assert point_row_crs84['site_id'] == point_row_utm['site_id']
+        assert point_row_crs84["site_id"] == point_row_utm["site_id"]
         mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
         start_date = mid_date - time_prior
         end_date = mid_date + time_prior
 
         status = point_row_crs84.status
-        if status == 'positive':
+        if status == "positive":
             # Translate to a valid T&E positive name
-            status = 'positive_pending'
+            status = "positive_pending"
 
         properties = {
             "type": "site_summary",
@@ -205,14 +209,14 @@ def convert_polygons_to_region_model(
             },
         }
         try:
-            if polygon is None :
+            if polygon is None:
                 raise Exception
             polygon_video_space = polygon.convex_hull
             polygon_video_space.to_shapely()
 
         except Exception:
             continue
-            raise NotImplementedError('fixme define default polygon')
+            raise NotImplementedError("fixme define default polygon")
             default_polygon = NotImplemented
             polygon_video_space = default_polygon
             vid_space_summaries.append(properties)
@@ -263,7 +267,6 @@ def image_predicted(
 
 
 def show_mask(mask, ax, random_color=False):
-
     color = np.array([255 / 255, 255 / 255, 255 / 255, 1.0])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
@@ -272,7 +275,6 @@ def show_mask(mask, ax, random_color=False):
 
 
 def read_points_anns(filepath_to_points):
-
     fpath = filepath_to_points
     # Read json text directly from the zipfile
     file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
@@ -299,7 +301,6 @@ def load_sam(filepath_to_sam):
 
 
 def comput_average_boxes(dset):
-
     total = []
     for gid in range(len(dset.images().coco_images)):
         coco_img = dset.images().coco_images[gid]
@@ -330,7 +331,6 @@ def comput_average_boxes(dset):
 # TODO: GENERALIZE FOR ALL REGIONS
 # Pick one region coco file
 def get_points(video_obj, filepath_to_points):
-
     # Find the world-space CRS for this region
     video_crs = util_gis.coerce_crs(video_obj["wld_crs_info"])
 
@@ -352,7 +352,12 @@ def get_points(video_obj, filepath_to_points):
         warp_vid_from_wld.to_shapely()
     )
 
-    return region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84
+    return (
+        region_points_gdf_vidspace,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+    )
 
 
 def main():
@@ -392,9 +397,10 @@ def main():
     import rich
     from rich.markup import escape
 
-    rich.print(f'config = {escape(ub.urepr(config, nl=1))}')
+    rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
 
     from geowatch.utils import util_resolution
+
     size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
 
     filepath_to_images = config.filepath_to_images
@@ -416,20 +422,25 @@ def main():
     #  how to warp them all the way down to the image level.)
     dset = kwcoco.CocoDataset(filepath_to_images)
 
-    assert dset.n_videos == 1, 'only handling 1 video for now'
+    assert dset.n_videos == 1, "only handling 1 video for now"
 
     video_obj = list(dset.videos().objs)[0]
     video_image_ids = dset.images(video_id=video_obj["id"])
 
-    video_space_gsd = util_resolution.ResolvedUnit.coerce(str(video_obj['target_gsd']) + ' mGSD')
+    video_space_gsd = util_resolution.ResolvedUnit.coerce(
+        str(video_obj["target_gsd"]) + " mGSD"
+    )
 
     # Convert the size prior to video space
     vidspace_size_prior = size_prior.at_resolution(video_space_gsd)
     prior_width, prior_height = vidspace_size_prior.window
 
-    region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84 = get_points(
-        video_obj, filepath_to_points
-    )
+    (
+        region_points_gdf_vidspace,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+    ) = get_points(video_obj, filepath_to_points)
     if method == "box":
         polygons = kwimage.Boxes(
             [[p.x, p.y, prior_width, prior_height] for p in region_points_gdf_vidspace],
@@ -461,9 +472,9 @@ def main():
             # Note that each point is associated with a date, so not all the
             # points warped here are actually associated with this image.
             warp_img_from_vid = coco_image.warp_img_from_vid
-            #region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
-             #   warp_img_from_vid.to_shapely()
-            #)
+            # region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
+            #   warp_img_from_vid.to_shapely()
+            # )
 
             delayed_img = coco_image.imdelay("red|green|blue", space="video")
             imdata = delayed_img.finalize()
@@ -478,8 +489,7 @@ def main():
             img = kwimage.ensure_uint255(img)
             predictor.set_image(img, "RGB")
             regions = kwimage.Boxes(
-                [[p.x, p.y, box_width, box_height]
-                 for p in region_points_gdf_vidspace],
+                [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
                 "cxywh",
             )
             regions = regions.to_ltrb()
@@ -487,8 +497,8 @@ def main():
             for count_individual_mask, (point, box) in enumerate(
                 zip(region_points_gdf_vidspace, regions)
             ):
-                #if count_individual_mask >10:
-                 #   break
+                # if count_individual_mask >10:
+                #   break
                 masks, scores, logits = predictor.predict(
                     point_coords=np.array([[point.x, point.y]]),
                     point_labels=np.array([1]),
@@ -505,7 +515,7 @@ def main():
 
             # filename = f"{count}_sam_image_mask.png"
             # data = image_predicted(im,geo_polygons_image,filename)
-            #count = count + 1
+            # count = count + 1
         # geo_masks_total=np.reshape(geo_masks_total,(image_id+1,len(region_points_gdf_imgspace)))
         all_predicted_regions /= len(video_image_ids)
         polygons = list(
@@ -525,7 +535,7 @@ def main():
         region_gdf_crs84,
         time_prior,
     )
-    print(f'Writing output to {output}')
+    print(f"Writing output to {output}")
     output.write_text(result.dumps())
 
 
