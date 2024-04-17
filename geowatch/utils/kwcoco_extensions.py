@@ -108,7 +108,7 @@ def populate_watch_fields(
     skip_populate_errors=False,
 ):
     """
-    Aggregate populate function for fields useful to GEOWATCH.
+    Aggregate populate function for fields useful to GeoWATCH.
 
     Args:
         coco_dset (Dataset): dataset to work with

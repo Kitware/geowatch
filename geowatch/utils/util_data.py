@@ -295,7 +295,7 @@ class DataRegistry:
 
 def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     """
-    Return the location of the GEOWATCH DVC Data path if it exists and is in
+    Return the location of the GeoWATCH DVC Data path if it exists and is in
     a "standard" location.
 
     NOTE: other team members can add their "standard" locations if they want.

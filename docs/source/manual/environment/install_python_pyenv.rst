@@ -121,7 +121,7 @@ On Ubuntu this can be setup as follows:
     #### END BASHRC PART ####
 
 
-Create GEOWATCH environment with Pyenv
+Create GeoWATCH environment with Pyenv
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 First create and activate a new virtual environment (note this could be done
@@ -145,9 +145,9 @@ virtual environment.
 
 
 Once you are in a virtual environment (managed by either conda or pyenv), the
-GEOWATCH Python module can then be installed with ``pip`` via the following
+GeoWATCH Python module can then be installed with ``pip`` via the following
 command, where ``/path/to/geowatch-repo`` is the absolute path to the directory
-containing to GEOWATCH repo.
+containing to GeoWATCH repo.
 
 NOTE: It is important you install the module with the editable (``-e``) flag,
 otherwise changes you make to the module, will not be reflected when you run

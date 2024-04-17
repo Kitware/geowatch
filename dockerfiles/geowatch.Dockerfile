@@ -141,7 +141,7 @@ cd /root/code/geowatch
 pwd
 ls -altr
 
-echo "Run GEOWATCH developer setup:"
+echo "Run GeoWATCH developer setup:"
 WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF

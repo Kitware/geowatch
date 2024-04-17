@@ -1,4 +1,4 @@
-Coding Conventions in the GEOWATCH REPO
+Coding Conventions in the GeoWATCH REPO
 =======================================
 
 This document is an effort to list concepts and patterns that you will see if

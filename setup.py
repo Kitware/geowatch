@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     setup(
         name=NAME,
-        author="GEOWATCH developers",
+        author="GeoWATCH developers",
         author_email='kitware@kitware.com',
         python_requires='>=3.10',
         # https://pypi.org/classifiers/

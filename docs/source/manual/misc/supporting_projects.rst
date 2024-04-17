@@ -1,8 +1,8 @@
 Supporting Projects
 ===================
 
-These are a list of important projects that are used extensively in GEOWATCH. In
-some cases these are being developed simultaneously with GEOWATCH.
+These are a list of important projects that are used extensively in GeoWATCH. In
+some cases these are being developed simultaneously with GeoWATCH.
 
 
 * https://gitlab.kitware.com/computer-vision/kwcoco - Importance: CRITICAL - This is our data exchange

@@ -1,4 +1,4 @@
-GEOWATCH TPL
+GeoWATCH TPL
 ============
 
 A package that holds third-party libraries that some geowatch tasks require.

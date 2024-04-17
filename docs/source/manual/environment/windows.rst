@@ -1,4 +1,4 @@
-GEOWATCH On Windows
+GeoWATCH On Windows
 ===================
 
 Windows usage is far less tested than Linux. If possible use Linux, but we will

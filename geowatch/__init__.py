@@ -1,10 +1,10 @@
 """
-The GEOWATCH module
+The GeoWATCH module
 
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
+| The GeoWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The GEOWATCH Github Repo (Mirror)                        | https://github.com/Kitware/geowatch/                           |
+| The GeoWATCH Github Repo (Mirror)                        | https://github.com/Kitware/geowatch/                           |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Pypi                                                     | https://pypi.org/project/geowatch/                             |
 +----------------------------------------------------------+----------------------------------------------------------------+
@@ -115,7 +115,7 @@ __version__ = '0.17.0'
 
 
 # ../dev/maintain/generate_authors.py
-__author__ = 'GEOWATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Connor Greenwell, Benjamin Brodie, Peri Akiva, Usman Rafique, Jacob DeRosa, Matthew Purri, Ajay Upadhyaya, Ji Won Suh, Jacob Birge, Ryan LaClair, Scott Workman, Dexter Lau, Sergii Skakun, Aram Ansary Ogholbake, Cohen Archbold, Bane Sullivan, Srikumar Sastry, Armin Hadzic'
+__author__ = 'GeoWATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Connor Greenwell, Benjamin Brodie, Peri Akiva, Usman Rafique, Jacob DeRosa, Matthew Purri, Ajay Upadhyaya, Ji Won Suh, Jacob Birge, Ryan LaClair, Scott Workman, Dexter Lau, Sergii Skakun, Aram Ansary Ogholbake, Cohen Archbold, Bane Sullivan, Srikumar Sastry, Armin Hadzic'
 
 __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
 __url__ = 'https://gitlab.kitware.com/computer-vision/geowatch'

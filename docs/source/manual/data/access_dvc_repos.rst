@@ -1,10 +1,10 @@
 ****************************
-Accessing GEOWATCH DVC Repos
+Accessing GeoWATCH DVC Repos
 ****************************
 
 NOTE (2024-01-23): See the `new Phase 3 DVC repo docs <./access_internal_phase3_dvc_repos.rst>`_ for the latest data.
 
-This document outlines how to access the GEOWATCH DVC repos for internal
+This document outlines how to access the GeoWATCH DVC repos for internal
 collaberators.
 
 DVC stands for Data Version Control, and is a layer on top of git that helps
@@ -16,14 +16,14 @@ manage larger data files. For more information on DVC see
 
 As of 2022-09-29 there are two primary internal DVC repos:
 
-* The Phase 2 Internal SMART GEOWATCH DVC **Data** Repo:  https://gitlab.kitware.com/smart/smart_data_dvc/
+* The Phase 2 Internal SMART GeoWATCH DVC **Data** Repo:  https://gitlab.kitware.com/smart/smart_data_dvc/
 
-* The Phase 2 Internal SMART GEOWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_expt_dvc/
+* The Phase 2 Internal SMART GeoWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_expt_dvc/
 
 
 Note: There is an additional repo for Drop7 Cropped AC/SC data:
 
-* The Phase 2 Internal SMART GEOWATCH DVC AC/SC **Data** Repo:  https://gitlab.kitware.com/smart/smart_drop7
+* The Phase 2 Internal SMART GeoWATCH DVC AC/SC **Data** Repo:  https://gitlab.kitware.com/smart/smart_drop7
 
 
 This document will outline how to clone the DVC repos, and then how to pull

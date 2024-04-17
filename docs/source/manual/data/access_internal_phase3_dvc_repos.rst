@@ -1,5 +1,5 @@
 ***********************************
-Accessing Phase3 GEOWATCH DVC Repos
+Accessing Phase3 GeoWATCH DVC Repos
 ***********************************
 
 This document was written on 2024-01-23 and is relevant for phase 3 data.
@@ -7,9 +7,9 @@ For phase2 data instructions see: `old phase 2 document <./access_dvc_repos.rst>
 
 For Phase 3, there are two primary internal DVC repos:
 
-* The Phase 3 Internal SMART GEOWATCH DVC **Data** Repo:  https://gitlab.kitware.com/smart/smart_phase3_data/
+* The Phase 3 Internal SMART GeoWATCH DVC **Data** Repo:  https://gitlab.kitware.com/smart/smart_phase3_data/
 
-* The Phase 3 Internal SMART GEOWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_phase3_expt/
+* The Phase 3 Internal SMART GeoWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_phase3_expt/
 
 
 Prerequistes

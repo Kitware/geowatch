@@ -1,8 +1,8 @@
-Installing GEOWATCH For Development
+Installing GeoWATCH For Development
 ===================================
 
 
-There are two methods for installing GEOWATCH in development mode.
+There are two methods for installing GeoWATCH in development mode.
 The first is a local install (recommended), and the second is using a docker
 image. This document goes over both options.
 
@@ -14,7 +14,7 @@ Option 1: Local Install
 Install Python
 ~~~~~~~~~~~~~~
 
-Python 3.8+ is required for GEOWATCH. Python versions can be managed with either
+Python 3.8+ is required for GeoWATCH. Python versions can be managed with either
 conda or pyenv. Working with conda is more beginner friendly, but pyenv has
 less commercial restrictions, but requires a compiler certain system libraries
 (e.g. openssl, sqlite3, readline, ffi, curses, bz2, etc..) to compile Python.
@@ -92,8 +92,8 @@ Option 2: Docker Image
 -----------------------
 
 This repository also includes a ``Dockerfile`` that can be used to
-build the GEOWATCH Docker image.  The built Docker image will have the
-GEOWATCH Conda environment and GEOWATCH Python module pre-installed.
+build the GeoWATCH Docker image.  The built Docker image will have the
+GeoWATCH Conda environment and GeoWATCH Python module pre-installed.
 
 To build the conda Docker image:
 
