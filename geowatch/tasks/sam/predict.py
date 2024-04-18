@@ -12,7 +12,7 @@ Example:
     >>> import kwcoco
     >>> import ubelt as ub
     >>> # Define where to write the output
-    >>> output_dpath = ub.Path.appdir('geowatch/tests/sam/demo').ensuredir()
+    >>> output_dpath = ub.Path.appdir('/mnt/ssd2/data/test/geowatch/geowatch/tasks/sam').ensuredir()
     >>> output_kwcoco_fpath = output_dpath / 'demo_sam.kwcoco.zip'
     >>> # Define the input
     >>> dset = kwcoco.CocoDataset.demo('vidshapes', num_frames=4, num_videos=1)
