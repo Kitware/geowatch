@@ -30,7 +30,7 @@ class HeatMapConfig(scfg.DataConfig):
         "/mnt/ssd3/segment-anything/demo/model/sam_vit_h_4b8939.pth",
         help="Filepath to SAM model",
     )
-    file_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
+    filepath_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
 
     size_prior = scfg.Value(
         "20.06063 x 20.0141229 @ 10mGSD",
@@ -385,11 +385,11 @@ def load_point_annots(filepath_to_points, region_id):
     else:
         file = open(fpath, 'r')
     with file:
-        gdf_crs84 = gpd.read_file(file)
+        points_gdf_crs84 = gpd.read_file(file)
     # Simplified logic to grab only the rows corresponding to this video based on
     # assumptions about site-id patterns. Not robust.
-    flags = gdf_crs84.site_id.str.startswith(region_id)
-    points_gdf_crs84 = gdf_crs84[flags]
+    flags = points_gdf_crs84.site_id.str.startswith(region_id)
+    points_gdf_crs84 = points_gdf_crs84[flags]
     return points_gdf_crs84
 
 
@@ -518,7 +518,7 @@ def main():
         DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'ellipse' \
-            --file_output KR_R001-genpoints.geojson \
+            --filepath_output KR_R001-genpoints.geojson \
             --region_id KR_R001 \
             --size_prior "20x20@10mGSD" \
             --ignore_buffer None \
@@ -538,7 +538,7 @@ def main():
     import kwimage
 
     filepath_to_points = ub.Path(config.filepath_to_points)
-    file_output = ub.Path(config.file_output)
+    filepath_output = ub.Path(config.filepath_output)
     config.time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
     config.size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
 
@@ -626,8 +626,8 @@ def main():
         points_gdf_crs84,
         config,
     )
-    print(f"Writing output to {file_output}")
-    file_output.write_text(new_region_model.dumps())
+    print(f"Writing output to {filepath_output}")
+    filepath_output.write_text(new_region_model.dumps())
 
 
 if __name__ == "__main__":
