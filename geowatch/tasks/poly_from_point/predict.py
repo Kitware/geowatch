@@ -103,16 +103,29 @@ class HeatMapConfig(scfg.DataConfig):
         help="Filepath to SAM model",
     )
     file_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
-    box_size = scfg.Value(
-        [20.06063, 20.0141229],
-        help="Specify Bounding Box for SAM to use during prediction",
+
+    size_prior = scfg.Value(
+        "20.06063 x 20.0141229 @ 10mGSD",
+        help=ub.paragraph(
+            """
+            The expected size of the objects in world coorindates.
+            Must be specified as
+            ``<w> x <h> @ <magnitude> <resolution>``. E.g.  ``20x25@10mGSD``
+            will assume objects 200 by 250 meters.
+            """
+        ),
+        alias=["box_size"],
     )
 
     method = scfg.Value(
-        "sam", choices=["sam", "box"], help="Method for extracting polygons from points"
+        "sam",
+        choices=["sam", "box", "ellipse"],
+        help="Method for extracting polygons from points",
     )
 
-    time_pad = scfg.Value('1 year', help='time prior before and after')
+    time_prior = scfg.Value(
+        "1 year", help="time prior before and after", alias=["time_pad"]
+    )
 
 
 def extract_sam_polygons(
@@ -130,7 +143,7 @@ def extract_sam_polygons(
 
     for idx, mask in enumerate(all_predicted_regions):
         try:
-            res = mask > (.45) 
+            res = mask > (0.45)
             # point_row = region_gdf_utm.iloc[idx]
             mask = kwimage.Mask(res, "c_mask")
             polygon = mask.to_multi_polygon()
@@ -149,7 +162,7 @@ def convert_polygons_to_region_model(
     warp_vid_from_wld,
     region_gdf_utm,
     region_gdf_crs84,
-    time_pad,
+    time_prior,
 ):
     print(f"{len(polygons)=}")
     """
@@ -168,20 +181,26 @@ def convert_polygons_to_region_model(
     for idx, polygon in enumerate(polygons):
         point_row_utm = region_gdf_utm.iloc[idx]
         point_row_crs84 = region_gdf_crs84.iloc[idx]
-        assert point_row_crs84['site_id'] == point_row_utm['site_id']
+        assert point_row_crs84["site_id"] == point_row_utm["site_id"]
         mid_date = kwutil.util_time.datetime.coerce(point_row_utm["date"])
-        start_date = mid_date - time_pad
-        end_date = mid_date + time_pad
+        start_date = mid_date - time_prior
+        end_date = mid_date + time_prior
+
+        status = point_row_crs84.status
+        if status == "positive":
+            # Translate to a valid T&E positive name
+            status = "positive_pending"
+
         properties = {
             "type": "site_summary",
-            "status": "positive_annotated",
+            "status": status,
             "version": "2.0.1",
             "site_id": point_row_utm["site_id"],
             "mgrs": main_region_header["properties"]["mgrs"],
             "start_date": start_date.date().isoformat(),
             "end_date": end_date.date().isoformat(),
             "score": 1,
-            "originator": "Rutgers_SAM",
+            "originator": "poly_from_point",  # TODO: add some config info here
             "model_content": "annotation",
             "validated": "False",
             "cache": {
@@ -190,19 +209,19 @@ def convert_polygons_to_region_model(
             },
         }
         try:
-            if polygon is None :
+            if polygon is None:
                 raise Exception
             polygon_video_space = polygon.convex_hull
             polygon_video_space.to_shapely()
-            
+
         except Exception:
             continue
-            raise NotImplementedError('fixme define default polygon')
+            raise NotImplementedError("fixme define default polygon")
             default_polygon = NotImplemented
             polygon_video_space = default_polygon
             vid_space_summaries.append(properties)
             vid_space_geometries.append(polygon_video_space)
-  
+
         else:
             vid_space_summaries.append(properties)
             vid_space_geometries.append(polygon_video_space)
@@ -248,7 +267,6 @@ def image_predicted(
 
 
 def show_mask(mask, ax, random_color=False):
-
     color = np.array([255 / 255, 255 / 255, 255 / 255, 1.0])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
@@ -257,7 +275,6 @@ def show_mask(mask, ax, random_color=False):
 
 
 def read_points_anns(filepath_to_points):
-
     fpath = filepath_to_points
     # Read json text directly from the zipfile
     file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
@@ -284,7 +301,6 @@ def load_sam(filepath_to_sam):
 
 
 def comput_average_boxes(dset):
-
     total = []
     for gid in range(len(dset.images().coco_images)):
         coco_img = dset.images().coco_images[gid]
@@ -315,7 +331,6 @@ def comput_average_boxes(dset):
 # TODO: GENERALIZE FOR ALL REGIONS
 # Pick one region coco file
 def get_points(video_obj, filepath_to_points):
-
     # Find the world-space CRS for this region
     video_crs = util_gis.coerce_crs(video_obj["wld_crs_info"])
 
@@ -337,10 +352,14 @@ def get_points(video_obj, filepath_to_points):
         warp_vid_from_wld.to_shapely()
     )
 
-    return region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84
+    return (
+        region_points_gdf_vidspace,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+    )
 
 
-# TODO: add hard coded to config
 def main():
     r"""
     IGNORE:
@@ -352,21 +371,38 @@ def main():
 
 
     Ignore:
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+        echo "$DVC_DATA_DPATH"
+        echo "$DVC_EXPT_DPATH"
+
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'sam' \
-            --filepath_to_images "$HOME/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
-            --filepath_to_points "$HOME/data/dvc-repos/smart_phase3_data/annotations/point_based_annotations.zip" \
-            --filepath_to_region "$HOME/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R001.geojson" \
-            --filepath_to_sam /home/joncrall/data/dvc-repos/smart_phase3_expt/models/sam/sam_vit_h_4b8939.pth
+            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
+            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+            --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
 
+        python -m geowatch.tasks.poly_from_point.predict \
+            --method 'ellipse' \
+            --file_output KR_R001-genpoints.geojson \
+            --size_prior "20@10mGSD" \
+            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
+            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+
+        geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
     """
     config = HeatMapConfig.cli(cmdline=1)
     import rich
     from rich.markup import escape
-    rich.print(f'config = {escape(ub.urepr(config, nl=1))}')
 
-    box_width = config.box_size[0]
-    box_height = config.box_size[1]
+    rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
+
+    from geowatch.utils import util_resolution
+
+    size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
+
     filepath_to_images = config.filepath_to_images
     filepath_to_sam = config.filepath_to_sam
     filepath_to_points = config.filepath_to_points
@@ -375,7 +411,7 @@ def main():
     output = ub.Path(config.file_output)
     main_region = RegionModel.coerce(filepath_to_region)
     main_region_header = main_region.header
-    time_pad = kwutil.util_time.timedelta.coerce(config.time_pad)
+    time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
 
     main_region_header["properties"]["originator"] = "Rutgers"
     main_region_header["properties"]["comments"] = "SAM Points"
@@ -385,31 +421,35 @@ def main():
     #  above points directly, but for completeness this example demonstrates
     #  how to warp them all the way down to the image level.)
     dset = kwcoco.CocoDataset(filepath_to_images)
+
+    assert dset.n_videos == 1, "only handling 1 video for now"
+
     video_obj = list(dset.videos().objs)[0]
     video_image_ids = dset.images(video_id=video_obj["id"])
 
-    region_points_gdf_vidspace, warp_vid_from_wld, region_gdf_utm, region_gdf_crs84 = get_points(
-        video_obj, filepath_to_points
-    )
+    video_space_gsd = util_resolution.ResolvedUnit.coerce(
+        video_obj["target_gsd"], default_unit='mGSD')
+
+    # Convert the size prior to video space
+    vidspace_size_prior = size_prior.at_resolution(video_space_gsd)
+    prior_width, prior_height = vidspace_size_prior.window
+
+    (
+        region_points_gdf_vidspace,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+    ) = get_points(video_obj, filepath_to_points)
     if method == "box":
-        regions = kwimage.Boxes(
-            [[p.x, p.y, box_width, box_height] for p in region_points_gdf_vidspace],
+        polygons = kwimage.Boxes(
+            [[p.x, p.y, prior_width, prior_height] for p in region_points_gdf_vidspace],
             "cxywh",
-        )
-        polygons = regions.to_polygons()
-
-        result = convert_polygons_to_region_model(
-            polygons,
-            main_region_header,
-            warp_vid_from_wld,
-            region_gdf_utm,
-            region_gdf_crs84,
-            time_pad,
-        )
-        output = ub.Path(output)
-        output.write_text(result.dumps())
-
-        ...
+        ).to_polygons()
+    if method == "ellipse":
+        polygons = [
+            kwimage.Polygon.circle(xy=(p.x, p.y), r=(prior_width, prior_height))
+            for p in region_points_gdf_vidspace
+        ]
     if method == "sam":
         count_individual_mask = 0
 
@@ -430,10 +470,10 @@ def main():
             # Get the transform from video space to image space
             # Note that each point is associated with a date, so not all the
             # points warped here are actually associated with this image.
-            warp_img_from_vid = coco_image.warp_img_from_vid
-            #region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
-             #   warp_img_from_vid.to_shapely()
-            #)
+            # warp_img_from_vid = coco_image.warp_img_from_vid
+            # region_points_gdf_imgspace = region_points_gdf_vidspace.affine_transform(
+            #   warp_img_from_vid.to_shapely()
+            # )
 
             delayed_img = coco_image.imdelay("red|green|blue", space="video")
             imdata = delayed_img.finalize()
@@ -448,8 +488,7 @@ def main():
             img = kwimage.ensure_uint255(img)
             predictor.set_image(img, "RGB")
             regions = kwimage.Boxes(
-                [[p.x, p.y, box_width, box_height]
-                 for p in region_points_gdf_vidspace],
+                [[p.x, p.y, prior_width, prior_height] for p in region_points_gdf_vidspace],
                 "cxywh",
             )
             regions = regions.to_ltrb()
@@ -457,8 +496,8 @@ def main():
             for count_individual_mask, (point, box) in enumerate(
                 zip(region_points_gdf_vidspace, regions)
             ):
-                #if count_individual_mask >10:
-                 #   break
+                # if count_individual_mask >10:
+                #   break
                 masks, scores, logits = predictor.predict(
                     point_coords=np.array([[point.x, point.y]]),
                     point_labels=np.array([1]),
@@ -475,7 +514,7 @@ def main():
 
             # filename = f"{count}_sam_image_mask.png"
             # data = image_predicted(im,geo_polygons_image,filename)
-            #count = count + 1
+            # count = count + 1
         # geo_masks_total=np.reshape(geo_masks_total,(image_id+1,len(region_points_gdf_imgspace)))
         all_predicted_regions /= len(video_image_ids)
         polygons = list(
@@ -487,16 +526,16 @@ def main():
             )
         )
 
-        result = convert_polygons_to_region_model(
-            polygons,
-            main_region_header,
-            warp_vid_from_wld,
-            region_gdf_utm,
-            region_gdf_crs84,
-            time_pad,
-        )
-        print(result.dumps())
-        output.write_text(result.dumps())
+    result = convert_polygons_to_region_model(
+        polygons,
+        main_region_header,
+        warp_vid_from_wld,
+        region_gdf_utm,
+        region_gdf_crs84,
+        time_prior,
+    )
+    print(f"Writing output to {output}")
+    output.write_text(result.dumps())
 
 
 if __name__ == "__main__":
