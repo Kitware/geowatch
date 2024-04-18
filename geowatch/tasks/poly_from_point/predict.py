@@ -428,8 +428,7 @@ def main():
     video_image_ids = dset.images(video_id=video_obj["id"])
 
     video_space_gsd = util_resolution.ResolvedUnit.coerce(
-        str(video_obj["target_gsd"]) + " mGSD"
-    )
+        video_obj["target_gsd"], default_unit='mGSD')
 
     # Convert the size prior to video space
     vidspace_size_prior = size_prior.at_resolution(video_space_gsd)
