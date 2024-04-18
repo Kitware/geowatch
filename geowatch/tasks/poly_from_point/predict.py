@@ -380,7 +380,10 @@ def get_vidspace_info(video_obj):
 def load_point_annots(filepath_to_points, region_id):
     fpath = filepath_to_points
     # Read json text directly from the zipfile
-    file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
+    if fpath.endswith('.zip'):
+        file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
+    else:
+        file = open(fpath, 'r')
     with file:
         gdf_crs84 = gpd.read_file(file)
     # Simplified logic to grab only the rows corresponding to this video based on
@@ -518,9 +521,9 @@ def main():
             --file_output KR_R001-genpoints.geojson \
             --region_id KR_R001 \
             --size_prior "20x20@10mGSD" \
-            --ignore_buffer "10@10mGSD" \
+            --ignore_buffer None \
             --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
-            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+            --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
 
         geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
