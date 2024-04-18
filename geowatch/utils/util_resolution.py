@@ -26,7 +26,10 @@ RESOLUTION_GRAMMAR_PARTS = ub.codeblock(
 
     unit: WORD
 
-    resolved_unit: magnitude WS* unit
+    numeric_unit: (magnitude WS* unit)
+    implicit_unit: unit
+
+    resolved_unit: numeric_unit | implicit_unit
 
     %import common.NUMBER
     %import common.WS
@@ -117,11 +120,22 @@ class ResolvedTransformer(ExtendedTransformer):
     def unit(self, items):
         return items[0].value
 
-    def resolved_unit(self, items):
+    def implicit_unit(self, items):
+        info = {
+            'mag': 1,
+            'unit': items[-1],
+        }
+        return info
+
+    def numeric_unit(self, items):
         info = {
             'mag': items[0],
             'unit': items[-1],
         }
+        return info
+
+    def resolved_unit(self, items):
+        info = items[0]
         return info
 
 
@@ -372,3 +386,45 @@ class ResolvedWindow(Resolved, ub.NiceRepr):
 
     def __nice__(self):
         return (f'{self.window} @ {self.resolution.__nice__()}')
+
+    # TODO:
+    # More flexible inputs
+    # @classmethod
+    # def coerce(cls, data, default_unit=None):
+    #     """
+    #     Example:
+    #         >>> from geowatch.utils.util_resolution import *  # NOQA
+    #         >>> windows = []
+    #         >>> windows.append(ResolvedWindow.coerce("128@10GSD"))
+    #         >>> windows.append(ResolvedWindow.coerce(128, default_unit='10mGSD'))
+    #         >>> windows.append(ResolvedWindow.coerce([128, 128], default_unit='10mGSD'))
+    #         >>> windows.append(ResolvedWindow.coerce(1280, default_unit='mGSD'))
+    #         >>> windows.append(ResolvedWindow.coerce('1280', default_unit='mGSD'))
+    #         >>> print(f'windows = {ub.urepr(windows, nl=1)}')
+    #     """
+    #     is_string = isinstance(data, str)
+    #     if is_string:
+    #         # Allow the input to be given as a numeric string
+    #         try:
+    #             mag = _int_or_float(data)
+    #         except Exception:
+    #             ...
+    #         else:
+    #             data = mag
+    #             is_string = False
+
+    #     if isinstance(data, str):
+    #         self = cls.parse(data)
+
+    #     if ub.iterable(data):
+    #         self = cls.parse(data)
+
+    #     elif isinstance(data, numbers.Number):
+    #         if default_unit is None:
+    #             raise ValueError(
+    #                 'must provide a default unit if numberic input is given')
+    #         default_unit = ResolvedUnit.coerce(default_unit)
+    #         self = cls(data, default_unit)
+    #     else:
+    #         raise TypeError(type(data))
+    #     return self
