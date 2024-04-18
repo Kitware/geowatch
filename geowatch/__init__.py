@@ -96,6 +96,14 @@ You probably wont need:
     geowatch_dvc add my_phase2_data_repo --path=<path-to-your-phase2-data-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_data
     geowatch_dvc add my_phase2_expt_repo --path=<path-to-your-phase2-expt-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_expt
 
+
+.. code:: python
+
+    # Useful Python Snippets
+    import geowatch
+    data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='auto')
+    expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_expt', hardware='auto')
+
 """
 import os
 import sys
