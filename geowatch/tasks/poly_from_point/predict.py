@@ -593,7 +593,8 @@ def main():
     if utm_crs is None:
         from geowatch.utils import util_gis
 
-        points_gdf_utm = util_gis.project_gdf_to_local_utm(points_gdf_crs84)
+        points_gdf_utm = util_gis.project_gdf_to_local_utm(
+            points_gdf_crs84, max_utm_zones=10, mode=1)
         utm_crs = points_gdf_utm.crs
     else:
         points_gdf_utm = points_gdf_crs84.to_crs(utm_crs)

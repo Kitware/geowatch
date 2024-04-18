@@ -10,7 +10,7 @@ def main():
     data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
     # expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_expt', hardware='auto')
 
-    kwcoco_dpath = (data_dvc_dpath / 'Drop8-ARA-Median10GSD-V1')
+    kwcoco_bundle_dpath = (data_dvc_dpath / 'Drop8-ARA-Median10GSD-V1')
 
     region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-v1/region_models')
     points_fpath = data_dvc_dpath / 'annotations/point_based_annotations.zip'
@@ -75,7 +75,7 @@ def main():
     )
     region_model_list = list(region_dpath.glob("*.geojson"))
 
-    queue = cmd_queue.Queue.create(backend="tmux", size=4)
+    queue = cmd_queue.Queue.create(backend="tmux", size=16)
     # queue.add_header_command(
     #     ub.codeblock(
     #         """
@@ -92,9 +92,9 @@ def main():
 
     status_rows = []
     for region_path in region_model_list:
-        region_id = region_path.stem
+        region_id = region_path.stem.strip()
         kwcoco_path = (
-            kwcoco_dpath / region_id / (f"imgonly-{region_id}-rawbands.kwcoco.zip")
+            kwcoco_bundle_dpath / region_id / (f"imgonly-{region_id}-rawbands.kwcoco.zip")
         )
         has_points = region_id in regions_with_points
         has_kwcoco = kwcoco_path.exists()
@@ -115,7 +115,7 @@ def main():
             }
             polygen_cmd = polygen_template.format(**fmtkw)
             polygen_job = queue.submit(
-                polygen_cmd, name=f"PolyGen: {region_id} ")
+                polygen_cmd, name=f"PolyGen_{region_id}")
 
             DO_DRAW = 1
             if DO_DRAW:
@@ -124,8 +124,22 @@ def main():
                     region_fpath=filepath_output,
                     viz_fpath=viz_fpath,
                 )
-                queue.submit(regionviz_cmd, name=f'Viz: {region_id}',
+                queue.submit(regionviz_cmd, name=f'Viz_{region_id}',
                              depends=polygen_job)
+
+            out_kwcoco_path = (
+                kwcoco_bundle_dpath / region_id / (f"pointannv1-{region_id}-rawbands.kwcoco.zip")
+            )
+            reproject_cmd = ub.codeblock(
+                fr'''
+                geowatch reproject_annotations \
+                    --src "{kwcoco_path}" \
+                    --dst "{out_kwcoco_path}" \
+                    --region_models="{filepath_output}"
+                ''')
+            queue.submit(reproject_cmd, name=f'reproject_{region_id}',
+                         depends=polygen_job)
+
         status_rows.append(row)
 
     import pandas as pd
