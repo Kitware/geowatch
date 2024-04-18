@@ -90,6 +90,8 @@ def main():
         geowatch draw_region "{region_fpath}" --fpath "{viz_fpath}"
         ''')
 
+    force_rerun = 0
+
     status_rows = []
     for region_path in region_model_list:
         region_id = region_path.stem.strip()
@@ -114,18 +116,23 @@ def main():
                 **common_params
             }
             polygen_cmd = polygen_template.format(**fmtkw)
-            polygen_job = queue.submit(
-                polygen_cmd, name=f"PolyGen_{region_id}")
+
+            if not filepath_output.exists() or force_rerun:
+                polygen_job = queue.submit(
+                    polygen_cmd, name=f"PolyGen_{region_id}")
+            else:
+                polygen_job = None
 
             DO_DRAW = 1
             if DO_DRAW:
                 viz_fpath = viz_region_dpath / f'point_viz_{region_id}.png'
-                regionviz_cmd = regionviz_template.format(
-                    region_fpath=filepath_output,
-                    viz_fpath=viz_fpath,
-                )
-                queue.submit(regionviz_cmd, name=f'Viz_{region_id}',
-                             depends=polygen_job)
+                if not viz_fpath.exists() or force_rerun:
+                    regionviz_cmd = regionviz_template.format(
+                        region_fpath=filepath_output,
+                        viz_fpath=viz_fpath,
+                    )
+                    queue.submit(regionviz_cmd, name=f'Viz_{region_id}',
+                                 depends=polygen_job)
 
             out_kwcoco_path = (
                 kwcoco_bundle_dpath / region_id / (f"pointannv1-{region_id}-rawbands.kwcoco.zip")
@@ -137,8 +144,9 @@ def main():
                     --dst "{out_kwcoco_path}" \
                     --region_models="{filepath_output}"
                 ''')
-            queue.submit(reproject_cmd, name=f'reproject_{region_id}',
-                         depends=polygen_job)
+            if not out_kwcoco_path.exists() or force_rerun:
+                queue.submit(reproject_cmd, name=f'reproject_{region_id}',
+                             depends=polygen_job)
 
         status_rows.append(row)
 
