@@ -8,8 +8,10 @@ import kwutil
 
 
 class HeatMapConfig(scfg.DataConfig):
-
-    region_id = scfg.Value(None, help='if the kwcoco file is unspecified, the region_id to extract points from must be given.')
+    region_id = scfg.Value(
+        None,
+        help="if the kwcoco file is unspecified, the region_id to extract points from must be given.",
+    )
 
     filepath_to_images = scfg.Value(
         "/mnt/ssd2/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip",
@@ -62,6 +64,7 @@ class HeatMapConfig(scfg.DataConfig):
     time_prior = scfg.Value(
         "1 year", help="time prior before and after", alias=["time_pad"]
     )
+
 
 """
 NOTES:
@@ -133,16 +136,15 @@ SeeAlso:
 # TODO : kwutil.util_time.timedelta.coerce
 
 
-def convert_polygons_to_region_model(utm_polygons,
-                                     main_region_header,
-                                     points_gdf_utm,
-                                     points_gdf_crs84,
-                                     config):
+def convert_polygons_to_region_model(
+    utm_polygons, main_region_header, points_gdf_utm, points_gdf_crs84, config
+):
     """
     Given polygons in a CRS, convert them to CRS84 polygon-based RegionModels.
     """
     from geowatch.utils import util_resolution
-    utm_gsd = util_resolution.ResolvedUnit.coerce('1mGSD')
+
+    utm_gsd = util_resolution.ResolvedUnit.coerce("1mGSD")
 
     if config.ignore_buffer is not None:
         ignore_buffer_size = config.ignore_buffer.at_resolution(utm_gsd).scalar
@@ -205,19 +207,21 @@ def convert_polygons_to_region_model(utm_polygons,
             new_utm_geometries.append(polygon_video_space)
 
     new_utm_gdf = gpd.GeoDataFrame(
-        {'geometry': new_utm_geometries},
-        crs=points_gdf_utm.crs)
+        {"geometry": new_utm_geometries}, crs=points_gdf_utm.crs
+    )
 
-    region_id = main_region_header["properties"]['region_id']
+    region_id = main_region_header["properties"]["region_id"]
 
     if ignore_buffer_size is not None:
         # Hack to find a good new site id starting point for the dummy ignore polys
         # we will add.
-        max_site_id = max(points_gdf_crs84['site_id'].apply(lambda x: int(x.split('_')[-1])))
+        max_site_id = max(
+            points_gdf_crs84["site_id"].apply(lambda x: int(x.split("_")[-1]))
+        )
         next_site_num = max_site_id + 1
 
         # Add ignore buffer regions
-        buffered_shapes = new_utm_gdf['geometry'].buffer(ignore_buffer_size)
+        buffered_shapes = new_utm_gdf["geometry"].buffer(ignore_buffer_size)
 
         # new_utm_gdf[new_utm_gdf['status'] != 'ignore'].unary_union
         # new_union_geom = new_utm_gdf.unary_union
@@ -227,11 +231,11 @@ def convert_polygons_to_region_model(utm_polygons,
         new_ignore_polys = []
         new_ignore_props = []
         for geom, props in zip(new_ignore_geoms, new_properties):
-            start_date = props['start_date']
-            end_date = props['end_date']
+            start_date = props["start_date"]
+            end_date = props["end_date"]
             # Breakup multipolygons into multiple new "sites"
             polys = []
-            if geom.geom_type == 'MultiPolygon':
+            if geom.geom_type == "MultiPolygon":
                 polys = [p for p in geom.geoms if p.is_valid]
                 for poly in geom.geoms:
                     if poly.is_valid:
@@ -240,10 +244,10 @@ def convert_polygons_to_region_model(utm_polygons,
                 polys = [geom]
 
             for poly in polys:
-                new_site_id = f'{region_id}_{next_site_num:04d}'
+                new_site_id = f"{region_id}_{next_site_num:04d}"
                 ignore_prop = {
                     "type": "site_summary",
-                    "status": 'ignore',
+                    "status": "ignore",
                     "version": "2.0.1",
                     "site_id": new_site_id,
                     "mgrs": main_region_header["properties"]["mgrs"],
@@ -262,8 +266,8 @@ def convert_polygons_to_region_model(utm_polygons,
         new_utm_geometries = new_utm_geometries + new_ignore_polys
         new_properties = new_properties + new_ignore_props
         new_utm_gdf = gpd.GeoDataFrame(
-            {'geometry': new_utm_geometries},
-            crs=points_gdf_utm.crs)
+            {"geometry": new_utm_geometries}, crs=points_gdf_utm.crs
+        )
 
     # Convert the new UTM geometrices back into CRS84
     new_crs84_gdf = new_utm_gdf.to_crs("crs84")
@@ -280,6 +284,7 @@ def convert_polygons_to_region_model(utm_polygons,
 
 def extract_polygons(im):
     import kwimage
+
     data = im > 0.5
     mask = kwimage.Mask(data, "c_mask")
     polygon = mask.to_multi_polygon()
@@ -288,6 +293,7 @@ def extract_polygons(im):
 
 def image_predicted(im, geo_polygons_image, filename):
     import kwimage
+
     im = np.zeros((len(im), len(im[0])))
     for mask in geo_polygons_image:
         np.logical_or(im, mask, out=im)
@@ -306,6 +312,7 @@ def load_sam(filepath_to_sam):
     # from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
     import geowatch_tpl
     import torch
+
     segment_anything = geowatch_tpl.import_submodule("segment_anything")
     # SamAutomaticMaskGenerator = segment_anything.SamAutomaticMaskGenerator
     SamPredictor = segment_anything.SamPredictor
@@ -325,6 +332,7 @@ def load_sam(filepath_to_sam):
 def comput_average_boxes(dset):
     import kwimage
     from sklearn.cluster import KMeans
+
     total = []
     for gid in range(len(dset.images().coco_images)):
         coco_img = dset.images().coco_images[gid]
@@ -358,6 +366,7 @@ def get_vidspace_info(video_obj):
     """
     from geowatch.utils import util_gis
     import kwimage
+
     # Find the world-space CRS for this region
     video_crs = util_gis.coerce_crs(video_obj["wld_crs_info"])
     # Build the affine transform from world space to video space.
@@ -390,14 +399,15 @@ def convert_points_to_poly_with_sam_method(dset, video_obj, points_gdf_utm, conf
     video_image_ids = dset.images(video_id=video_obj["id"])
 
     # Now we can warp all the points into video space.
-    points_vidspace = points_gdf_utm['geometry'].affine_transform(
+    points_vidspace = points_gdf_utm["geometry"].affine_transform(
         warp_vid_from_utm.to_shapely()
     )
 
     warp_utm_from_vid = warp_vid_from_utm.inv()
 
     video_space_gsd = util_resolution.ResolvedUnit.coerce(
-        video_obj["target_gsd"], default_unit='mGSD')
+        video_obj["target_gsd"], default_unit="mGSD"
+    )
     size_prior_vidspace = config.size_prior.at_resolution(video_space_gsd)
     prior_width, prior_height = size_prior_vidspace.window
 
@@ -518,20 +528,24 @@ def main():
     config = HeatMapConfig.cli(cmdline=1)
     import rich
     from rich.markup import escape
+
     rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
 
     from geowatch.utils import util_resolution
     import kwimage
+
     filepath_to_points = ub.Path(config.filepath_to_points)
     file_output = ub.Path(config.file_output)
     config.time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
     config.size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
 
     if config.ignore_buffer is not None:
-        config.ignore_buffer = util_resolution.ResolvedScalar.coerce(config.ignore_buffer)
+        config.ignore_buffer = util_resolution.ResolvedScalar.coerce(
+            config.ignore_buffer
+        )
 
     if not filepath_to_points.exists():
-        raise FileNotFoundError(f'filepath_to_points={filepath_to_points}')
+        raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
 
     main_region = RegionModel.coerce(config.filepath_to_region)
     main_region_header = main_region.header
@@ -542,7 +556,7 @@ def main():
     if config.filepath_to_images is not None:
         filepath_to_images = ub.Path(config.filepath_to_images)
         if not filepath_to_images.exists():
-            raise FileNotFoundError(f'filepath_to_points={filepath_to_points}')
+            raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
 
         # Load the kwcoco file and use its metadata extract information about
         # video space.  We convert the size priors to videospace in this case.
@@ -554,19 +568,19 @@ def main():
         if config.region_id is None:
             config.region_id = video_obj["name"]
 
-        assert config.region_id == video_obj["name"], 'inconsistent name'
+        assert config.region_id == video_obj["name"], "inconsistent name"
 
         utm_crs, warp_vid_from_utm = get_vidspace_info(video_obj)
     else:
         dset = None
         utm_crs = None
         if config.region_id is None:
-            raise ValueError('region_id is required when a kwcoco path is not given')
-        if config.method == 'sam':
-            raise ValueError('SAM requires a kwcoco file for video space')
+            raise ValueError("region_id is required when a kwcoco path is not given")
+        if config.method == "sam":
+            raise ValueError("SAM requires a kwcoco file for video space")
 
     # Convert the size prior to meters
-    utm_gsd = util_resolution.ResolvedUnit.coerce('1mGSD')
+    utm_gsd = util_resolution.ResolvedUnit.coerce("1mGSD")
     size_prior_utm = config.size_prior.at_resolution(utm_gsd)
 
     points_gdf_crs84 = load_point_annots(filepath_to_points, config.region_id)
@@ -575,12 +589,13 @@ def main():
     # crs to work with from the kwcoco file, then we need to infer a good one.
     if utm_crs is None:
         from geowatch.utils import util_gis
+
         points_gdf_utm = util_gis.project_gdf_to_local_utm(points_gdf_crs84)
         utm_crs = points_gdf_utm.crs
     else:
         points_gdf_utm = points_gdf_crs84.to_crs(utm_crs)
 
-    points_utm = points_gdf_utm['geometry']
+    points_utm = points_gdf_utm["geometry"]
 
     if config.method == "box":
         prior_width, prior_height = size_prior_utm.window
@@ -596,9 +611,10 @@ def main():
         ]
     elif config.method == "sam":
         utm_polygons = convert_points_to_poly_with_sam_method(
-            dset, video_obj, points_gdf_utm, config)
+            dset, video_obj, points_gdf_utm, config
+        )
     else:
-        raise KeyError(f'Unknown Method: {config.method}')
+        raise KeyError(f"Unknown Method: {config.method}")
 
     new_region_model = convert_polygons_to_region_model(
         utm_polygons,
