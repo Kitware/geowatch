@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.17.0 - Unreleased
 
+### Added
+* New task: `poly_from_point` that contains various methods to transform
+  point-based annotations into polygon-based ones using heuristics.
+
 
 ## Version 0.16.2 - Released 2024-04-15
 
