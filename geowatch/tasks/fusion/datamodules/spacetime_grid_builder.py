@@ -151,7 +151,7 @@ class SpacetimeGridBuilder:
 
             negative_classes (List[str]):
                 indicate class names that should not count towards a region being
-                marked as positive.
+                marked as positive. NOTE: This is old and unused.
 
             respect_valid_regions (bool):
                 if True, only place windows in valid regions
@@ -345,12 +345,12 @@ def sample_video_spacetime_targets(dset,
     if not update_rule:
         update_rule = 'distribute'
 
-    if negative_classes is None:
-        negative_classes = heuristics.BACKGROUND_CLASSES
+    if negative_classes is not None:
         warnings.warn(ub.paragraph(
             f'''
-            Negative classes were not specified to SpacetimeGridBuilder.
-            Using heuristic background classes: {negative_classes}
+            Grid sampler no longer handles negative classes. Instead it
+            provides the user the information to balance positive/negatives
+            after the fact.
             '''))
 
     dset_hashid = dset._cached_hashid()
@@ -371,7 +371,7 @@ def sample_video_spacetime_targets(dset,
         winspace_time_dims,
         window_overlap,
         window_space_scale,
-        negative_classes, keepbound,
+        keepbound,
         include_sensors,
         exclude_sensors,
         select_videos,
@@ -436,7 +436,7 @@ def sample_video_spacetime_targets(dset,
             job = jobs.submit(
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
                 video_id, video_gids, winspace_time_dims, winspace_space_dims,
-                window_overlap, negative_classes, keepbound,
+                window_overlap, keepbound,
                 affinity_type, update_rule, time_span, time_kernel, use_annot_info,
                 use_grid_positives, use_grid_negatives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
@@ -477,7 +477,7 @@ def sample_video_spacetime_targets(dset,
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
     from kwutil.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~...', tail='\n...~')))
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~TRUNCATED...', tail='\n...~')))
     return sample_grid
 
 
@@ -514,7 +514,7 @@ class ImagePropertyCacher:
 @profile
 def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
-        window_overlap, negative_classes,
+        window_overlap,
         keepbound, affinity_type, update_rule, time_span, time_kernel,
         use_annot_info, use_grid_positives, use_grid_negatives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
@@ -596,13 +596,12 @@ def _sample_single_video_spacetime_targets(
 
     depends = [
         dset_hashid,
-        negative_classes,
         affinity_type,
         update_rule,
         video_name,
         gid_arr,
         vidspace_window_dims, window_overlap,
-        negative_classes, keepbound,
+        keepbound,
         affinity_type,
         time_span, use_annot_info,
         use_grid_positives,
@@ -655,8 +654,8 @@ def _sample_single_video_spacetime_targets(
 
         if use_annot_info:
             qtree, tid_to_infos, loose_aid_to_infos = _build_vidspace_track_qtree(
-                dset, video_gids, negative_classes, vidspace_video_width,
-                vidspace_video_height, image_props)
+                dset, video_gids, vidspace_video_width, vidspace_video_height,
+                image_props)
         else:
             qtree = None
             tid_to_infos = None
@@ -931,9 +930,8 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
 
 
 @profile
-def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
-                                vidspace_video_width, vidspace_video_height,
-                                image_props):
+def _build_vidspace_track_qtree(dset, video_gids, vidspace_video_width,
+                                vidspace_video_height, image_props):
     """
     Build a data structure that allows for fast lookup of which annotations
     exist in the in the requested "Window Space".
@@ -977,16 +975,15 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         imgspace_xywh = []
         infos = []
         for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
-            if cname not in negative_classes:
-                imgspace_xywh.append(dset.index.anns[aid]['bbox'])
-                infos.append({
-                    'gid': gid,
-                    'cid': cid,
-                    'tid': tid,
-                    # 'frame_index': frame_index,
-                    'cname': dset._resolve_to_cat(cid)['name'],
-                    'aid': aid,
-                })
+            imgspace_xywh.append(dset.index.anns[aid]['bbox'])
+            infos.append({
+                'gid': gid,
+                'cid': cid,
+                'tid': tid,
+                # 'frame_index': frame_index,
+                'cname': dset._resolve_to_cat(cid)['name'],
+                'aid': aid,
+            })
 
         imgspace_boxes = kwimage.Boxes(np.array(imgspace_xywh), 'xywh')
 
