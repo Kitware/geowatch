@@ -554,7 +554,10 @@ class BalancedSampleTree(ub.NiceRepr):
         for parent, children in parent_to_leafs.items():
             # Group children by the new attribute
             val_to_subgroup = ub.group_items(children, lambda n: self.graph.nodes[n][key])
-            val_to_subgroup = ub.odict(sorted(val_to_subgroup.items()))
+            # try:
+            #     val_to_subgroup = ub.odict(sorted(val_to_subgroup.items()))
+            # except TypeError:
+            #     val_to_subgroup = ub.odict(sorted(val_to_subgroup.items(), key=str))
 
             # Add weights to the prior parent
             if weights is not None:
@@ -562,6 +565,7 @@ class BalancedSampleTree(ub.NiceRepr):
                 denom = weights_group.sum()
                 if denom != 0:
                     weights_group = weights_group / denom
+                    print(f'weights_group={weights_group}')
                     self.graph.nodes[parent]['weights'] = weights_group
                 else:
                     # All options have zero weight, schedule group for pruning

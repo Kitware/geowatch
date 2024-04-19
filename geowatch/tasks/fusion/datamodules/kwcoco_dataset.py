@@ -371,7 +371,24 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         maximum ratio of samples with no annotations to samples with annots.
         Only applies to training dataset when used in the data module.
         Validation/test dataset defaults to zero.
+
+        NOTE: This will be deprecated and superceded by "balance_options".
         '''))
+
+    balance_options = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
+        '''
+        A YAML configuration that determines how to balance across discrete
+        samples based on their annotation content. It should be specified as a
+        list of dictionaries. Each dictionary must specify "attribute" as the
+        name of the attribute to balance across. Each dictionary can optionally
+        specify "weight" as a mapping from attribute values to a numeric weight
+        indicating the relative importance of sampling an attribute with that
+        value. A "default_weight" can be specified for attribute values that
+        are not given. The order of the dictionaries matters. The first item
+        will be perfectly balanced, everything else will be balanced with
+        respect to the previous balancing. New in 0.17.0.
+        '''))
+
     use_grid_cache = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
         '''
         If true, will cache the spacetime grid to make multiple runs quicker.
@@ -388,7 +405,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     prenormalize_inputs = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
         '''
-        New in 0.4.3: Can specified as list of dictionaries that effectively
+        Can specified as list of dictionaries that effectively
         contains the dataset statistics to use. Details of that will be
         documented as the feature matures. See the geowatch.cli.coco_spectra
         script to help determine reasonable values for this. These
@@ -396,7 +413,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         be specified as a list of dictionaries each containing: * mean: * std:
         * min: * max: As well as the Modality to which the normalization
         applies, e.g.: * domain * channels * sensor If set to True, then we try
-        to automatically compute these values.
+        to automatically compute these values. New in 0.4.3.
         '''))
     normalize_perframe = scfg.Value(False, group=NORM_GROUP, help=ub.paragraph(
         '''
@@ -2563,7 +2580,7 @@ class BalanceMixin:
             # they had no annotations OR the only annotations were
             # hueristically marked as negative.
             old_has_class_of_interest = [
-                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) >= 0
+                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) > 0
                 for f in observed_catfreq
             ]
             column_attrs['old_has_class_of_interest'] = old_has_class_of_interest
@@ -2590,59 +2607,48 @@ class BalanceMixin:
         # Balance options are specified as an ordered list of the properties we
         # want to balance over, which can contain optional information about
         # how to do balancing.
+        if self.config.balance_options == 'scott':
+            # Hard coded special mapping for scott
+            balance_options = kwutil.Yaml.coerce(
+                '''
+                - attribute: region
+                - attribute: contains_phase
+                  weights:
+                      False: 0
+                      True: 1
+                - attribute: phases
+                  default_weight: 0.0
+                  weights:
+                      'No Activity': 0.25
+                      'Site Preparation': 0.25
+                      'Active Construction': 0.25
+                      'Post Construction': 0.25
+                ''')
+            balance_options = kwutil.Yaml.coerce(balance_options)
+        else:
+            balance_options = kwutil.Yaml.coerce(self.config.balance_options)
 
-        # This is currently hard coded
-        # balance_options = ub.codeblock(
-        #     '''
-        #     - attribute: region
-        #     - attribute: contains_annotation
-        #       weights:
-        #           True: 0.5
-        #           False: 0.5
-        #     - attribute: class
-        #       default_weight: 0.25
-        #       weights:
-        #           'No Activity': 0.25
-        #           'Site Preparation': 0.25
-        #           'Active Construction': 0.25
-        #           'Post Construction': 0.25
-        #     ''')
-        balance_options = ub.codeblock(
-            '''
-            - attribute: region
-            - attribute: contains_phase
-              weights:
-                  False: 0
-                  True: 1
-            - attribute: phases
-              default_weight: 0.0
-              weights:
-                  'No Activity': 0.25
-                  'Site Preparation': 0.25
-                  'Active Construction': 0.25
-                  'Post Construction': 0.25
-            ''')
-        balance_options = kwutil.Yaml.coerce(balance_options)
+        if balance_options is None:
+            balance_options = []
 
         if BACKWARDS_COMPAT_NEG_TO_POS:
             # If the old neg_to_pos_ratio config option is given, then add a
             # new balance option to the list that reconstructs it.
             npr = self.config['neg_to_pos_ratio']
-            npr_dist = np.asarray([1, npr]) / (1 + npr)
-            balance_options = [{
-                'attribute': 'old_has_class_of_interest',
-                'weights': {
-                    True: npr_dist[0],
-                    False: npr_dist[1],
-                }
-            }] + balance_options
+            if npr is not None:
+                npr_dist = np.asarray([1, npr]) / (1 + npr)
+                balance_options = [{
+                    'attribute': 'old_has_class_of_interest',
+                    'weights': {
+                        True: npr_dist[0],
+                        False: npr_dist[1],
+                    }
+                }] + balance_options
 
         print('Balancing over attributes')
         df_sample_attributes, multilabel_attributes = self._setup_attribute_dataframe(new_sample_grid)
         sample_grid = df_sample_attributes.to_dict('records')
-
         balance_attrs = [d['attribute'] for d in balance_options]
-
         has_multilabel_attributes = set(balance_attrs) & set(multilabel_attributes)
 
         # Initialize an instance of BalancedSampleTree
