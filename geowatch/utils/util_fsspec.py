@@ -184,7 +184,7 @@ class FSPath(str):
         """
         self.fs.touch(self.path, truncate=truncate, **kwargs)
 
-    def move(self, path2, recursive='auto', maxdepth=None, verbose=1, **kwargs):
+    def move(self, path2, recursive='auto', maxdepth=None, idempotent=True, verbose=1, **kwargs):
         """
         Note: this may work differently than ubelt.Path.move, ideally we should
         rectify this. The difference case is what happens when you move:
@@ -237,17 +237,18 @@ class FSPath(str):
         src_path = self.path
         dst_path = path2
 
-        # Ensure that if we're copying directories that the paths have
-        # a trailing slash, otherwise when copying a directory into a
-        # non-empty directory the source directory itself (rather than
-        # just the contents) will be copied into the destination
-        # directory
-        if self.is_dir():
-            if not self.path.endswith('/'):
-                src_path = f"{self.path}/"
+        if idempotent:
+            # Ensure that if we're copying directories that the paths have
+            # a trailing slash, otherwise when copying a directory into a
+            # non-empty directory the source directory itself (rather than
+            # just the contents) will be copied into the destination
+            # directory
+            if self.is_dir():
+                if not self.path.endswith('/'):
+                    src_path = f"{self.path}/"
 
-            if not path2.endswith('/'):
-                dst_path = f"{path2}/"
+                if not path2.endswith('/'):
+                    dst_path = f"{path2}/"
 
         self.fs.move(src_path, dst_path, recursive=recursive, maxdepth=maxdepth,
                      **kwargs)
