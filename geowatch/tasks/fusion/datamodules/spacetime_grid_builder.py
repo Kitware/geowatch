@@ -54,7 +54,7 @@ from geowatch.utils import kwcoco_extensions
 from geowatch import heuristics
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 
@@ -715,13 +715,13 @@ def _sample_single_video_spacetime_targets(
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
             track_infos = list(tid_to_infos.items())
-            for tid, infos in ub.ProgIter(track_infos,
+            for tid, track_info_group in ub.ProgIter(track_infos,
                                           desc='Centered tracks',
                                           enabled=len(track_infos) > 4 and probably_slow,
                                           verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
-                        dset, use_annot_info, qtree, video_id, infos,
+                        dset, use_annot_info, qtree, video_id, track_info_group,
                         video_gids, vidspace_window_dims,
                         time_sampler)
                 new_targets = list(new_targets)
@@ -736,9 +736,9 @@ def _sample_single_video_spacetime_targets(
                                          desc='Centered annots',
                                          enabled=len(loose_aid_to_infos) > 4 and probably_slow,
                                          verbose=verbose * (len(loose_aid_to_infos) > 4 and probably_slow)):
-                infos = [info]
+                track_info_group = [info]
                 new_targets = _build_targets_around_track(
-                        dset, use_annot_info, qtree, video_id, infos,
+                        dset, use_annot_info, qtree, video_id, track_info_group,
                         video_gids, vidspace_window_dims,
                         time_sampler)
                 new_targets = list(new_targets)
@@ -773,20 +773,20 @@ def _sample_single_video_spacetime_targets(
 
 
 @profile
-def _build_targets_around_track(dset, use_annot_info, qtree, video_id, infos, video_gids,
+def _build_targets_around_track(dset, use_annot_info, qtree, video_id, track_info_group, video_gids,
                                 vidspace_window_dims, time_sampler):
     """
     Given information about a track, build targets to ensure the network trains
     with it.
 
     Args:
-        infos (List[Dict]):
+        track_info_group (List[Dict]):
             each row contains gid, aid, cid, tid, frame-index for the track of
             interest.
     """
     window_height, window_width = vidspace_window_dims
     # For every frame in the track
-    for info in infos:
+    for info in track_info_group:
         main_gid = info['gid']
         vidspace_ann_box = kwimage.Box.coerce(info['vidspace_box'], format='tlbr')
         vidspace_ann_box = vidspace_ann_box.quantize()

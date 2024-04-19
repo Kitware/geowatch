@@ -2493,15 +2493,23 @@ class BalanceMixin:
         sample quickly.
         """
         space_slice = target['space_slice']
-        space_box = kwimage.Box.from_slice(space_slice)
+        vid_space_box = kwimage.Box.from_slice(space_slice)
         if sequence:
             all_aids = []
             for gid in target['gids']:
-                aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
+                warp_vid_from_img = sampler.dset.coco_image(gid).warp_vid_from_img
+                warp_img_from_vid = warp_vid_from_img.inv()
+                img_space_box = vid_space_box.warp(warp_img_from_vid)
+                aids = sampler.regions.overlapping_aids(gid, img_space_box.boxes)
                 all_aids.extend(aids)
             return all_aids
         else:
-            return self.sampler.regions.overlapping_aids(target['main_gid'], space_box.boxes)
+            gid = target['main_gid']
+            warp_vid_from_img = sampler.dset.coco_image(gid).warp_vid_from_img
+            warp_img_from_vid = warp_vid_from_img.inv()
+            img_space_box = vid_space_box.warp(warp_img_from_vid)
+            return sampler.regions.overlapping_aids(gid, img_space_box.boxes)
+
 
     @profile
     def _get_observed_annotations(self, targets):
