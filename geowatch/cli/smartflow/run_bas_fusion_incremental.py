@@ -158,7 +158,6 @@ def run_bas_fusion_for_baseline(config):
     from geowatch.cli.smartflow_ingress import smartflow_ingress
     from geowatch.cli.smartflow_egress import smartflow_egress
     from geowatch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-    from geowatch.utils.util_framework import download_region, determine_region_id
     from geowatch.tasks.fusion.predict import predict
     from kwutil.util_yaml import Yaml
     from geowatch.utils import util_framework
