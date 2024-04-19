@@ -565,7 +565,6 @@ class BalancedSampleTree(ub.NiceRepr):
                 denom = weights_group.sum()
                 if denom != 0:
                     weights_group = weights_group / denom
-                    print(f'weights_group={weights_group}')
                     self.graph.nodes[parent]['weights'] = weights_group
                 else:
                     # All options have zero weight, schedule group for pruning
