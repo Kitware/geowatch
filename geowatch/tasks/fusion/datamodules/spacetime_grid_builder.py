@@ -682,7 +682,8 @@ def _sample_single_video_spacetime_targets(
             num_cells = len(slices) * len(video_gids)
             probably_slow = num_cells > (16 * 30)
 
-            for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
+            for vidspace_region in ub.ProgIter(slices,
+                                               desc='Build targets over sliding window',
                                                enabled=probably_slow,
                                                verbose=verbose * probably_slow):
 
@@ -716,7 +717,7 @@ def _sample_single_video_spacetime_targets(
             # centered around each annotation.
             track_infos = list(tid_to_infos.items())
             for tid, track_info_group in ub.ProgIter(track_infos,
-                                          desc='Centered tracks',
+                                          desc='Build targets around centered track annotations',
                                           enabled=len(track_infos) > 4 and probably_slow,
                                           verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
@@ -733,7 +734,7 @@ def _sample_single_video_spacetime_targets(
             # tracks of length 1
             loose_annot_infos = list(loose_aid_to_infos.items())
             for aid, info in ub.ProgIter(loose_annot_infos,
-                                         desc='Centered annots',
+                                         desc='Build targets around centered trackless annots',
                                          enabled=len(loose_aid_to_infos) > 4 and probably_slow,
                                          verbose=verbose * (len(loose_aid_to_infos) > 4 and probably_slow)):
                 track_info_group = [info]

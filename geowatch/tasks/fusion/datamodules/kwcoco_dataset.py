@@ -162,6 +162,10 @@ AUGMENTATION_GROUP = 'augmentation'
 SELECTION_GROUP = 'selection'
 
 
+BACKWARDS_COMPAT_NEG_TO_POS = True
+
+
+
 class KWCocoVideoDatasetConfig(scfg.DataConfig):
     """
     This is the configuration for a single dataset that could be used for
@@ -2529,26 +2533,50 @@ class BalanceMixin:
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
         #observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
-        observed_annots = [v['annot_info']['main_gid_catnames'] for v in new_sample_grid['targets']]
-        observed_phases = list(map(lambda x: ub.dict_subset(x, set(heuristics.PHASES).intersection(x.keys())), observed_annots))
+        observed_catfreq = [v['annot_info']['main_gid_catnames'] for v in new_sample_grid['targets']]
+        observed_annot = [len(f) > 0 for f in observed_catfreq]
 
-        # associate target window with positive / negative
-        target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
-        contains_phase = [any(x) for x in observed_phases]
 
-        # build a dataframe with target attributes
-        df = pd.DataFrame({
+        column_attrs = {
             'video_id': video_ids,
             'video_name': video_names,
             'region': region_names,
-            'target_type': target_type,
-            'contains_phase': contains_phase,
-            'phases': observed_phases,
-        }).reset_index(drop=False)
-        return df
+            'contains_annotation': observed_annot,
+            'class': observed_catfreq,
+        }
+
+        if 1:
+            # Hard coded heuristic attributes for the particular problem.
+            # This will eventually be removed in favor of a more flexible
+            # configuration.
+            observed_phases = list(map(lambda x: ub.dict_subset(x, set(heuristics.PHASES).intersection(x.keys())), observed_catfreq))
+            # associate target window with positive / negative
+            # TODO: we should deprecate 'positive-indexes' and instead make it
+            # something like "indexes-with-annots"
+            target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+            column_attrs['contains_phase'] = [any(x) for x in observed_phases]
+            column_attrs['phases'] = observed_phases
+
+        if BACKWARDS_COMPAT_NEG_TO_POS:
+            # To maintain compatability with old neg_to_pos_ratio build an
+            # indicator array that flags the samples the prev v0.17 code
+            # considered as positive / negative. We will eventually remove
+            # this logic. Samples were previously considered as negative if
+            # they had no annotations OR the only annotations were
+            # hueristically marked as negative.
+            old_is_negative = [
+                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) == 0
+                for f in observed_catfreq
+            ]
+            column_attrs['old_is_negative'] = old_is_negative
+            column_attrs['target_type'] = old_is_negative
+
+        # build a dataframe with target attributes
+        df_sample_attributes = pd.DataFrame(column_attrs).reset_index(drop=False)
+        return df_sample_attributes
 
     @profile
-    def _init_balance(self, sample_grid_input):
+    def _init_balance(self, new_sample_grid):
         """
         Build data structure used for balanced sampling.
 
@@ -2556,32 +2584,99 @@ class BalanceMixin:
         across input domains.
         """
 
+        import kwutil
+        # Balance options are specified as an ordered list of the properties we
+        # want to balance over, which can contain optional information about
+        # how to do balancing.
+
+        # This is currently hard coded
+        # balance_options = ub.codeblock(
+        #     '''
+        #     - attribute: region
+        #     - attribute: contains_annotation
+        #       weights:
+        #           True: 0.5
+        #           False: 0.5
+        #     - attribute: class
+        #       default_weight: 0.25
+        #       weights:
+        #           'No Activity': 0.25
+        #           'Site Preparation': 0.25
+        #           'Active Construction': 0.25
+        #           'Post Construction': 0.25
+        #     ''')
+        balance_options = ub.codeblock(
+            '''
+            - attribute: region
+            - attribute: contains_phase
+              weights:
+                  False: 0
+                  True: 1
+            - attribute: phases
+              default_weight: 0.0
+              weights:
+                  'No Activity': 0.25
+                  'Site Preparation': 0.25
+                  'Active Construction': 0.25
+                  'Post Construction': 0.25
+            ''')
+        balance_options = kwutil.Yaml.coerce(balance_options)
+
+        if BACKWARDS_COMPAT_NEG_TO_POS:
+            # If the old neg_to_pos_ratio config option is given, then add a
+            # new balance option to the list that reconstructs it.
+            npr = self.config['neg_to_pos_ratio']
+            npr_dist = np.asarray([1, npr]) / (1 + npr)
+            balance_options = [{
+                'attribute': 'old_is_negative',
+                'weights': {
+                    True: npr_dist[0],
+                    False: npr_dist[1],
+                }
+            }] + balance_options
+
         print('Balancing over attributes')
-        df_sample_attributes = self._setup_attribute_dataframe(sample_grid_input)
+        df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
         sample_grid = df_sample_attributes.to_dict('records')
 
         # Initialize an instance of BalancedSampleTree
         if not any([isinstance(v, dict) for (k, v) in sample_grid[0].items()]):
-            self.balanced_sample_tree = data_utils.BalancedSampleTree(sample_grid)
+            print('Constructing balance tree')
+            balanced_sample_tree = data_utils.BalancedSampleTree(sample_grid, rng=0)
         else:
-            self.balanced_sample_tree = data_utils.BalancedSampleForest(sample_grid)
+            print('Constructing balance forest')
+            balanced_sample_tree = data_utils.BalancedSampleForest(sample_grid, rng=0)
 
-        # Compute weights for subdivide
-        npr = self.config['neg_to_pos_ratio']
-        npr_dist = np.asarray([1, npr]) / (1 + npr)
-        weights_target_type = ub.odict(zip([True, False], npr_dist))
+        for balance_option in balance_options:
+            print(f'Subdivide with balance_option = {ub.urepr(balance_option, nl=1)}')
+            key = balance_option['attribute']
+            key_weights = balance_option.get('weights', None)
+            default_weight = balance_option.get('default_weight', 0)
+            balanced_sample_tree.subdivide(key=key, weights=key_weights,
+                                           default_weight=default_weight)
 
-        self.balanced_sample_tree.subdivide('region')
-        self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)
+        if 0:
+            # Reporting for debugging
+            targets = new_sample_grid['targets']
+            sampled_idxs = [balanced_sample_tree.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
 
-        if df_sample_attributes['contains_phase'].any():
-            self.balanced_sample_tree.subdivide('contains_phase', weights={False: 0, True: 1})
-            self.balanced_sample_tree.subdivide(
-                'phases',
-                weights={None: 0, 'No Activity': .25, 'Site Preparation': .25,
-                         'Active Construction': .25, 'Post Construction': .25}
-            )
+            naive_targets = df_sample_attributes.copy()
+            naive_targets['class'] = df_sample_attributes['class'].apply(str)
+            naive_targets['phases'] = df_sample_attributes['phases'].apply(str)
+            balanced_targets = naive_targets.iloc[sampled_idxs]
 
+            # balance_attrs = ['class', 'phases', 'contains_phase']
+            balance_attrs = ['phases', 'contains_phase']
+            for attr in balance_attrs:
+                naive = naive_targets.value_counts(attr)
+                balanced = balanced_targets.value_counts(attr)
+                freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
+                freq_table = freq_table.sort_values('balanced', ascending=0)
+                print('---')
+                print(f'attr={attr}')
+                print(freq_table.to_string())
+
+        self.balanced_sample_tree = balanced_sample_tree
         if self.config['reseed_fit_random_generators']:
             self.reseed()
 
@@ -3337,11 +3432,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         grid_kw = common_grid_kw.copy()
 
-        negative_classes = (
+        # Remember this for backwards compat
+        self._old_balance_as_negative_classes = (
             self.ignore_classes | self.background_classes | self.negative_classes)
 
         annot_helper_kws = dict(
-            negative_classes=negative_classes,
+            # negative_classes=self._old_balance_as_negative_classes,
             keepbound=False,
             use_annot_info=True,
             use_centered_positives=config['use_centered_positives'],

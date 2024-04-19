@@ -433,6 +433,16 @@ class BalancedSampleTree(ub.NiceRepr):
         self.graph = self._create_graph(sample_grid)
         self._leaf_nodes = [n for n in self.graph.nodes if self.graph.out_degree[n] == 0]
 
+    def reseed(self, rng):
+        """
+        Reseed (or unseed) the random number generator
+
+        Args:
+            rng (int | None | RandomState):
+                random number generator or seed
+        """
+        self.rng = kwarray.ensure_rng(rng)
+
     @profile
     def _create_graph(self, sample_grid):
         graph = nx.DiGraph()
@@ -514,7 +524,7 @@ class BalancedSampleTree(ub.NiceRepr):
             raise ValueError("Leaf nodes became empty.")
 
     @profile
-    def subdivide(self, key, weights=None):
+    def subdivide(self, key, weights=None, default_weight=0):
         """
         Args:
             key (str):
@@ -524,6 +534,10 @@ class BalancedSampleTree(ub.NiceRepr):
             weights (None | Dict[Any, Number]):
                 an optional mapping from values that ``key`` could point to
                 to a numeric weight.
+
+            default_weight (None | Number):
+                if an attribute is unspecified in the weight table, this is
+                the default weight it should be given. Default is 0.
         """
         remove_nodes = []
         remove_edges = []
@@ -544,7 +558,7 @@ class BalancedSampleTree(ub.NiceRepr):
 
             # Add weights to the prior parent
             if weights is not None:
-                weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys())))
+                weights_group = np.asarray(list(ub.take(weights, val_to_subgroup.keys(), default=default_weight)))
                 denom = weights_group.sum()
                 if denom != 0:
                     weights_group = weights_group / denom
@@ -691,6 +705,18 @@ class BalancedSampleForest(ub.NiceRepr):
         self.n_trees = n_trees
         self.forest = self._create_forest(sample_grid, n_trees, scoring)
 
+    def reseed(self, rng):
+        """
+        Reseed (or unseed) the random number generator
+
+        Args:
+            rng (int | None | RandomState):
+                random number generator or seed
+        """
+        self.rng = kwarray.ensure_rng(rng)
+        for tree in self.forest:
+            tree.reseed(self.rng)
+
     @profile
     def _create_forest(self, sample_grid, n_trees, scoring):
         """ Generate N BalancedSampleTree's, producing a hard assignment for
@@ -727,14 +753,14 @@ class BalancedSampleForest(ub.NiceRepr):
                             raise NotImplementedError
 
             # initialize a BalancedSampleTree with this sample grid
-            bst = BalancedSampleTree(local_sample_grid)
+            bst = BalancedSampleTree(local_sample_grid, rng=self.rng)
             forest.append(bst)
         return forest
 
     @profile
-    def subdivide(self, key, weights=None):
+    def subdivide(self, key, weights=None, default_weight=0):
         for tree in self.forest:
-            tree.subdivide(key, weights=weights)
+            tree.subdivide(key, weights=weights, default_weight=default_weight)
 
     @profile
     def _sample_many(self, num):
