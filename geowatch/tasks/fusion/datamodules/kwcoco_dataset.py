@@ -2562,12 +2562,12 @@ class BalanceMixin:
             # this logic. Samples were previously considered as negative if
             # they had no annotations OR the only annotations were
             # hueristically marked as negative.
-            old_is_negative = [
-                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) == 0
+            old_has_class_of_interest = [
+                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) >= 0
                 for f in observed_catfreq
             ]
-            column_attrs['old_is_negative'] = old_is_negative
-            column_attrs['target_type'] = old_is_negative
+            column_attrs['old_has_class_of_interest'] = old_has_class_of_interest
+            # column_attrs['target_type'] = old_has_class_of_interest
 
         # build a dataframe with target attributes
         df_sample_attributes = pd.DataFrame(column_attrs).reset_index(drop=False)
@@ -2630,7 +2630,7 @@ class BalanceMixin:
             npr = self.config['neg_to_pos_ratio']
             npr_dist = np.asarray([1, npr]) / (1 + npr)
             balance_options = [{
-                'attribute': 'old_is_negative',
+                'attribute': 'old_has_class_of_interest',
                 'weights': {
                     True: npr_dist[0],
                     False: npr_dist[1],
@@ -2678,13 +2678,19 @@ class BalanceMixin:
             balance_attrs = [d['attribute'] for d in balance_options]
 
             naive_targets = df_sample_attributes.copy()
-            for attr in balance_attrs:
-                naive_targets[attr] = df_sample_attributes[attr].apply(str)
             balanced_targets = naive_targets.iloc[sampled_idxs]
-
             for attr in balance_attrs:
-                naive = naive_targets.value_counts(attr)
-                balanced = balanced_targets.value_counts(attr)
+                if attr in multilabel_attributes:
+                    from collections import Counter
+                    naive = Counter()
+                    for row in naive_targets[attr]:
+                        naive.update(row)
+                    balanced = Counter()
+                    for row in balanced_targets[attr]:
+                        balanced.update(row)
+                else:
+                    naive = naive_targets.value_counts(attr)
+                    balanced = balanced_targets.value_counts(attr)
                 freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
                 freq_table = freq_table.sort_values('balanced', ascending=0)
                 print('--- Balance Report ---')
