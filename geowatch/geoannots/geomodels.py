@@ -833,7 +833,24 @@ class RegionModel(_Model):
         self.remove_invalid_properties()
         self.ensure_isodates()
         self.fix_backwards_dates()
+        self.fix_multipolygons()
         return self
+
+    def fix_multipolygons(self):
+        from shapely import from_geojson
+        from shapely.geometry import MultiPolygon, mapping
+
+        for sitesum in self.body_features():
+            geom = from_geojson(json.dumps(sitesum['geometry']))
+
+            if isinstance(geom, MultiPolygon):
+                convex_hull = geom.buffer(0).convex_hull
+                # Have to serialize/deserialize here as shapely
+                # returns tuple coordinates which might throw off
+                # downstream code (expecting lists)
+                new_geom = json.loads(json.dumps(mapping(convex_hull)))
+
+                sitesum['geometry'] = new_geom
 
     def remove_invalid_properties(self):
         """
@@ -1104,6 +1121,22 @@ class SiteModel(_Model):
                     prop['current_phase'] = prop['current_phase'].replace(
                         'salient', 'Active Construction')
 
+    def fix_multipolygons(self):
+        from shapely import from_geojson
+        from shapely.geometry import MultiPolygon, mapping
+
+        site = self.header
+        geom = from_geojson(json.dumps(site['geometry']))
+
+        if isinstance(geom, MultiPolygon):
+            convex_hull = geom.buffer(0).convex_hull
+            # Have to serialize/deserialize here as shapely
+            # returns tuple coordinates which might throw off
+            # downstream code (expecting lists)
+            new_geom = json.loads(json.dumps(mapping(convex_hull)))
+
+            site['geometry'] = new_geom
+
     def fixup(self):
         """
         Fix common issues with this site model
@@ -1118,6 +1151,7 @@ class SiteModel(_Model):
         self.fix_current_phase_salient()
         self.fix_backwards_dates()
         self.fix_old_schema_properties()
+        self.fix_multipolygons()
         # self.fix_geom()
         return self
 

@@ -52,10 +52,10 @@ class FixupConfig(scfg.DataConfig):
         Which site model assets to ingress and fix up
         '''), alias=['site_models_asset_name'])
 
-    performer_suffix = scfg.Value('KIT', type=str, required=True, help=ub.paragraph(
-        '''
-        Performer suffix for output files
-        '''))
+    performer_suffix = scfg.Value('KIT', type=str, required=False, help=ub.paragraph(
+            '''
+            Performer suffix for output files
+            '''))
 
 
 def main(cmdline=1, **kwargs):

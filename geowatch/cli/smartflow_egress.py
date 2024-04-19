@@ -117,7 +117,7 @@ def smartflow_egress(assetnames_and_local_paths,
         newline (bool): controls formatting of output stac item
 
     Returns:
-        Dict: the new STAC item
+        Dict: Of asset names and output paths
 
     CommandLine:
         xdoctest -m geowatch.cli.smartflow_egress smartflow_egress
@@ -213,7 +213,7 @@ def smartflow_egress(assetnames_and_local_paths,
     assert aws_profile is None, 'unhandled'
     outbucket = FSPath.coerce(outbucket)
 
-    PRE_DELETE_HACK = 1
+    PRE_DELETE_HACK = 0
     if PRE_DELETE_HACK:
         # HACK: delete everything in the outbucket to prevent conflicting
         # results and ensure the next step always gets exactly this output
@@ -284,7 +284,7 @@ def smartflow_egress(assetnames_and_local_paths,
 
     print('EGRESSED: {}'.format(ub.urepr(output_stac_items, nl=-1)))
     print('--- FINISH EGRESS ---')
-    return te_output
+    return {k: v['href'] for k, v in assetnames_and_s3_paths.items()}
 
 
 def fallback_copy(local_path, asset_s3_outpath):
