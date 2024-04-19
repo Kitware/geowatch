@@ -1392,7 +1392,7 @@ class GetItemMixin(TruthMixin):
                 # In non-test-mode we discard the user index and randomly
                 # sample a grid location to achive balanced sampling.
                 try:
-                    resolved_index = self.balanced_sample_tree.sample()
+                    resolved_index = self.balanced_sampler.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
             target = self.new_sample_grid['targets'][resolved_index]
@@ -1401,7 +1401,7 @@ class GetItemMixin(TruthMixin):
         target['requested_index'] = requested_index
         target['resolved_index'] = resolved_index
         # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
-        # print(f'{LOCAL_RANK=}, {index=} {self.mode=} {self.balanced_sample_tree.sample()} {target=}')
+        # print(f'{LOCAL_RANK=}, {index=} {self.mode=} {self.balanced_sampler.sample()} {target=}')
         if target is None:
             raise FailedSample('no target')
         return target
@@ -2573,7 +2573,11 @@ class BalanceMixin:
 
         # build a dataframe with target attributes
         df_sample_attributes = pd.DataFrame(column_attrs).reset_index(drop=False)
-        return df_sample_attributes
+
+        # Mark which attributes are multi-label
+        multilabel_attributes = ['phases', 'class']
+
+        return df_sample_attributes, multilabel_attributes
 
     @profile
     def _init_balance(self, new_sample_grid):
@@ -2636,47 +2640,60 @@ class BalanceMixin:
             }] + balance_options
 
         print('Balancing over attributes')
-        df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
+        df_sample_attributes, multilabel_attributes = self._setup_attribute_dataframe(new_sample_grid)
         sample_grid = df_sample_attributes.to_dict('records')
 
+        balance_attrs = [d['attribute'] for d in balance_options]
+
+        has_multilabel_attributes = set(balance_attrs) & set(multilabel_attributes)
+
         # Initialize an instance of BalancedSampleTree
-        if not any([isinstance(v, dict) for (k, v) in sample_grid[0].items()]):
-            print('Constructing balance tree')
-            balanced_sample_tree = data_utils.BalancedSampleTree(sample_grid, rng=0)
-        else:
+        # rng = self.rng
+        rng = kwarray.ensure_rng(rng=None)
+        if has_multilabel_attributes:
+            # If we are going to subdivide on multi-label attributes we want to
+            # use a forest instead of tree.
             print('Constructing balance forest')
-            balanced_sample_tree = data_utils.BalancedSampleForest(sample_grid, rng=0)
+            balanced_sampler = data_utils.BalancedSampleForest(
+                sample_grid, rng=rng, n_trees=16)
+        else:
+            print('Constructing balance tree')
+            balanced_sampler = data_utils.BalancedSampleTree(
+                sample_grid, rng=rng)
 
         for balance_option in balance_options:
             print(f'Subdivide with balance_option = {ub.urepr(balance_option, nl=1)}')
             key = balance_option['attribute']
             key_weights = balance_option.get('weights', None)
             default_weight = balance_option.get('default_weight', 0)
-            balanced_sample_tree.subdivide(key=key, weights=key_weights,
+            balanced_sampler.subdivide(key=key, weights=key_weights,
                                            default_weight=default_weight)
 
-        if 0:
+        REPORT_BALANCE = 1
+        if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
-            sampled_idxs = [balanced_sample_tree.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
+            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
+
+            # Inspect the attributes you balanced over and compare to the naive
+            # case.
+            balance_attrs = [d['attribute'] for d in balance_options]
 
             naive_targets = df_sample_attributes.copy()
-            naive_targets['class'] = df_sample_attributes['class'].apply(str)
-            naive_targets['phases'] = df_sample_attributes['phases'].apply(str)
+            for attr in balance_attrs:
+                naive_targets[attr] = df_sample_attributes[attr].apply(str)
             balanced_targets = naive_targets.iloc[sampled_idxs]
 
-            # balance_attrs = ['class', 'phases', 'contains_phase']
-            balance_attrs = ['phases', 'contains_phase']
             for attr in balance_attrs:
                 naive = naive_targets.value_counts(attr)
                 balanced = balanced_targets.value_counts(attr)
                 freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
                 freq_table = freq_table.sort_values('balanced', ascending=0)
-                print('---')
+                print('--- Balance Report ---')
                 print(f'attr={attr}')
                 print(freq_table.to_string())
 
-        self.balanced_sample_tree = balanced_sample_tree
+        self.balanced_sampler = balanced_sampler
         if self.config['reseed_fit_random_generators']:
             self.reseed()
 
@@ -3104,7 +3121,7 @@ class MiscMixin:
             could fix that.
         """
         # Randomize across DDP workers
-        if hasattr(self, 'balanced_sample_tree'):
+        if hasattr(self, 'balanced_sampler'):
             rng = kwarray.ensure_rng(rng=None)
             import secrets
             import time
@@ -3114,7 +3131,7 @@ class MiscMixin:
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
             rng = kwarray.ensure_rng(rng=seed)
-            self.balanced_sample_tree.rng = rng
+            self.balanced_sampler.rng = rng
         ...
 
     @property
@@ -3476,7 +3493,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             if 1:
                 self._init_balance(new_sample_grid)
 
-            self.length = len(self.balanced_sample_tree)
+            self.length = len(self.balanced_sampler)
 
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)
