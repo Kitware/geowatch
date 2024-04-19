@@ -165,7 +165,6 @@ SELECTION_GROUP = 'selection'
 BACKWARDS_COMPAT_NEG_TO_POS = True
 
 
-
 class KWCocoVideoDatasetConfig(scfg.DataConfig):
     """
     This is the configuration for a single dataset that could be used for
@@ -2498,6 +2497,7 @@ class BalanceMixin:
         """
         space_slice = target['space_slice']
         vid_space_box = kwimage.Box.from_slice(space_slice)
+        sampler = self.sampler
         if sequence:
             all_aids = []
             for gid in target['gids']:
@@ -2513,7 +2513,6 @@ class BalanceMixin:
             warp_img_from_vid = warp_vid_from_img.inv()
             img_space_box = vid_space_box.warp(warp_img_from_vid)
             return sampler.regions.overlapping_aids(gid, img_space_box.boxes)
-
 
     @profile
     def _get_observed_annotations(self, targets):
@@ -2536,7 +2535,6 @@ class BalanceMixin:
         observed_catfreq = [v['annot_info']['main_gid_catnames'] for v in new_sample_grid['targets']]
         observed_annot = [len(f) > 0 for f in observed_catfreq]
 
-
         column_attrs = {
             'video_id': video_ids,
             'video_name': video_names,
@@ -2553,7 +2551,7 @@ class BalanceMixin:
             # associate target window with positive / negative
             # TODO: we should deprecate 'positive-indexes' and instead make it
             # something like "indexes-with-annots"
-            target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+            # target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
             column_attrs['contains_phase'] = [any(x) for x in observed_phases]
             column_attrs['phases'] = observed_phases
 

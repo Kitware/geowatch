@@ -347,7 +347,7 @@ def sample_video_spacetime_targets(dset,
 
     if negative_classes is not None:
         warnings.warn(ub.paragraph(
-            f'''
+            '''
             Grid sampler no longer handles negative classes. Instead it
             provides the user the information to balance positive/negatives
             after the fact.
@@ -717,9 +717,9 @@ def _sample_single_video_spacetime_targets(
             # centered around each annotation.
             track_infos = list(tid_to_infos.items())
             for tid, track_info_group in ub.ProgIter(track_infos,
-                                          desc='Build targets around centered track annotations',
-                                          enabled=len(track_infos) > 4 and probably_slow,
-                                          verbose=verbose * (len(track_infos) > 4 and probably_slow)):
+                                                     desc='Build targets around centered track annotations',
+                                                     enabled=len(track_infos) > 4 and probably_slow,
+                                                     verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
                         dset, use_annot_info, qtree, video_id, track_info_group,
