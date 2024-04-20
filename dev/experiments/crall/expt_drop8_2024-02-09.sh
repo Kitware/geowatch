@@ -2324,6 +2324,24 @@ EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 
+
+export VALI_FPATH
+export TRAIN_FPATH
+# Ensure we can do a postgres database
+python -c "if 1:
+    import geowatch
+    import os
+    import ubelt as ub
+    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+    print(vali_dset._cached_hashid())
+    print(train_dset._cached_hashid())
+    print(vali_dset._orig_coco_fpath())
+    print(train_dset._orig_coco_fpath())
+"
+
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
 
@@ -2378,7 +2396,7 @@ python -m geowatch.cli.experimental.recommend_size_adjustments \
 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : $BATCH_SIZE
-  num_workers             : 5
+  num_workers             : 4
   train_dataset           : $TRAIN_FPATH
   vali_dataset            : $VALI_FPATH
   time_steps              : 9
@@ -2408,6 +2426,7 @@ data:
   observable_threshold   : 0.0
   quality_threshold      : 0.0
   weight_dilate          : 10
+  sqlview                : postgresql
   neg_to_pos_ratio       : null
   balance_options :
       - attribute: old_has_class_of_interest
@@ -2446,7 +2465,7 @@ model:
     focal_gamma: 2.0
     global_change_weight: 0.0
     global_class_weight: 1.0
-    global_saliency_weight: 0.05
+    global_saliency_weight: 0.5
     input_channels: null
     input_sensorchan: null
     learning_rate: 0.001
@@ -2466,6 +2485,12 @@ model:
     saliency_weights: auto
     stream_channels: 16
     tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
 lr_scheduler:
   class_path: torch.optim.lr_scheduler.OneCycleLR
   init_args:

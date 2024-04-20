@@ -2677,7 +2677,17 @@ class BalanceMixin:
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
-            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
+
+            num_targets = len(targets)
+            num_samples = min(10_000, num_targets)
+
+            normalizer = num_samples / num_targets
+            print('Report Balance:')
+            print(f'num_targets={num_targets}')
+            print(f'num_samples={num_samples}')
+            print(f'normalizer={normalizer}')
+
+            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
 
             # Inspect the attributes you balanced over and compare to the naive
             # case.
@@ -2699,6 +2709,7 @@ class BalanceMixin:
                     balanced = balanced_targets.value_counts(attr)
                 freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
                 freq_table = freq_table.sort_values('balanced', ascending=0)
+                freq_table['naive'] *= normalizer
                 print('--- Balance Report ---')
                 print(f'attr={attr}')
                 print(freq_table.to_string())

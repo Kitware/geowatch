@@ -403,7 +403,21 @@ def sample_video_spacetime_targets(dset,
             select_videos=select_videos,
             select_images=select_images,
         )
-        selected_vidid_per_gid = dset.images(selected_gids).lookup('video_id', default=None)
+
+        selected_images = dset.images(selected_gids)
+        if hasattr(selected_images._dset, '_column_lookup'):
+            print(f'Query {len(selected_images)} sql rows, may take time')
+            # self = selected_images
+            # key = 'video_id'
+            with ub.Timer('sql query'):
+                selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
+                # selected_vidid_per_gid = self._dset._column_lookup(
+                #     tablename=self._key, key=key, rowids=self._ids)
+                # f1dfe5897bbf49a09a9e0a4e63809dc95248d2d3b3cbd993f0d8b399dba60d746dc537a3bde46a8a066b227efafbbb7b38dc254c7bac1bae9ff09f4d64976956
+        else:
+            selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
+
+        selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
         selected_vidid_to_gids = ub.group_items(selected_gids, selected_vidid_per_gid)
 
         loose_gids = selected_vidid_to_gids.pop(None, [])
@@ -814,7 +828,7 @@ def _build_targets_around_track(dset, use_annot_info, qtree, video_id, track_inf
             isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
             isect_aids_catnames = dset.annots(isect_aids).category_names
             aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
-            gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+            gid_to_aids = {x: dset.index.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
             gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
 
             if use_annot_info:
@@ -862,7 +876,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
         isect_aids_catnames = dset.annots(isect_aids).category_names
         aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
-        gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+        gid_to_aids = {x: dset.index.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
         gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
 
     if respect_valid_regions:
