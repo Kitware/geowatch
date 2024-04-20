@@ -1245,7 +1245,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         _pyrng = kwarray.ensure_rng(rng, api='python')
         def _seeded_uuid():
             # uuid.uuid4()
-            _int = int.from_bytes(_pyrng.randbytes(16))
+            _int = int.from_bytes(_pyrng.randbytes(16), byteorder='big')
             # _int = int.from_bytes(rng.randbytes(16))
             return uuid.UUID(int=_int, version=4)
 

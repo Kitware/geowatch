@@ -851,6 +851,14 @@ class MultiscaleMask:
     A helper class to build up a mask indicating what pixels are unobservable
     based on data from different resolution.
 
+    In othe words, if you have multiple masks, and each mask has a different
+    resolution, then this will iteravely upscale the masks to the largest
+    resolution so far and perform a logical or. This helps keep the memory
+    footprint small.
+
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.datamodules.data_utils MultiscaleMask --show
+
     Example:
         >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> image = kwimage.grab_test_image()
@@ -864,6 +872,7 @@ class MultiscaleMask:
         >>> omask.update(mask2)
         >>> omask.update(mask3)
         >>> masked_image = omask.apply(image, np.nan)
+        >>> # Now we can use our upscaled masks on an image.
         >>> masked_image = kwimage.fill_nans_with_checkers(masked_image, on_value=0.3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -874,8 +883,7 @@ class MultiscaleMask:
         >>> kwplot.imshow(inputs, pnum=(1, 3, 1), title='input masks')
         >>> kwplot.imshow(omask.mask, pnum=(1, 3, 2), title='final mask')
         >>> kwplot.imshow(masked_image, pnum=(1, 3, 3), title='masked image')
-        >>> #kwplot.set_figtitle
-
+        >>> kwplot.show_if_requested()
     """
 
     def __init__(self):
