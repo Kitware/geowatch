@@ -1,6 +1,11 @@
 """
 I dont like the name of this file. I want to rename it, but it exists to keep
 the size of the datamodule down for now.
+
+TODO:
+    - [ ] Break BalancedSampleTree and BalancedSampleForest into their own balanced sampling module.
+    - [ ] Make a good augmentation module
+    - [ ] Determine where MultiscaleMask should live.
 """
 import numpy as np
 import ubelt as ub
@@ -730,7 +735,8 @@ class BalancedSampleForest(ub.NiceRepr):
         """
         import copy
         forest = []
-        for idx in range(n_trees):
+        verbose = 1
+        for idx in ub.ProgIter(range(n_trees), desc='Build balanced forests', verbose=verbose):
             local_sample_grid = copy.deepcopy(sample_grid)
             for sample in local_sample_grid:
                 for key, val in sample.items():
