@@ -162,6 +162,9 @@ AUGMENTATION_GROUP = 'augmentation'
 SELECTION_GROUP = 'selection'
 
 
+BACKWARDS_COMPAT_NEG_TO_POS = True
+
+
 class KWCocoVideoDatasetConfig(scfg.DataConfig):
     """
     This is the configuration for a single dataset that could be used for
@@ -368,7 +371,24 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         maximum ratio of samples with no annotations to samples with annots.
         Only applies to training dataset when used in the data module.
         Validation/test dataset defaults to zero.
+
+        NOTE: This will be deprecated and superceded by "balance_options".
         '''))
+
+    balance_options = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
+        '''
+        A YAML configuration that determines how to balance across discrete
+        samples based on their annotation content. It should be specified as a
+        list of dictionaries. Each dictionary must specify "attribute" as the
+        name of the attribute to balance across. Each dictionary can optionally
+        specify "weight" as a mapping from attribute values to a numeric weight
+        indicating the relative importance of sampling an attribute with that
+        value. A "default_weight" can be specified for attribute values that
+        are not given. The order of the dictionaries matters. The first item
+        will be perfectly balanced, everything else will be balanced with
+        respect to the previous balancing. New in 0.17.0.
+        '''))
+
     use_grid_cache = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
         '''
         If true, will cache the spacetime grid to make multiple runs quicker.
@@ -385,7 +405,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     prenormalize_inputs = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
         '''
-        New in 0.4.3: Can specified as list of dictionaries that effectively
+        Can specified as list of dictionaries that effectively
         contains the dataset statistics to use. Details of that will be
         documented as the feature matures. See the geowatch.cli.coco_spectra
         script to help determine reasonable values for this. These
@@ -393,7 +413,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         be specified as a list of dictionaries each containing: * mean: * std:
         * min: * max: As well as the Modality to which the normalization
         applies, e.g.: * domain * channels * sensor If set to True, then we try
-        to automatically compute these values.
+        to automatically compute these values. New in 0.4.3.
         '''))
     normalize_perframe = scfg.Value(False, group=NORM_GROUP, help=ub.paragraph(
         '''
@@ -1388,7 +1408,7 @@ class GetItemMixin(TruthMixin):
                 # In non-test-mode we discard the user index and randomly
                 # sample a grid location to achive balanced sampling.
                 try:
-                    resolved_index = self.balanced_sample_tree.sample()
+                    resolved_index = self.balanced_sampler.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
             target = self.new_sample_grid['targets'][resolved_index]
@@ -1397,7 +1417,7 @@ class GetItemMixin(TruthMixin):
         target['requested_index'] = requested_index
         target['resolved_index'] = resolved_index
         # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
-        # print(f'{LOCAL_RANK=}, {index=} {self.mode=} {self.balanced_sample_tree.sample()} {target=}')
+        # print(f'{LOCAL_RANK=}, {index=} {self.mode=} {self.balanced_sampler.sample()} {target=}')
         if target is None:
             raise FailedSample('no target')
         return target
@@ -2401,6 +2421,9 @@ class BalanceMixin:
     """
     Helpers to build the sample grid and balance it
 
+    CommandLine:
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin:1 --bench
+
     Example:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
@@ -2438,8 +2461,21 @@ class BalanceMixin:
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
         >>> assert num_positives > num_negatives
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--bench)
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> import kwcoco
+        >>> coco_fpath = '/media/joncrall/flash1/smart_phase3_data/Drop8-Cropped2GSD-V1/data_vali_rawbands_split6_n004_f9b08cce.kwcoco.zip'
+        >>> coco_fpath = '/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-V2/data_vali_rawbands_split6.kwcoco.zip'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = KWCocoVideoDataset(coco_dset, mode="fit", time_dims=4, window_dims=(300, 300),
+        >>>                           channels='red|green|blue', neg_to_pos_ratio=1.0)
     """
 
+    @profile
     def _get_video_names(self, vidids):
         unique_vidids, _idx_to_unique_idx = np.unique(vidids, return_inverse=True)
         coco_dset = self.sampler.dset
@@ -2457,6 +2493,7 @@ class BalanceMixin:
         vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
         return vidnames
 
+    @profile
     def _get_region_names(self, vidnames):
         # create mapping from video name to region name
         from kwutil import util_pattern
@@ -2469,27 +2506,41 @@ class BalanceMixin:
                 self.vidname_to_region_name[vidname] = vidname
         return list(ub.take(self.vidname_to_region_name, vidnames))
 
-    def _load_target_annots(self, target):
+    @profile
+    def _load_target_annots(self, target, sequence=False):
         """
         TODO: need an ndsampler endpoint that just finds the annotations in a
         sample quickly.
         """
         space_slice = target['space_slice']
-        space_box = kwimage.Box.from_slice(space_slice)
-        all_aids = []
-        for gid in target['gids']:
-            aids = self.sampler.regions.overlapping_aids(gid, space_box.boxes)
-            all_aids.extend(aids)
-        return all_aids
+        vid_space_box = kwimage.Box.from_slice(space_slice)
+        sampler = self.sampler
+        if sequence:
+            all_aids = []
+            for gid in target['gids']:
+                warp_vid_from_img = sampler.dset.coco_image(gid).warp_vid_from_img
+                warp_img_from_vid = warp_vid_from_img.inv()
+                img_space_box = vid_space_box.warp(warp_img_from_vid)
+                aids = sampler.regions.overlapping_aids(gid, img_space_box.boxes)
+                all_aids.extend(aids)
+            return all_aids
+        else:
+            gid = target['main_gid']
+            warp_vid_from_img = sampler.dset.coco_image(gid).warp_vid_from_img
+            warp_img_from_vid = warp_vid_from_img.inv()
+            img_space_box = vid_space_box.warp(warp_img_from_vid)
+            return sampler.regions.overlapping_aids(gid, img_space_box.boxes)
 
+    @profile
     def _get_observed_annotations(self, targets):
         observed_cats = []
-        for target in targets:
+        for target in ub.ProgIter(targets, desc='Building observed annots'):
             aids = self._load_target_annots(target)
             catnames = self.sampler.dset.annots(aids).category_names
             observed_cats.append(ub.dict_hist(catnames))
         return observed_cats
 
+    @profile
     def _setup_attribute_dataframe(self, new_sample_grid):
         """
         Build a dataframe of attributes (for each sample) that can be used for balancing.
@@ -2497,24 +2548,53 @@ class BalanceMixin:
         video_ids = [v['video_id'] for v in new_sample_grid['targets']]
         video_names = self._get_video_names(video_ids)
         region_names = self._get_region_names(video_names)
-        observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
-        observed_phases = list(map(lambda x: set(heuristics.PHASES).intersection(x), observed_annots))
+        #observed_annots = self._get_observed_annotations(new_sample_grid['targets'])
+        observed_catfreq = [v['annot_info']['main_gid_catnames'] for v in new_sample_grid['targets']]
+        observed_annot = [len(f) > 0 for f in observed_catfreq]
 
-        # associate target window with positive / negative
-        target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
-        contains_phase = [any(x) for x in observed_phases]
-
-        # build a dataframe with target attributes
-        df = pd.DataFrame({
+        column_attrs = {
             'video_id': video_ids,
             'video_name': video_names,
             'region': region_names,
-            'target_type': target_type,
-            'contains_phase': contains_phase,
-            'phases': observed_phases,
-        }).reset_index(drop=False)
-        return df
+            'contains_annotation': observed_annot,
+            'class': observed_catfreq,
+        }
 
+        if 1:
+            # Hard coded heuristic attributes for the particular problem.
+            # This will eventually be removed in favor of a more flexible
+            # configuration.
+            observed_phases = list(map(lambda x: ub.dict_subset(x, set(heuristics.PHASES).intersection(x.keys())), observed_catfreq))
+            # associate target window with positive / negative
+            # TODO: we should deprecate 'positive-indexes' and instead make it
+            # something like "indexes-with-annots"
+            # target_type = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+            column_attrs['contains_phase'] = [any(x) for x in observed_phases]
+            column_attrs['phases'] = observed_phases
+
+        if BACKWARDS_COMPAT_NEG_TO_POS:
+            # To maintain compatability with old neg_to_pos_ratio build an
+            # indicator array that flags the samples the prev v0.17 code
+            # considered as positive / negative. We will eventually remove
+            # this logic. Samples were previously considered as negative if
+            # they had no annotations OR the only annotations were
+            # hueristically marked as negative.
+            old_has_class_of_interest = [
+                len(ub.udict.difference(f, self._old_balance_as_negative_classes)) > 0
+                for f in observed_catfreq
+            ]
+            column_attrs['old_has_class_of_interest'] = old_has_class_of_interest
+            # column_attrs['target_type'] = old_has_class_of_interest
+
+        # build a dataframe with target attributes
+        df_sample_attributes = pd.DataFrame(column_attrs).reset_index(drop=False)
+
+        # Mark which attributes are multi-label
+        multilabel_attributes = ['phases', 'class']
+
+        return df_sample_attributes, multilabel_attributes
+
+    @profile
     def _init_balance(self, new_sample_grid):
         """
         Build data structure used for balanced sampling.
@@ -2523,21 +2603,107 @@ class BalanceMixin:
         across input domains.
         """
 
+        import kwutil
+        # Balance options are specified as an ordered list of the properties we
+        # want to balance over, which can contain optional information about
+        # how to do balancing.
+        if self.config.balance_options == 'scott':
+            # Hard coded special mapping for scott
+            balance_options = kwutil.Yaml.coerce(
+                '''
+                - attribute: region
+                - attribute: contains_phase
+                  weights:
+                      False: 0
+                      True: 1
+                - attribute: phases
+                  default_weight: 0.0
+                  weights:
+                      'No Activity': 0.25
+                      'Site Preparation': 0.25
+                      'Active Construction': 0.25
+                      'Post Construction': 0.25
+                ''')
+            balance_options = kwutil.Yaml.coerce(balance_options)
+        else:
+            balance_options = kwutil.Yaml.coerce(self.config.balance_options)
+
+        if balance_options is None:
+            balance_options = []
+
+        if BACKWARDS_COMPAT_NEG_TO_POS:
+            # If the old neg_to_pos_ratio config option is given, then add a
+            # new balance option to the list that reconstructs it.
+            npr = self.config['neg_to_pos_ratio']
+            if npr is not None:
+                npr_dist = np.asarray([1, npr]) / (1 + npr)
+                balance_options = [{
+                    'attribute': 'old_has_class_of_interest',
+                    'weights': {
+                        True: npr_dist[0],
+                        False: npr_dist[1],
+                    }
+                }] + balance_options
+
         print('Balancing over attributes')
-        df_sample_attributes = self._setup_attribute_dataframe(new_sample_grid)
+        df_sample_attributes, multilabel_attributes = self._setup_attribute_dataframe(new_sample_grid)
+        sample_grid = df_sample_attributes.to_dict('records')
+        balance_attrs = [d['attribute'] for d in balance_options]
+        has_multilabel_attributes = set(balance_attrs) & set(multilabel_attributes)
 
         # Initialize an instance of BalancedSampleTree
-        self.balanced_sample_tree = data_utils.BalancedSampleTree(df_sample_attributes.to_dict('records'))
+        # rng = self.rng
+        rng = kwarray.ensure_rng(rng=None)
+        if has_multilabel_attributes:
+            # If we are going to subdivide on multi-label attributes we want to
+            # use a forest instead of tree.
+            print('Constructing balance forest')
+            balanced_sampler = data_utils.BalancedSampleForest(
+                sample_grid, rng=rng, n_trees=16)
+        else:
+            print('Constructing balance tree')
+            balanced_sampler = data_utils.BalancedSampleTree(
+                sample_grid, rng=rng)
 
-        # Compute weights for subdivide
-        npr = self.config['neg_to_pos_ratio']
-        npr_dist = np.asarray([1, npr]) / (1 + npr)
-        weights_target_type = ub.odict(zip([True, False], npr_dist))
+        for balance_option in balance_options:
+            print(f'Subdivide with balance_option = {ub.urepr(balance_option, nl=1)}')
+            key = balance_option['attribute']
+            key_weights = balance_option.get('weights', None)
+            default_weight = balance_option.get('default_weight', 0)
+            balanced_sampler.subdivide(key=key, weights=key_weights,
+                                           default_weight=default_weight)
 
-        self.balanced_sample_tree.subdivide('region')
-        self.balanced_sample_tree.subdivide('target_type', weights=weights_target_type)
-        self.balanced_sample_tree.subdivide('contains_phase')
+        REPORT_BALANCE = 1
+        if REPORT_BALANCE:
+            # Reporting for debugging
+            targets = new_sample_grid['targets']
+            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
 
+            # Inspect the attributes you balanced over and compare to the naive
+            # case.
+            balance_attrs = [d['attribute'] for d in balance_options]
+
+            naive_targets = df_sample_attributes.copy()
+            balanced_targets = naive_targets.iloc[sampled_idxs]
+            for attr in balance_attrs:
+                if attr in multilabel_attributes:
+                    from collections import Counter
+                    naive = Counter()
+                    for row in naive_targets[attr]:
+                        naive.update(row)
+                    balanced = Counter()
+                    for row in balanced_targets[attr]:
+                        balanced.update(row)
+                else:
+                    naive = naive_targets.value_counts(attr)
+                    balanced = balanced_targets.value_counts(attr)
+                freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
+                freq_table = freq_table.sort_values('balanced', ascending=0)
+                print('--- Balance Report ---')
+                print(f'attr={attr}')
+                print(freq_table.to_string())
+
+        self.balanced_sampler = balanced_sampler
         if self.config['reseed_fit_random_generators']:
             self.reseed()
 
@@ -2965,7 +3131,7 @@ class MiscMixin:
             could fix that.
         """
         # Randomize across DDP workers
-        if hasattr(self, 'balanced_sample_tree'):
+        if hasattr(self, 'balanced_sampler'):
             rng = kwarray.ensure_rng(rng=None)
             import secrets
             import time
@@ -2975,7 +3141,7 @@ class MiscMixin:
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
             rng = kwarray.ensure_rng(rng=seed)
-            self.balanced_sample_tree.rng = rng
+            self.balanced_sampler.rng = rng
         ...
 
     @property
@@ -3112,6 +3278,17 @@ class MiscMixin:
             collate_fn=ub.identity,  # disable collation
         )
         return loader
+
+
+class BackwardCompatMixin:
+    """
+    Backwards compatability for modified properties.
+    (These may eventually be deprecated).
+    """
+
+    @property
+    def new_sample_grid(self):
+        return self.sample_grid
 
 
 class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMixin, IntrospectMixin, MiscMixin, SpacetimeAugmentMixin, SMARTDataMixin):
@@ -3282,11 +3459,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         grid_kw = common_grid_kw.copy()
 
-        negative_classes = (
+        # Remember this for backwards compat
+        self._old_balance_as_negative_classes = (
             self.ignore_classes | self.background_classes | self.negative_classes)
 
         annot_helper_kws = dict(
-            negative_classes=negative_classes,
+            # negative_classes=self._old_balance_as_negative_classes,
             keepbound=False,
             use_annot_info=True,
             use_centered_positives=config['use_centered_positives'],
@@ -3325,7 +3503,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             if 1:
                 self._init_balance(new_sample_grid)
 
-            self.length = len(self.balanced_sample_tree)
+            self.length = len(self.balanced_sampler)
 
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)

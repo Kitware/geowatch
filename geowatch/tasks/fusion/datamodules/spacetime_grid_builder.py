@@ -54,7 +54,7 @@ from geowatch.utils import kwcoco_extensions
 from geowatch import heuristics
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 
@@ -151,7 +151,7 @@ class SpacetimeGridBuilder:
 
             negative_classes (List[str]):
                 indicate class names that should not count towards a region being
-                marked as positive.
+                marked as positive. NOTE: This is old and unused.
 
             respect_valid_regions (bool):
                 if True, only place windows in valid regions
@@ -345,12 +345,12 @@ def sample_video_spacetime_targets(dset,
     if not update_rule:
         update_rule = 'distribute'
 
-    if negative_classes is None:
-        negative_classes = heuristics.BACKGROUND_CLASSES
+    if negative_classes is not None:
         warnings.warn(ub.paragraph(
-            f'''
-            Negative classes were not specified to SpacetimeGridBuilder.
-            Using heuristic background classes: {negative_classes}
+            '''
+            Grid sampler no longer handles negative classes. Instead it
+            provides the user the information to balance positive/negatives
+            after the fact.
             '''))
 
     dset_hashid = dset._cached_hashid()
@@ -371,7 +371,7 @@ def sample_video_spacetime_targets(dset,
         winspace_time_dims,
         window_overlap,
         window_space_scale,
-        negative_classes, keepbound,
+        keepbound,
         include_sensors,
         exclude_sensors,
         select_videos,
@@ -436,7 +436,7 @@ def sample_video_spacetime_targets(dset,
             job = jobs.submit(
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
                 video_id, video_gids, winspace_time_dims, winspace_space_dims,
-                window_overlap, negative_classes, keepbound,
+                window_overlap, keepbound,
                 affinity_type, update_rule, time_span, time_kernel, use_annot_info,
                 use_grid_positives, use_grid_negatives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
@@ -477,7 +477,7 @@ def sample_video_spacetime_targets(dset,
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
     from kwutil.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~...', tail='\n...~')))
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~TRUNCATED...', tail='\n...~')))
     return sample_grid
 
 
@@ -514,7 +514,7 @@ class ImagePropertyCacher:
 @profile
 def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
-        window_overlap, negative_classes,
+        window_overlap,
         keepbound, affinity_type, update_rule, time_span, time_kernel,
         use_annot_info, use_grid_positives, use_grid_negatives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
@@ -596,13 +596,12 @@ def _sample_single_video_spacetime_targets(
 
     depends = [
         dset_hashid,
-        negative_classes,
         affinity_type,
         update_rule,
         video_name,
         gid_arr,
         vidspace_window_dims, window_overlap,
-        negative_classes, keepbound,
+        keepbound,
         affinity_type,
         time_span, use_annot_info,
         use_grid_positives,
@@ -655,8 +654,8 @@ def _sample_single_video_spacetime_targets(
 
         if use_annot_info:
             qtree, tid_to_infos, loose_aid_to_infos = _build_vidspace_track_qtree(
-                dset, video_gids, negative_classes, vidspace_video_width,
-                vidspace_video_height, image_props)
+                dset, video_gids, vidspace_video_width, vidspace_video_height,
+                image_props)
         else:
             qtree = None
             tid_to_infos = None
@@ -683,7 +682,8 @@ def _sample_single_video_spacetime_targets(
             num_cells = len(slices) * len(video_gids)
             probably_slow = num_cells > (16 * 30)
 
-            for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
+            for vidspace_region in ub.ProgIter(slices,
+                                               desc='Build targets over sliding window',
                                                enabled=probably_slow,
                                                verbose=verbose * probably_slow):
 
@@ -716,14 +716,15 @@ def _sample_single_video_spacetime_targets(
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
             track_infos = list(tid_to_infos.items())
-            for tid, infos in ub.ProgIter(track_infos,
-                                          desc='Centered tracks',
-                                          enabled=len(track_infos) > 4 and probably_slow,
-                                          verbose=verbose * (len(track_infos) > 4 and probably_slow)):
+            for tid, track_info_group in ub.ProgIter(track_infos,
+                                                     desc='Build targets around centered track annotations',
+                                                     enabled=len(track_infos) > 4 and probably_slow,
+                                                     verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
-                    video_id, infos, video_gids, vidspace_window_dims,
-                    time_sampler)
+                        dset, use_annot_info, qtree, video_id, track_info_group,
+                        video_gids, vidspace_window_dims,
+                        time_sampler)
                 new_targets = list(new_targets)
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
@@ -733,13 +734,14 @@ def _sample_single_video_spacetime_targets(
             # tracks of length 1
             loose_annot_infos = list(loose_aid_to_infos.items())
             for aid, info in ub.ProgIter(loose_annot_infos,
-                                         desc='Centered annots',
+                                         desc='Build targets around centered trackless annots',
                                          enabled=len(loose_aid_to_infos) > 4 and probably_slow,
                                          verbose=verbose * (len(loose_aid_to_infos) > 4 and probably_slow)):
-                infos = [info]
+                track_info_group = [info]
                 new_targets = _build_targets_around_track(
-                    video_id, infos, video_gids, vidspace_window_dims,
-                    time_sampler)
+                        dset, use_annot_info, qtree, video_id, track_info_group,
+                        video_gids, vidspace_window_dims,
+                        time_sampler)
                 new_targets = list(new_targets)
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
@@ -772,20 +774,20 @@ def _sample_single_video_spacetime_targets(
 
 
 @profile
-def _build_targets_around_track(video_id, infos, video_gids,
+def _build_targets_around_track(dset, use_annot_info, qtree, video_id, track_info_group, video_gids,
                                 vidspace_window_dims, time_sampler):
     """
     Given information about a track, build targets to ensure the network trains
     with it.
 
     Args:
-        infos (List[Dict]):
+        track_info_group (List[Dict]):
             each row contains gid, aid, cid, tid, frame-index for the track of
             interest.
     """
     window_height, window_width = vidspace_window_dims
     # For every frame in the track
-    for info in infos:
+    for info in track_info_group:
         main_gid = info['gid']
         vidspace_ann_box = kwimage.Box.coerce(info['vidspace_box'], format='tlbr')
         vidspace_ann_box = vidspace_ann_box.quantize()
@@ -802,7 +804,27 @@ def _build_targets_around_track(video_id, infos, video_gids,
         if _hack2:
             gids = _hack2[_hack_main_idx]
             label = 'positive_center'
+            annot_info = None
             vidspace_region = vidspace_ann_box.to_slice()
+
+            # Find all annotations that pass through this spatial region
+            vidspace_box = kwimage.Box.from_slice(vidspace_region).to_ltrb()
+            query = vidspace_box.data
+            isect_aids = list(qtree.intersect(query))
+            isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
+            isect_aids_catnames = dset.annots(isect_aids).category_names
+            aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
+            gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+            gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
+
+            if use_annot_info:
+                annot_info = {
+                    'isect_aids': isect_aids,
+                    'isect_aids_catnames': isect_aids_catnames,
+                    'gid_to_aids': ub.dict_subset(gid_to_aids, gids, default=[]),
+                    'gid_to_catnames': ub.dict_subset(gid_to_catnames, gids, default=[]),
+                    'main_gid_catnames': ub.dict_hist(list(ub.take(gid_to_catnames, [main_gid], default=[]))[0]),
+                }
 
             target = {
                 'main_idx': _hack_main_idx,
@@ -812,6 +834,7 @@ def _build_targets_around_track(video_id, infos, video_gids,
                 'space_slice': vidspace_region,
                 'label': label,
                 'resampled': -1,
+                'annot_info': annot_info,
             }
             yield target
 
@@ -837,6 +860,10 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         query = vidspace_box.data
         isect_aids = list(qtree.intersect(query))
         isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
+        isect_aids_catnames = dset.annots(isect_aids).category_names
+        aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
+        gid_to_aids = {x: dset.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
+        gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
 
     if respect_valid_regions:
         # Reselect the keyframes if we overlap an invalid region (as
@@ -869,6 +896,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
     for main_idx, gids in main_idx_to_gids2.items():
         main_gid = time_sampler.video_gids[main_idx]
         label = 'unknown'
+        annot_info = None
 
         if use_annot_info:
             if isect_aids:
@@ -881,6 +909,14 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                 # Hack: exclude all annotated regions from negative sampling
                 label = 'negative_grid'
 
+            annot_info = {
+                'isect_aids': isect_aids,
+                'isect_aids_catnames': isect_aids_catnames,
+                'gid_to_aids': ub.dict_subset(gid_to_aids, gids, default=[]),
+                'gid_to_catnames': ub.dict_subset(gid_to_catnames, gids, default=[]),
+                'main_gid_catnames': ub.dict_hist(list(ub.take(gid_to_catnames, [main_gid], default=[]))[0]),
+            }
+
         target = {
             'main_idx': main_idx,
             'video_id': video_id,
@@ -889,14 +925,14 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
             'space_slice': vidspace_region,
             'resampled': resampled,
             'label': label,
+            'annot_info': annot_info,
         }
         yield target
 
 
 @profile
-def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
-                                vidspace_video_width, vidspace_video_height,
-                                image_props):
+def _build_vidspace_track_qtree(dset, video_gids, vidspace_video_width,
+                                vidspace_video_height, image_props):
     """
     Build a data structure that allows for fast lookup of which annotations
     exist in the in the requested "Window Space".
@@ -940,16 +976,15 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         imgspace_xywh = []
         infos = []
         for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
-            if cname not in negative_classes:
-                imgspace_xywh.append(dset.index.anns[aid]['bbox'])
-                infos.append({
-                    'gid': gid,
-                    'cid': cid,
-                    'tid': tid,
-                    # 'frame_index': frame_index,
-                    'cname': dset._resolve_to_cat(cid)['name'],
-                    'aid': aid,
-                })
+            imgspace_xywh.append(dset.index.anns[aid]['bbox'])
+            infos.append({
+                'gid': gid,
+                'cid': cid,
+                'tid': tid,
+                # 'frame_index': frame_index,
+                'cname': dset._resolve_to_cat(cid)['name'],
+                'aid': aid,
+            })
 
         imgspace_boxes = kwimage.Boxes(np.array(imgspace_xywh), 'xywh')
 
