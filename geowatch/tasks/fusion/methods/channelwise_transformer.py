@@ -237,7 +237,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     predictable_classes = scfg.Value(None, help=ub.paragraph(
         '''
         Subset of classes to perform predictions on (for the class head).
-        Specified as a comma delimited string.
+        Specified as a YAML list or a comma delimited string.
         '''))
 
     def __post_init__(self):
@@ -372,14 +372,16 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.input_norms = input_norms
 
-        self.predictable_classes = self.hparams.predictable_classes
-        if self.predictable_classes is not None:
-            self.predictable_classes = [x.strip() for x in self.hparams.predictable_classes.split(',')]
-            self.classes = kwcoco.CategoryTree.coerce(self.predictable_classes)
-            self.num_classes = len(self.predictable_classes)
-        else:
-            self.classes = kwcoco.CategoryTree.coerce(classes)
-            self.num_classes = len(self.classes)
+        import kwutil
+        predictable_classes = kwutil.Yaml.coerce(self.hparams.predictable_classes)
+        if predictable_classes is not None:
+            if isinstance(predictable_classes, str):
+                predictable_classes = [x.strip() for x in predictable_classes.split(',')]
+            classes = kwcoco.CategoryTree.coerce(predictable_classes)
+
+        self.predictable_classes = predictable_classes
+        self.classes = kwcoco.CategoryTree.coerce(classes)
+        self.num_classes = len(self.classes)
 
         self.global_class_weight = self.hparams.global_class_weight
         self.global_change_weight = self.hparams.global_change_weight

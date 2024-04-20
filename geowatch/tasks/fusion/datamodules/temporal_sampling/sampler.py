@@ -10,6 +10,9 @@ CommandLine:
     SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:3
     SMART_DATA_DVC_DPATH=1 xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:3
 
+    xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:0 --show
+    xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling __doc__:1 --show
+
 Example:
     >>> # Basic overview demo of the algorithm
     >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
@@ -27,6 +30,7 @@ Example:
     >>> self.show_summary(samples_per_frame=3, fnum=3)
     >>> self.show_procedure(fnum=1)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # Demo multiple different settings
@@ -57,6 +61,7 @@ Example:
     >>> self.show_summary(samples_per_frame=3, fnum=3)
     >>> self.show_procedure(fnum=6)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # Demo corner case where there are too few observations

@@ -1156,3 +1156,17 @@ class FigureManager:
     def set_figtitle(self, *args, **kwargs):
         import kwplot
         kwplot.set_figtitle(*args, **kwargs, fig=self.fig)
+
+
+def _format_xaxis_as_timedelta(ax):
+    """
+    TODO: document and better integrate into util_kwplot
+    """
+    import datetime as datetime_mod
+
+    def timeTicks(x, pos):
+        d = datetime_mod.timedelta(seconds=x)
+        return str(d.days)  # + ' days'
+    import matplotlib as mpl
+    formatter = mpl.ticker.FuncFormatter(timeTicks)
+    ax.xaxis.set_major_formatter(formatter)

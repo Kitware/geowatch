@@ -116,6 +116,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         * Random Stratified Sampling Affinity Matrix
         * A quasi-random sampling approach to image retrieval
 
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling.affinity affinity_sample:0 --show
+        xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling.affinity affinity_sample:1 --show
+
     Example:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
@@ -135,6 +139,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> sns = kwplot.autosns()
         >>> plt = kwplot.autoplt()
         >>> show_affinity_sample_process(chosen, info)
+        >>> kwplot.show_if_requested()
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -157,6 +162,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> kwplot.autompl()
         >>> chosen, info = self.show_procedure(idx=0, fnum=10, exclude=[1, 2, 4])
         >>> print('info = {}'.format(ub.urepr(info, nl=4)))
+        >>> kwplot.show_if_requested()
 
     Ignore:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -221,6 +227,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> info['title_suffix'] = chr(10) + time_kernel_code
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
         >>> show_affinity_sample_process(chosen, info, fnum=1)
+        >>> kwplot.show_if_requested()
     """
     rng = kwarray.ensure_rng(rng)
 
