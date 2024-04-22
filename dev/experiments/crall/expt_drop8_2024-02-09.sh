@@ -2325,22 +2325,22 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 
 
-export VALI_FPATH
-export TRAIN_FPATH
-# Ensure we can do a postgres database
-python -c "if 1:
-    import geowatch
-    import os
-    import ubelt as ub
-    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
-    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
-    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
-    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
-    print(vali_dset._cached_hashid())
-    print(train_dset._cached_hashid())
-    print(vali_dset._orig_coco_fpath())
-    print(train_dset._orig_coco_fpath())
-"
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
 
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
@@ -2426,7 +2426,7 @@ data:
   observable_threshold   : 0.0
   quality_threshold      : 0.0
   weight_dilate          : 10
-  sqlview                : postgresql
+  #sqlview                : postgresql
   neg_to_pos_ratio       : null
   balance_options :
       - attribute: old_has_class_of_interest

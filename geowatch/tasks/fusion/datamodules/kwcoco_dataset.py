@@ -2373,11 +2373,15 @@ class IntrospectMixin:
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
 
-            annots = self.sampler.dset.annots(frame['ann_aids'])
-            cids = annots.lookup('category_id')
-            class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
-            frame_summary['class_hist'] = class_hist
             if frame.get('ann_aids') is not None:
+                if 0:
+                    # disable as workaround for coco sql issues
+                    # (i.e. we dont want to rely on a connection to the sql
+                    # database in the main thread)
+                    annots = self.sampler.dset.annots(frame['ann_aids'])
+                    cids = annots.lookup('category_id')
+                    class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
+                    frame_summary['class_hist'] = class_hist
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
         vidname = item.get('video_name', None)

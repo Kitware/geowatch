@@ -457,6 +457,15 @@ class _ValueGetter:
     def __call__(self, data):
         if not data.did_setup:
             data.setup('fit')
+        if 1:
+            # Hack to disconnect SQL coco databases before we fork
+            # TODO: find a way to handle this more ellegantly
+            if hasattr(data, 'coco_datasets'):
+                for k, v in data.coco_datasets.items():
+                    if hasattr(v, 'disconnect'):
+                        if v.session is not None:
+                            v.session.close()
+                        v.disconnect()
         return getattr(data, self.key)
 
 
