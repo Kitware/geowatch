@@ -272,6 +272,9 @@ class DrawRegionCLI(scfg.DataConfig):
                         }
                         lines.append(line)
                     _draw_lines(lines, ax)
+                    # TODO: make this formatter fixup work better.
+                    import matplotlib.dates as mdates
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 
                 if summary_df is not None:
                     lines = []
