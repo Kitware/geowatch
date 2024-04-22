@@ -10,6 +10,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New task: `poly_from_point` that contains various methods to transform
   point-based annotations into polygon-based ones using heuristics.
 
+### Fixed
+* `geowatch.cli.draw_region` now correctly draws timeline information and does a better job at distinguishing them. 
+
 
 ## Version 0.16.2 - Released 2024-04-15
 

@@ -65,7 +65,7 @@ class DrawRegionCLI(scfg.DataConfig):
         rich.print('config = ' + ub.urepr(config, nl=1))
 
         # import copy
-        import numpy as np
+        # import numpy as np
         import pandas as pd
         # from kwutil import util_time
         from geowatch.geoannots import geomodels
@@ -148,7 +148,7 @@ class DrawRegionCLI(scfg.DataConfig):
         draw_backend = 'cv2'
         draw_backend = 'mpl'
         if draw_backend == 'mpl':
-            sns = kwplot.autosns()
+            kwplot.autosns()
 
             title = util_kwplot.TitleBuilder()
 
@@ -176,15 +176,31 @@ class DrawRegionCLI(scfg.DataConfig):
             unique_status_to_color = ub.dzip(unique_status, unique_colors)
             legend_canvas = kwplot.make_legend_img(unique_status_to_color, dpi=600)
 
-            # Assign colors to each site summary
+            # Assign a unique color to each site (Used for edges)
+            unique_site_ids = set()
+            if site_df is not None:
+                unique_site_ids.update(site_df.site_id)
+            if summary_df is not None:
+                unique_site_ids.update(summary_df.site_id)
+            _unique_colors = kwimage.Color.distinct(len(unique_site_ids))
+            # Darken the edge colors so they arent so distracting
+            _unique_colors = [kwimage.Color(c).adjust(lighten=-0.25).as01() for c in _unique_colors]
+            siteid_to_color = ub.dzip(unique_site_ids, _unique_colors)
+
+            if summary_df is not None:
+                summary_df['edge_color'] = summary_df['site_id'].apply(siteid_to_color.__getitem__)
+            if site_df is not None:
+                site_df['edge_color'] = summary_df['site_id'].apply(siteid_to_color.__getitem__)
+
+            # Assign face colors to each site summary
             unique_status_to_face_color01 = {s: c.as01() for s, c in unique_status_to_color.items()}
-            unique_status_to_edge_color01 = {s: c.adjust(lighten=-.05).as01() for s, c in unique_status_to_color.items()}
+            # unique_status_to_edge_color01 = {s: c.adjust(lighten=-.05).as01() for s, c in unique_status_to_color.items()}
             if summary_df is not None:
                 summary_df['face_color'] = summary_df['status'].apply(unique_status_to_face_color01.__getitem__)
-                summary_df['edge_color'] = summary_df['status'].apply(unique_status_to_edge_color01.__getitem__)
+                # summary_df['edge_color'] = summary_df['status'].apply(unique_status_to_edge_color01.__getitem__)
             if site_df is not None:
                 site_df['face_color'] = site_df['status'].apply(unique_status_to_face_color01.__getitem__)
-                site_df['edge_color'] = site_df['status'].apply(unique_status_to_edge_color01.__getitem__)
+                # site_df['edge_color'] = site_df['status'].apply(unique_status_to_edge_color01.__getitem__)
 
             num_rows = 2 if config.with_timeline else 1
             figman = util_kwplot.FigureManager(
@@ -235,22 +251,56 @@ class DrawRegionCLI(scfg.DataConfig):
                 ax = kwplot.figure(fnum=1, pnum=(num_rows, 1, 2), docla=1).gca()
 
                 if site_df is not None:
-                    centroid = site_df.geometry.centroid
-                    site_df['y'] = centroid.y
-                    sub = site_df[['site_id', 'y']]
-                    stacked = pd.concat([sub] * 2, ignore_index=True)
-                    stacked['date'] = pd.concat([site_df.start_date, site_df.end_date], ignore_index=True)
-                    stacked['frame_idx'] = np.concatenate([[0] * len(site_df), [1] * len(site_df)])
-                    sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
+                    # centroid = site_df.geometry.centroid
+                    # site_df['y'] = centroid.y
+                    # sub = site_df[['site_id', 'y']]
+                    # stacked = pd.concat([sub] * 2, ignore_index=True)
+                    # stacked['date'] = pd.concat([site_df.start_date, site_df.end_date], ignore_index=True)
+                    # stacked['frame_idx'] = np.concatenate([[0] * len(site_df), [1] * len(site_df)])
+                    # sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
+                    lines = []
+                    for idx, row in enumerate(site_df.to_dict('records')):
+                        y = row['geometry'].centroid.y
+                        color = row['edge_color']
+                        xs = [row['start_date'], row['end_date']]
+                        xs = util_kwplot.fix_matplotlib_dates(xs)
+                        line = {
+                            'ys': [y, y],
+                            'xs': xs,
+                            'color': color,
+                            'marker': '.'
+                        }
+                        lines.append(line)
+                    _draw_lines(lines, ax)
 
                 if summary_df is not None:
-                    centroid = summary_df.geometry.centroid
-                    summary_df['y'] = centroid.y
-                    sub = summary_df[['site_id', 'y']]
-                    stacked = pd.concat([sub] * 2, ignore_index=True)
-                    stacked['date'] = pd.concat([summary_df.start_date, summary_df.end_date], ignore_index=True)
-                    stacked['frame_idx'] = np.concatenate([[0] * len(summary_df), [1] * len(summary_df)])
-                    sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
+                    lines = []
+                    for idx, row in enumerate(summary_df.to_dict('records')):
+                        y = row['geometry'].centroid.y
+                        color = row['edge_color']
+                        xs = [row['start_date'], row['end_date']]
+                        xs = util_kwplot.fix_matplotlib_dates(xs)
+                        line = {
+                            'ys': [y, y],
+                            'xs': xs,
+                            'color': color,
+                            'marker': '.'
+                        }
+                        lines.append(line)
+                    _draw_lines(lines, ax)
+                    # TODO: make this formatter fixup work better.
+                    import matplotlib.dates as mdates
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                    # ax.xaxis.set_major_locator(mdates.DayLocator(interval=90))
+
+                    # centroid = summary_df.geometry.centroid
+                    # summary_df['y'] = centroid.y
+                    # sub = summary_df[['site_id', 'y']]
+                    # stacked = pd.concat([sub] * 2, ignore_index=True)
+                    # stacked['date'] = pd.concat([summary_df.start_date, summary_df.end_date], ignore_index=True)
+                    # stacked['frame_idx'] = np.concatenate([[0] * len(summary_df), [1] * len(summary_df)])
+                    # sns.lineplot(data=stacked, x='date', y='y', ax=ax, hue='site_id', legend=False)
+
                 ax.set_ylim(miny, maxy)
 
             fpath = config.fpath
@@ -260,6 +310,57 @@ class DrawRegionCLI(scfg.DataConfig):
 
         else:
             raise NotImplementedError
+
+
+def _demo_draw_times():
+    """
+    MWE code to help get timelines to draw right.
+    """
+    lines = [
+        {'ys': [5178041.5354517745, 5178041.5354517745],
+         'xs': [16530.0, 18745.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+        {'ys': [5177799.260253956, 5177799.260253956],
+         'xs': [16050.0, 18901.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+        {'ys': [5177300.748245601, 5177300.748245601],
+         'xs': [16050.0, 18536.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+        {'ys': [5177175.214791525, 5177175.214791525],
+         'xs': [16530.0, 18901.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+        {'ys': [5176775.194194238, 5176775.194194238],
+         'xs': [16050.0, 18745.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+        {'ys': [5176569.654561392, 5176569.654561392],
+         'xs': [16530.0, 18911.0],
+         'color': (0.0, 0.38171248398857033, 0.7303921568627451),
+         'marker': '.'},
+    ]
+    import kwplot
+    kwplot.autosns()
+    fig = kwplot.figure(doclf=1)
+    ax = fig.gca()
+    _draw_lines(lines, ax)
+    # TODO: make this formatter fixup work better.
+    import matplotlib.dates as mdates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+
+    ...
+
+
+def _draw_lines(lines, ax):
+    # TODO: could use util_kwplot artist manager here
+    for line in lines:
+        xs = line['xs']
+        ys = line['ys']
+        linestyle = line.get('linestyle', '-')
+        ax.plot(xs, ys, linestyle, marker=line['marker'], color=line['color'])
 
 
 __cli__ = DrawRegionCLI
