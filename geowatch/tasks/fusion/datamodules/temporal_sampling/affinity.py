@@ -576,7 +576,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
         f'{error_level=}',
     ]
     if error_level == 3:
-        msg3 = '\n'.join(['all probability is exhausted.'] + debug_parts)
+        msg3 = '\n'.join(['All probability is exhausted.'] + debug_parts)
         raise TimeSampleError(msg3)
 
     current_weights = affinity[chosen[0]].copy()
@@ -591,7 +591,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
     if total_weight == 0:
         # Should really never get here in day-to-day, but just in case
         if error_level == 2:
-            msg2 = '\n'.join(['all included probability is exhausted.'] + debug_parts)
+            msg2 = '\n'.join(['All included probability is exhausted.'] + debug_parts)
             raise TimeSampleError(msg2)
 
         # Zero weight method: neighbors
@@ -619,7 +619,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
 
             if error_level == 1:
                 debug_parts.append(f'{total_weight=}')
-                msg1 = '\n'.join(['all chosen probability is exhausted.'] + debug_parts)
+                msg1 = '\n'.join(['All chosen probability is exhausted.'] + debug_parts)
                 raise TimeSampleError(msg1)
 
             if zero_weight_method == 'neighbors':
