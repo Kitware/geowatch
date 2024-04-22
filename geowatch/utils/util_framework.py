@@ -859,7 +859,7 @@ class NodeStateDebugger:
         import kwutil
         # import uuid
         # unique_suffix = ub.hash_data(uuid.uuid4())[0:8]
-        unique_suffix = kwutil.datetime.now().isoformat(pathsafe=1)
+        unique_suffix = kwutil.util_time.isoformat(kwutil.util_time.datetime.now(), pathsafe=1)
         if config is None:
             step_name = 'unknown_step'
         else:
