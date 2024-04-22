@@ -190,7 +190,7 @@ class DrawRegionCLI(scfg.DataConfig):
             if summary_df is not None:
                 summary_df['edge_color'] = summary_df['site_id'].apply(siteid_to_color.__getitem__)
             if site_df is not None:
-                site_df['edge_color'] = summary_df['site_id'].apply(siteid_to_color.__getitem__)
+                site_df['edge_color'] = site_df['site_id'].apply(siteid_to_color.__getitem__)
 
             # Assign face colors to each site summary
             unique_status_to_face_color01 = {s: c.as01() for s, c in unique_status_to_color.items()}

@@ -112,6 +112,8 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         print("* Running baseline framework kwcoco ingress *")
         ingress_dir = ub.Path('/tmp/ingress')
 
+        eval_dpath = (ingress_dir / 'metrics_output').ensuredir()
+
         USE_NON_STAC_PATHS = True
         if USE_NON_STAC_PATHS:
             # FIXME: would be better if we conformed to the same STAC-in
@@ -159,9 +161,21 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
 
         node_state.print_current_state(ingress_dir)
 
+        DRAW_SANITY_CHECK = True
+        if DRAW_SANITY_CHECK:
+            print('Draw predictions and truth before we do eval as a sanity check')
+            viz_output_dpath = (eval_dpath / 'region_viz_overall').ensuredir()
+            command = ub.paragraph(
+                f'''
+                geowatch draw_region {true_site_dpath}
+                    --extra_header "True Sites"
+                    --fpath "{viz_output_dpath}"/true_site_viz.png
+                ''')
+            print(command)
+            ...
+
         smart_pipeline.PolygonEvaluation.name = 'poly_eval'
         eval_node = smart_pipeline.PolygonEvaluation()
-        eval_dpath = (ingress_dir / 'metrics_output').ensuredir()
         eval_fpath = eval_dpath / 'poly_eval.json'
 
         eval_node.configure({
