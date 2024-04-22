@@ -113,6 +113,7 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         ingress_dir = ub.Path('/tmp/ingress')
 
         eval_dpath = (ingress_dir / 'metrics_output').ensuredir()
+        viz_output_dpath = (eval_dpath / 'region_viz_overall').ensuredir()
 
         USE_NON_STAC_PATHS = True
         if USE_NON_STAC_PATHS:
@@ -129,19 +130,20 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
             remote_true_site_fpaths = [p for p in remote_true_site_dpath.ls() if p.name.startswith(config.region_id)]
             remote_true_region_fpaths = [p for p in remote_true_region_dpath.ls() if p.name.startswith(config.region_id)]
 
-            true_annot_dpath = (ingress_dir / 'truth/region_models').ensuredir()
+            true_annot_dpath = (ingress_dir / 'truth').ensuredir()
             true_region_dpath = (true_annot_dpath / 'region_models').ensuredir()
             true_site_dpath = (true_annot_dpath / 'site_models').ensuredir()
 
             # Copy predictions to local node
-            pred_site_dpath = FSPath.coerce(ingress_dir / 'site_models')
+            pred_annot_dpath = (ingress_dir / 'pred').ensuredir()
+            pred_site_dpath = FSPath.coerce(pred_annot_dpath / 'site_models')
             remote_pred_site_dpath.copy(pred_site_dpath, verbose=3)
 
-            if 0:
-                # HACK
-                remote_pred_region_dpath = remote_pred_site_dpath.parent / 'region_models'
-                pred_region_dpath = FSPath.coerce(ingress_dir / 'region_models')
-                remote_pred_region_dpath.copy(pred_region_dpath)
+            # We dont need the region model for scoring, but it helps for
+            # visualization and ensuring our approch is consistent
+            remote_pred_region_dpath = remote_pred_site_dpath.parent / 'region_models'
+            pred_region_dpath = FSPath.coerce(pred_annot_dpath / 'region_models')
+            remote_pred_region_dpath.copy(pred_region_dpath)
 
             # Copy truth to local node
             for fpath in ub.ProgIter(remote_true_site_fpaths, desc='pull site truth', verbose=3):
@@ -149,7 +151,7 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
             for fpath in ub.ProgIter(remote_true_region_fpaths, desc='pull region truth', verbose=3):
                 fpath.copy(true_region_dpath / fpath.name)
 
-        # # 2. Download and prune region file
+        # 2. Download and prune region file
         print("* Downloading and pruning region file *")
         local_region_path = '/tmp/region.json'
         download_region(
@@ -164,15 +166,37 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         DRAW_SANITY_CHECK = True
         if DRAW_SANITY_CHECK:
             print('Draw predictions and truth before we do eval as a sanity check')
-            viz_output_dpath = (eval_dpath / 'region_viz_overall').ensuredir()
             command = ub.paragraph(
                 f'''
                 geowatch draw_region {true_site_dpath}
                     --extra_header "True Sites"
                     --fpath "{viz_output_dpath}"/true_site_viz.png
                 ''')
-            print(command)
-            ...
+            ub.cmd(command, shell=True, verbose=3)
+
+            command = ub.paragraph(
+                f'''
+                geowatch draw_region {true_region_dpath}
+                    --extra_header "True Region"
+                    --fpath "{viz_output_dpath}"/true_region_viz.png
+                ''')
+            ub.cmd(command, shell=True, verbose=3)
+
+            command = ub.paragraph(
+                f'''
+                geowatch draw_region {pred_site_dpath}
+                    --extra_header "Pred Sites"
+                    --fpath "{viz_output_dpath}"/pred_site_viz.png
+                ''')
+            ub.cmd(command, shell=True, verbose=3)
+
+            command = ub.paragraph(
+                f'''
+                geowatch draw_region {pred_region_dpath}
+                    --extra_header "Pred Regions"
+                    --fpath "{viz_output_dpath}"/pred_region_viz.png
+                ''')
+            ub.cmd(command, shell=True, verbose=3)
 
         smart_pipeline.PolygonEvaluation.name = 'poly_eval'
         eval_node = smart_pipeline.PolygonEvaluation()
@@ -193,6 +217,15 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
         node_state.print_current_state(ingress_dir)
 
         node_state.print_directory_contents(eval_dpath)
+
+        # Change viz symlinks to real files
+        if True:
+            for path in viz_output_dpath.glob('*'):
+                if path.is_symlink():
+                    real_path = path.resolve()
+                    assert not real_path.is_symlink()
+                    path.unlink()
+                    real_path.copy(path)
 
         assets_to_egress = {
             'eval_dpath': eval_dpath,

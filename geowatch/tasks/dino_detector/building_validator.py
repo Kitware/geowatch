@@ -238,6 +238,12 @@ def main(cmdline=1, **kwargs):
         clear_existing=False,
     )
 
+    if 0:
+        from geowatch.utils import util_framework
+        region_models = [region_model]
+        site_models = input_sites
+        util_framework.check_region_and_site_models_agree(region_models, site_models)
+
     # Enrich all sites with features (evidence) and decisions.
     site_to_decisions = {
         s: {

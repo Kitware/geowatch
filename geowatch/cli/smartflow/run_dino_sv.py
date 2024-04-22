@@ -235,7 +235,14 @@ def run_dino_sv(config):
             util_framework.fixup_and_validate_site_and_region_models(
                 region_dpath=output_region_fpath.parent,
                 site_dpath=output_sites_dpath,
+
             )
+
+            if 0:
+                util_framework.fixup_and_validate_site_and_region_models(
+                    region_dpath=input_region_fpath.parent,
+                    site_dpath=input_sites_dpath,
+                )
 
     node_state.print_current_state(ingress_dir)
 

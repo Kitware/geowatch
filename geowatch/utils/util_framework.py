@@ -771,18 +771,83 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
     from geowatch.utils import util_gis
     region_infos = list(util_gis.coerce_geojson_datas(region_dpath, format='json'))
     site_infos = list(util_gis.coerce_geojson_datas(site_dpath, format='json'))
+
+    region_models = []
     for region_info in region_infos:
         fpath = region_info['fpath']
         region = geomodels.RegionModel(**region_info['data'])
         region.fixup()
         fpath.write_text(region.dumps(indent='    '))
+        region_models.append(region)
         region.validate()
+
+    site_models = []
     for site_info in site_infos:
         fpath = site_info['fpath']
         site = geomodels.SiteModel(**site_info['data'])
         site.fixup()
         fpath.write_text(site.dumps(indent='    '))
         site.validate()
+        site_models.append(site)
+
+    check_region_and_site_models_agree(region_models, site_models)
+
+
+def check_region_and_site_models_agree(region_models, site_models):
+    # Check that region / site models are consistent with each other
+    all_site_summaries = list(ub.flatten(region.site_summaries() for region in region_models))
+    all_site_headers = [site.header for site in site_models]
+
+    sitesum_dups = ub.find_duplicates(sitesum['properties']['site_id'] for sitesum in all_site_summaries)
+    assert not sitesum_dups, 'site summaries have duplicate site-ids'
+
+    site_dups = ub.find_duplicates(header['properties']['site_id'] for header in all_site_headers)
+    assert not site_dups, 'site models have duplicate site-ids'
+
+    siteid_to_summary = {sitesum['properties']['site_id']: sitesum for sitesum in all_site_summaries}
+    siteid_to_header = {header['properties']['site_id']: header for header in all_site_headers}
+
+    site_ids_in_summaries = set(siteid_to_summary)
+    site_ids_in_header = set(siteid_to_header)
+    if site_ids_in_summaries != site_ids_in_header:
+        diff1 = site_ids_in_header - site_ids_in_header
+        diff2 = site_ids_in_summaries - site_ids_in_header
+        print(f'diff1 = {ub.urepr(diff1, nl=1)}')
+        print(f'diff2 = {ub.urepr(diff2, nl=1)}')
+        raise Exception('site-ids differe between summaries and site headers')
+
+    # These properties should be the same in both variants
+    common_properties = ['start_date', 'end_date', 'status']
+
+    errors = []
+    import math
+    for site_id in site_ids_in_summaries:
+        summary = siteid_to_summary[site_id]
+        header = siteid_to_header[site_id]
+        summary_props = ub.udict(summary['properties'])
+        header_props = ub.udict(header['properties'])
+
+        summary_common_props = summary_props & common_properties
+        header_common_props = header_props & common_properties
+
+        score1 = summary_props.get('score', 1.0)
+        score2 = header_props.get('score', 1.0)
+        has_diff = summary_common_props != header_common_props
+        has_diff |= (not math.isclose(score1, score2))
+
+        if has_diff:
+            print(f'FOUND INCONSISTENCY IN {site_id}')
+            print(f'header_props = {ub.urepr(header_props, nl=1)}')
+            print(f'summary_props = {ub.urepr(summary_props, nl=1)}')
+            errors.append(site_id)
+        # assert summary_props['start_date'] == header_props['start_date']
+        # assert summary_props['end_date'] == header_props['end_date']
+        # assert summary_props['status'] == header_props['status']
+
+    if errors:
+        raise AssertionError(f'There were {len(errors)} / {len(site_ids_in_summaries)} inconsistent sites')
+    else:
+        print(f'Checked {len(site_ids_in_summaries)} sites which seem consistent')
 
 
 class NodeStateDebugger:

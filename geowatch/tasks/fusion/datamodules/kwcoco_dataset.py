@@ -33,7 +33,7 @@ Example:
     >>> item = self[index]
     >>> # Summarize batch item in text
     >>> summary = self.summarize_item(item)
-    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> print('item summary: ' + ub.urepr(summary, nl=2))
     >>> # Draw batch item
     >>> canvas = self.draw_item(item)
     >>> # xdoctest: +REQUIRES(--show)
@@ -1053,6 +1053,11 @@ class TruthMixin:
                         poly, shape=space_shape)
                     max_dist = dist.max()
                     if max_dist > 0:
+                        # TODO: Can we modify this so weights from one polygon
+                        # don't clobber weights of overlapping neighbors? This
+                        # might involve starting from 0 and building up for
+                        # foreground objects and then multiplying this into
+                        # background weights.
                         dist_weight = dist / max_dist
                         weight_mask = dist_weight + (1 - poly_mask)
                         task_target_weight['class'] = task_target_weight['class'] * weight_mask
