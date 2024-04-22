@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * `geowatch.cli.draw_region` now correctly draws timeline information and does a better job at distinguishing them. 
+* Fixed issue where DinoSV would output the same decision for every site.
 
 
 ## Version 0.16.2 - Released 2024-04-15
