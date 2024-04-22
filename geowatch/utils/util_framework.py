@@ -854,23 +854,35 @@ class NodeStateDebugger:
         #   command, so there is a tradeoff.
         print('To run in a similar environment locally:')
         TASK_IMAGE_NAME = os.environ.get('TASK_IMAGE_NAME', None)
+
+        from kwutil.slugify_ext import smart_truncate
+        import kwutil
+        # import uuid
+        # unique_suffix = ub.hash_data(uuid.uuid4())[0:8]
+        unique_suffix = kwutil.datetime.now().isoformat(pathsafe=1)
+        if config is None:
+            step_name = 'unknown_step'
+        else:
+            # TODO: ensure pathsafe name utility
+            step_name = smart_truncate(config.__class__.__name__, 24, trunc_loc=1, head="_", tail="_")
+        temp_location = f'debug_{step_name}_{unique_suffix}'
         create_local_env_command = ub.codeblock(
             fr'''
             # Set these environment variables to reasonable locations on your
             # host machine.
-            LOCAL_WORK_DPATH=$HOME/temp/debug_smartflow_v2/ingress
+            LOCAL_WORK_DPATH=$HOME/temp/{temp_location}/ingress
             LOCAL_CODE_DPATH=$HOME/code
             LOCAL_DATA_DPATH=$HOME/data
 
             # Run the docker image
-            mkdir -p $LOCAL_WORK_DPATH
-            cd $LOCAL_WORK_DPATH
+            mkdir -p "$LOCAL_WORK_DPATH"
+            cd "$LOCAL_WORK_DPATH"
             docker run \
                 --runtime=nvidia \
                 --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
                 --volume "$LOCAL_CODE_DPATH":/extern_code:ro \
                 --volume "$LOCAL_DATA_DPATH":/extern_data:ro \
-                --volume $HOME/.aws:/root/.aws:ro \
+                --volume "$HOME"/.aws:/root/.aws:ro \
                 --volume "$HOME"/.cache/pip:/pip_cache \
                 --env AWS_PROFILE=iarpa \
                 --env TASK_IMAGE_NAME={TASK_IMAGE_NAME} \
