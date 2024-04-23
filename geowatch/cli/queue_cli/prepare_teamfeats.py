@@ -16,7 +16,6 @@ SeeAlso:
 
 Example:
     >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
-    >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './pretend_bundle/data.kwcoco.json',
     >>>     'gres': [0, 1],
@@ -48,7 +47,6 @@ Example:
 Example:
     >>> # Test landcover commands
     >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
-    >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
     >>>     'src_kwcocos': './PRETEND_BUNDLE/data.kwcoco.json',
     >>>     'gres': [0, 1],
@@ -72,7 +70,6 @@ Example:
 Example:
     >>> # Test COLD commands
     >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
-    >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> cold_config = ub.codeblock(
         '''
         enabled: 1
@@ -86,6 +83,28 @@ Example:
     >>>     'expt_dvc_dpath': './PRETEND_EXPT_DVC',
     >>>     'virtualenv_cmd': 'conda activate geowatch',
     >>>     'cold_config': cold_config,
+    >>>     'run': 0,
+    >>>     'check': False,
+    >>>     'skip_existing': False,
+    >>>     'backend': 'serial',
+    >>> }
+    >>> config['backend'] = 'serial'
+    >>> outputs = prep_feats(cmdline=False, **config)
+    >>> outputs['queue'].print_commands(0, 0)
+    >>> output_paths = outputs['final_output_paths']
+    >>> print('output_paths = {}'.format(ub.urepr(output_paths, nl=1)))
+
+Example:
+    >>> # Test COLD commands
+    >>> from geowatch.cli.queue_cli.prepare_teamfeats import *  # NOQA
+    >>> cold_config = None
+    >>> config = {
+    >>>     'src_kwcocos': './PRETEND_BUNDLE/data.kwcoco.json',
+    >>>     'gres': [0, 1],
+    >>>     'expt_dvc_dpath': './PRETEND_EXPT_DVC',
+    >>>     'virtualenv_cmd': 'conda activate geowatch',
+    >>>     'cold_config': cold_config,
+    >>>     'with_cold': cold_config,
     >>>     'run': 0,
     >>>     'check': False,
     >>>     'skip_existing': False,
@@ -190,16 +209,16 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
         - [ ] jsonargparse use-case: specifying parmeters of the subalgos
     """
     src_kwcocos = scfg.Value(None, help=ub.paragraph(
-            '''
-            One or more base coco files to compute team-features on.
-            '''), nargs='+', alias=['base_fpath'], group='inputs')
+        '''
+        One or more base coco files to compute team-features on.
+        '''), nargs='+', alias=['base_fpath'], group='inputs')
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
-            '''
-            The DVC directory where team feature model weights can be
-            found. If "auto" uses the
-            ``geowatch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
-            infer the location.
-            '''), group='inputs')
+        '''
+        The DVC directory where team feature model weights can be
+        found. If "auto" uses the
+        ``geowatch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
+        infer the location.
+        '''), group='inputs')
 
     gres = scfg.Value('auto', help='comma separated list of gpus or auto', group='cmd-queue')
 
@@ -212,35 +231,35 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     with_sam = scfg.Value(False, help='Include SAM features')
 
     cold_config = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Raw json/yaml or a path to a json/yaml file that specifies the
-            config for cold teamfeats.
-            '''))
+        '''
+        Raw json/yaml or a path to a json/yaml file that specifies the
+        config for cold teamfeats.
+        '''))
 
     num_s2_landcover_hidden = 32
     num_wv_landcover_hidden = 32
 
     invariant_segmentation = scfg.Value(False, help=ub.paragraph(
-            '''
-            Enable/Disable segmentation part of invariants
-            '''), group='invariants options')
+        '''
+        Enable/Disable segmentation part of invariants
+        '''), group='invariants options')
     invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', group='invariants options')
     invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', group='invariants options')
 
     virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            Command to start the appropriate virtual environment if your
-            bashrc does not start it by default.
-            '''))
+        '''
+        Command to start the appropriate virtual environment if your
+        bashrc does not start it by default.
+        '''))
 
     skip_existing = scfg.Value(True, help='if True skip completed results', group='common options')
 
     data_workers = scfg.Value(2, help='dataloader workers for each proc', group='common options')
 
     kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
-            '''
-            use .kwcoco.json or .kwcoco.zip for outputs
-            '''), group='common options')
+        '''
+        use .kwcoco.json or .kwcoco.zip for outputs
+        '''), group='common options')
 
     assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
         '''
@@ -254,10 +273,10 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     cold_workermode = scfg.Value('process', help='workers mode for pycold. DEPRECATED pass as workermode in "cold_config"', group='cold options')
 
     depth_workers = scfg.Value(2, help=ub.paragraph(
-            '''
-            workers for depth only. On systems with < 32GB RAM might
-            need to set to 0
-            '''), group='depth options')
+        '''
+        workers for depth only. On systems with < 32GB RAM might
+        need to set to 0
+        '''), group='depth options')
 
 
 def prep_feats(cmdline=True, **kwargs):
@@ -497,6 +516,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
         combo_code_parts.append(codes[key])
 
     from kwutil.util_yaml import Yaml
+    key = 'with_cold'
     cold_config = Yaml.coerce(config.cold_config or {})
     GRACEFUL_DEPRECATION_WORKAROUNDS = 1
     if GRACEFUL_DEPRECATION_WORKAROUNDS:
@@ -506,7 +526,6 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
             cold_config['workers'] = config.cold_workers
         config[key] = cold_config.get('enabled', config[key])
         cold_config['enabled'] = config[key]
-    key = 'with_cold'
     if cold_config['enabled']:
         node = ProcessNode(
             name=key + name_suffix,

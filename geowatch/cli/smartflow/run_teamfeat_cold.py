@@ -115,10 +115,10 @@ def main():
     # and then transfer the features to the time-combined data.
     node_state.print_current_state(ingress_dir)
 
-    full_input_kwcoco_fpath = ingressed_assets['timedense_bas_kwcoco_file']
-    timecombined_input_kwcoco_fpath = ingressed_assets['enriched_bas_kwcoco_file']
+    full_input_kwcoco_fpath = ub.Path(ingressed_assets['timedense_bas_kwcoco_file'])
+    timecombined_input_kwcoco_fpath = ub.Path(ingressed_assets['enriched_bas_kwcoco_file'])
 
-    timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
+    timecombined_output_kwcoco_fpath = timecombined_input_kwcoco_fpath.augment(
         stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
 
     from geowatch.cli import watch_coco_stats
@@ -129,16 +129,33 @@ def main():
     print('Print some disk and machine statistics (again)')
     ub.cmd('df -h', verbose=3)
 
-    # TOOD: better passing of configs
+    # Eval18 cold config
+    # sensors: L8,S2
+    # adj_cloud: false
+    # method: COLD
+    # prob: 0.99
+    # conse: 8
+    # cm_interval: 60
+    # year_lowbound:
+    # year_highbound:
+    # coefs: cv,rmse,a0,a1,b1,c1
+    # coefs_bands: 0,1,2,3,4,5
+    # timestamp: false
+    # combine: false
+    # resolution: 10GSD
 
+    # TOOD: better passing of configs
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
     from geowatch.cli.queue_cli import prepare_teamfeats
+    from kwutil.util_yaml import Yaml
     base_fpath = ub.Path(full_input_kwcoco_fpath)
+    cold_config = Yaml.coerce(config.cold_config or {})
+    cold_config['enabled'] = True
+
     prepare_teamfeats.main(
         cmdline=0,
-        with_cold=1,
         cold_config=config.cold_config,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
