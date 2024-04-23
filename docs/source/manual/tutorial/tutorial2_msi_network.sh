@@ -16,7 +16,7 @@ DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
 mkdir -p "$DVC_DATA_DPATH"
 mkdir -p "$DVC_EXPT_DPATH"
 
-NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-10}"  # If variable not set or null, use default.
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
 NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
 NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
 
@@ -93,16 +93,14 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 
-# To ensure anyone can run this tutorial we default to a "cpu" accelerator.
-# However, if you have one or more GPUs available you should modify the
-# ACCELERATOR and CUDA_VISIBLE_DEVICES variables based on your hardware
-
-export ACCELERATOR=cpu
-# Uncomment if you are using a GPU, and set CUDA_VISIBLE_DEVICES
-# to a comma separated list of the GPU #'s you want to use.
-# Index for GPU devices typically starts at 0.
+# Accelerator is set to "GPU". Set  CUDA_VISIBLE_DEVICES to a
+# comma separated list of the GPU #'s you want to use (index may start at 0).
 export ACCELERATOR=gpu
 export CUDA_VISIBLE_DEVICES=0
+
+# However, if you have only have a cpu, the tutorial will still run.
+# Comment out the above two commands and enable the command below.
+# export ACCELERATOR=cpu
 
 DEVICES=$(python -c "if 1:
     import os
@@ -134,9 +132,9 @@ DDP_WORKAROUND = $DDP_WORKAROUND
 "
 
 # The following parameters are related and impose constraints on each other.
-MAX_STEPS=10  # default is 400
-MAX_EPOCHS=2  # defaykt is 20
-TRAIN_BATCHES_PER_EPOCH=5 # default is 20
+MAX_STEPS=400
+MAX_EPOCHS=20
+TRAIN_BATCHES_PER_EPOCH=20
 ACCUMULATE_GRAD_BATCHES=1
 BATCH_SIZE=2
 TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
