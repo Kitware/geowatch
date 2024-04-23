@@ -1,24 +1,25 @@
 """
 Ported bits of netharn
 
-import liberator
-lib = liberator.Liberator()
+Ignore:
+    import liberator
+    lib = liberator.Liberator()
 
 
-import netharn as nh
-lib.add_dynamic(nh.api.Initializer)
+    import netharn as nh
+    lib.add_dynamic(nh.api.Initializer)
 
-lib.expand(['netharn'])
-print(lib.current_sourcecode())
+    lib.expand(['netharn'])
+    print(lib.current_sourcecode())
 
-lib.add_dynamic(nh.initializers.KaimingNormal)
-print(lib.current_sourcecode())
+    lib.add_dynamic(nh.initializers.KaimingNormal)
+    print(lib.current_sourcecode())
 
 
-import liberator
-lib = liberator.Liberator()
-lib.add_dynamic(nh.util.number_of_parameters)
-print(lib.current_sourcecode())
+    import liberator
+    lib = liberator.Liberator()
+    lib.add_dynamic(nh.util.number_of_parameters)
+    print(lib.current_sourcecode())
 
 """
 import torch
@@ -81,6 +82,7 @@ class Initializer(object):
             Tuple[Initializer, dict]: initializer_ = initializer_cls, kw
 
         Examples:
+            >>> from geowatch.utils.util_netharn import *  # NOQA
             >>> print(ub.urepr(Initializer.coerce({'init': 'noop'})))
             >>> config = {
             ...     'init': 'pretrained',
@@ -150,10 +152,9 @@ class NoOp(Initializer):
     the weights yourself.
 
     Example:
-        >>> # xdoctest: +SKIP
         >>> import copy
         >>> self = NoOp()
-        >>> model = toynet.ToyNet2d()
+        >>> model = ToyNet2d()
         >>> old_state = sum(v.sum() for v in model.state_dict().values())
         >>> self(model)
         >>> new_state = sum(v.sum() for v in model.state_dict().values())
@@ -170,9 +171,8 @@ class Orthogonal(Initializer):
     Same as Orthogonal, but uses pytorch implementation
 
     Example:
-        >>> # xdoctest: +SKIP
         >>> self = Orthogonal()
-        >>> model = toynet.ToyNet2d()
+        >>> model = ToyNet2d()
         >>> try:
         >>>     self(model)
         >>> except RuntimeError:
@@ -199,10 +199,9 @@ class KaimingUniform(Initializer):
     Same as HeUniform, but uses pytorch implementation
 
     Example:
-        >>> # xdoctest: +SKIP
-        >>> from netharn.models import toynet
+        >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> self = KaimingUniform()
-        >>> model = toynet.ToyNet2d()
+        >>> model = ToyNet2d()
         >>> self(model)
         >>> layer = torch.nn.modules.Conv2d(3, 3, 3)
         >>> self(layer)
@@ -225,10 +224,9 @@ class KaimingNormal(Initializer):
     Same as HeNormal, but uses pytorch implementation
 
     Example:
-        >>> # xdoctest: +SKIP
-        >>> from netharn.models import toynet
+        >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> self = KaimingNormal()
-        >>> model = toynet.ToyNet2d()
+        >>> model = ToyNet2d()
         >>> self(model)
         >>> layer = torch.nn.modules.Conv2d(3, 3, 3)
         >>> self(layer)
@@ -258,6 +256,7 @@ def apply_initializer(input, func, funckw):
         funckw (dict):
 
     Example:
+        >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> from torch import nn
         >>> import torch
         >>> class DummyNet(nn.Module):
@@ -321,6 +320,7 @@ def trainable_layers(model, names=False):
         parameters instead of the parameters themselves.
 
     Example:
+        >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> import torchvision
         >>> model = torchvision.models.AlexNet()
         >>> list(trainable_layers(model, names=True))
@@ -380,3 +380,33 @@ def number_of_parameters(model, trainable=True):
         model_parameters = model.parameters()
     n_params = sum([np.prod(p.size()) for p in model_parameters])
     return n_params
+
+
+class ToyNet2d(torch.nn.Module):
+    """
+    Demo model for a simple 2 class learning problem
+    """
+    def __init__(self, input_channels=1, num_classes=2):
+        super().__init__()
+        self.input_channels = input_channels
+        self.num_classes = num_classes
+        self.layers = torch.nn.Sequential(*[
+            torch.nn.Conv2d(input_channels, 8, kernel_size=3, padding=1, bias=False),
+
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(8, 8, kernel_size=3, padding=1, bias=False),
+
+            torch.nn.BatchNorm2d(8),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(8, num_classes, kernel_size=3, padding=1, bias=False),
+        ])
+
+        self.softmax = torch.nn.Softmax(dim=1)
+
+    def forward(self, inputs):
+        spatial_out = self.layers(inputs)
+        num = float(np.prod(spatial_out.shape[-2:]))
+        averaged = spatial_out.sum(dim=2).sum(dim=2) / num
+        probs = self.softmax(averaged)
+        return probs
