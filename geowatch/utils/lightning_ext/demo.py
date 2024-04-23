@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
-import netharn as nh
 import torch
+from geowatch.utils.util_netharn import ToyNet2d, ToyData2d
 
 
 class LightningToyNet2d(pl.LightningModule):
@@ -14,7 +14,7 @@ class LightningToyNet2d(pl.LightningModule):
         self.num_train = num_train
         self.num_val = num_val
         self.batch_size = batch_size
-        self.model = nh.models.ToyNet2d()
+        self.model = ToyNet2d()
 
     def forward(self, x):
         return self.model(x)
@@ -41,12 +41,12 @@ class LightningToyNet2d(pl.LightningModule):
         return self.forward_step(batch, batch_idx)
 
     def train_dataloader(self):
-        dataset = nh.data.toydata.ToyData2d(n=self.num_train)
+        dataset = ToyData2d(n=self.num_train)
         loader = dataset.make_loader(batch_size=self.batch_size, num_workers=0)
         return loader
 
     def val_dataloader(self):
-        dataset = nh.data.toydata.ToyData2d(n=self.num_val)
+        dataset = ToyData2d(n=self.num_val)
         loader = dataset.make_loader(batch_size=self.batch_size, num_workers=0)
         return loader
 

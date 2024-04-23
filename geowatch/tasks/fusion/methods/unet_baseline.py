@@ -7,7 +7,6 @@ import einops
 
 import kwcoco
 import kwarray
-import netharn as nh
 import ubelt as ub
 
 from geowatch import heuristics
@@ -15,6 +14,7 @@ from geowatch.tasks.fusion.methods.network_modules import coerce_criterion
 from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
 from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from geowatch.tasks.fusion.architectures import unet_blur
+from geowatch.utils.util_netharn import InputNorm
 
 from typing import Dict, Any, Optional
 
@@ -137,13 +137,13 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             in_chan = mode_code.numel()
 
             if input_stats is None:
-                input_norm = nh.layers.InputNorm()
+                input_norm = InputNorm()
             else:
                 stats = input_stats.get((s, c), None)
                 if stats is None:
-                    input_norm = nh.layers.InputNorm()
+                    input_norm = InputNorm()
                 else:
-                    input_norm = nh.layers.InputNorm(
+                    input_norm = InputNorm(
                         **(ub.udict(stats) & {'mean', 'std'}))
 
             # key = sanitize_key(str((s, c)))

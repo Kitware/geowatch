@@ -2,15 +2,10 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-# import matplotlib.pyplot as plt
-# from kwcoco.channel_spec import ChannelSpec  # NOQA
-from functools import partial
-from netharn.data.batch_samplers import PatchedBatchSampler
-from netharn.data.data_containers import ItemContainer
-from netharn.data.data_containers import BatchContainer
-from netharn.data.data_containers import container_collate
-from netharn.data.batch_samplers import PatchedRandomSampler
-from netharn.data.batch_samplers import SubsetSampler
+from geowatch.tasks.rutgers_material_seg.datasets.tensor_containers import (
+    PatchedBatchSampler, ItemContainer, BatchContainer, container_collate,
+    PatchedRandomSampler, SubsetSampler,
+)
 
 
 class SequenceDataset(torch.utils.data.Dataset):

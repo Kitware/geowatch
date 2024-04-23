@@ -1594,6 +1594,8 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
                 #     scale = (loss / 1e4).detach()
                 #     loss /= scale
                 prev = loss
+                # import torch.utils.data as torch_data
+                # default_collate = torch_data.dataloader.default_collate
                 # item_losses_ = default_collate(outputs['item_losses'])
                 item_losses_ = outputs['item_losses']
                 item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)

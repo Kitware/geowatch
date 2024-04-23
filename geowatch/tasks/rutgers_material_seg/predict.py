@@ -756,11 +756,7 @@ def build_evaler(cmdline=False, **kwargs):
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    import netharn as nh
-    mounted_model_cls = nh.device.DataSerial
-    # mounted_model_cls = nn.DataParallel
     print("model has {} trainable parameters".format(num_params))
-    model = mounted_model_cls(model)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
 

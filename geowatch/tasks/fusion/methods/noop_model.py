@@ -3,12 +3,12 @@ import torch
 from torch import nn
 
 import kwcoco
-import netharn as nh
 import ubelt as ub
 
 from geowatch import heuristics
 from geowatch.tasks.fusion.methods.network_modules import RobustModuleDict
 from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from geowatch.utils.util_netharn import InputNorm
 
 
 class NoopModel(pl.LightningModule, WatchModuleMixins):
@@ -89,13 +89,13 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             else:
                 s, c = k
             if input_stats is None:
-                input_norm = nh.layers.InputNorm()
+                input_norm = InputNorm()
             else:
                 stats = input_stats.get((s, c), None)
                 if stats is None:
-                    input_norm = nh.layers.InputNorm()
+                    input_norm = InputNorm()
                 else:
-                    input_norm = nh.layers.InputNorm(
+                    input_norm = InputNorm(
                         **(ub.udict(stats) & {'mean', 'std'}))
 
             # key = sanitize_key(str((s, c)))

@@ -15,8 +15,8 @@ from torch.nn.modules.container import Module
 from torch._jit_internal import _copy_to_script_wrapper
 import einops
 import numpy as np
-import netharn as nh
 from torch import nn
+from geowatch.utils import util_netharn
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -164,22 +164,8 @@ class OurDepthwiseSeparableConv(nn.Module):
 
     From timm
 
-    Example:
+    Ignore:
         from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
-
-        norm = nh.layers.rectify_normalizer(in_channels=3, key={'type': 'group', 'num_groups': 1})
-        norm(torch.rand(2, 1))
-
-        self = OurDepthwiseSeparableConv(11, 13, kernel_size=3, padding=1, residual=1)
-        x = torch.rand(2, 11, 3, 3)
-        y = self.forward(x)
-
-        z = nh.OutputShapeFor(self.conv_dw)((2, 11, 1, 1))
-        print('z = {!r}'.format(z))
-        nh.OutputShapeFor(self.conv_pw)(z)
-
-        in_modes = 13
-        self =
 
         tokenizer = nn.Sequential(*[
             OurDepthwiseSeparableConv(in_modes, in_modes, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
@@ -208,25 +194,25 @@ class OurDepthwiseSeparableConv(nn.Module):
         self.has_residual = (stride == 1 and in_chs == out_chs) and residual
         self.drop_path_rate = drop_path_rate
 
-        conv_cls = nh.layers.rectify_conv(dim=2)
+        conv_cls = util_netharn.rectify_conv(dim=2)
         # self.conv_dw = create_conv2d(
         #     in_chs, in_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
         self.conv_dw = conv_cls(
             in_chs, in_chs, kernel_size, stride=stride, dilation=dilation,
             padding=padding, groups=in_chs)  # depthwise
 
-        self.bn1 = nh.layers.rectify_normalizer(in_channels=in_chs, key=norm)
+        self.bn1 = util_netharn.rectify_normalizer(in_channels=in_chs, key=norm)
         if self.bn1 is None:
-            self.bn1 = nh.layers.Identity()
-        self.act1 = nh.layers.rectify_nonlinearity(noli)
+            self.bn1 = util_netharn.Identity()
+        self.act1 = util_netharn.rectify_nonlinearity(noli)
         if self.act1 is None:
-            self.act1 = nh.layers.Identity()
+            self.act1 = util_netharn.Identity()
 
         self.conv_pw = conv_cls(in_chs, out_chs, pw_kernel_size, padding=0)
         # self.bn2 = norm_layer(out_chs)
-        self.bn2 = nh.layers.rectify_normalizer(in_channels=out_chs, key=norm)
+        self.bn2 = util_netharn.rectify_normalizer(in_channels=out_chs, key=norm)
         if self.bn2 is None:
-            self.bn2 = nh.layers.Identity()
+            self.bn2 = util_netharn.Identity()
 
     def feature_info(self, location):
         if location == 'expansion':  # after SE, input to PW
@@ -252,7 +238,7 @@ class OurDepthwiseSeparableConv(nn.Module):
         return x
 
 
-class DWCNNTokenizer(nh.layers.Sequential):
+class DWCNNTokenizer(torch.nn.Sequential):
     """
     self = DWCNNTokenizer(13, 2)
     inputs = torch.rand(2, 13, 16, 16)
@@ -274,7 +260,7 @@ class DWCNNTokenizer(nh.layers.Sequential):
         self.out_channels = out_chn
 
 
-class LinearConvTokenizer(nh.layers.Sequential):
+class LinearConvTokenizer(torch.nn.Sequential):
     """
     Example:
         >>> from geowatch.tasks.fusion.methods.network_modules import *  # NOQA
@@ -291,19 +277,19 @@ class LinearConvTokenizer(nh.layers.Sequential):
         final_groups = 1
 
         super().__init__(
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=c1, out_channels=c2, groups=c1, norm=None,
                 noli=None, kernel_size=3, stride=2, padding=1,
             ).conv,
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=c2, out_channels=c3, groups=c2, norm=None,
                 noli=None, kernel_size=3, stride=2, padding=1,
             ).conv,
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=c3, out_channels=c4, groups=min(c3, c4), norm=None,
                 noli=None, kernel_size=3, stride=2, padding=1,
             ).conv,
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=c4, out_channels=out_channels,
                 groups=final_groups, norm=None, noli=None, kernel_size=1,
                 stride=1, padding=0,
@@ -333,15 +319,15 @@ class ConvTokenizer(nn.Module):
         tokenizer2 = RearrangeTokenizer(in_channels, 8, 8)
         tokenizer3 = DWCNNTokenizer(in_channels, 512)
         tokenizer4 = LinearConvTokenizer(in_channels, 512)
-        print(nh.util.number_of_parameters(tokenizer1))
-        print(nh.util.number_of_parameters(tokenizer2))
-        print(nh.util.number_of_parameters(tokenizer3))
-        print(nh.util.number_of_parameters(tokenizer4))
+        print(util_netharn.number_of_parameters(tokenizer1))
+        print(util_netharn.number_of_parameters(tokenizer2))
+        print(util_netharn.number_of_parameters(tokenizer3))
+        print(util_netharn.number_of_parameters(tokenizer4))
 
-        print(nh.util.number_of_parameters(tokenizer4[0]))
-        print(nh.util.number_of_parameters(tokenizer4[1]))
-        print(nh.util.number_of_parameters(tokenizer4[2]))
-        print(nh.util.number_of_parameters(tokenizer4[3]))
+        print(util_netharn.number_of_parameters(tokenizer4[0]))
+        print(util_netharn.number_of_parameters(tokenizer4[1]))
+        print(util_netharn.number_of_parameters(tokenizer4[2]))
+        print(util_netharn.number_of_parameters(tokenizer4[3]))
 
         inputs = torch.rand(1, in_channels, 128, 128)
 
@@ -370,26 +356,26 @@ class ConvTokenizer(nn.Module):
         input_shape = (1, in_channels, 64, 64)
 
         print(tokenizer2(torch.rand(*input_shape)).shape)
-        downsampler1 = nh.layers.Sequential(*[
-            nh.layers.ConvNormNd(
+        downsampler1 = torch.nn.Sequential(*[
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=in_channels, out_channels=in_channels,
                 groups=in_channels, norm=None, noli=None, kernel_size=3,
                 stride=2, padding=1,
             ),
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=in_channels, out_channels=in_channels,
                 groups=in_channels, norm=None, noli=None, kernel_size=3,
                 stride=2, padding=1,
             ),
-            nh.layers.ConvNormNd(
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=in_channels, out_channels=in_channels,
                 groups=in_channels, norm=None, noli=None, kernel_size=3,
                 stride=2, padding=1,
             ),
         ])
 
-        downsampler2 = nh.layers.Sequential(*[
-            nh.layers.ConvNormNd(
+        downsampler2 = torch.nn.Sequential(*[
+            util_netharn.ConvNormNd(
                 dim=2, in_channels=in_channels, out_channels=in_channels,
                 groups=in_channels, norm=None, noli=None, kernel_size=7,
                 stride=5, padding=3,
@@ -403,11 +389,11 @@ class ConvTokenizer(nn.Module):
 
     def __init__(self, in_chn, out_chn, norm=None):
         super().__init__()
-        self.down = nh.layers.ConvNormNd(
+        self.down = util_netharn.ConvNormNd(
             dim=2, in_channels=in_chn, out_channels=in_chn, groups=in_chn,
             norm=norm, noli=None, kernel_size=7, stride=5, padding=3,
         )
-        self.one_by_one = nh.layers.ConvNormNd(
+        self.one_by_one = util_netharn.ConvNormNd(
             dim=2, in_channels=in_chn, out_channels=out_chn, groups=1,
             norm=norm, noli=None, kernel_size=1, stride=1, padding=0,
         )
@@ -435,7 +421,7 @@ class RearrangeTokenizer(nn.Module):
     def __init__(self, in_channels, agree, window_size):
         super().__init__()
         self.window_size = window_size
-        self.foot = nh.layers.MultiLayerPerceptronNd(
+        self.foot = util_netharn.MultiLayerPerceptronNd(
             dim=2, in_channels=in_channels, hidden_channels=3,
             out_channels=agree, residual=True, norm=None)
         self.out_channels = agree * window_size * window_size

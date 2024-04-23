@@ -189,8 +189,6 @@ class DigitalGlobeBundle(ub.NiceRepr):
                 meta['sensorVehicle']
 
             dict_list = self.data['product_metas']
-            from netharn.data.collate import default_collate
-            default_collate(dict_list)
             print(varried['sensorVehicle'])
         """
         dpath = abspath(pointer)

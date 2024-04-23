@@ -710,10 +710,6 @@ class TimmEncoder:
         # n_heads=8,
         self.timm_model
         timm.create_model('mobilenetv3_large_100_miil_in21k')
-        import netharn as nh
-        nh.OutputShapeFor(self.timm_model.patch_embed.proj)
-        nh.OutputShapeFor(self.timm_model.blocks)
-        nh.OutputShapeFor(self.timm_model.head)
 
 
 class MM_VITEncoder(nn.Module):
@@ -939,10 +935,10 @@ class FusionEncoder(nn.Module):
         >>> # Get a sense of the arch size
         >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> rows = []
-        >>> import netharn as nh  # NOQA
+        >>> from geowatch.utils import util_netharn
         >>> for key, config in ub.ProgIter(list(encoder_configs.items())):
         >>>     self = FusionEncoder(in_features=256, **config)
-        >>>     num_params = nh.util.number_of_parameters(self)
+        >>>     num_params = util_netharn.number_of_parameters(self)
         >>>     row = {'arch': key, 'num_params': num_params}
         >>>     row.update(config)
         >>>     print('row = {}'.format(ub.urepr(row, nl=0, sort=0)))
