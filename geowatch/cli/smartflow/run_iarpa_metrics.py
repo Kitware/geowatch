@@ -227,6 +227,37 @@ class RunIARPAMetricsCLI(scfg.DataConfig):
                     path.unlink()
                     real_path.copy(path)
 
+        if True:
+            confusion_out_dpath = eval_dpath / 'confusion_analysis'
+            region_id = config.region_id
+            bas_metric_dpath = (eval_dpath / region_id / 'overall/bas')
+            src_kwcoco_fpath = None  # TODO: get imagery
+            command = ub.codeblock(
+                fr'''
+                python -m geowatch.mlops.confusor_analysis \
+                    --src_kwcoco="{src_kwcoco_fpath}" \
+                    --bas_metric_dpath="{bas_metric_dpath}" \
+                    --pred_sites="{pred_site_dpath}" \
+                    --out_dpath={confusion_out_dpath} \
+                    --true_region_dpath="{true_region_dpath}" \
+                    --true_site_dpath="{true_site_dpath}" \
+                    --region_id="{region_id}" \
+                    --viz_sites=0 \
+                    --reload=0
+                ''')
+            ub.cmd(command, verbose=3, shell=1)
+
+            confusion_group_dpath = confusion_out_dpath / 'confusion_groups'
+            confusion_region_fpaths = list(confusion_group_dpath.glob('*.geojson'))
+            for fpath in confusion_region_fpaths:
+                command = ub.paragraph(
+                    f'''
+                    geowatch draw_region {fpath}
+                        --extra_header "{fpath.name}"
+                        --fpath "{fpath}.png"
+                    ''')
+                ub.cmd(command, shell=True, verbose=3)
+
         assets_to_egress = {
             'eval_dpath': eval_dpath,
             'eval_fpath': eval_fpath,
