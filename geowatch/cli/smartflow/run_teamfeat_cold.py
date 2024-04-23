@@ -157,6 +157,7 @@ def main():
     prepare_teamfeats.main(
         cmdline=0,
         cold_config=config.cold_config,
+        with_cold=True,
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
         assets_dname='_teamfeats',
@@ -171,6 +172,10 @@ def main():
     full_output_kwcoco_fpath = base_combo_fpath
 
     node_state.print_current_state(ingress_dir)
+
+    if not full_output_kwcoco_fpath.exists():
+        raise FileNotFoundError(
+            f'The COLD kwcoco file: {full_output_kwcoco_fpath} does not seem to exist')
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
