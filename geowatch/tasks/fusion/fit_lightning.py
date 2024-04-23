@@ -298,7 +298,23 @@ class TorchGlobals(pl.callbacks.Callback):
 
 class WeightInitializer(pl.callbacks.Callback):
     """
-    Netowrk weight initializer with support for partial weight loading.
+    Network weight initializer with support for partial weight loading.
+
+    Attributes:
+        init (str | PathLike): either "noop" to use default weight
+            initialization, or a path to a pretrained model that has at least
+            some similarity to the model to be trained.
+
+        association (str):
+            Either "embedding" or "isomorphism". The "embedding" case is more
+            flexible allowing similar subcomponents of the network to be
+            disconnected.  In the "isomorphism" case, the transfered part must
+            be a proper subgraph in both models.  See torch-libertor's partial
+            weight initializtion for more details.
+
+        verbose (int):
+            if 1 prints some info. If 3 prints the explicit association found.
+            if 0, prints nothing.
     """
 
     def __init__(self, init='noop', association='embedding', verbose=1):
