@@ -2,6 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
+from functools import partial
 from geowatch.tasks.rutgers_material_seg.datasets.tensor_containers import (
     PatchedBatchSampler, ItemContainer, BatchContainer, container_collate,
     PatchedRandomSampler, SubsetSampler,
