@@ -47,7 +47,14 @@ class DrawRegionCLI(scfg.DataConfig):
 
     with_timeline = scfg.Value(True, help='if True draw the timeline')
 
-    fpath = scfg.Value('region.png', help='path to write viz to')
+    fpath = scfg.Value('auto', help='path to write viz to', alias=['output_fpath'])
+
+    sidecar = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, then default the output fpath to write viz as a sidecar next
+        to the input. When false the default is region.png.
+        Has no effect if fpath is specified.
+        '''))
 
     @classmethod
     def main(cls, cmdline=1, **kwargs):
@@ -62,6 +69,18 @@ class DrawRegionCLI(scfg.DataConfig):
         """
         import rich
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+
+        if config.fpath == 'auto':
+            if config.sidecar:
+                paths = config.models or config.region_models or config.site_models
+                if len(paths) > 1:
+                    raise Exception('Cannot do an auto sidecar with multiple inputs')
+                path = paths[0]
+                config.fpath = ub.Path(path).augment(ext='.png')
+            else:
+                #
+                config.fpath = 'region.png'
+
         rich.print('config = ' + ub.urepr(config, nl=1))
 
         # import copy
