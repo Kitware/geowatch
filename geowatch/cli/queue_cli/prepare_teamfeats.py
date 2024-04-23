@@ -517,7 +517,7 @@ def _make_teamfeat_nodes(src_fpath, expt_dvc_dpath, aligned_bundle_dpath, config
 
     from kwutil.util_yaml import Yaml
     key = 'with_cold'
-    cold_config = Yaml.coerce(config.cold_config or {})
+    cold_config = Yaml.coerce(config.cold_config) or {}
     GRACEFUL_DEPRECATION_WORKAROUNDS = 1
     if GRACEFUL_DEPRECATION_WORKAROUNDS:
         if 'workers' not in cold_config:

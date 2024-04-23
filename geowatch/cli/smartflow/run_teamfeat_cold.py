@@ -151,7 +151,7 @@ def main():
     from geowatch.cli.queue_cli import prepare_teamfeats
     from kwutil.util_yaml import Yaml
     base_fpath = ub.Path(full_input_kwcoco_fpath)
-    cold_config = Yaml.coerce(config.cold_config or {})
+    cold_config = Yaml.coerce(config.cold_config) or {}
     cold_config['enabled'] = True
 
     prepare_teamfeats.main(
