@@ -206,10 +206,14 @@ echo "
         --runtime=nvidia -it geowatch:311-strict bash
 
     IMAGE_VERSION=$(docker run --runtime=nvidia -it geowatch:311-strict python -c "import geowatch; print(geowatch.__version__)")
+    IMAGE_VERSION=$(python -c "import geowatch; print(geowatch.__version__)")
     echo "IMAGE_VERSION=$IMAGE_VERSION"
 
     docker login gitlab.kitware.com:4567
-    docker tag geowatch:311-strict gitlab.kitware.com:4567/computer-vision/geowatch 
+    docker tag geowatch:311-strict gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
+    docker push gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
+
+    docker pull gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
 
    # Will need to bake in a model
    # For futher instructions see: 

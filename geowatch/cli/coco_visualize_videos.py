@@ -645,6 +645,10 @@ def main(cmdline=True, **kwargs):
         # Terminal fixup
         import sys
         if sys.stdout.isatty():
+            # FFmpeg seems to mess up terminal output. I'm not sure why.
+            # Also running this "fixup" seems to break things when people run
+            # multiple commands in a copy-paste fashion, so we should remove
+            # this.
             ub.cmd('stty sane', verbose=3)
 
 
