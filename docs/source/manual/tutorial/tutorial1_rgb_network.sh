@@ -16,6 +16,7 @@ RunMe:
     export ACCELERATOR=gpu
     source ~/code/watch/tutorial/tutorial1_rgb_network.sh
 "
+
 export ACCELERATOR="${ACCELERATOR:-cpu}"
 
 
@@ -59,8 +60,8 @@ VALI_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
 TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 
 # Generate toy datasets using the "kwcoco toydata" tool
-kwcoco toydata vidshapes1-frames5-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
-kwcoco toydata vidshapes4-frames5-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_vali
+kwcoco toydata vidshapes2-frames10-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
+kwcoco toydata vidshapes4-frames10-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_vali
 kwcoco toydata vidshapes2-frames6-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_test
 
 
@@ -103,7 +104,7 @@ Some useful options are:
 "
 
 # Try visualizing the path to the training kwcoco file
-geowatch visualize "$TRAIN_FPATH" --viz_dpath="$DVC_EXPT_DPATH/_viz_toyrgb" --animate=True
+geowatch visualize "$TRAIN_FPATH" --viz_dpath="$DVC_EXPT_DPATH/_viz_toyrgb" --animate=False
 
 
 echo "
