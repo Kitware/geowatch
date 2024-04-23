@@ -2305,6 +2305,16 @@ initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
 "
 
+# shellcheck disable=SC2155
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+# shellcheck disable=SC2155
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "list checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "repackage checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "gather packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
 
 # Point Based BAS V2 on yardrat
 

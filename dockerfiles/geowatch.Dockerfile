@@ -193,7 +193,7 @@ echo "
         --build-arg PYTHON_VERSION=3.11.2 \
         -f ./dockerfiles/pyenv.Dockerfile .
 
-    # Build the watch image
+    # Build the geowatch image
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "geowatch:311-strict" \
         --build-arg BUILD_STRICT=1 \
@@ -204,6 +204,12 @@ echo "
     docker run \
         --volume "$HOME/code/geowatch":/host-geowatch:ro \
         --runtime=nvidia -it geowatch:311-strict bash
+
+    IMAGE_VERSION=$(docker run --runtime=nvidia -it geowatch:311-strict python -c "import geowatch; print(geowatch.__version__)")
+    echo "IMAGE_VERSION=$IMAGE_VERSION"
+
+    docker login gitlab.kitware.com:4567
+    docker tag geowatch:311-strict gitlab.kitware.com:4567/computer-vision/geowatch 
 
    # Will need to bake in a model
    # For futher instructions see: 
