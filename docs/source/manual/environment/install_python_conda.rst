@@ -36,10 +36,10 @@ Windows.
 NOTE: If using conda, do NOT use ``conda install`` to install Python packages.
 
 
-Create GEOWATCH Environment with Conda
+Create GeoWATCH Environment with Conda
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If using conda, the instructions below can be used to create the GEOWATCH Conda
+If using conda, the instructions below can be used to create the GeoWATCH Conda
 environment.
 
 .. code:: bash

@@ -298,12 +298,29 @@ class TorchGlobals(pl.callbacks.Callback):
 
 class WeightInitializer(pl.callbacks.Callback):
     """
-    Netowrk weight initializer with support for partial weight loading.
+    Network weight initializer with support for partial weight loading.
+
+    Attributes:
+        init (str | PathLike): either "noop" to use default weight
+            initialization, or a path to a pretrained model that has at least
+            some similarity to the model to be trained.
+
+        association (str):
+            Either "embedding" or "isomorphism". The "embedding" case is more
+            flexible allowing similar subcomponents of the network to be
+            disconnected.  In the "isomorphism" case, the transfered part must
+            be a proper subgraph in both models.  See torch-libertor's partial
+            weight initializtion for more details.
+
+        verbose (int):
+            if 1 prints some info. If 3 prints the explicit association found.
+            if 0, prints nothing.
     """
 
-    def __init__(self, init='noop', association='embedding'):
+    def __init__(self, init='noop', association='embedding', verbose=1):
         self.init = init
         self.association = association
+        self.verbose = verbose
         self._did_once = False
 
     def setup(self, trainer, pl_module, stage):
@@ -311,7 +328,11 @@ class WeightInitializer(pl.callbacks.Callback):
             # Only weight initialize once, on whatever stage happens first.
             return
         self._did_once = True
-        if self.init != 'noop':
+        if self.verbose:
+            print('🏋 Initializing weights')
+        if self.init == 'noop':
+            ...
+        else:
             from geowatch.tasks.fusion.fit import coerce_initializer
             from kwutil import util_pattern
             initializer = coerce_initializer(self.init)
@@ -322,11 +343,11 @@ class WeightInitializer(pl.callbacks.Callback):
             # (TODO add to torch_liberator as an option, allow to be configured
             # as argument to this class, or allow the model to set some property
             # that says which weights should not be touched.)
-            print('Initializing weights')
             old_state = model.state_dict()
             ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
             ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
-            print('Finding keys to not initializer')
+            if self.verbose:
+                print('Finding keys to not initializer')
             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
 
             # TODO: read the config of the model we initialize from and save it
@@ -334,15 +355,17 @@ class WeightInitializer(pl.callbacks.Callback):
 
             initializer.association = self.association
             info = initializer.forward(model)  # NOQA
-            if info:
-                mapping = info.get('mapping', None)
-                unset = info.get('self_unset', None)
-                unused = info.get('self_unused', None)
-                print('mapping = {}'.format(ub.urepr(mapping, nl=1)))
-                print(f'unused={unused}')
-                print(f'unset={unset}')
+            if self.verbose >= 3:
+                if info:
+                    mapping = info.get('mapping', None)
+                    unset = info.get('self_unset', None)
+                    unused = info.get('self_unused', None)
+                    print('mapping = {}'.format(ub.urepr(mapping, nl=1)))
+                    print(f'unused={unused}')
+                    print(f'unset={unset}')
 
-            print('Finalize initialization')
+            if self.verbose:
+                print('🏋 Finalize weight initialization')
             updated = model.state_dict() | to_preserve
             model.load_state_dict(updated)
 
@@ -457,6 +480,15 @@ class _ValueGetter:
     def __call__(self, data):
         if not data.did_setup:
             data.setup('fit')
+        if 1:
+            # Hack to disconnect SQL coco databases before we fork
+            # TODO: find a way to handle this more ellegantly
+            if hasattr(data, 'coco_datasets'):
+                for k, v in data.coco_datasets.items():
+                    if hasattr(v, 'disconnect'):
+                        if v.session is not None:
+                            v.session.close()
+                        v.disconnect()
         return getattr(data, self.key)
 
 

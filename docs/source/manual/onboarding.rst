@@ -1,9 +1,9 @@
 *******************
-GEOWATCH Onboarding
+GeoWATCH Onboarding
 *******************
 
 The purpose of this document is to guide a new user in the installation and
-usage of the GEOWATCH system.
+usage of the GeoWATCH system.
 
 For a high level overview of the system, see the `overview <overview.rst>`_.
 

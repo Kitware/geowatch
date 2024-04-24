@@ -141,7 +141,7 @@ cd /root/code/geowatch
 pwd
 ls -altr
 
-echo "Run GEOWATCH developer setup:"
+echo "Run GeoWATCH developer setup:"
 WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF
@@ -193,7 +193,7 @@ echo "
         --build-arg PYTHON_VERSION=3.11.2 \
         -f ./dockerfiles/pyenv.Dockerfile .
 
-    # Build the watch image
+    # Build the geowatch image
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "geowatch:311-strict" \
         --build-arg BUILD_STRICT=1 \
@@ -205,8 +205,43 @@ echo "
         --volume "$HOME/code/geowatch":/host-geowatch:ro \
         --runtime=nvidia -it geowatch:311-strict bash
 
+    IMAGE_VERSION=$(docker run --runtime=nvidia -it geowatch:311-strict python -c "import geowatch; print(geowatch.__version__)")
+    IMAGE_VERSION=$(python -c "import geowatch; print(geowatch.__version__)")
+    echo "IMAGE_VERSION=$IMAGE_VERSION"
+
+    docker login gitlab.kitware.com:4567
+    docker tag geowatch:311-strict gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
+    docker push gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
+
+    docker pull gitlab.kitware.com:4567/computer-vision/geowatch:$IMAGE_VERSION-cp311-strict
+
+    docker tag gitlab.kitware.com:4567/computer-vision/geowatch:0.17.0-cp311-strict geowatch:0.17.0-cp311-strict
+
    # Will need to bake in a model
    # For futher instructions see: 
    # ../docs/source/manual/smartflow/smartflow_running_the_system.rst
+
+
+    # Notes about running the images
+
+    # host machine.
+    LOCAL_WORK_DPATH=$HOME/temp/{temp_location}/ingress
+    LOCAL_CODE_DPATH=$HOME/code
+    LOCAL_DATA_DPATH=$HOME/data
+    # Run the docker image
+    mkdir -p "$LOCAL_WORK_DPATH"
+    cd "$LOCAL_WORK_DPATH"
+    docker run \
+        --runtime=nvidia \
+        --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
+        --volume "$LOCAL_CODE_DPATH":/extern_code:ro \
+        --volume "$LOCAL_DATA_DPATH":/extern_data:ro \
+        --volume "$HOME"/.aws:/root/.aws:ro \
+        --volume "$HOME"/.cache/pip:/pip_cache \
+        -it geowatch:0.17.0-cp311-strict bash
+
+    git remote add host /extern_code/geowatch/.git
+    git remote -v
+    git fetch host
 "
 EOF

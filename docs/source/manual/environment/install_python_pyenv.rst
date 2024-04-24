@@ -5,7 +5,7 @@ An fully FOSS alternative to a conda environment is pyenv.
 The only real drawback to pyenv is that you must be able to compile Python
 itself.
 
-On ubuntu this can be setup as follows:
+On Ubuntu this can be setup as follows:
 
 .. code:: bash
 
@@ -121,7 +121,7 @@ On ubuntu this can be setup as follows:
     #### END BASHRC PART ####
 
 
-Create GEOWATCH environment with Pyenv
+Create GeoWATCH environment with Pyenv
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 First create and activate a new virtual environment (note this could be done
@@ -137,6 +137,9 @@ virtual environment.
     # Set your shell to use this pyenv shim
     pyenv shell $CHOSEN_PYTHON_VERSION
 
+    # Use global instead of shell to ensure your prefered version is permanent
+    # pyenv global $CHOSEN_PYTHON_VERSION
+
     # Create the virtual environment
     python -m venv $(pyenv prefix)/envs/pyenv-geowatch
 
@@ -145,9 +148,9 @@ virtual environment.
 
 
 Once you are in a virtual environment (managed by either conda or pyenv), the
-GEOWATCH Python module can then be installed with ``pip`` via the following
+GeoWATCH Python module can then be installed with ``pip`` via the following
 command, where ``/path/to/geowatch-repo`` is the absolute path to the directory
-containing to GEOWATCH repo.
+containing to GeoWATCH repo.
 
 NOTE: It is important you install the module with the editable (``-e``) flag,
 otherwise changes you make to the module, will not be reflected when you run

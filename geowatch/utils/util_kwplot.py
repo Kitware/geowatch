@@ -6,6 +6,18 @@ import matplotlib.text  # NOQA
 class TitleBuilder:
     """
     Simple class for adding information to a line, and then adding new lines.
+
+    Example:
+        >>> from geowatch.utils.util_kwplot import *  # NOQA
+        >>> builder = TitleBuilder()
+        >>> builder.add_part('Part 1')
+        >>> builder.add_part('Part 2')
+        >>> builder.ensure_newline()
+        >>> builder.add_part('Part 3')
+        >>> text = builder.finalize()
+        >>> print(text)
+        Part 1, Part 2
+        Part 3
     """
     def __init__(self):
         self._row = []
@@ -897,8 +909,6 @@ class ArtistManager:
 def time_sample_arcplot(time_samples, yloc=1, ax=None):
     """
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
         >>> from geowatch.utils.util_kwplot import *  # NOQA
         >>> time_samples = [
         >>>     [1, 3, 5, 7, 9],
@@ -908,9 +918,10 @@ def time_sample_arcplot(time_samples, yloc=1, ax=None):
         >>> import kwplot
         >>> kwplot.autompl()
         >>> time_sample_arcplot(time_samples)
+        >>> kwplot.show_if_requested()
 
     References:
-        https://stackoverflow.com/questions/42162787/arc-between-points-in-circle
+        .. [SO42162787] https://stackoverflow.com/questions/42162787/arc-between-points-in-circle
     """
 
     import kwplot
@@ -1156,3 +1167,17 @@ class FigureManager:
     def set_figtitle(self, *args, **kwargs):
         import kwplot
         kwplot.set_figtitle(*args, **kwargs, fig=self.fig)
+
+
+def _format_xaxis_as_timedelta(ax):
+    """
+    TODO: document and better integrate into util_kwplot
+    """
+    import datetime as datetime_mod
+
+    def timeTicks(x, pos):
+        d = datetime_mod.timedelta(seconds=x)
+        return str(d.days)  # + ' days'
+    import matplotlib as mpl
+    formatter = mpl.ticker.FuncFormatter(timeTicks)
+    ax.xaxis.set_major_formatter(formatter)

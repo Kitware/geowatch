@@ -177,7 +177,6 @@ def main(cmdline=1, **kwargs):
     from geowatch.utils import util_gis
     import kwcoco
     from geowatch.cli import reproject_annotations
-    from kwutil import util_time
     from kwcoco.util import util_json
     from geowatch.utils import process_context
     import os
@@ -238,6 +237,85 @@ def main(cmdline=1, **kwargs):
         clear_existing=False,
     )
 
+    if 0:
+        from geowatch.utils import util_framework
+        region_models = [region_model]
+        site_models = input_sites
+        util_framework.check_region_and_site_models_agree(region_models, site_models)
+
+    site_to_decisions = make_decisions(output_kwcoco, site_id_to_summary, config)
+
+    num_accept = sum(d['accept'] for s, d in site_to_decisions.items())
+    print(f'Filter to {num_accept} / {len(site_id_to_summary)} sites')
+
+    # Enrich each site summary with the decision reason and update status
+    for site_id, decision in site_to_decisions.items():
+        sitesum = site_id_to_summary[site_id]
+
+        # Change the status of sites to "system_rejected" instead of droping them
+        if not decision['accept']:
+            sitesum['properties']['status'] = 'system_rejected'
+
+        if 'cache' not in sitesum['properties']:
+            sitesum['properties']['cache'] = {}
+
+        sitesum['properties']['cache']['dino_decision'] = decision
+
+    # Copy the site models and update their header with new summary
+    # information.
+    output_sites_dpath = ub.Path(config.output_sites_dpath)
+    output_sites_dpath.ensuredir()
+    out_site_fpaths = []
+
+    for old_site in input_sites:
+        site_id = old_site.site_id
+        old_fpath = site_to_site_fpath[site_id]
+        new_fpath = output_sites_dpath / old_fpath.name
+        new_summary = site_id_to_summary[site_id]
+        old_site.header['properties']['status'] = new_summary['properties']['status']
+        if 'cache' not in old_site.header['properties']:
+            old_site.header['properties']['cache'] = {}
+        old_site.header['properties']['cache'].update(new_summary['properties']['cache'])
+        new_fpath.write_text(old_site.dumps())
+        out_site_fpaths.append(new_fpath)
+
+    # Write the updated site summaries in a new region model
+    new_summaries = list(site_id_to_summary.values())
+    new_region_model = geomodels.RegionModel.from_features(
+        [region_model.header] + list(new_summaries))
+    output_region_fpath.parent.ensuredir()
+
+    if 1:
+        from geowatch.utils import util_framework
+        region_models = [region_model]
+        site_models = input_sites
+        util_framework.check_region_and_site_models_agree([new_region_model], site_models)
+
+    print(f'Write filtered region model to: {output_region_fpath}')
+    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
+        json.dump(new_region_model, file, indent=4)
+
+    # from kwutil.util_json import debug_json_unserializable
+    # debug_json_unserializable(new_region_model)
+
+    proc_context.stop()
+
+    if config.output_site_manifest_fpath is not None:
+        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
+        print(f'Write filtered site result to {config.output_site_manifest_fpath}')
+        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
+            json.dump(filter_output, file, indent=4)
+
+
+def make_decisions(output_kwcoco, site_id_to_summary, config):
+    """
+    Make yes/no decision about sites with dino predictions in the kwcoco file.
+
+    Returns:
+        Dict: mapping from site-ids to the decision made for it
+    """
+    from kwcoco.util import util_json
+    from kwutil import util_time
     # Enrich all sites with features (evidence) and decisions.
     site_to_decisions = {
         s: {
@@ -306,59 +384,7 @@ def main(cmdline=1, **kwargs):
         decision['features'] = start_features + end_features
         decision = util_json.ensure_json_serializable(decision)
         site_to_decisions[site_id] = decision
-
-    num_accept = sum(d['accept'] for s, d in site_to_decisions.items())
-    print(f'Filter to {num_accept} / {len(site_id_to_summary)} sites')
-
-    # Enrich each site summary with the decision reason and update status
-    for site_id, decision in site_to_decisions.items():
-        sitesum = site_id_to_summary[site_id]
-
-        # Change the status of sites to "system_rejected" instead of droping them
-        if not decision['accept']:
-            sitesum['properties']['status'] = 'system_rejected'
-
-        if 'cache' not in sitesum['properties']:
-            sitesum['properties']['cache'] = {}
-
-        sitesum['properties']['cache']['dino_decision'] = decision
-
-    # Copy the site models and update their header with new summary
-    # information.
-    output_sites_dpath = ub.Path(config.output_sites_dpath)
-    output_sites_dpath.ensuredir()
-    out_site_fpaths = []
-
-    for old_site in input_sites:
-        old_fpath = site_to_site_fpath[old_site.site_id]
-        new_fpath = output_sites_dpath / old_fpath.name
-        new_summary = site_id_to_summary[site_id]
-        old_site.header['properties']['status'] = new_summary['properties']['status']
-        if 'cache' not in old_site.header['properties']:
-            old_site.header['properties']['cache'] = {}
-        old_site.header['properties']['cache'].update(new_summary['properties']['cache'])
-        new_fpath.write_text(old_site.dumps())
-        out_site_fpaths.append(new_fpath)
-
-    # Write the updated site summaries in a new region model
-    new_summaries = list(site_id_to_summary.values())
-    new_region_model = geomodels.RegionModel.from_features(
-        [region_model.header] + list(new_summaries))
-    output_region_fpath.parent.ensuredir()
-    print(f'Write filtered region model to: {output_region_fpath}')
-    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
-        json.dump(new_region_model, file, indent=4)
-
-    # from kwutil.util_json import debug_json_unserializable
-    # debug_json_unserializable(new_region_model)
-
-    proc_context.stop()
-
-    if config.output_site_manifest_fpath is not None:
-        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
-        print(f'Write filtered site result to {config.output_site_manifest_fpath}')
-        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
-            json.dump(filter_output, file, indent=4)
+    return site_to_decisions
 
 
 def building_in_image_features(coco_img, site_id, config):

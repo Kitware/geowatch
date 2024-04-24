@@ -62,7 +62,6 @@ import torchmetrics
 # import math
 
 import numpy as np
-import netharn as nh
 import pytorch_lightning as pl
 
 # import torch_optimizer as optim
@@ -83,6 +82,8 @@ from geowatch.tasks.fusion.methods.network_modules import ConvTokenizer
 from geowatch.tasks.fusion.methods.network_modules import LinearConvTokenizer
 from geowatch.tasks.fusion.methods.network_modules import DWCNNTokenizer
 from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from geowatch.utils.util_netharn import InputNorm
+from geowatch.utils.util_netharn import MultiLayerPerceptronNd
 
 import scriptconfig as scfg
 
@@ -237,7 +238,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     predictable_classes = scfg.Value(None, help=ub.paragraph(
         '''
         Subset of classes to perform predictions on (for the class head).
-        Specified as a comma delimited string.
+        Specified as a YAML list or a comma delimited string.
         '''))
 
     def __post_init__(self):
@@ -286,10 +287,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>>                              #attention_impl='performer'
         >>>                              attention_impl='exact'
         >>>                              )
-        >>> device = nh.XPU.coerce('cpu').main_device
+        >>> device = torch.device('cpu')
         >>> self = self.to(device)
         >>> # Run forward pass
-        >>> num_params = nh.util.number_of_parameters(self)
+        >>> from geowatch.utils import util_netharn
+        >>> num_params = util_netharn.number_of_parameters(self)
         >>> print('num_params = {!r}'.format(num_params))
         >>> output = self.forward_step(batch, with_loss=True)
         >>> import torch.profiler
@@ -347,9 +349,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     input_norms[s] = RobustModuleDict()
                 stats = input_stats.get((s, c), None)
                 if stats is None:
-                    input_norms[s][c] = nh.layers.InputNorm()
+                    input_norms[s][c] = InputNorm()
                 else:
-                    input_norms[s][c] = nh.layers.InputNorm(
+                    input_norms[s][c] = InputNorm(
                         **ub.udict(stats) & {'mean', 'std'})
 
             # Not sure what causes the format to change. Just hitting test
@@ -359,7 +361,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     for c, stats in v.items():
                         if s not in input_norms:
                             input_norms[s] = RobustModuleDict()
-                        input_norms[s][c] = nh.layers.InputNorm(
+                        input_norms[s][c] = InputNorm(
                             **ub.udict(stats) & {'mean', 'std'})
                 else:
                     # for (s, c), stats in input_stats.items():
@@ -367,19 +369,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     stats = v
                     if s not in input_norms:
                         input_norms[s] = RobustModuleDict()
-                    input_norms[s][c] = nh.layers.InputNorm(
+                    input_norms[s][c] = InputNorm(
                         **ub.udict(stats) & {'mean', 'std'})
 
         self.input_norms = input_norms
 
-        self.predictable_classes = self.hparams.predictable_classes
-        if self.predictable_classes is not None:
-            self.predictable_classes = [x.strip() for x in self.hparams.predictable_classes.split(',')]
-            self.classes = kwcoco.CategoryTree.coerce(self.predictable_classes)
-            self.num_classes = len(self.predictable_classes)
-        else:
-            self.classes = kwcoco.CategoryTree.coerce(classes)
-            self.num_classes = len(self.classes)
+        import kwutil
+        predictable_classes = kwutil.Yaml.coerce(self.hparams.predictable_classes)
+        if predictable_classes is not None:
+            if isinstance(predictable_classes, str):
+                predictable_classes = [x.strip() for x in predictable_classes.split(',')]
+            classes = kwcoco.CategoryTree.coerce(predictable_classes)
+
+        self.predictable_classes = predictable_classes
+        self.classes = kwcoco.CategoryTree.coerce(classes)
+        self.num_classes = len(self.classes)
 
         self.global_class_weight = self.hparams.global_class_weight
         self.global_change_weight = self.hparams.global_change_weight
@@ -526,11 +530,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         print(f'self.in_features={self.in_features}')
         ### NEW:
         # Learned positional encodings
-        self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
+        self.token_learner1_time_delta = MultiLayerPerceptronNd(
             dim=0, in_channels=1, hidden_channels=3, out_channels=8, residual=True, norm=None)
-        self.token_learner2_sensor = nh.layers.MultiLayerPerceptronNd(
+        self.token_learner2_sensor = MultiLayerPerceptronNd(
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
-        self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
+        self.token_learner3_mode = MultiLayerPerceptronNd(
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
@@ -648,7 +652,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                                                               ohem_ratio=_config.ohem_ratio,
                                                               focal_gamma=_config.focal_gamma)
                 if self.hparams.decoder == 'mlp':
-                    self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
+                    self.heads[head_name] = MultiLayerPerceptronNd(
                         dim=0,
                         in_channels=feat_dim,
                         hidden_channels=prop['hidden'],
@@ -793,11 +797,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> # assert opt.param_groups[0]['lr'] == my_lr
             >>> # assert opt.param_groups[0]['weight_decay'] == my_decay
         """
-        import netharn as nh
+        from geowatch.utils import util_netharn
 
         # Netharn api will convert a string code into a type/class and
         # keyword-arguments to create an instance.
-        optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
             optimizer=self.hparams.optimizer,
             # learning_rate=self.hparams.learning_rate,
             lr=self.hparams.learning_rate,  # netharn bug?, some optimizers dont accept learning_rate and only lr
@@ -963,9 +967,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> # Run overfit
             >>> device = 0
             >>> self.overfit(batch)
-
-        nh.initializers.KaimingNormal()(self)
-        nh.initializers.Orthogonal()(self)
         """
         import kwplot
         # import torch_optimizer
@@ -996,7 +997,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
-        # optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        # optim_cls, optim_kw = util_netharn.Optimizer.coerce(
         #     optim='RAdam', lr=1e-3, weight_decay=0,
         #     params=self.parameters())
         #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
@@ -1028,8 +1029,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 #     # Turn down the learning rate when loss gets huge
                 #     scale = (loss / 1e4).detach()
                 #     loss /= scale
-                prev = loss
-                item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
+                import torch.utils.data as torch_data
+                default_collate = torch_data.dataloader.default_collate
+                item_losses_ = default_collate(outputs['item_losses'])
                 item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
                 loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
                 loss.backward()
@@ -1089,7 +1091,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> batch[3] = None
             >>> batch[4] = None
             >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>>     from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>>     print(_debug_inbatch_shapes(batch))
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
@@ -1114,8 +1117,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> outputs = self.forward_step(batch, with_loss=True)
-            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(batch))
+            >>> print(_debug_inbatch_shapes(outputs))
 
         Example:
             >>> # Test learned_linear multimodal reduce
@@ -1127,8 +1131,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels, multimodal_reduce='learned_linear')
             >>> batch = self.demo_batch()
             >>> outputs = self.forward_step(batch, with_loss=True)
-            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(batch))
+            >>> print(_debug_inbatch_shapes(outputs))
             >>> # outputs['loss'].backward()
         """
         outputs = {}
@@ -1259,9 +1264,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> item = self.demo_batch(width=64, height=65)[0]
             >>> outputs = self.forward_item(item, with_loss=True)
             >>> print('item')
-            >>> print(nh.data.collate._debug_inbatch_shapes(item))
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(item))
             >>> print('outputs')
-            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+            >>> print(_debug_inbatch_shapes(outputs))
 
         Example:
             >>> # Decoupled resolutions
@@ -1273,9 +1279,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels, decouple_resolution=True)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
             >>> item = batch[0]
-            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(batch))
             >>> result1 = self.forward_step(batch, with_loss=True)
-            >>> print(nh.data.collate._debug_inbatch_shapes(result1))
+            >>> print(_debug_inbatch_shapes(result1))
             >>> # Check we can go backward
             >>> result1['loss'].backward()
         """

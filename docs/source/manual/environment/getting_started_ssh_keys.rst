@@ -69,6 +69,18 @@ will allow you to clone and interact with repos without being prompted for
 credentials each time.
 
 
+Modify An Existing Clone to Use SSH
+-----------------------------------
+
+If you cloned the ``geowatch`` repo with the https protocol, you can modify the
+remote URL to ssh instead via:
+
+
+.. code:: bash
+
+    git remote set-url origin git@gitlab.kitware.com:computer-vision/geowatch.git
+
+
 Register SSH Keys with a DVC server
 -----------------------------------
 

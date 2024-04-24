@@ -171,6 +171,7 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
             If unspecified, then frame indexes are shown directly.
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> unixtimes = None
         >>> sample_idxs = [
         >>>     [0, 1, 2],
@@ -232,6 +233,7 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes=None, sensors=None, titl
             If unspecified, then frame indexes are shown directly.
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> unixtimes = None
         >>> sample_idxs = [
         >>>     [0, 1, 2],

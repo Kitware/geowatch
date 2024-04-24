@@ -158,7 +158,7 @@ pygtrie>=2.5.0     ; python_version < '3.13' and python_version >= '3.6'     # P
 networkx>=2.8.0
 python_dateutil>=2.8.2
 pytimeparse>=1.1.8
-progiter>=1.1.0
+progiter>=2.0.0
 fire>=0.4.0
 
 # Parsing
@@ -222,7 +222,6 @@ monai>=0.8.0     ; python_version < '4.0'  and python_version >= '3.11'    # Pyt
 monai>=0.6.0     ; python_version < '3.11' 
 
 torch_optimizer>=0.1.0
-netharn>=0.6.1
 
 timm>=0.6.13,<0.9.0 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 timm>=0.4.12,<0.9.0 ; python_version < '3.11'                               # Python 3.10-

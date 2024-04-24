@@ -3,7 +3,7 @@ How to Contribute
 
 We follow a `merge requests <https://docs.gitlab.com/ee/user/project/merge_requests/>`_ workflow.
 
-Here is a complete, minimal example of how to add code to this repository, assuming you have followed the instructions above. You should be inside this repo's directory tree on your local machine and have the GEOWATCH environment active.
+Here is a complete, minimal example of how to add code to this repository, assuming you have followed the instructions above. You should be inside this repo's directory tree on your local machine and have the GeoWATCH environment active.
 
 .. code:: bash
 

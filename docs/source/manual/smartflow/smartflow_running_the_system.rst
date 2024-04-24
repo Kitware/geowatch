@@ -6,13 +6,13 @@ Running The System In Smartflow
 
    This file is currently a working document and contains a lot of notes
 
-This goes over how to run the GEOWATCH system in smartflow.
+This goes over how to run the GeoWATCH system in smartflow.
 
 The outline of this document is:
 
 * `Building the Docker Image <SectionBuildDocker_>`__,
     + `Building the Pyenv Base Image <BuildPyenv_>`__,
-    + `Building the GEOWATCH Image 2 <BuildGeowatch_>`__.
+    + `Building the GeoWATCH Image 2 <BuildGeowatch_>`__.
     + `Baking Models into the Image <BakeModel_>`__.
     + `Updating Existing Images <UpdateImage_>`__.
 * `Submit a DAG <SubmitDAG_>`__.
@@ -51,7 +51,7 @@ Other script of interest are:
 
 .. _SectionBuildDocker:
 
-Section 1: The GEOWATCH Docker Image
+Section 1: The GeoWATCH Docker Image
 ====================================
 
 In this section we will go over how to build the docker image used in a submission:
@@ -125,7 +125,7 @@ Now that the pyenv image ``pyenv:3.11.2`` has been created we can quickly test i
 
 .. _BuildGeowatch:
 
-Building the GEOWATCH Image
+Building the GeoWATCH Image
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we build the watch image on top of the pyenv image. To ensure we do this

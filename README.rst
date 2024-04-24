@@ -1,4 +1,4 @@
-GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
+GeoWATCH - Geographic Wide Area Terrestrial Change Hypercube
 ============================================================
 
 
@@ -22,7 +22,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 
 |GitlabCIPipeline| |GitlabCICoverage| |Pypi| |PypiDownloads| |ReadTheDocs|
 
-Geowatch is an open source research and production environment for image and
+GeoWATCH is an open source research and production environment for image and
 video segmentation and detection with geospatial awareness.
 
 
@@ -37,7 +37,7 @@ space.
 The following table provides links to relevant resources for the SMART WATCH project:
 
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The GEOWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
+| The GeoWATCH Gitlab Repo                                 | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Pypi                                                     | https://pypi.org/project/geowatch/                             |
 +----------------------------------------------------------+----------------------------------------------------------------+
@@ -45,9 +45,9 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
+| The Phase 2 Internal SMART GeoWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART GEOWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
+| The Phase 2 Internal SMART GeoWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 
 .. _Software Overview Slides: https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/
@@ -58,7 +58,7 @@ The following table provides links to relevant resources for the SMART WATCH pro
 Purpose & Features
 ------------------
 
-Geowatch can be used to train, predict, and evaluate segmentation models on
+GeoWATCH can be used to train, predict, and evaluate segmentation models on
 multi-sensor image or video data.
 Polygons can be extracted or "tracked" across frames in a video to produce
 vectorized predictions.
@@ -74,7 +74,7 @@ dataset are provided in a kwcoco file.
 Dataloaders are setup to work with kwcoco files, and at train time details like
 mean/std computation, classes, frequency weights are handled automatically as
 opposed to common practice of hardcoding those values somewhere in a config
-file or in the code. In this way geowatch seeks to run on the input data the
+file or in the code. In this way GeoWATCH seeks to run on the input data the
 user provides, rather than make assumptions about it. The only restriction is
 that the data must be registered in a
 `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_ file, which is
@@ -86,7 +86,7 @@ formats (e.g. COGs) will be more efficient than others.
 
 .. .. Slides:
 .. .. * `KQH Demo Slides <https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/edit#slide=id.p>`_.
-.. .. * `Geowatch Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
+.. .. * `GeoWATCH Software Overview <https://docs.google.com/presentation/d/125kMWZIwfS85lm7bvvCwGAlYZ2BevCfBLot7A72cDk8/edit#slide=id.g282ae2e4546_0_5>`_.
 
 Use Case: Heavy Construction
 ----------------------------
@@ -143,50 +143,73 @@ Note IPFS links use the ipfs.io gateway, but the CID can be used to accesss the 
 
 
 
+System Requirements
+-------------------
+
+Before you start you must have
+`installed Python <docs/source/manual/environment/install_python.rst>`_.
+We currently support CPython versions 3.10 and 3.11.
+
 Getting Started
 ---------------
 
-To quickly get started locally, assuming you have `Python installed <docs/source/manual/environment/install_python.rst>`_,
-you can install geowatch with pip.
+The ``geowatch`` package is available on pypi and can be installed with pip.
+To install a barebones version of geowatch with limited features and
+dependencies, run:
 
 
 .. code:: bash
 
    pip install geowatch[headless]
 
-   # OR for a more fully featured install use:
+Note that it is import to specify "headless", to indicate that the
+`opencv-python-headless <https://pypi.org/project/opencv-python-headless/>`_
+variant of opencv that should be used. Alternatively, you could specify
+"graphics" to use the
+`opencv-python <https://pypi.org/project/opencv-python/>`_ variant, but we have
+found that this can cause conflicts with Qt libraries.
+
+Alternatively, for a fully featured install of GeoWATCH run:
+
+.. code:: bash
+
    pip install geowatch[headless,optional,development,tests]
 
 
-This gives you access to the GEOWATCH CLI.
+After installing ``geowatch`` from from pypi, you will have access to the
+GeoWATCH command line interface (CLI).  At this point you should be able to use
+the CLI to list available commands:
 
 .. code:: bash
 
    geowatch --help
 
-One library that we cannot get via the standard pip mechanism is GDAL. We have
-to install this manually from the Kitware hosted GDAL large image wheels.
+Unfortunately, the install is not complete. This is because binary wheels for
+`GDAL <https://gdal.org/index.html>`_ are not available on pypi, and this means
+we cannot access them at GeoWATCH install-time. Fortunately, Kitware
+`hosts binary GDAL wheels <https://girder.github.io/large_image_wheels>`_, and
+GeoWATCH provides a tool to install them and complete its installation.
 
 .. code:: bash
 
-    pip install --prefer-binary GDAL>=3.4.1 --find-links https://girder.github.io/large_image_wheels
-
-    # NEW in 0.8.0. Instead of using the above command you can run:
     geowatch finish_install
 
-
-If you use the fully featured install command (which you can run after the
-fact), you can test that your install is functioning correctly by running the
-doctests:
+If you use the fully featured install command (which can be run even if
+GeoWATCH is already installed), or have at least installed
+`xdoctest <https://github.com/Erotemic/xdoctest>`_, you can test that your
+install is functioning correctly by running the doctests in the ``geowatch``
+module:
 
 .. code:: bash
 
-    xdoctest watch
+    xdoctest -m geowatch
 
 
-For more details see the `installing GEOWATCH for development guide <docs/source/manual/environment/installing_geowatch.rst>`_.
+The GeoWATCH CLI has support for tab-complete, but this feature needs to `be enabled <docs/source/manual/development/coding_environment.rst>`_.
 
-We also have limited windows support, see `installing GEOWATCH on Windows  <docs/source/manual/environment/windows.rst>`_.
+For more details see the `installing GeoWATCH for development guide <docs/source/manual/environment/installing_geowatch.rst>`_.
+
+We also have limited windows support, see `installing GeoWATCH on Windows  <docs/source/manual/environment/windows.rst>`_.
 
 
 Tutorials
@@ -217,7 +240,7 @@ For quick reference, a list of current documentation files is:
 
 * `Internal Resources <docs/source/manual/data/internal_resources.rst>`_
 
-* `The GEOWATCH CLI <docs/source/manual/watch_cli.rst>`_
+* `The GeoWATCH CLI <docs/source/manual/watch_cli.rst>`_
 
 * Contribution:
 
@@ -233,9 +256,9 @@ For quick reference, a list of current documentation files is:
 
 * Installing:
 
-  + `Installing GEOWATCH <docs/source/manual/environment/installing_geowatch.rst>`_
+  + `Installing GeoWATCH <docs/source/manual/environment/installing_geowatch.rst>`_
 
-  + `Installing GEOWATCH on Windows <docs/source/manual/environment/windows.rst>`_
+  + `Installing GeoWATCH on Windows <docs/source/manual/environment/windows.rst>`_
 
   + `Installing Python via Conda <docs/source/manual/environment/install_python_conda.rst>`_
 
@@ -261,13 +284,13 @@ For new collaborators, please refer to the `onboarding docs <docs/source/manual/
 
 For internal collaborators, please refer to the `internal docs <docs/source/manual/data/internal_resources.rst>`_
 
-For more details about the GEOWATCH CLI and other CLI tools included in this package see:
-`the GEOWATCH CLI docs <docs/source/manual/watch_cli.rst>`_
+For more details about the GeoWATCH CLI and other CLI tools included in this package see:
+`the GeoWATCH CLI docs <docs/source/manual/watch_cli.rst>`_
 
-The geowatch module is built on top of several other
+The ``geowatch`` module is built on top of several other
 `supporting libraries <docs/source/manual/misc/supporting_projects.rst>`_
 developed by Kitware. Familiarity with these packages will make it easier to
-understand the geowatch codebase.
+understand the GeoWATCH codebase.
 Particularly, developers should be have some familiarity with
 `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_,
 `kwimage <https://gitlab.kitware.com/computer-vision/kwimage>`_,

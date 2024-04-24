@@ -6,7 +6,7 @@ ignore_missing_imports = true
 
 [tool.xcookie]
 tags = [ "gitlab", "purepy", "kitware", "cv2", "gdal",]
-author = "GEOWATCH developers, Kitware Inc., Jon Crall"
+author = "GeoWATCH developers, Kitware Inc., Jon Crall"
 author_email = "kitware@kitware.com, jon.crall@kitware.com"
 description = "The geowatch module"
 mod_name = "geowatch"

@@ -1,15 +1,15 @@
 
-GEOWATCH System
+GeoWATCH System
 ---------------
 
-Kitware's GEOWATCH Python module is deep-learning segmentation tool for single
+Kitware's GeoWATCH Python module is deep-learning segmentation tool for single
 or multi-frame data of a region over time with multiple sensors, modalities,
 and resolutions.
 
 
 How it works:
 * A kwcoco dataset registers images which can have different combinations of bands / resolutions
-* If the images are geo-registered, SMART-GEOWATCH can crop and stitch images into an aligned sequence that matches the bounds of a geojson file.
+* If the images are geo-registered, GeoWATCH can crop and stitch images into an aligned sequence that matches the bounds of a geojson file.
 * User specifies groups of channels
 * Each combination of sensor / channel group to fit a segmentation model
 * Each unique combination gets its own input "stem" that normalizes the number of channels.

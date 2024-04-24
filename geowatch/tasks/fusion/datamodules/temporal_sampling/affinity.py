@@ -116,6 +116,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         * Random Stratified Sampling Affinity Matrix
         * A quasi-random sampling approach to image retrieval
 
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling.affinity affinity_sample:0 --show
+        xdoctest -m geowatch.tasks.fusion.datamodules.temporal_sampling.affinity affinity_sample:1 --show
+
     Example:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
@@ -135,6 +139,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> sns = kwplot.autosns()
         >>> plt = kwplot.autoplt()
         >>> show_affinity_sample_process(chosen, info)
+        >>> kwplot.show_if_requested()
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -157,6 +162,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> kwplot.autompl()
         >>> chosen, info = self.show_procedure(idx=0, fnum=10, exclude=[1, 2, 4])
         >>> print('info = {}'.format(ub.urepr(info, nl=4)))
+        >>> kwplot.show_if_requested()
 
     Ignore:
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -221,6 +227,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> info['title_suffix'] = chr(10) + time_kernel_code
         >>> from geowatch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
         >>> show_affinity_sample_process(chosen, info, fnum=1)
+        >>> kwplot.show_if_requested()
     """
     rng = kwarray.ensure_rng(rng)
 
@@ -569,7 +576,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
         f'{error_level=}',
     ]
     if error_level == 3:
-        msg3 = '\n'.join(['all probability is exhausted.'] + debug_parts)
+        msg3 = '\n'.join(['All probability is exhausted.'] + debug_parts)
         raise TimeSampleError(msg3)
 
     current_weights = affinity[chosen[0]].copy()
@@ -584,7 +591,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
     if total_weight == 0:
         # Should really never get here in day-to-day, but just in case
         if error_level == 2:
-            msg2 = '\n'.join(['all included probability is exhausted.'] + debug_parts)
+            msg2 = '\n'.join(['All included probability is exhausted.'] + debug_parts)
             raise TimeSampleError(msg2)
 
         # Zero weight method: neighbors
@@ -612,7 +619,7 @@ def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
 
             if error_level == 1:
                 debug_parts.append(f'{total_weight=}')
-                msg1 = '\n'.join(['all chosen probability is exhausted.'] + debug_parts)
+                msg1 = '\n'.join(['All chosen probability is exhausted.'] + debug_parts)
                 raise TimeSampleError(msg1)
 
             if zero_weight_method == 'neighbors':

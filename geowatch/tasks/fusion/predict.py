@@ -880,8 +880,8 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
             batch = fixed_batch
 
             if 0:
-                import netharn as nh
-                print(nh.data.collate._debug_inbatch_shapes(batch))
+                from geowatch.utils.util_netharn import _debug_inbatch_shapes
+                print(_debug_inbatch_shapes(batch))
 
             MONITOR_MEMORY = 1
             if MONITOR_MEMORY:

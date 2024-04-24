@@ -750,7 +750,7 @@ class AggregatorAnalysisMixin:
                 param_table = pd.DataFrame.from_dict(top_param_lut).T
                 param_table.index.name = 'param_hashid'
                 param_table = util_pandas.DataFrame(param_table)
-                param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
+                param_table = param_table.reorder(varied_keys, axis=1, missing='drop')
                 print(ub.paragraph(
                     '''
                     Note, to paste into sheets, there will be an icon after you
@@ -1240,7 +1240,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # generalized later.
         columns['region_id'] = ['region1'] * num
 
-        columns[f'context.{node}.uuid'] = [str(uuid.uuid4()) for _ in range(num)]
+        # Can we make numpy use 128 bit types?
+        # maxint = 340_282_366_920_938_463_463_374_607_431_768_211_455
+        _pyrng = kwarray.ensure_rng(rng, api='python')
+        def _seeded_uuid():
+            # uuid.uuid4()
+            _int = int.from_bytes(_pyrng.randbytes(16), byteorder='big')
+            # _int = int.from_bytes(rng.randbytes(16))
+            return uuid.UUID(int=_int, version=4)
+
+        columns[f'context.{node}.uuid'] = [str(_seeded_uuid()) for _ in range(num)]
         columns[f'machine.{node}.host'] = ['pc1'] * num
 
         # Sample from the distributions to construct the demo rows
@@ -1416,6 +1425,12 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             non-determinisim came from.
             assert len(subagg) > 0, 'query should return something'
             AssertionError: query should return something
+
+            Another instance on 2024-04-19. Job log is:
+            https://gitlab.kitware.com/computer-vision/geowatch/-/jobs/9652752
+
+            This is likely because of unseeded UUIDs, which should now be
+            fixed.
         """
         import numpy as np
         import kwarray

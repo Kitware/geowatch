@@ -4,7 +4,22 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.16.0 - Unreleased
+## Version 0.17.0 - Unreleased
+
+### Added
+* Confusion analysis is now run in per-stage metrics.
+* New task: `poly_from_point` that contains various methods to transform
+  point-based annotations into polygon-based ones using heuristics.
+
+### Fixed
+* `geowatch.cli.draw_region` now correctly draws timeline information and does a better job at distinguishing them. 
+* Fixed issue where DinoSV would output the same decision for every site.
+
+### Removed
+* Removed dependency on netharn. All relevant code has been vendored into helper modules.
+
+
+## Version 0.16.2 - Released 2024-04-15
 
 ### Added
 * Function `geowatch.tasks.fusion.utils.load_model_header` to read header info from a torch package

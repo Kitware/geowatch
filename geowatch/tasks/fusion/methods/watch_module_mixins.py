@@ -76,6 +76,7 @@ class WatchModuleMixins:
         """
         Example:
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -83,14 +84,15 @@ class WatchModuleMixins:
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>>     print(_debug_inbatch_shapes(batch))
             >>> result = self.forward_step(batch)
             >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(result))
+            >>>     print(_debug_inbatch_shapes(batch))
 
         Example:
             >>> # With nans
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
@@ -99,22 +101,23 @@ class WatchModuleMixins:
             >>> batch = self.demo_batch(nans=0.5, num_timesteps=2)
             >>> item = batch[0]
             >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>>     print(_debug_inbatch_shapes(batch))
             >>> result1 = self.forward_step(batch)
             >>> result2 = self.forward_step(batch, with_loss=0)
             >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(result1))
-            >>>   print(nh.data.collate._debug_inbatch_shapes(result2))
+            >>>     print(_debug_inbatch_shapes(result1))
+            >>>     print(_debug_inbatch_shapes(result2))
 
         Example:
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
             >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(new_mode_sample=1)
-            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print(_debug_inbatch_shapes(batch))
         """
         import kwarray
         from kwarray import distributions
@@ -641,16 +644,12 @@ class WatchModuleMixins:
             >>> # Run overfit
             >>> device = 0
             >>> self.overfit(batch)
-
-        nh.initializers.KaimingNormal()(self)
-        nh.initializers.Orthogonal()(self)
         """
         import kwplot
         # import torch_optimizer
         import xdev
         import kwimage
         import pandas as pd
-        # import netharn as nh
         from kwutil.slugify_ext import smart_truncate
         from kwplot.mpl_make import render_figure_to_image
 
@@ -675,9 +674,6 @@ class WatchModuleMixins:
         _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
-        # optim_cls, optim_kw = nh.api.Optimizer.coerce(
-        #     optim='RAdam', lr=1e-3, weight_decay=0,
-        #     params=self.parameters())
         try:
             [optim], [sched] = self.configure_optimizers()
         except Exception:
@@ -711,7 +707,7 @@ class WatchModuleMixins:
                 #     scale = (loss / 1e4).detach()
                 #     loss /= scale
                 prev = loss
-                # item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
+                # item_losses_ = default_collate(outputs['item_losses'])
                 # item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
                 loss.backward()
                 item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
@@ -864,12 +860,12 @@ class WatchModuleMixins:
         Note: this is only a fallback for testing purposes. This should be
         overwrriten in your module or done via lightning CLI.
         """
-        import netharn as nh
+        from geowatch.utils import util_netharn
         from torch.optim import lr_scheduler
 
         # Netharn api will convert a string code into a type/class and
         # keyword-arguments to create an instance.
-        optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
             optimizer='adamw', lr=3e-4, weight_decay=3e-6)
         optim_kw['params'] = self.parameters()
         optimizer = optim_cls(**optim_kw)

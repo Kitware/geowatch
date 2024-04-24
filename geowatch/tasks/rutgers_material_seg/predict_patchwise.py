@@ -306,11 +306,7 @@ def main(cmdline=True, **kwargs):
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    import netharn as nh
-    mounted_model_cls = nh.device.DataSerial
-    # mounted_model_cls = nn.DataParallel
     print("model has {} trainable parameters".format(num_params))
-    model = mounted_model_cls(model)
 
     # model.load_state_dict(checkpoint_state['model'])
 

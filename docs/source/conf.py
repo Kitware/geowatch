@@ -136,8 +136,8 @@ def parse_version(fpath):
     return visitor.version
 
 project = 'geowatch'
-copyright = '2024, GEOWATCH developers Kitware Inc. Jon Crall'
-author = 'GEOWATCH developers Kitware Inc. Jon Crall'
+copyright = '2024, GeoWATCH developers Kitware Inc. Jon Crall'
+author = 'GeoWATCH developers Kitware Inc. Jon Crall'
 modname = 'geowatch'
 
 repo_dpath = dirname(dirname(dirname(__file__)))
@@ -371,7 +371,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'geowatch.tex', 'geowatch Documentation',
-     'GEOWATCH developers Kitware Inc. Jon Crall', 'manual'),
+     'GeoWATCH developers Kitware Inc. Jon Crall', 'manual'),
 ]
 
 

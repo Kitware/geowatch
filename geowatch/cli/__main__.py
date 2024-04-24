@@ -103,7 +103,7 @@ def main(cmdline=True, **kw):
 
     boring_description =  ub.codeblock(
         f'''
-        🌐🌐🌐 The GEO-WATCH CLI 🌐🌐🌐
+        🌐🌐🌐 The GeoWATCH CLI 🌐🌐🌐
 
         An open source research and production environment for image and video
         segmentation and detection with geospatial awareness.

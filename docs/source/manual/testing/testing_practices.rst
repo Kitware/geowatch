@@ -13,7 +13,7 @@ file.
 Writing tests
 -------------
 
-GEOWATCH uses the ``pytest`` module for running unit tests. Unit tests
+GeoWATCH uses the ``pytest`` module for running unit tests. Unit tests
 should be added into the ``tests`` directory and files should be
 prefixed with ``test_``.
 

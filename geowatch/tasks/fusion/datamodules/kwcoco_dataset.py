@@ -33,7 +33,7 @@ Example:
     >>> item = self[index]
     >>> # Summarize batch item in text
     >>> summary = self.summarize_item(item)
-    >>> print('item summary: ' + ub.urepr(summary, nl=3))
+    >>> print('item summary: ' + ub.urepr(summary, nl=2))
     >>> # Draw batch item
     >>> canvas = self.draw_item(item)
     >>> # xdoctest: +REQUIRES(--show)
@@ -1053,6 +1053,11 @@ class TruthMixin:
                         poly, shape=space_shape)
                     max_dist = dist.max()
                     if max_dist > 0:
+                        # TODO: Can we modify this so weights from one polygon
+                        # don't clobber weights of overlapping neighbors? This
+                        # might involve starting from 0 and building up for
+                        # foreground objects and then multiplying this into
+                        # background weights.
                         dist_weight = dist / max_dist
                         weight_mask = dist_weight + (1 - poly_mask)
                         task_target_weight['class'] = task_target_weight['class'] * weight_mask
@@ -2373,11 +2378,15 @@ class IntrospectMixin:
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
 
-            annots = self.sampler.dset.annots(frame['ann_aids'])
-            cids = annots.lookup('category_id')
-            class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
-            frame_summary['class_hist'] = class_hist
             if frame.get('ann_aids') is not None:
+                if 0:
+                    # disable as workaround for coco sql issues
+                    # (i.e. we dont want to rely on a connection to the sql
+                    # database in the main thread)
+                    annots = self.sampler.dset.annots(frame['ann_aids'])
+                    cids = annots.lookup('category_id')
+                    class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
+                    frame_summary['class_hist'] = class_hist
                 frame_summary['num_annots'] = len(frame['ann_aids'])
 
         vidname = item.get('video_name', None)
@@ -2677,7 +2686,17 @@ class BalanceMixin:
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
-            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(len(targets)), desc='sample')]
+
+            num_targets = len(targets)
+            num_samples = min(10_000, num_targets)
+
+            normalizer = num_samples / num_targets
+            print('Report Balance:')
+            print(f'num_targets={num_targets}')
+            print(f'num_samples={num_samples}')
+            print(f'normalizer={normalizer}')
+
+            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
 
             # Inspect the attributes you balanced over and compare to the naive
             # case.
@@ -2699,6 +2718,7 @@ class BalanceMixin:
                     balanced = balanced_targets.value_counts(attr)
                 freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
                 freq_table = freq_table.sort_values('balanced', ascending=0)
+                freq_table['naive'] *= normalizer
                 print('--- Balance Report ---')
                 print(f'attr={attr}')
                 print(freq_table.to_string())

@@ -14,23 +14,27 @@ class HeatMapConfig(scfg.DataConfig):
     )
 
     filepath_to_images = scfg.Value(
-        "/mnt/ssd2/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip",
-        help="Filepath containning images",
+        None,
+        # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip",
+        help="Filepath to the kwcoco corresponding to a region",
     )
 
     filepath_to_points = scfg.Value(
-        "/mnt/ssd2/data/dvc-repos/smart_phase3_data/submodules/annotations/point_based_annotations.zip",
-        help="Filepath to Geopoints",
+        None,
+        # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/submodules/annotations/point_based_annotations.zip",
+        help="Filepath to point-based annotations in geojson format.",
     )
     filepath_to_region = scfg.Value(
-        "/mnt/ssd2/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson",
-        help="Filepath to Regions",
+        None,
+        # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson",
+        help="Filepath to geojson regions file.",
     )
     filepath_to_sam = scfg.Value(
-        "/mnt/ssd3/segment-anything/demo/model/sam_vit_h_4b8939.pth",
-        help="Filepath to SAM model",
+        None,
+        # "/mnt/ssd3/segment-anything/demo/model/sam_vit_h_4b8939.pth",
+        help="If the methos id SAM, specify the filepath to the SAM weights",
     )
-    filepath_output = scfg.Value("KR_R002-SAM.geojson", help="Output dest")
+    filepath_output = scfg.Value("output_region.geojson", help="Output region model with the polygons inferred from the points")
 
     size_prior = scfg.Value(
         "20.06063 x 20.0141229 @ 10mGSD",
@@ -56,7 +60,7 @@ class HeatMapConfig(scfg.DataConfig):
     )
 
     method = scfg.Value(
-        "sam",
+        "ellipse",
         choices=["sam", "box", "ellipse"],
         help="Method for extracting polygons from points",
     )
@@ -521,8 +525,8 @@ def main():
             --filepath_output KR_R001-genpoints.geojson \
             --region_id KR_R001 \
             --size_prior "20x20@10mGSD" \
-            --ignore_buffer None \
-            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
+            --ignore_buffer "10@10mGSD" \
+            --filepath_to_images None \
             --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
 

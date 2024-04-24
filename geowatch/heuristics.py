@@ -141,7 +141,9 @@ HUERISTIC_STATUS_DATA = [
     },
     {
         'status': 'positive_excluded',
-        'color': 'gray',
+        # Modifing the official color scheme to differentiate this from negative
+        # 'color': 'gray',
+        'color': 'darkblue',
         # This is positive, but is not "big" enough
         # Setting this to "positive" by default, because it is ignored at
         # evaluation time.
