@@ -8,9 +8,13 @@ output if you run this should end with something like
 source ~/code/watch/tutorial/toy_experiments_msi.sh
 "
 
-# Define wherever you want to store results
+# Define wherever you want to store results and create the directories
+# if they don't already exist.
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
 DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+
+mkdir -p "$DVC_DATA_DPATH"
+mkdir -p "$DVC_EXPT_DPATH"
 
 NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
 NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
@@ -22,8 +26,6 @@ VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.js
 TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json
 
 generate_data(){
-    mkdir -p "$DVC_DATA_DPATH"
-
     kwcoco toydata --key="vidshapes${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
         --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=1
 
@@ -33,7 +35,6 @@ generate_data(){
     kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
         --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=1
 }
-
 
 print_stats(){
     # Print stats
@@ -54,22 +55,17 @@ Should look like
 2   vidshapes_msi_test/data.kwcoco.json      24      12         2       3                             5                  3                                 4
 "
 
-
-
 demo_visualize_toydata(){
-    kwcoco toydata --key=vidshapes1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
-    python -m geowatch.cli.coco_visualize_videos \
-        --src "$(realpath ./tmp/data.kwcoco.json)" \
-        --channels="B1|B8|b" \
-        --viz_dpath="$(realpath ./tmp)/_viz" \
-        --animate=True
 
     python -m geowatch.cli.coco_visualize_videos \
-        --src "$DVC_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json" \
+        --src "$TRAIN_FPATH" \
         --channels="gauss|B11,r|g|b,B1|B8|B11" \
-        --viz_dpath="$DVC_DATA_DPATH/vidshapes_msi_train100/_viz" --animate=True
+        --viz_dpath="$DVC_DATA_DPATH/vidshapes_msi_train_viz" --animate=False
 }
 
+
+# Run the function if you want to visualize the data
+demo_visualize_toydata
 
 # Define the channels we want to use
 # The sensors and channels are specified by the kwcoco SensorChanSpec
@@ -83,13 +79,11 @@ demo_visualize_toydata(){
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 echo "CHANNELS = $CHANNELS"
 
-
 echo "
 In Tutorial #2 we expand the complexity of the 'fit' command compared to the
 previous tutorial. We define some of the important parameters as environment
 variables to illustrate relationships between them.
 "
-
 
 # Fit
 DATASET_CODE=ToyDataMSI
@@ -99,15 +93,14 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 
-# To ensure anyone can run this tutorial we default to a "cpu" accelerator.
-# However, if you have one or more GPUs available you should modify the
-# ACCELERATOR and CUDA_VISIBLE_DEVICES variables based on your hardware
+# Accelerator is set to "GPU". Set  CUDA_VISIBLE_DEVICES to a
+# comma separated list of the GPU #'s you want to use (index may start at 0).
+export ACCELERATOR=gpu
+export CUDA_VISIBLE_DEVICES=0
 
-export ACCELERATOR=cpu
-# Uncomment if you are using a GPU, and set CUDA_VISIBLE_DEVICES
-# to a comma separated list of the GPU #'s you want to use.
-# export ACCELERATOR=gpu
-# export CUDA_VISIBLE_DEVICES=0,1
+# However, if you have only have a cpu, the tutorial will still run.
+# Comment out the above two commands and enable the command below.
+# export ACCELERATOR=cpu
 
 DEVICES=$(python -c "if 1:
     import os
@@ -177,13 +170,6 @@ DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
             global_saliency_weight: 1.0
             global_class_weight:    1.0
             global_change_weight:   0.0
-    lr_scheduler:
-      class_path: torch.optim.lr_scheduler.OneCycleLR
-      init_args:
-        max_lr: $TARGET_LR
-        total_steps: $MAX_STEPS
-        anneal_strategy: cos
-        pct_start: 0.05
     optimizer:
       class_path: torch.optim.Adam
       init_args:
