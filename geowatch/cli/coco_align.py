@@ -333,6 +333,12 @@ class ImageExtractConfig(AssetExtractConfig):
         the end of a sequence.
         '''))
 
+    image_error_policy = scfg.Value('raise', help=ub.paragraph(
+        '''
+        What to do when input contain no regions to crops. Can be "ignore"
+        to write an empty kwcoco file or "raise" to throw an Exception.
+        '''), choices=['raise', 'ignore'])
+
 
 class ExtractConfig(ImageExtractConfig):
     """
@@ -459,12 +465,6 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         '''))
 
     empty_region_policy = scfg.Value('ignore', help=ub.paragraph(
-        '''
-        What to do when input contain no regions to crops. Can be "ignore"
-        to write an empty kwcoco file or "raise" to throw an Exception.
-        '''), choices=['raise', 'ignore'])
-
-    image_error_policy = scfg.Value('raise', help=ub.paragraph(
         '''
         What to do when input contain no regions to crops. Can be "ignore"
         to write an empty kwcoco file or "raise" to throw an Exception.
@@ -2217,6 +2217,13 @@ def _aligncrop(obj_group,
 
     out_fpath = dst_gpath
     error_fpath = out_fpath.parent / (out_fpath.name + '.error')
+    if 'WV' in sensor_coarse:
+        import xdev
+        xdev.embed()
+
+    if 0:
+        from geowatch.gis.geotiff import geotiff_crs_info
+        geotiff_crs_info(ref)
 
     if asset_config.skip_previous_errors:
         raise SkipImage('Attempting to grab this asset previously failed, skipping')

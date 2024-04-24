@@ -43,8 +43,11 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KW_C001.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KW_C001_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R002.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R002_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R00*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R00*_*.geojson"
+
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R001.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R001_*.geojson"
 
 
 # iMerit Regions Only
@@ -104,7 +107,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=1 \
-    --run=1
+    --run=0
     #--sensor_to_time_window='
     #    #S2: 2 weeks
     #    #L8: 2 weeks
