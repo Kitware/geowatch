@@ -9,12 +9,17 @@ CommandLine:
     # Just show configuration
     DRY_RUN=1 ./run_developer_setup.sh
 
-    # Total setup
-    ./run_developer_setup.sh
+    # Execute setup with strict versions
+    WATCH_STRICT=1 ./run_developer_setup.sh
 
 JonSetup:
 
+    WATCH_STRICT=0 ./run_developer_setup.sh
+
     WATCH_STRICT=0 WITH_DVC=1 WITH_COLD=1 ./run_developer_setup.sh
+
+    # SeeAlso:
+    dev/devsetup/dev_pkgs.sh
 '
 
 
@@ -139,6 +144,8 @@ WITH_APT_ENSURE=$WITH_APT_ENSURE
 
 install_pytorch(){
     __doc__='
+    Currently Unused.
+
     TODO: handle the appropriate torch version here
     Make this robust over multiple operating systems
 
@@ -187,7 +194,6 @@ install_pytorch(){
     fi
 
 }
-# install_pytorch
 
 fix_opencv_conflicts(){
     __doc__="
@@ -218,6 +224,9 @@ fix_opencv_conflicts(){
 
 
 torch_on_3090(){
+    __doc__="
+    Unused
+    "
     # NO LONGER NEEDED
     # https://github.com/pytorch/pytorch/issues/31285
     # Seems like we need to work from source:
@@ -255,7 +264,9 @@ check_metrics_framework(){
 
 
 check_gpu_ops_work(){
-    # quick check to ensure that GPU operations are generally functional
+    __doc__="
+    quick check to ensure that GPU operations are generally functional
+    "
     xdoctest -m torch --style=google --global-exec "from torch import nn\nimport torch.nn.functional as F\nimport torch" --options="+IGNORE_WHITESPACE"
 
     python -c "import torch; print(torch.nn.modules.Linear(10, 5).to(0)(torch.rand(10, 10).to(0)).sum().backward())"

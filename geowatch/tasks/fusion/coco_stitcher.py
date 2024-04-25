@@ -373,54 +373,11 @@ class CocoStitchingManager(object):
             prob_subdir = f'{self.assets_dname}/{self.short_code}'
             self.prob_dpath = (bundle_dpath / prob_subdir).ensuredir()
 
-    def accumulate_image(self, gid, space_slice, data, asset_dsize=None,
-                         scale_asset_from_stitchspace=None, is_ready='auto',
-                         weights=None, downweight_edges=False, **kwargs):
+    def _allocate_image_stitcher(self, dset, img, data, asset_dsize, scale_asset_from_stitchspace):
         """
-        Stitches a result into the appropriate image stitcher.
-
-        Args:
-            gid (int):
-                the image id to stitch into
-
-            space_slice (Tuple[slice, slice] | None):
-                the slice (in "output-space") the data corresponds to.
-                if None, assumes this is for the entire image.
-
-            data (ndarray | Tensor): the feature or probability data
-
-            asset_dsize (Tuple): the w/h of outputspace
-                (i.e. the asset we will write)
-
-            scale_asset_from_stitchspace (float | None):
-                the scale to the outspace from from the stitching (i.e.
-                image/video) space.
-
-            is_ready (bool): todo, fix this to work better
-
-        Note:
-            Output space is asset space for the new asset we are building.
-            The actual stitcher holds data in outspace / assetspace.
-            May want to adjust termonology here.
+        Allocates memory for stitching into an image.
         """
-        if kwargs.get('dsize', None) is not None:
-            asset_dsize = kwargs.get('dsize', None)
-            if 0:
-                ub.schedule_deprecation(
-                    'geowatch', 'dsize', 'arg of accumulate_image',
-                    'use asset_dsize instad', deprecate='now')
-
-        if kwargs.get('scale', None) is not None:
-            scale_asset_from_stitchspace = kwargs.get('scale', None)
-            if 0:
-                ub.schedule_deprecation(
-                    'geowatch', 'scale', 'arg of accumulate_image',
-                    'use scale_asset_from_stitchspace instad', deprecate='now')
-
-        self._stitched_gid_patch_histograms[gid] += 1
-        data = kwarray.atleast_nd(data, 3)
-        dset = self.result_dataset
-        img = dset.index.imgs[gid]
+        gid = img['id']
         if self.stiching_space == 'video':
             vidid = img.get('video_id', None)
             # Create the stitcher if it does not exist
@@ -449,6 +406,91 @@ class CocoStitchingManager(object):
                     memmap=self.memmap)
                 self._image_scales[gid] = scale_asset_from_stitchspace
 
+        elif self.stiching_space == 'image':
+            # Create the stitcher if it does not exist
+            vidid = img.get('video_id', None)
+            if gid not in self.image_stitchers:
+                if asset_dsize is None:
+                    height, width = img['height'], img['width']
+                else:
+                    width, height = asset_dsize
+                if self.num_bands == 'auto':
+                    if len(data.shape) == 3:
+                        self.num_bands = data.shape[2]
+                    else:
+                        raise NotImplementedError
+                asset_dims = (height, width, self.num_bands)
+                self.image_stitchers[gid] = kwarray.Stitcher(
+                    asset_dims, device=self.device)
+                self._image_scales[gid] = scale_asset_from_stitchspace
+        else:
+            raise NotImplementedError(self.stiching_space)
+
+    def accumulate_image(self, gid, space_slice, data, asset_dsize=None,
+                         scale_asset_from_stitchspace=None, is_ready='auto',
+                         weights=None, downweight_edges=False, **kwargs):
+        """
+        Stitches a result into the appropriate image stitcher.
+
+        Args:
+            gid (int):
+                the image id to stitch into
+
+            space_slice (Tuple[slice, slice] | None):
+                the slice (in "output-space") the data corresponds to.
+                if None, assumes this is for the entire image.
+
+            data (ndarray | Tensor): the feature or probability data
+
+            asset_dsize (Tuple): the w/h of outputspace
+                (i.e. the asset we will write)
+
+            scale_asset_from_stitchspace (float | None):
+                the scale to the outspace from from the stitching (i.e.
+                image/video) space.
+
+            is_ready (bool): todo, fix this to work better
+
+            ** kwargs:
+                dsize, scale deprecated
+
+        Note:
+            Output space is asset space for the new asset we are building.
+            The actual stitcher holds data in outspace / assetspace.
+            May want to adjust termonology here.
+        """
+        _old_dsize = kwargs.pop('dsize', None)
+        _old_scale = kwargs.pop('scale', None)
+        if _old_dsize is not None:
+            asset_dsize = _old_dsize
+            ub.schedule_deprecation(
+                'geowatch', 'dsize', 'arg of accumulate_image',
+                'use asset_dsize instad', deprecate='now')
+
+        if _old_scale is not None:
+            scale_asset_from_stitchspace = _old_scale
+            ub.schedule_deprecation(
+                'geowatch', 'scale', 'arg of accumulate_image',
+                'use scale_asset_from_stitchspace instad', deprecate='now')
+
+        if len(kwargs):
+            raise ValueError(f'Unknown kwargs: {kwargs!r}')
+
+        self._stitched_gid_patch_histograms[gid] += 1
+        data = kwarray.atleast_nd(data, 3)
+        dset = self.result_dataset
+        img = dset.index.imgs[gid]
+
+        # Allocate memory for this image if we havent done so already
+        if gid not in self.image_stitchers:
+            self._allocate_image_stitcher(
+                dset, img, data, asset_dsize, scale_asset_from_stitchspace)
+
+        # Use a heuristic to see if we can mark any previous image stitchers as
+        # "ready".
+        if self.stiching_space == 'video':
+            vidid = img.get('video_id', None)
+
             if is_ready == 'auto':
                 is_ready = self._last_vidid is not None and vidid != self._last_vidid
 
@@ -470,20 +512,6 @@ class CocoStitchingManager(object):
         elif self.stiching_space == 'image':
             # Create the stitcher if it does not exist
             vidid = img.get('video_id', None)
-            if gid not in self.image_stitchers:
-                if asset_dsize is None:
-                    height, width = img['height'], img['width']
-                else:
-                    width, height = asset_dsize
-                if self.num_bands == 'auto':
-                    if len(data.shape) == 3:
-                        self.num_bands = data.shape[2]
-                    else:
-                        raise NotImplementedError
-                asset_dims = (height, width, self.num_bands)
-                self.image_stitchers[gid] = kwarray.Stitcher(
-                    asset_dims, device=self.device)
-                self._image_scales[gid] = scale_asset_from_stitchspace
 
             if is_ready == 'auto':
                 is_ready = self._last_imgid is not None and gid != self._last_imgid
@@ -715,19 +743,19 @@ class CocoStitchingManager(object):
 
         # Get spatial relationship between the stitch space and image space
         if self.stiching_space == 'video':
-            vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', {'type': 'affine'}))
-            img_from_stitch = vid_from_img.inv()
+            warp_vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', {'type': 'affine'}))
+            warp_img_from_stitch = warp_vid_from_img.inv()
         elif self.stiching_space == 'image':
-            img_from_stitch = kwimage.Affine.eye()
+            warp_img_from_stitch = kwimage.Affine.eye()
         else:
             raise AssertionError
 
         n_anns = 0
         total_prob = 0
 
-        asset_from_stitch = kwimage.Affine.coerce(scale=scale_asset_from_stitchspace)
-        stitch_from_asset = asset_from_stitch.inv()
-        img_from_asset = img_from_stitch @ stitch_from_asset
+        warp_asset_from_stitch = kwimage.Affine.coerce(scale=scale_asset_from_stitchspace)
+        warp_stitch_from_asset = warp_asset_from_stitch.inv()
+        warp_img_from_asset = warp_img_from_stitch @ warp_stitch_from_asset
 
         if self.write_probs:
             # This currently exists as an example to demonstrate how a
@@ -757,7 +785,7 @@ class CocoStitchingManager(object):
                 'height': final_probs.shape[0],
                 'width': final_probs.shape[1],
                 'num_bands': final_probs.shape[2],
-                'warp_aux_to_img': img_from_asset.concise(),
+                'warp_aux_to_img': warp_img_from_asset.concise(),
             }
             auxiliary = img.setdefault('auxiliary', [])
             auxiliary.append(aux)
@@ -780,7 +808,7 @@ class CocoStitchingManager(object):
                 srs.SetAxisMappingStrategy(axis_strat)
                 img_from_wld = kwimage.Affine.coerce(img['wld_to_pxl'])
                 wld_from_img = img_from_wld.inv()
-                wld_from_asset = wld_from_img @ img_from_asset
+                wld_from_asset = wld_from_img @ warp_img_from_asset
                 write_kwargs['crs'] = srs.ExportToWkt()
                 write_kwargs['transform'] = wld_from_asset
                 write_kwargs['overviews'] = 2
@@ -860,7 +888,7 @@ class CocoStitchingManager(object):
                 n_anns = len(scored_polys)
                 for score, asset_poly in scored_polys:
                     # Transform the video polygon into image space
-                    img_poly = asset_poly.warp(img_from_asset)
+                    img_poly = asset_poly.warp(warp_img_from_asset)
                     bbox = list(img_poly.box().boxes.to_coco())[0]
                     # Add the polygon as an annotation on the image
                     self.result_dataset.add_annotation(
