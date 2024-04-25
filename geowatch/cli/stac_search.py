@@ -137,10 +137,6 @@ CommandLine:
 """
 import json
 import tempfile
-import pystac_client
-from geowatch.utils import util_logging
-from geowatch.utils import util_s3
-import kwarray
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -254,15 +250,17 @@ def main(cmdline=True, **kwargs):
     """
     config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
+    import rich.markup
+    rich.print('config = {}'.format(rich.markup.escape(ub.urepr(config, nl=1))))
+
     from geowatch.utils import util_gis
     from kwutil import slugify_ext
     from kwutil import util_progress
     from kwutil import util_parallel
     from geowatch.utils import util_pandas
     from kwutil import util_time
+    from geowatch.utils import util_logging
     import pandas as pd
-    import rich.markup
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     args = config.namespace
 
     logger = util_logging.get_logger(verbose=args.verbose)
@@ -397,6 +395,7 @@ def main(cmdline=True, **kwargs):
         raise NotImplementedError(f'only area is implemented. Got {args.mode=}')
 
     if args.s3_dest is not None:
+        from geowatch.utils import util_s3
         logger.info('Saving output to S3')
         util_s3.send_file_to_s3(dest_path, args.s3_dest)
     else:
@@ -432,11 +431,14 @@ class StacSearcher:
 
     def __init__(self, logger=None):
         if logger is None:
+            from geowatch.utils import util_logging
             logger = util_logging.PrintLogger(verbose=1)
         self.logger = logger
 
     def by_geometry(self, provider, geom, collections, start, end,
                     query, headers, max_products_per_region=None, verbose=1):
+        import pystac_client
+        import kwarray
         if verbose:
             self.logger.info('Processing ' + provider)
         # hack: is there a better way to declare (i.e. in the
@@ -510,6 +512,7 @@ class StacSearcher:
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
         raise NotImplementedError
+        import pystac_client
         self.logger.info(f'Processing {stac_id}')
         catalog = pystac_client.Client.open(provider, headers=headers)
         if stac_id[-4:] == '_TCI':
@@ -555,6 +558,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
         logger.info(f'Query region file: {region_fpath}')
 
     if str(region_fpath).startswith('s3://'):
+        from geowatch.utils import util_s3
         r_file_loc = util_s3.get_file_from_s3(region_fpath, temp_dir)
     else:
         r_file_loc = region_fpath

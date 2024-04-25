@@ -173,6 +173,12 @@ def read_input_stac_items(path):
 
     This also handles jsonl files as well as a a fallback for whitespace
     separated data.
+
+    Args:
+        path (str | PathLike): path to the .input file
+
+    Returns:
+        List[Dict]: stac items
     """
     import json
 

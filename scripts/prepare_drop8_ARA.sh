@@ -99,7 +99,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --cache=$CACHE_STEPS \
     --verbose=100 \
     --skip_existing=0 \
-    --force_min_gsd=0.1 \
+    --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \
     --asset_timeout="10 minutes" \

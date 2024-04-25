@@ -34,6 +34,13 @@ DATASET_SUFFIX=Drop8-L2
 REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_*0*.geojson"
 SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
 
+
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R00*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R00*_*.geojson"
+
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R001.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R001_*.geojson"
+
 # T&E Regions Only
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_R0*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_R0*_*.geojson"
