@@ -1,34 +1,59 @@
-__dev__ = """
+__mkinit__ = """
 mkinit ~/code/watch/geowatch/rc/__init__.py --lazy -w
+
+
+    python -c "from geowatch import rc"
+    EAGER_IMPORT_MODULES=geowatch python -c "from geowatch import rc"
 """
 
+###
 
-def lazy_import(module_name, submodules, submod_attrs):
+
+def lazy_import(module_name, submodules, submod_attrs, eager='auto'):
     import importlib
     import os
     name_to_submod = {
-        func: mod
-        for mod, funcs in submod_attrs.items() for func in funcs
+        func: mod for mod, funcs in submod_attrs.items()
+        for func in funcs
     }
 
     def __getattr__(name):
         if name in submodules:
-            attr = importlib.import_module('{module_name}.{name}'.format(
-                module_name=module_name, name=name))
+            attr = importlib.import_module(
+                '{module_name}.{name}'.format(
+                    module_name=module_name, name=name)
+            )
         elif name in name_to_submod:
             submodname = name_to_submod[name]
             module = importlib.import_module(
-                '{module_name}.{submodname}'.format(module_name=module_name,
-                                                    submodname=submodname))
+                '{module_name}.{submodname}'.format(
+                    module_name=module_name, submodname=submodname)
+            )
             attr = getattr(module, name)
         else:
-            raise AttributeError('No {module_name} attribute {name}'.format(
-                module_name=module_name, name=name))
+            raise AttributeError(
+                'No {module_name} attribute {name}'.format(
+                    module_name=module_name, name=name))
         globals()[name] = attr
         return attr
 
-    if os.environ.get('EAGER_IMPORT', ''):
-        for name in name_to_submod.values():
+    eager_import_flag = False
+    if eager == 'auto':
+        eager_import_text = os.environ.get('EAGER_IMPORT', '')
+        if eager_import_text:
+            eager_import_text_ = eager_import_text.lower()
+            if eager_import_text_ in {'true', '1', 'on', 'yes'}:
+                eager_import_flag = True
+
+        eager_import_module_text = os.environ.get('EAGER_IMPORT_MODULES', '')
+        if eager_import_module_text:
+            if eager_import_module_text.lower() in __name__.lower():
+                eager_import_flag = True
+    else:
+        eager_import_flag = eager
+
+    if eager_import_flag:
+        for name in submodules:
             __getattr__(name)
 
         for attrs in submod_attrs.values():
@@ -41,14 +66,16 @@ __getattr__ = lazy_import(
     __name__,
     submodules={
         'registry',
+        'requirements',
     },
     submod_attrs={
         'registry': [
-            'load_site_model_schema',
-            'load_region_model_schema',
-            'load_job_schema',
-            'geoidgrid_path',
             'dem_path',
+            'geoidgrid_path',
+            'load_job_schema',
+            'load_region_model_schema',
+            'load_site_model_schema',
+            'requirement_path',
         ],
     },
 )
@@ -57,8 +84,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = [
-    'load_site_model_schema', 'load_region_model_schema', 'load_job_schema',
-    'geoidgrid_path', 'dem_path', 'registry'
-]
+__all__ = ['dem_path', 'geoidgrid_path', 'load_job_schema',
+           'load_region_model_schema', 'load_site_model_schema', 'registry',
+           'requirement_path', 'requirements']
