@@ -5,6 +5,11 @@ Install geowatch development environment
 
 CommandLine:
     cd $HOME/code/geowatch
+
+    # Just show configuration
+    DRY_RUN=1 ./run_developer_setup.sh
+
+    # Total setup
     ./run_developer_setup.sh
 
 JonSetup:
@@ -30,10 +35,6 @@ WITH_APT_ENSURE=${WITH_APT_ENSURE:="auto"}
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	# Running as a script
 	set -eo pipefail
-fi
-
-if [[ "${DEV_TRACE+x}" != "0" ]]; then
-	set -x
 fi
 
 
@@ -265,6 +266,9 @@ main(){
     __doc__="
     The main part of the run-developer-setup script
     "
+    if [[ "${DEV_TRACE}" != "0" ]]; then
+        set -x
+    fi
 
     if [[ "$WITH_APT_ENSURE" == "auto" ]]; then
         # If on debian/ubuntu ensure the dependencies are installed
