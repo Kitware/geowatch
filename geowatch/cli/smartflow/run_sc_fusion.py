@@ -108,7 +108,7 @@ class SCFusionConfig(scfg.DataConfig):
         Which site model assets to to use as input
         '''))
 
-    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+    egress_intermediate_outputs = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         If true egress intermediate heatmaps, otherwise only egress the geojson
         '''))

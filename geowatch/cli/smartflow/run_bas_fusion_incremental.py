@@ -93,7 +93,7 @@ class BasFusionConfig(scfg.DataConfig):
             Use time_dense imagery. Defaults to False and uses time averaged data.
             '''))
 
-    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+    egress_intermediate_outputs = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         If true egress intermediate heatmaps, otherwise only egress the geojson
         '''))
