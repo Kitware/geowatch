@@ -26,7 +26,6 @@ import kwimage
 import kwarray
 import warnings
 from os.path import relpath
-from geowatch.utils import util_kwarray
 
 
 def demo_coco_stitching_manager():
@@ -101,8 +100,8 @@ def demo_coco_stitching_manager():
             # larger context.
             stitcher.accumulate_image(
                 image_id, output_space_slice, probs,
-                dsize=output_image_dsize,
-                scale=scale_outspace_from_vid,
+                asset_dsize=output_image_dsize,
+                scale_asset_from_stitchspace=scale_outspace_from_vid,
                 weights=output_weights,
                 downweight_edges=1,
             )
@@ -377,6 +376,7 @@ class CocoStitchingManager(object):
         """
         Allocates memory for stitching into an image.
         """
+        from geowatch.utils import util_kwarray
         gid = img['id']
         if self.stiching_space == 'video':
             vidid = img.get('video_id', None)
@@ -446,8 +446,8 @@ class CocoStitchingManager(object):
                 (i.e. the asset we will write)
 
             scale_asset_from_stitchspace (float | None):
-                the scale to the outspace from from the stitching (i.e.
-                image/video) space.
+                the scale to the outspace from from the stitch-space
+                (i.e.  image/video) space.
 
             is_ready (bool): todo, fix this to work better
 

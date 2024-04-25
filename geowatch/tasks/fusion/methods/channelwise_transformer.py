@@ -1088,6 +1088,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         Generic forward step used for test / train / validation
 
+        Returns:
+            Dict : with keys for various predictions / losses
+
         CommandLine:
             xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.forward_step
 
