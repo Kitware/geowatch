@@ -4,7 +4,7 @@ References:
 """
 import os
 import ubelt as ub
-from watch.stac.stac_search_builder import SENSOR_TO_DEFAULTS
+from geowatch.stac.stac_search_builder import SENSOR_TO_DEFAULTS
 
 
 def print_provider_debug_information():
@@ -177,17 +177,17 @@ def check_processed_regions():
     Print out a table of how many images / region / collection there are.
 
     CommandLine:
-        source $HOME/code/watch/secrets/secrets
+        source $HOME/code/watch-smartflow-dags/secrets/secrets
         xdoctest $HOME/code/watch/dev/notebooks/stac_notebook.py check_processed_regions
     """
     import json
     import pystac_client
     from datetime import datetime as datetime_cls
-    import watch
+    import geowatch
     import pandas as pd
     from rich import print
 
-    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
 
     # MODIFY AS NEEDED
     headers = {
@@ -211,7 +211,7 @@ def check_processed_regions():
 
     collections_of_interest = ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']
 
-    from watch.utils import util_pattern
+    from kwutil import util_pattern
     pat = util_pattern.Pattern.coerce('ta1-*-acc*').to_regex()
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
 
@@ -221,18 +221,23 @@ def check_processed_regions():
         # 'ta1-wv-acc-2',
         # 'ta1-pd-acc-2',
 
-        'ta1-10m-tsmoothed-acc-3',
-        # 'ta1-10m-acc-3',
+        # 'ta1-10m-tsmoothed-acc-3',
+        # # 'ta1-10m-acc-3',
 
-        'ta1-s2-acc-4',
-        'ta1-ls-acc-4',
-        'ta1-wv-acc-4',
-        'ta1-pd-acc-4',
+        # 'ta1-s2-acc-4',
+        # 'ta1-ls-acc-4',
+        # 'ta1-wv-acc-4',
+        # 'ta1-pd-acc-4',
 
-        'ta1-s2-acc-3',
-        'ta1-ls-acc-3',
-        'ta1-wv-acc-3',
-        'ta1-pd-acc-3',
+        # 'ta1-s2-acc-3',
+        # 'ta1-ls-acc-3',
+        # 'ta1-wv-acc-3',
+        # 'ta1-pd-acc-3',
+
+        'ta1-s2-ara-4',
+        'ta1-ls-ara-4',
+        'ta1-wv-ara-4',
+        'ta1-pd-ara-4',
 
         # 'ta1-s2-acc',
         # 'ta1-s2-acc-1',
@@ -248,7 +253,7 @@ def check_processed_regions():
     #     'ta1-30m-acc-1'
     # ]
     from kwutil import util_progress
-    from watch.cli.stac_to_kwcoco import summarize_stac_item
+    from geowatch.cli.stac_to_kwcoco import summarize_stac_item
 
     peryear_rows = []
     peritem_rows = []
@@ -326,6 +331,28 @@ def check_processed_regions():
                     'max_date': max_date.isoformat(),
                     # **year_oo_num
                 })
+
+    # band_rows = []
+    # gsds = []
+    # for region_id, results in region_to_results.items():
+    #     for stac_item in results:
+    #         stac_dict = stac_item.to_dict()
+    #         gsd = stac_dict['properties'].get('gsd', None)
+    #         for asset_key, asset in stac_dict['assets'].items():
+    #             for band_info in asset.get('eo:bands', []):
+    #                 if 'common_name' in band_info:
+    #                     collection = stac_dict['collection']
+    #                     band_name = band_info['common_name']
+    #                     band_rows.append({
+    #                         'collection': collection,
+    #                         'band_name': band_name,
+    #                         'gsd': gsd,
+    #                     })
+    #         gsds.append(gsd)
+    # min(g for g in gsds if g is not None)
+    # banddf = pd.DataFrame(band_rows)
+    # band_hist = banddf.value_counts(['collection', 'band_name', 'gsd'])
+    # print(band_hist.to_string())
 
     region_to_num_results = ub.udict(region_to_results).map_values(len)
     region_to_num_results = ub.udict(region_to_num_results).sorted_values()
@@ -448,7 +475,7 @@ def _devcheck_providers_exist():
     """
     developer logic to test to see if providers are working
     """
-    # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
+    # from geowatch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
     import pystac_client
     import os
@@ -489,7 +516,7 @@ def check_single_colletion():
     """
     source $HOME/code/watch/secrets/secrets
     COLLECTION=ta1-10m-tsmoothed-acc-3
-    xdoctest -m watch.stac._notebook check_single_endpoint
+    xdoctest -m geowatch.stac._notebook check_single_endpoint
     """
     import os
     import pystac_client
@@ -517,9 +544,9 @@ def check_single_colletion():
     asset = ub.peek(first_item.assets.values())
     print(asset.to_dict())
 
-    import watch
-    from watch.geoannots import geomodels
-    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    import geowatch
+    from geowatch.geoannots import geomodels
+    dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     base = ((dvc_data_dpath / 'annotations') / 'drop6')
     region_fpath = base / 'region_models/NZ_R001.geojson'
     region = geomodels.RegionModel.coerce(region_fpath)
