@@ -219,7 +219,7 @@ def run_bas_fusion_for_baseline(config):
         ensure_comments=True,
     )
 
-    from watch.geoannots.geomodels import RegionModel
+    from geowatch.geoannots.geomodels import RegionModel
     region = RegionModel.coerce(local_region_path)
 
     # Returned as datetime
@@ -375,7 +375,7 @@ def run_bas_fusion_for_baseline(config):
             incremental_assets_for_egress['filtered_bas_fusion_kwcoco'] =\
                 filtered_previous_bas_fusion_kwcoco_path
 
-            from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+            from geowatch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
             concat_kwcoco_datasets(
                 (filtered_previous_bas_fusion_kwcoco_path,
                  combined_bas_fusion_kwcoco_path),
