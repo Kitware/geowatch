@@ -2201,8 +2201,9 @@ def _aligncrop(obj_group,
     already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
 
+    needs_resolution_checks = False  # TODO
     if not needs_recompute:
-        if asset_config.corruption_checks:
+        if asset_config.corruption_checks or needs_resolution_checks:
             # Sometimes the data will exist, but it's bad data. Check for this.
             try:
                 ref = util_gdal.GdalDataset.open(dst_gpath, mode='r')
@@ -2213,17 +2214,18 @@ def _aligncrop(obj_group,
                 print(f'The data exists {dst_gpath}, but is corrupted. Recomputing')
                 dst_gpath.delete()
             else:
+                # Do resolution checks
+                if 0:
+                    from geowatch.gis.geotiff import geotiff_crs_info
+                    info = geotiff_crs_info(ref)
+                    info['approx_meter_gsd']
                 ref = None
 
     out_fpath = dst_gpath
     error_fpath = out_fpath.parent / (out_fpath.name + '.error')
-    if 'WV' in sensor_coarse:
-        import xdev
-        xdev.embed()
-
-    if 0:
-        from geowatch.gis.geotiff import geotiff_crs_info
-        geotiff_crs_info(ref)
+    # if 'WV' in sensor_coarse:
+    #     import xdev
+    #     xdev.embed()
 
     if asset_config.skip_previous_errors:
         raise SkipImage('Attempting to grab this asset previously failed, skipping')
