@@ -7,8 +7,8 @@ This is a new Phase2 Variant of this script.
 
 Example:
 
-    export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
-    export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
+    export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+    export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
     cd $DVC_EXPT_DPATH
 
     python -m geowatch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -128,8 +128,8 @@ class ManagerConfig(scfg.DataConfig):
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
         '''
         path to the experiment dvc dpath. If unspecified, this will use the
-        default dvc path tagged with "phase2_expt". See ``geowatch dvc list``
-        to see current registered paths.
+        default dvc path based on :func:`heuristics.auto_expt_dvc`.
+        See ``geowatch dvc list`` to see current registered paths.
         '''))
 
     model_pattern = scfg.Value('*', help='if specified restrict to models matching this name pattern')
@@ -384,8 +384,8 @@ class ExperimentState(ub.NiceRepr):
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
         >>> from geowatch.mlops.manager import *  # NOQA
         >>> import geowatch
-        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
-        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data')
+        >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_expt')
+        >>> data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data')
         >>> #dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
         >>> dataset_code = '*'
         >>> #dataset_code = 'Drop4-BAS'
@@ -867,7 +867,7 @@ class ExperimentState(ub.NiceRepr):
             >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
             >>> from geowatch.mlops.manager import *  # NOQA
             >>> import geowatch
-            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt')
+            >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_expt')
             >>> #expt_dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd')
             >>> #dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
             >>> self = ExperimentState(expt_dvc_dpath)
@@ -958,7 +958,7 @@ class ExperimentState(ub.NiceRepr):
         print(ub.codeblock(
             f"""
             # On the evaluation remote you need to run something like:
-            DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
+            DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")  # fixme: hardcoded
             cd $DVC_EXPT_DPATH
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}

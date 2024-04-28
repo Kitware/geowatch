@@ -20,6 +20,7 @@ CODE_DPATH=$HOME/code
 mylibs=(
 ubelt
 mkinit
+xdev
 xdoctest
 scriptconfig
 cmd_queue

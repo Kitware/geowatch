@@ -17,6 +17,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 * Removed dependency on netharn. All relevant code has been vendored into helper modules.
+* Hardcoded gewatch_dvc paths
 
 
 ## Version 0.16.2 - Released 2024-04-15

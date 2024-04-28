@@ -12,11 +12,12 @@ CommandLine:
     # Execute setup with strict versions
     WATCH_STRICT=1 ./run_developer_setup.sh
 
-JonSetup:
+Alternatives:
 
+    export WITH_MMCV=0
     WATCH_STRICT=0 ./run_developer_setup.sh
 
-    WATCH_STRICT=0 WITH_DVC=1 WITH_COLD=1 ./run_developer_setup.sh
+    WATCH_STRICT=0 WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 ./run_developer_setup.sh
 
     # SeeAlso:
     dev/devsetup/dev_pkgs.sh

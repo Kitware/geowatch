@@ -14,6 +14,9 @@ class DummyModel(pl.LightningModule):
 
     def forward_step(self, batch, with_loss=False):
         import torch
+        import kwarray
+        import kwimage
+        import numpy as np
         outputs = {}
 
         num_classes = len(self.classes)
@@ -23,6 +26,9 @@ class DummyModel(pl.LightningModule):
 
         outputs['class_probs'] = []
         outputs['saliency_probs'] = []
+
+        torch_impl = kwarray.ArrayAPI.coerce('torch')
+        np_impl = kwarray.ArrayAPI.coerce('numpy')
 
         for item in batch:
             frame_preds = []
@@ -37,14 +43,22 @@ class DummyModel(pl.LightningModule):
                 frame['output_image_dsize']
                 frame['scale_outspace_from_vid']
 
+                out_dims = frame['output_dims']
+
                 # derived
-                derived = torch.stack([v.nan_to_num().mean(dim=0) for v in frame['modes'].values()]).mean(dim=0)
-                pattern = (derived > derived.mean()).to(torch.float32)[:, :, None]
+                _derived = torch.stack([
+                    v.nan_to_num().mean(dim=0)
+                    for v in frame['modes'].values()]).mean(dim=0)
+                derived = torch_impl.numpy(_derived).astype(np.float32)
+                out_dsize = out_dims[::-1]
+                derived = kwimage.imresize(derived, dsize=out_dsize)
+                pattern = (derived > derived.mean())[:, :, None].astype(np.float32)
+                _pattern = np_impl.tensor(pattern).to(_derived.device)
 
                 # Pretend to make predictions
                 frame_pred = {}
-                frame_pred['saliency_probs'] = pattern * torch.rand(saliency_dims + [2])
-                frame_pred['class_probs'] =  pattern * torch.rand(class_dims + [num_classes])
+                frame_pred['saliency_probs'] = _pattern * torch.rand(saliency_dims + [2])
+                frame_pred['class_probs'] =  _pattern * torch.rand(class_dims + [num_classes])
                 frame_preds.append(frame_pred)
 
             outputs['class_probs'].append(
