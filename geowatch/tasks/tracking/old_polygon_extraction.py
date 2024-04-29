@@ -310,6 +310,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
                 'thresh': config.thresh,
                 'algo': config.new_algo,
                 'viz_out_dir': extractor_viz_dir,
+                'polygon_simplify_tolerance': config.polygon_simplify_tolerance,
             })
         polygons = extractor.predict_polygons()
 

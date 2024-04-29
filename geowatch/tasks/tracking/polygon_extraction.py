@@ -78,6 +78,7 @@ class PolygonExtractor:
             'robust_normalize': False,
             'positional_encoding': True,
             'positional_encoding_scale': 1.0,
+            'polygon_simplify_tolerance': None,
             'scale_factor': 'auto',
             'thresh': 0.3,
             'viz_out_dir': None,
@@ -606,6 +607,12 @@ class PolygonExtractor:
         label_img = self.predict()
         label_mask = LabelMask(label_img)
         polys = label_mask.to_multi_polygons()
+
+        if self.config['polygon_simplify_tolerance'] is not None:
+            # TODO: handle difference between pixel and world units.
+            simplify_thresh = int(self.config['polygon_simplify_tolerance'])
+            polys = [p.simplify(simplify_thresh) for p in polys]
+
         if return_info:
             info = {}
             info['label_mask'] = label_mask
