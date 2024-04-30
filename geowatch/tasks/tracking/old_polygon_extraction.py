@@ -115,6 +115,12 @@ class PolygonExtractConfig(scfg.DataConfig):
         We should find a better way of handling this.
         '''))
 
+    polygon_simplify_tolerance = scfg.Value(None, help=ub.paragraph(
+        '''
+        The pixel size (at the specified heatmap resolution) to use for polygon
+        simplification.
+        '''))
+
     viz_out_dir = scfg.Value(None, help=ub.paragraph(
         '''
         Directory to output intermediate visualizations
