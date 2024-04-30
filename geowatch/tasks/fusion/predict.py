@@ -675,7 +675,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         proc_context.add_disk_info(test_coco_dataset.fpath)
 
     memory_monitor_timer = ub.Timer().tic()
-    memory_monitor_interval_seconds = 60
+    memory_monitor_interval_seconds = 60 * 60
     with_memory_units = bool(ub.modname_to_modpath('pint'))
 
     with torch.set_grad_enabled(False), pman:
