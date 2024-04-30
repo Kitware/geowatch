@@ -672,7 +672,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     ).to(self.device)
 
                 elif self.hparams.decoder == 'mlp':
-                    self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
+                    self.heads[head_name] = MultiLayerPerceptronNd(
                         dim=0,
                         in_channels=feat_dim,
                         hidden_channels=prop['hidden'],
