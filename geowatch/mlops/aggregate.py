@@ -1774,9 +1774,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 rois = [key for key in agg.macro_compatible.keys()]
         if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
             # Asked for multiple groups of ROIS.
+            print(f'Building multiple ({len(rois)}) macro tables')
             for single_rois in rois:
                 agg.build_single_macro_table(single_rois, **kwargs)
         else:
+            print(f'Building a single macro table: {rois}')
             agg.build_single_macro_table(rois, **kwargs)
 
     @profile
