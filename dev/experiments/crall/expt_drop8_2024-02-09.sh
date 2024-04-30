@@ -2565,8 +2565,8 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
-            #- 0.36
-            #- 0.37
+            - 0.36
+            - 0.37
             - 0.375
             - 0.38
             - 0.39
@@ -2577,7 +2577,13 @@ geowatch schedule --params="
         bas_poly.polygon_simplify_tolerance: 1
         bas_poly.agg_fn: probs
         bas_poly.time_thresh:
+            - 0.85
             - 0.8
+            - 0.75
+        bas_poly.time_pad_after:
+            - 0 months
+            - 3 months
+            - 12 months
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
         bas_poly.poly_merge_method: 'v2'
@@ -2591,6 +2597,13 @@ geowatch schedule --params="
         bas_poly_viz.enabled: 0
         bas_poly.enabled: 1
         bas_poly_eval.enabled: 1
+    include:
+        - bas_poly.time_pad_after: 0 months
+          bas_poly.time_pad_before: 0 months
+        - bas_poly.time_pad_after: 3 months
+          bas_poly.time_pad_before: 3 months
+        - bas_poly.time_pad_after: 12 months
+          bas_poly.time_pad_before: 12 months
     " \
     --root_dpath="$MLOPS_DPATH" \
     --devices="0,1,2,3" --tmux_workers=8 \
@@ -2634,8 +2647,9 @@ python -m geowatch.mlops.aggregate \
         reference_region: final
         concise: 1
         show_csv: 0
-    " --rois="KR_R002,CN_C000"
-    #--rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    " \
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    #" --rois="KR_R002,CN_C000"
     #--rois="KR_R002"
     #--rois="CN_C000"
 
