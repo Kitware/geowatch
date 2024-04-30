@@ -121,6 +121,7 @@ class WatchModuleMixins:
         """
         import kwarray
         from kwarray import distributions
+        import kwimage
 
         def _specific_coerce(val, rng=None):
             # Coerce for what we want to do here,
@@ -212,6 +213,8 @@ class WatchModuleMixins:
                 frame['saliency'] = rng.randint(low=0, high=1, size=(H0, W0))
                 frame['saliency_weights'] = rng.rand(H0, W0)
                 frame['saliency_output_dims'] = (H0, W0)
+
+                frame['box_ltrb'] = kwimage.Boxes.random(10).to_ltrb().tensor().data
 
                 frame['date_captured'] = '',
                 frame['gid'] = bx

@@ -591,6 +591,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 view. if False separate annotations / images for a less
                 cluttered view.
 
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_datamodule KWCocoVideoDataModule.draw_batch
+
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> from geowatch.tasks.fusion import datamodules
@@ -701,7 +704,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if item is None:
                     stats['num_None_batch_items'] += 1
 
-        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs']
+        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs', 'box']
 
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
@@ -725,8 +728,20 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                         head_outputs = outputs[head_key]
                         head_item_output = head_outputs[item_idx]
                         if head_item_output is not None:
-                            for frame_out in head_item_output:
-                                item_output[head_key].append(frame_out.data.cpu().numpy())
+                            if head_key == 'box':
+                                # Handle box head separately.
+                                # TODO: Should the network handle this conversion?
+                                box_ltrb = head_item_output['box_ltrb'].data.cpu().numpy()
+                                box_probs = head_item_output['box_probs'].data.cpu().numpy()
+                                for frame_box_ltrb, frame_box_probs in zip(box_ltrb, box_probs):
+                                    item_output[head_key].append({
+                                        'box_ltrb': frame_box_ltrb,
+                                        'box_probs': frame_box_probs
+                                    })
+                            else:
+                                # Handle original heatmap case
+                                for frame_out in head_item_output:
+                                    item_output[head_key].append(frame_out.data.cpu().numpy())
                         else:
                             item_output[head_key].append(None)
             else:

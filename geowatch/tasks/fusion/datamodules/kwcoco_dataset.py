@@ -842,7 +842,7 @@ class TruthMixin:
         ann_cids    = dets.data['cids']
         ann_tids    = dets.data['tids']
         ann_weights = dets.data['weights']
-        ann_ltrb    = dets.data['boxes'].to_ltrb().data
+        ann_boxes    = dets.data['boxes']
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
@@ -869,6 +869,8 @@ class TruthMixin:
         # Note: it is important to respect class indexes, ids, and
         # name mappings
         if wants_boxes:
+            ann_ltrb = ann_boxes.to_ltrb().data
+
             box_labels = {
                 'box_ltrb': [],
                 # 'box_tids': [],
@@ -3652,7 +3654,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             'class': True,
             'saliency': True,
             # 'boxes': True,
-            'boxes': False,
+            'boxes': True,
 
             # ouputs is not really a task, it requests the weights needed for
             # predict-time stitching.
