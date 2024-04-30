@@ -70,6 +70,40 @@ class DummyModel(pl.LightningModule):
         return outputs
 
 
+class BatchOutputsV1(dict):
+    """
+    Expected structure
+
+    Dict:
+        class_probs (List[Tensor]): A list item for each batch item containing a TxHxWxC tensor.
+        saliency_probs (List[Tensor]): A list item for each batch item containing a TxHxWx2 tensor.
+        loss_parts (Dict[str, Tensor]): parts of the loss function to combine
+        total_loss (Scalar): the final loss to backpropogate on
+    """
+
+
+class ItemOutputV2(dict):
+    """
+    Expected Structure:
+        'frames': List[Dict]: a dictionary containing predictions for each frame / different timestep containin keys
+            {
+                'class' (Tensor): class prediction for this frame
+                'saliency' (Tensor): saliency prediction for this frame
+            }
+    """
+
+
+class BatchOutputsV2(dict):
+    """
+    Expected structure:
+
+    Dict:
+        outputs (List[ItemOutputV1]): A list item for each batch item containing a dictionary with
+        loss_parts (Dict[str, Tensor]): parts of the loss function to combine
+        total_loss (Scalar): the final loss to backpropogate on
+    """
+
+
 def ensure_test_kwcoco_dataset():
     import geowatch
     import ubelt as ub

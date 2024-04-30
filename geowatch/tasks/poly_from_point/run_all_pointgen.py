@@ -177,5 +177,15 @@ def main():
     """
 
 
+if __name__ == '__main__':
+    """
+
+    CommandLine:
+        python ~/code/geowatch/geowatch/tasks/poly_from_point/run_all_pointgen.py
+        python -m geowatch.tasks.poly_from_point.run_all_pointgen
+    """
+    __cli__.main()
+
+
 if __name__ == "__main__":
     main()
