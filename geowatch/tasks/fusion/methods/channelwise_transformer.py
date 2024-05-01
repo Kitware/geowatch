@@ -55,6 +55,7 @@ heterogeneous data:
 """
 import einops
 import kwarray
+import kwimage
 import kwcoco
 import ubelt as ub
 import torch
@@ -163,6 +164,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
+    global_box_weight = scfg.Value(1.0, type=float)
     modulate_class_weights = scfg.Value('', type=str, help=ub.paragraph(
         '''
         DEPRECATE. SET THE class_weights to auto:<modulate_str>
@@ -375,7 +377,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.input_norms = input_norms
 
         import kwutil
-        predictable_classes = kwutil.Yaml.coerce(self.hparams.predictable_classes)
+        predictable_classes = kwutil.util_yaml.Yaml.coerce(
+            self.hparams.predictable_classes)
         if predictable_classes is not None:
             if isinstance(predictable_classes, str):
                 predictable_classes = [x.strip() for x in predictable_classes.split(',')]
@@ -388,10 +391,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.global_class_weight = self.hparams.global_class_weight
         self.global_change_weight = self.hparams.global_change_weight
         self.global_saliency_weight = self.hparams.global_saliency_weight
+
         self.global_head_weights = {
             'class': self.hparams.global_class_weight,
             'change': self.hparams.global_change_weight,
             'saliency': self.hparams.global_saliency_weight,
+            'box': self.hparams.global_box_weight
         }
 
         # TODO: this data should be introspectable via the kwcoco file
@@ -436,6 +441,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
         ])
+        #self.object_weights = self._coerce_object_weights(self.hparams.object_weights)
         print(f'self.change_weights={self.change_weights}')
 
         if isinstance(self.hparams.stream_channels, str):
@@ -641,17 +647,32 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 'loss': self.hparams.class_loss,
                 'weights': self.class_weights,
             },
+            {
+                'name': 'box',
+                'weights': self.global_head_weights['box'],
+            },
         ]
 
         for prop in head_properties:
             head_name = prop['name']
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
-                self.criterions[head_name] = coerce_criterion(prop['loss'],
-                                                              prop['weights'],
-                                                              ohem_ratio=_config.ohem_ratio,
-                                                              focal_gamma=_config.focal_gamma)
-                if self.hparams.decoder == 'mlp':
+                if head_name != 'box':
+                    self.criterions[head_name] = coerce_criterion(prop['loss'],
+                                                                  prop['weights'],
+                                                                  ohem_ratio=_config.ohem_ratio,
+                                                                  focal_gamma=_config.focal_gamma)
+                if head_name == 'box':
+                    from geowatch.tasks.fusion.methods.object_head import DetrDecoderForObjectDetection
+                    from transformers import DetrConfig
+
+                    self.heads[head_name] = DetrDecoderForObjectDetection(
+                        config=DetrConfig(d_model=feat_dim, num_labels=1, dropout=0.0, eos_coefficient=1.0, num_queries=20),
+                        d_model=feat_dim,
+                        d_hidden=feat_dim
+                    ).to(self.device)
+
+                elif self.hparams.decoder == 'mlp':
                     self.heads[head_name] = MultiLayerPerceptronNd(
                         dim=0,
                         in_channels=feat_dim,
@@ -1176,6 +1197,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['class_probs'] = batch_head_probs['class']
         if 'saliency' in batch_head_probs:
             outputs['saliency_probs'] = batch_head_probs['saliency']
+        if 'box' in batch_head_probs:
+            outputs['box'] = batch_head_probs['box']
 
         # print(f'with_loss={with_loss}')
         if with_loss:
@@ -1276,7 +1299,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_sensorchan=channels, decouple_resolution=True)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels,
+            >>>     decouple_resolution=True, global_box_weight=0)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
             >>> item = batch[0]
             >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
@@ -1493,10 +1517,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 # _feats = spacetime_fused_features[:, :-1] - spacetime_fused_features[:, 1:]
                 change_feat = spacetime_features[1:]
                 logits['change'] = self.heads['change'](change_feat)
+
             if 'class' in self.heads:
                 logits['class'] = self.heads['class'](spacetime_features)
             if 'saliency' in self.heads:
                 logits['saliency'] = self.heads['saliency'](spacetime_features)
+            if 'box' in self.heads:
+                logits['box'] = self.heads['box'](spacetime_features)
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
@@ -1506,13 +1533,20 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # all logits so all items in the temporal seqeunce have the same
             # spatial resolution.
             resampled_logits = {}
+
             # Loop over change, categories, saliency
             for logit_key, logit_val in logits.items():
-                _tmp = einops.rearrange(logit_val, 't h w c -> 1 (t c) h w')
-                _tmp2 = nn.functional.interpolate(
-                    _tmp, [H, W], mode='bilinear', align_corners=True)
-                resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[3])
-                resampled_logits[logit_key] = resampled
+                if logit_key != 'box':
+                    _tmp = einops.rearrange(logit_val, 't h w c -> 1 (t c) h w')
+                    _tmp2 = nn.functional.interpolate(
+                        _tmp, [H, W], mode='bilinear', align_corners=True)
+                    resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[3])
+                    resampled_logits[logit_key] = resampled
+                else:
+                    # For boxes or non-spatial-grid tensors, just copy them
+                    # over.
+                    resampled_logits[logit_key] = logit_val
+
             # Convert logits into probabilities for output
             # Remove batch index in both cases
             probs = {}
@@ -1529,7 +1563,27 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
+            if 'box' in resampled_logits:
+                perframe_output_dims = [frame['output_dims'] for frame in item['frames']]
+                perframe_norm_boxes = kwimage.Boxes(resampled_logits['box'][0].detach(), 'cxywh').to_ltrb()
+                # Rescale each box from predicted 0-1 coords to the size of the
+                # input frames.
+                perframe_boxes = []
+                for norm_boxes, dims in zip(perframe_norm_boxes, perframe_output_dims):
+                    boxes = norm_boxes.scale(dims)
+                    # uncomment if we want to clip boxes
+                    # boxes = boxes.clip(0, 0, dims[1], dims[0])
+                    perframe_boxes.append(boxes[None, ...])
+                # Create final Tx100x4 tensor of boxes
+                # todo perhaps we don't concat and just return a list
+                # to make it more clear that these are per-frame boxes:w
+                perframe_boxes = kwimage.Boxes.concatenate(perframe_boxes, axis=0)
+                probs['box'] = {
+                    'box_ltrb': perframe_boxes.to_ltrb().data,
+                    'box_probs': resampled_logits['box'][1][..., 1].detach().sigmoid()
+                }
         else:
+            # NOTE: decoupled resolution lacks support here and may be removed.
             # For class / saliency frames are indepenent
             perframe_logits = ub.ddict(list)
             for frame_feature in perframe_stackable_encodings:
@@ -1551,14 +1605,17 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             resampled_logits = {}
             # Loop over change, categories, saliency
             for logit_key, logit_val in perframe_logits.items():
-                resampled_frame_logits = [
-                    nn.functional.interpolate(
-                        einops.rearrange(frame_logs, 'h w c -> 1 c h w'),
-                        [H, W], mode='bilinear', align_corners=False)
-                    for frame_logs in logit_val]
-                _tmp2 = torch.concat(resampled_frame_logits, dim=0)
-                resampled = einops.rearrange(_tmp2, 't c h w -> 1 t h w c')
-                resampled_logits[logit_key] = resampled
+                if logit_key != 'box':
+                    resampled_frame_logits = [
+                        nn.functional.interpolate(
+                            einops.rearrange(frame_logs, 'h w c -> 1 c h w'),
+                            [H, W], mode='bilinear', align_corners=False)
+                        for frame_logs in logit_val]
+                    _tmp2 = torch.concat(resampled_frame_logits, dim=0)
+                    resampled = einops.rearrange(_tmp2, 't c h w -> 1 t h w c')
+                    resampled_logits[logit_key] = resampled
+                else:
+                    raise NotImplementedError('no boxes in decoupled resolution')
 
             # Convert logits into probabilities for output
             # Remove batch index in both cases
@@ -1576,10 +1633,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
+            if 'box' in resampled_logits:
+                raise NotImplementedError
 
         if with_loss:
             item_loss_parts, item_truths = self._build_item_loss_parts(
                 item, resampled_logits)
+
         else:
             item_loss_parts = None
             item_truths = None
@@ -1656,7 +1716,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         frame_sensor_chan_tokens = einops.rearrange(x2, '1 hs ws f -> hs ws f')
         return frame_sensor_chan_tokens, space_shape
 
-    def _head_loss(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+    def _head_loss_heatmaps(self, head_key, head_logits, head_truth, head_weights, head_encoding):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
@@ -1695,11 +1755,24 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         return head_loss
 
-    def _build_item_loss_parts(self, item, resampled_logits):
+    def _head_loss_boxes(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+        final_loss = 0
+        for i in range(len(head_truth)):
+            out_boxes = kwimage.Boxes(head_logits[i: i + 1], 'ltrb')
+            true_boxes = kwimage.Boxes(head_truth[i], 'ltrb')
+            ious = out_boxes.ious(true_boxes)
+            if final_loss == 0:
+                final_loss = ious
+            else:
+                final_loss += ious.sum()
+        return final_loss / len(head_truth)
+
+    def _build_item_loss_parts(self, item, resampled_logits, box_logits=None):
         item_loss_parts = {}
         item_truths = {}
         item_encoding = {}
         if self.hparams.decouple_resolution:
+            # TODO: perhaps we deprecated decoupled resolution for this model?
             for head_key, head_logits in resampled_logits.items():
 
                 if head_key == 'class':
@@ -1734,7 +1807,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         einops.rearrange(frame_head_logits, 'b t h w c -> (b t) c h w'),
                         [h, w], mode='bilinear', align_corners=False), 'b c h w -> b 1 h w c')
 
-                    head_loss = self._head_loss(head_key, frame_head_logits2, frame_head_truth, frame_head_weights, truth_encoding)
+                    head_loss = self._head_loss_heatmaps(head_key, frame_head_logits2, frame_head_truth, frame_head_weights, truth_encoding)
                     frame_head_losses.append(head_loss)
 
                 if frame_head_losses:
@@ -1759,6 +1832,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 key: torch_safe_stack(_tensors, item_shape=[0, 0])[None, ...]
                 for key, _tensors in item_pixel_weights_list.items()
             }
+            #print(resampled_logits)
             if self.global_head_weights['change']:
                 item_encoding['change'] = 'index'
                 # [B, T, H, W]
@@ -1789,13 +1863,50 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     frame['saliency'] for frame in item['frames']
                 ])[None, ...]
 
+            if self.global_head_weights['box']:
+                item_encoding['box'] = 'index'
+                item_truths['box'] = [frame['box_ltrb'] for frame in item['frames']]
+
             # Compute criterion loss for each head
             for head_key, head_logits in resampled_logits.items():
-                head_truth = item_truths[head_key]
-                head_truth_encoding = item_encoding[head_key]
-                head_weights = item_weights[head_key]
-                head_loss = self._head_loss(head_key, head_logits, head_truth, head_weights, head_truth_encoding)
-                item_loss_parts[head_key] = head_loss
+                if head_key != 'box':
+                    head_truth = item_truths[head_key]
+                    head_truth_encoding = item_encoding[head_key]
+                    head_weights = item_weights[head_key]
+                    head_loss = self._head_loss_heatmaps(head_key, head_logits, head_truth, head_weights, head_truth_encoding)
+                    item_loss_parts[head_key] = head_loss
+                else:
+                    frame_output_dims = [frame['output_dims'] for frame in item['frames']]
+                    box_logits = resampled_logits['box']
+                    labels = []
+                    box_valid_logits = []
+                    box_valid_preds = []
+                    for frame_idx, boxes in enumerate(item_truths['box']):
+                        if boxes.numel() != 0:
+                            if len(boxes.shape) == 1:
+                                boxes = boxes.unsqueeze(0)
+                            boxes = kwimage.Boxes(boxes, 'ltrb')
+                            # Fix issue where augmentation causes negative widths
+                            # TODO: fix this in the dataloader itself
+                            boxes = _ensure_nonnegative_extent(boxes).to_ltrb()
+                            # Normalize boxes to 0-1 for detr
+                            frame_dims = tuple(1 / d for d in frame_output_dims[frame_idx])
+                            boxes = boxes.scale(frame_dims)
+                            #.clip(0, 0, 1, 1)
+                            # Put boxes in the format the loss wants
+                            box_cxwh = boxes.to_cxywh().data
+                            labels.append({
+                                'class_labels': torch.LongTensor([0] * len(boxes)).to(box_logits[0].device),
+                                'boxes': box_cxwh.float()
+                            })
+                            box_valid_logits.append(box_logits[1][frame_idx])
+                            box_valid_preds.append(box_logits[0][frame_idx])
+                    if labels:
+                        item_loss_parts['box'] = self.heads['box'](
+                            loss_only=True,
+                            pred_boxes=torch.stack(box_valid_preds),
+                            logits=torch.stack(box_valid_logits),
+                            labels=labels)[0]
 
         return item_loss_parts, item_truths
 
@@ -2020,3 +2131,52 @@ def perterb_params(optimizer, std):
         param += torch.empty(
             param.shape, device=param.device).normal_(
                 mean=0, std=std)
+
+
+def _ensure_nonnegative_extent(self, inplace=False):
+    """
+    Experimental. If the box has a negative width / height
+    make them positive and adjust the tlxy point.
+
+    Fixed version of the existing experimental method in kwimage
+
+    Example:
+        >>> import kwimage
+        >>> self = kwimage.Boxes(np.array([
+        >>>     [20, 30, -10, -20],
+        >>>     [0, 0, 10, 20],
+        >>>     [0, 0, -10, 20],
+        >>>     [0, 0, 10, -20],
+        >>> ]), 'xywh')
+        >>> new = _ensure_nonnegative_extent(self, inplace=0)
+        >>> assert np.any(self.width < 0)
+        >>> assert not np.any(new.width < 0)
+        >>> assert np.any(self.height < 0)
+        >>> assert not np.any(new.height < 0)
+
+        >>> import kwimage
+        >>> self = kwimage.Boxes(np.array([
+        >>>     [0, 3, 8, -4],
+        >>> ]), 'xywh')
+        >>> new = _ensure_nonnegative_extent(self, inplace=0)
+        >>> print('self = {}'.format(ub.urepr(self, nl=1)))
+        >>> print('new  = {}'.format(ub.urepr(new, nl=1)))
+        >>> assert not np.any(self.width < 0)
+        >>> assert not np.any(new.width < 0)
+        >>> assert np.any(self.height < 0)
+        >>> assert not np.any(new.height < 0)
+    """
+    if self.format != 'xywh':
+        # Probably want a ltrb inplace implementation as well.
+        self = self.to_xywh()
+    assert self.format == 'xywh'
+    _impl = self._impl
+    new = self if inplace else self.__class__(_impl.copy(self.data), self.format)
+    is_neg_w = new.data[..., 2] < 0
+    is_neg_h = new.data[..., 3] < 0
+    new_data = new.data
+    new_data[..., 0][is_neg_w] += new_data[..., 2][is_neg_w]
+    new_data[..., 1][is_neg_h] += new_data[..., 3][is_neg_h]
+    new_data[..., 2][is_neg_w] *= -1
+    new_data[..., 3][is_neg_h] *= -1
+    return new
