@@ -377,7 +377,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.input_norms = input_norms
 
         import kwutil
-        predictable_classes = kwutil.Yaml.coerce(self.hparams.predictable_classes)
+        predictable_classes = kwutil.util_yaml.Yaml.coerce(
+            self.hparams.predictable_classes)
         if predictable_classes is not None:
             if isinstance(predictable_classes, str):
                 predictable_classes = [x.strip() for x in predictable_classes.split(',')]
@@ -1518,11 +1519,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 logits['change'] = self.heads['change'](change_feat)
 
             if 'class' in self.heads:
-                logits['class'] = self.heads['class'](spacetime_features())
+                logits['class'] = self.heads['class'](spacetime_features)
             if 'saliency' in self.heads:
-                logits['saliency'] = self.heads['saliency'](spacetime_features())
+                logits['saliency'] = self.heads['saliency'](spacetime_features)
             if 'box' in self.heads:
-                logits['box'] = self.heads['box'](spacetime_features())
+                logits['box'] = self.heads['box'](spacetime_features)
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
