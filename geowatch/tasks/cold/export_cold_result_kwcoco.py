@@ -193,7 +193,7 @@ def export_cold_main(cmdline=1, **kwargs):
     ordinal_dates = {}
     img_names = {}
     sensors = list(sensors.split(","))
-    
+
     # Initialize dictionaries for each sensor
     for sensor in sensors:
         ordinal_dates[sensor] = []
@@ -235,7 +235,7 @@ def export_cold_main(cmdline=1, **kwargs):
         for date, name in zip(ordinal_dates[sensor], img_names[sensor]):
             if year_low_ordinal <= date < year_high_ordinal:
                 filtered_img_dates[sensor].append(date)
-                filtered_img_names[sensor].append(name)    
+                filtered_img_names[sensor].append(name)
         # Sort filtered img_dates
         filtered_img_dates[sensor] = sorted(filtered_img_dates[sensor])
         filtered_img_names[sensor] = sorted(filtered_img_names[sensor])
@@ -258,7 +258,7 @@ def export_cold_main(cmdline=1, **kwargs):
                 year_group[year].append(ordinal_day)
                 img_name_group[year].append(img_name)
             for year in sorted(year_group.keys()):
-                year_group_by_year = year_group[year]                
+                year_group_by_year = year_group[year]
                 # Determine the number of subdivisions
                 num_subdivisions = int(365 / cold_time_span.days)
                 # Select the first index from each subdivision
