@@ -1,0 +1,6 @@
+# Running some old models requires these dependencies
+# We should be able to remove them if we repackage their weights with modern
+# definitions of the same models. But that requires loading them, which will require
+# having these dependencies.
+
+netharn>=0.6.1
