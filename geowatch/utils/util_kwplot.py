@@ -128,7 +128,8 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     import pandas as pd
     # table_conversion = "chrome"  # matplotlib
 
-    if table_conversion == 'chrome':
+    print(f'table_conversion={table_conversion}')
+    if table_conversion == 'auto':
         if ub.find_exe('google-chrome'):
             table_conversion = 'chrome'
         else:
@@ -142,6 +143,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     if title is not None:
         style = style.set_caption(title)
 
+    print(f'table_conversion={table_conversion}')
     dfi.export(
         style,
         str(fpath),

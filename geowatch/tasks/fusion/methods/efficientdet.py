@@ -12,9 +12,8 @@ print(closer.current_sourcecode())
 """
 import kwimage
 import ndsampler
-import netharn as nh
 import ubelt as ub
-from netharn.data.channel_spec import ChannelSpec
+from delayed_image.channel_spec import ChannelSpec
 import collections
 import re
 from torch.utils import model_zoo
@@ -25,6 +24,8 @@ import warnings
 import torch.nn.functional as F
 import numpy as np
 import torch.nn as nn
+from geowatch.utils.util_netharn import InputNorm
+from geowatch.utils.util_netharn import padded_collate
 
 
 def normal_init(module, mean=0, std=1, bias=0):
@@ -290,6 +291,7 @@ class RetinaHead(nn.Module):
         .. [1]  https://arxiv.org/pdf/1708.02002.pdf
 
     Example:
+        >>> from geowatch.tasks.fusion.methods.efficientdet import RetinaHead
         >>> import torch
         >>> self = RetinaHead(11, 7)
         >>> x = torch.rand(1, 7, 32, 32)
@@ -1113,7 +1115,7 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x = block(x, drop_connect_rate=drop_connect_rate)
             num_repeat = num_repeat + 1
-            if(num_repeat == self._blocks_args[index].num_repeat):
+            if num_repeat == self._blocks_args[index].num_repeat:
                 num_repeat = 0
                 index = index + 1
                 P.append(x)
@@ -1705,7 +1707,7 @@ class EfficientDet(nn.Module):
 
         if input_stats:
             main_input_stats = ub.peek(input_stats.values())
-            self.input_norm = nh.layers.InputNorm(**main_input_stats)
+            self.input_norm = InputNorm(**main_input_stats)
         else:
             self.input_norm = Identity()
 
@@ -1779,15 +1781,15 @@ class EfficientDet(nn.Module):
 
             if 'tlbr' in label:
                 assert len(label['tlbr'].data) == 1
-                tlbr_tensor = nh.data.collate.padded_collate(label['tlbr'].data[0], -1)
+                tlbr_tensor = padded_collate(label['tlbr'].data[0], -1)
                 boxes_tensor = kwimage.Boxes(tlbr_tensor, 'tlbr')
             else:
                 assert len(label['cxywh'].data) == 1
-                cxywh_tensor = nh.data.collate.padded_collate(label['cxywh'].data[0], -1)
+                cxywh_tensor = padded_collate(label['cxywh'].data[0], -1)
                 boxes_tensor = kwimage.Boxes(cxywh_tensor, 'cxywh')
 
             tlbr_tensor = boxes_tensor.to_tlbr().data
-            cidx_tensor = nh.data.collate.padded_collate(
+            cidx_tensor = padded_collate(
                 [c[:, None] for c in label['class_idxs'].data[0]], -1)
             annotations = torch.cat([tlbr_tensor, cidx_tensor.float()], axis=2)
             annotations = annotations.view(batch_size, -1, 5)

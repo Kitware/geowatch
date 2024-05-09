@@ -86,3 +86,32 @@ sudo setfacl -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
 
 # Moving data to new directory
 rsync -avprRP /data/projects/smart/smart_phase3_data/.dvc/./cache /data2/projects/smart/smart_phase3_data/.dvc
+
+
+
+
+cd /data/joncrall/dvc-repos/smart_phase3_expt
+DPATH=$(pwd)
+DISK_TYPE=$(python -m geowatch.cli.experimental.disk_info --key hwtype)
+geowatch_dvc add --name="smart_phase3_expt-$DISK_TYPE" --path="$DPATH" --hardware="$DISK_TYPE" --tags=phase3_expt
+
+cd /data/joncrall/dvc-repos/smart_expt
+DPATH=$(pwd)
+DISK_TYPE=$(python -m geowatch.cli.experimental.disk_info --key hwtype)
+geowatch_dvc add --name="smart_phase2_expt-$DISK_TYPE" --path="$DPATH" --hardware="$DISK_TYPE" --tags=phase2_expt
+
+
+cd /data/joncrall/dvc-repos/smart_phase3_data
+DPATH=$(pwd)
+DISK_TYPE=$(python -m geowatch.cli.experimental.disk_info --key hwtype)
+geowatch_dvc add --name="smart_phase3_data-$DISK_TYPE" --path="$DPATH" --hardware="$DISK_TYPE" --tags=phase3_data
+
+cd /media/joncrall/flash1/smart_phase3_data
+DPATH=$(pwd)
+DISK_TYPE=$(python -m geowatch.cli.experimental.disk_info --key hwtype)
+geowatch_dvc add --name="smart_phase3_data-$DISK_TYPE" --path="$DPATH" --hardware="$DISK_TYPE" --tags=phase3_data
+
+cd /media/joncrall/flash1/smart_phase3_data
+DPATH=$(pwd)
+DISK_TYPE=$(python -m geowatch.cli.experimental.disk_info --key hwtype)
+geowatch_dvc add --name="smart_phase3_data-$DISK_TYPE" --path="$DPATH" --hardware="$DISK_TYPE" --tags=phase3_data
