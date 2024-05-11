@@ -163,7 +163,7 @@ install_pytorch(){
     import ubelt as ub
     import parse
 
-    available_versions = [
+    available_cuda_versions = [
         Version('11.8'),
         Version('12.1'),
     ]
@@ -179,7 +179,7 @@ install_pytorch(){
         cuda_version = Version(result.named['ver'])
 
         best = None
-        for cand in available_versions:
+        for cand in available_cuda_versions:
             if cuda_version < cand:
                 break
             best = cand
@@ -188,11 +188,15 @@ install_pytorch(){
     echo "TARGET_TORCH_DEVICE = $TARGET_TORCH_DEVICE"
     if [[ "$TARGET_TORCH_DEVICE" == "cpu" ]]; then
         pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+    elif [[ "$TARGET_TORCH_DEVICE" == "11.6" ]]; then
+        # For CUDA 11.6, the last supported version of torch was 1.13.1
+        pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
     elif [[ "$TARGET_TORCH_DEVICE" == "11.8" ]]; then
         pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
     elif [[ "$TARGET_TORCH_DEVICE" == "12.1" ]]; then
         pip install torch torchvision torchaudio # --index-url https://download.pytorch.org/whl/cu121
     fi
+
 
 }
 

@@ -43,7 +43,6 @@ class SmartTrainer(pl.Trainer):
     Simple trainer subclass so we can ensure a print happens directly before
     the training loop. (so annoying that we can't reorder callbacks)
     """
-    ...
 
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
@@ -70,6 +69,7 @@ class SmartTrainer(pl.Trainer):
         import rich
         dpath = ub.Path(self.logger.log_dir)
         rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+        from geowatch.tasks.fusion import helper_scripts
 
         try:
             vali_coco_fpath = self.datamodule.vali_dataset.coco_dset.fpath
@@ -77,183 +77,20 @@ class SmartTrainer(pl.Trainer):
             vali_coco_fpath = None
 
         try:
-            train_coco_path = self.datamodule.train_dataset.coco_dset.fpath
+            train_coco_fpath = self.datamodule.train_dataset.coco_dset.fpath
         except Exception:
-            train_coco_path = None
+            train_coco_fpath = None
 
-        script_fpaths = {}
+        # Generate helper script and write them to disk
+        scripts = helper_scripts.train_time_helper_scripts(dpath, train_coco_fpath, vali_coco_fpath)
+        for key, script in scripts.items():
+            script['fpath'].write_text(script['text'])
 
-        key = 'start_tensorboard'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        fpath.write_text(ub.codeblock(
-            f'''
-            #!/usr/bin/env bash
-            tensorboard --logdir {dpath}
-            '''))
-
-        key = 'draw_tensorboard'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        fpath.write_text(ub.codeblock(
-            fr'''
-            #!/usr/bin/env bash
-
-            # First update the main plots
-            WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
-                {dpath}
-
-            # Then stack them into a nice figure
-            kwimage stack_images --out "{dpath}/monitor/tensorboard-stack.png" -- {dpath}/monitor/tensorboard/*.png
-            '''
-        ))
-
-        checkpoint_header_part = ub.codeblock(
-            fr'''
-            #!/usr/bin/env bash
-
-            # Device defaults to CPU, but the user can pass a GPU in
-            # as the first argument.
-            DEVICE=${{1:-"cpu"}}
-
-            TRAIN_DPATH="{dpath}"
-            echo $TRAIN_DPATH
-
-            ### --- Choose Checkpoint --- ###
-
-            # Find a checkpoint to evaluate
-            # TODO: should add a geowatch helper for this
-            CHECKPOINT_FPATH=$(python -c "if 1:
-                import pathlib
-                train_dpath = pathlib.Path('$TRAIN_DPATH')
-                found = sorted((train_dpath / 'checkpoints').glob('*.ckpt'))
-                found = [f for f in found if 'last.ckpt' not in str(f)]
-                print(found[-1])
-                ")
-            echo "$CHECKPOINT_FPATH"
-
-            ### --- Repackage Checkpoint --- ###
-
-            # Convert it into a package, then get the name of that
-            geowatch repackage "$CHECKPOINT_FPATH"
-
-            PACKAGE_FPATH=$(python -c "if 1:
-                import pathlib
-                p = pathlib.Path('$CHECKPOINT_FPATH')
-                found = list(p.parent.glob(p.stem + '*.pt'))
-                print(found[-1])
-            ")
-            echo "$PACKAGE_FPATH"
-
-            PACKAGE_NAME=$(python -c "if 1:
-                import pathlib
-                p = pathlib.Path('$PACKAGE_FPATH')
-                print(p.stem.replace('.ckpt', ''))
-            ")
-            echo "$PACKAGE_NAME"
-            ''')
-
-        key = 'draw_train_batches'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        text = chr(10).join([
-            checkpoint_header_part,
-            ub.codeblock(
-                fr'''
-                ### --- Train Batch Prediction --- ###
-
-                # Predict on the validation set
-                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath "$PACKAGE_FPATH" \
-                    --test_dataset "{train_coco_path}" \
-                    --pred_dataset "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
-                    --window_overlap 0 \
-                    --clear_annots=False \
-                    --test_with_annot_info=True \
-                    --use_centered_positives=True \
-                    --use_grid_positives=False \
-                    --use_grid_negatives=False \
-                    --draw_batches=True \
-                    --devices "$DEVICE"
-                ''')
-        ])
-        fpath.write_text(text)
-
-        key = 'draw_vali_batches'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        text = chr(10).join([
-            checkpoint_header_part,
-            ub.codeblock(
-                fr'''
-                ### --- Validation Batch Prediction --- ###
-
-                # Predict on the validation set
-                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath "$PACKAGE_FPATH" \
-                    --test_dataset "{vali_coco_fpath}" \
-                    --pred_dataset "$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
-                    --window_overlap 0 \
-                    --clear_annots=False \
-                    --test_with_annot_info=True \
-                    --use_centered_positives=True \
-                    --use_grid_positives=False \
-                    --use_grid_negatives=False \
-                    --draw_batches=True \
-                    --devices "$DEVICE"
-                ''')
-        ])
-        fpath.write_text(text)
-
-        key = 'draw_train_dataset'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        text = chr(10).join([
-            checkpoint_header_part,
-            ub.codeblock(
-                fr'''
-                ### --- Train Full-Image Prediction (best run on a GPU) --- ###
-
-                # Predict on the training set
-                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath "$PACKAGE_FPATH" \
-                    --window_overlap 0 \
-                    --test_dataset "{train_coco_path}" \
-                    --pred_dataset "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
-                    --clear_annots False \
-                    --devices "$DEVICE"
-
-                # Visualize train predictions
-                geowatch visualize "$TRAIN_DPATH/monitor/train/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" --smart
-                ''')
-        ])
-        fpath.write_text(text)
-
-        key = 'draw_vali_dataset'
-        script_fpaths[key] = fpath = dpath / f'{key}.sh'
-        text = chr(10).join([
-            checkpoint_header_part,
-            ub.codeblock(
-                fr'''
-                ### --- Validation Full-Image Prediction (best run on a GPU) --- ###
-
-                # Predict on the validation set
-                export IGNORE_OFF_BY_ONE_STITCHING=1  # hack
-                python -m geowatch.tasks.fusion.predict \
-                    --package_fpath "$PACKAGE_FPATH" \
-                    --test_dataset "{vali_coco_fpath}" \
-                    --pred_dataset "$TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip" \
-                    --window_overlap 0 \
-                    --clear_annots=False \
-                    --devices "$DEVICE"
-
-                # Visualize vali predictions
-                geowatch visualize $TRAIN_DPATH/monitor/vali/preds/$PACKAGE_NAME/pred-$PACKAGE_NAME.kwcoco.zip --smart
-                ''')
-        ])
-        fpath.write_text(text)
-
+        # Add executable permission
         try:
             from geowatch.utils.util_chmod import new_chmod
-            for fpath in script_fpaths.values():
+            for key, script in scripts.items():
+                fpath = script['fpath']
                 new_chmod(fpath, 'u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
