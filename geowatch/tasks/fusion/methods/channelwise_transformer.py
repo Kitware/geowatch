@@ -164,7 +164,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
-    global_box_weight = scfg.Value(1.0, type=float)
+    global_box_weight = scfg.Value(0.0, type=float)
     modulate_class_weights = scfg.Value('', type=str, help=ub.paragraph(
         '''
         DEPRECATE. SET THE class_weights to auto:<modulate_str>
