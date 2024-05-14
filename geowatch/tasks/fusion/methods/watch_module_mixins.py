@@ -411,7 +411,9 @@ class WatchModuleMixins:
                 their respective float weights.
 
         Returns:
-            Tensor
+            Tensor:
+                A length-2 tensor where index 0 contains the background weight
+                and index 1 contains the foreground weight.
 
         CommandLine:
             xdoctest -m geowatch.tasks.fusion.methods.watch_module_mixins WatchModuleMixins._coerce_saliency_weights
@@ -444,12 +446,38 @@ class WatchModuleMixins:
             tensor([2., 1.])
             >>> self._coerce_saliency_weights({'fg': 1, 'bg': 2})
             tensor([2., 1.])
+            >>> self._coerce_saliency_weights(ub.codeblock(
+                '''
+                foreground: 3
+                background: 5
+                '''))
+            tensor([5., 3.])
             >>> import pytest
+            >>> with pytest.raises(ValueError):
+            >>>    self._coerce_saliency_weights(ub.codeblock(
+                        '''
+                        foreground2: 3
+                        background: 5
+                        '''))
             >>> with pytest.raises(Exception):
             >>>     self._coerce_saliency_weights(123)
         """
         from kwutil.util_yaml import Yaml
         saliency_weights_ = Yaml.coerce(saliency_weights)
+
+        # Provide aliases for the primary keys "fg" and "bg".
+        # This allows the user to user more explicit aliases. This also allows
+        # us to change the internal representation while maintaining backwards
+        # compatability.
+        primary_key_to_aliases = {
+            'bg': ['background'],
+            'fg': ['foreground'],
+        }
+        if isinstance(saliency_weights_, dict):
+            for primary_key, aliases in primary_key_to_aliases.items():
+                for alias_key in aliases:
+                    if alias_key in saliency_weights_:
+                        saliency_weights_[primary_key] = saliency_weights_.pop(alias_key)
 
         try:
             if saliency_weights_ is None:
@@ -482,6 +510,17 @@ class WatchModuleMixins:
             raise new_ex
 
         print(f'saliency_weights_ = {ub.urepr(saliency_weights_, nl=1)}')
+
+        if set(primary_key_to_aliases) != set(saliency_weights_):
+            raise ValueError(ub.paragraph(
+                '''
+                Saliency weights must contain values for each primary key or
+                use one of the known aliases. Valid primary keys and their
+                aliases are: {primary_key_to_aliases!r}. The user input for
+                saliency_weights={saliency_weights!r} and this was interpreted
+                as: {saliency_weights_!r}.
+                '''))
+
         bg_fg_weights = [
             saliency_weights_.get('bg', 1.0),
             saliency_weights_.get('fg', 1.0)
