@@ -3302,7 +3302,9 @@ model:
     rescale_nans: null
     saliency_head_hidden: 6
     saliency_loss: focal
-    saliency_weights: auto
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
     stream_channels: 16
     tokenizer: linconv
     predictable_classes:
