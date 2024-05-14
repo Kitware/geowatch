@@ -11,6 +11,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New task: `poly_from_point` that contains various methods to transform
   point-based annotations into polygon-based ones using heuristics.
 
+### Changed
+* Baseline tensorboard callback now also does the stacking automatically.
+
 ### Fixed
 * `geowatch.cli.draw_region` now correctly draws timeline information and does a better job at distinguishing them. 
 * Fixed issue where DinoSV would output the same decision for every site.
