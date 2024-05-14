@@ -202,7 +202,7 @@ class WeightInitializer(pl.callbacks.Callback):
                     print(f'unset={unset}')
 
             if self.verbose:
-                print('🏋 Finalize weight initialization')
+                print('🏋 - Finalize weight initialization')
             updated = model.state_dict() | to_preserve
             model.load_state_dict(updated)
 

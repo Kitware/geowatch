@@ -1272,6 +1272,30 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['loss'] = total_loss
             outputs['item_losses'] = item_losses
 
+        if 0:
+            train_dataset = self.trainer.datamodule.torch_datasets['train']
+            import xdev
+            xdev.embed()
+            if 0:
+                assert list(train_dataset.predictable_classes) == list(self.classes)
+                print(f'train_dataset.predictable_classes = {ub.urepr(train_dataset.predictable_classes, nl=1)}')
+                print(f'self.classes = {ub.urepr(self.classes, nl=1)}')
+
+                summary = train_dataset.summarize_item(batch[0], stats=True)
+                print(f'summary = {ub.urepr(summary, nl=-1)}')
+
+                # item_output=outputs,
+                canvas = train_dataset.draw_item(item, overlay_on_image=0, rescale=0, max_dim=1024)
+
+                import kwimage
+                import xdev
+                kwimage.imwrite('foo.jpg', canvas)
+                xdev.startfile('foo.jpg')
+
+                # import kwplot
+                # kwplot.autompl()
+                # kwplot.imshow(canvas)
+
         return outputs
 
     # def log(self, key, val, *args, **kwargs):

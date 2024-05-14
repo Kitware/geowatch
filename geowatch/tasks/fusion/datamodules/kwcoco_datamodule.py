@@ -825,3 +825,18 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)
 
         return canvas
+
+
+def _tmp(train_dataset):
+    import kwplot
+    label_to_color1 = {
+        node: data['color']
+        for node, data in train_dataset.classes.graph.nodes.items()}
+    label_to_color2 = {
+        node: data['color']
+        for node, data in train_dataset.predictable_classes.graph.nodes.items()}
+    legend_img1 = kwplot.make_legend_img(label_to_color1)
+    legend_img2 = kwplot.make_legend_img(label_to_color2)
+
+    kwplot.imshow(legend_img1, pnum=(1, 2, 1))
+    kwplot.imshow(legend_img2, pnum=(1, 2, 2))

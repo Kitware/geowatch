@@ -2146,7 +2146,7 @@ class GetItemMixin(TruthMixin):
 
 class IntrospectMixin:
     """
-    Methods for introspection of data
+    Methods for introspection / visualization of data
     """
 
     def draw_item(self, item, item_output=None, combinable_extra=None,
@@ -2351,7 +2351,7 @@ class IntrospectMixin:
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> summary = self.summarize_item(item, stats=True)
-            >>> print(f'summary = {ub.urepr(summary, nl=-2)}')
+            >>> print(f'summary = {ub.urepr(summary, nl=-1)}')
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
@@ -2362,11 +2362,11 @@ class IntrospectMixin:
             frame_summary = {}
             for mode_key, im_mode in frame['modes'].items():
                 domain_key = frame['sensor'] + ':' + mode_key
+                frame_summary[domain_key] = {}
                 if stats:
-                    frame_summary[domain_key] = kwarray.stats_dict(
+                    frame_summary[domain_key]['stats'] = kwarray.stats_dict(
                         im_mode, nan=True)
-                else:
-                    frame_summary[domain_key] = im_mode.shape
+                frame_summary[domain_key]['shape'] = im_mode.shape
             label_keys = [
                 'class_idxs', 'class_ohe', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights',
@@ -2375,7 +2375,10 @@ class IntrospectMixin:
             ]
             for key in label_keys:
                 if frame.get(key, None) is not None:
-                    frame_summary[key] = frame[key].shape
+                    frame_summary[key] = {}
+                    frame_summary[key]['shape'] = frame[key].shape
+                    if stats:
+                        frame_summary[key]['stats'] = kwarray.stats_dict(frame[key], nan=True)
             item_summary['frame_summaries'].append(frame_summary)
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))

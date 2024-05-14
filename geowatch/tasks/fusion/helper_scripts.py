@@ -40,12 +40,9 @@ def train_time_helper_scripts(dpath, train_coco_fpath, vali_coco_fpath):
         #!/usr/bin/env bash
         {autogen_comment}
 
-        # First update the main plots
+        # Update the main plots and stack them into a nice figure
         WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {dpath}
-
-        # Then stack them into a nice figure
-        kwimage stack_images --out "{dpath}/monitor/tensorboard-stack.png" -- {dpath}/monitor/tensorboard/*.png
         '''
     ))
 
