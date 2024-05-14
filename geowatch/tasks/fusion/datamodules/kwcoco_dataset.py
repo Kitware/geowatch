@@ -2659,7 +2659,7 @@ class BalanceMixin:
                     }
                 }] + balance_options
 
-        print('Balancing over attributes')
+        print('⚖️ - Balancing over attributes')
         df_sample_attributes, multilabel_attributes = self._setup_attribute_dataframe(new_sample_grid)
         sample_grid = df_sample_attributes.to_dict('records')
         balance_attrs = [d['attribute'] for d in balance_options]
@@ -2671,11 +2671,11 @@ class BalanceMixin:
         if has_multilabel_attributes:
             # If we are going to subdivide on multi-label attributes we want to
             # use a forest instead of tree.
-            print('Constructing balance forest')
+            print('Constructing balance forest 🌲🌳🌲🌳')
             balanced_sampler = data_utils.BalancedSampleForest(
                 sample_grid, rng=rng, n_trees=16)
         else:
-            print('Constructing balance tree')
+            print('Constructing balance tree 🌲')
             balanced_sampler = data_utils.BalancedSampleTree(
                 sample_grid, rng=rng)
 
@@ -2687,7 +2687,8 @@ class BalanceMixin:
             balanced_sampler.subdivide(key=key, weights=key_weights,
                                            default_weight=default_weight)
 
-        REPORT_BALANCE = 1
+        from kwutil import util_environ
+        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 1)
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
@@ -2696,37 +2697,46 @@ class BalanceMixin:
             num_samples = min(10_000, num_targets)
 
             normalizer = num_samples / num_targets
-            print('Report Balance:')
+            print('Report Balance ⚖️  :')
             print(f'num_targets={num_targets}')
             print(f'num_samples={num_samples}')
             print(f'normalizer={normalizer}')
+            print(ub.paragraph(
+                '''
+                Note: you can ctrl+c to skip this step while it is running.
+                Or you can set the environment variable ``REPORT_BALANCE=0`` to
+                prevent it from running at all.
+                '''))
 
-            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
+            try:
+                sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
 
-            # Inspect the attributes you balanced over and compare to the naive
-            # case.
-            balance_attrs = [d['attribute'] for d in balance_options]
+                # Inspect the attributes you balanced over and compare to the naive
+                # case.
+                balance_attrs = [d['attribute'] for d in balance_options]
 
-            naive_targets = df_sample_attributes.copy()
-            balanced_targets = naive_targets.iloc[sampled_idxs]
-            for attr in balance_attrs:
-                if attr in multilabel_attributes:
-                    from collections import Counter
-                    naive = Counter()
-                    for row in naive_targets[attr]:
-                        naive.update(row)
-                    balanced = Counter()
-                    for row in balanced_targets[attr]:
-                        balanced.update(row)
-                else:
-                    naive = naive_targets.value_counts(attr)
-                    balanced = balanced_targets.value_counts(attr)
-                freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
-                freq_table = freq_table.sort_values('balanced', ascending=0)
-                freq_table['naive'] *= normalizer
-                print('--- Balance Report ---')
-                print(f'attr={attr}')
-                print(freq_table.to_string())
+                naive_targets = df_sample_attributes.copy()
+                balanced_targets = naive_targets.iloc[sampled_idxs]
+                for attr in balance_attrs:
+                    if attr in multilabel_attributes:
+                        from collections import Counter
+                        naive = Counter()
+                        for row in naive_targets[attr]:
+                            naive.update(row)
+                        balanced = Counter()
+                        for row in balanced_targets[attr]:
+                            balanced.update(row)
+                    else:
+                        naive = naive_targets.value_counts(attr)
+                        balanced = balanced_targets.value_counts(attr)
+                    freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
+                    freq_table = freq_table.sort_values('balanced', ascending=0)
+                    freq_table['naive'] *= normalizer
+                    print('--- Balance Report ---')
+                    print(f'attr={attr}')
+                    print(freq_table.to_string())
+            except KeyboardInterrupt:
+                print('Caught keyboard interrupt. Skipping balance report')
 
         self.balanced_sampler = balanced_sampler
         if self.config['reseed_fit_random_generators']:

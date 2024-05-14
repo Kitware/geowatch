@@ -3140,7 +3140,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
-EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 
