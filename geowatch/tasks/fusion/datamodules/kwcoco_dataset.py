@@ -2307,6 +2307,11 @@ class IntrospectMixin:
         if norm_over_time == 'auto':
             norm_over_time = self.normalize_peritem is not None
 
+        # Hack to force the categories to draw right for SMART
+        # FIXME: Use the correct class colors in visualization.
+        from geowatch import heuristics
+        heuristics.ensure_heuristic_category_tree_colors(self.predictable_classes, force=True)
+
         from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,

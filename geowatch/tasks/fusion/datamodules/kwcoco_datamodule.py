@@ -754,8 +754,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             canvas_list.append(part)
 
         num_images = len(canvas_list)
-        # import xdev
-        # xdev.embed()
+
         if 1:
             # Choose a sensible chunksize for the grid based on the input image
             # aspect ratios
