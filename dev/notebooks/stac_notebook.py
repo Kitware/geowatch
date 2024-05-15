@@ -566,3 +566,85 @@ def check_single_colletion():
     items = list(items_gen)
     num_found = len(items)
     print(f'num_found={num_found}')
+
+
+def demo_dsm_query():
+    """
+    source $HOME/code/watch-smartflow-dags/secrets/secrets
+    """
+    import json
+    import pystac_client
+    from datetime import datetime as datetime_cls
+    import geowatch
+
+    dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='hdd')
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    base = ((dvc_data_dpath / 'annotations') / 'drop8')
+
+    region_dpath = base / 'region_models'
+    region_fpaths = list(region_dpath.glob('*.geojson'))
+
+    provider = "https://api.smart-stac.com"
+    catalog = pystac_client.Client.open(provider, headers=headers)
+
+    all_collections = list(catalog.get_collections())
+
+    from kwutil import util_pattern
+    pat = util_pattern.Pattern.coerce('ta1-dsm-ara-4').to_regex()
+    collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
+    # collections_of_interest = [
+    #     'ta1-dsm-ara-4',
+    # ]
+
+    from kwutil import util_progress
+    mprog = util_progress.ProgressManager()
+    jobs = ub.JobPool(mode='thread', max_workers=20)
+
+    region_to_results = ub.ddict(list)
+
+    with mprog, jobs:
+        # Check that planet items exist
+        for collection in mprog.progiter(collections_of_interest, desc='Query collections'):
+            # Check that planet items exist in our regions
+            region_iter = mprog.progiter(region_fpaths, desc=f'Submit query regions for {str(collection)}')
+            for region_fpath in region_iter:
+                with open(region_fpath) as file:
+                    region_data = json.load(file)
+                region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
+                region_id = region_row['properties']['region_id']
+                geom = region_row['geometry']
+                start = region_row['properties']['start_date']
+                end = region_row['properties']['end_date']
+                if end is None:
+                    # end = datetime_cls.utcnow().date()
+                    end = datetime_cls.now().date().isoformat()
+
+                item_search = catalog.search(
+                    collections=[collection],
+                    datetime=(start, end),
+                    intersects=geom,
+                    max_items=1000,
+                )
+                job = jobs.submit(list, item_search.items())
+                job.region_id = region_id
+                job.collection = collection
+
+        collect_errors = []
+
+        import rich
+        for job in mprog(jobs.as_completed(), total=len(jobs), desc='collect results'):
+            region_id = job.region_id
+            collection = job.collection
+            try:
+                results = job.result()
+            except Exception as ex:
+                rich.print(f'[red]ERROR IN {region_id} for {collection}: {ex}')
+                collect_errors.append(ex)
+                continue
+            region_to_results[region_id] += results
+
+    for region_id, results in region_to_results.items():
+        for result in results:
+            print(f'result.assets = {ub.urepr(result.assets, nl=1)}')
