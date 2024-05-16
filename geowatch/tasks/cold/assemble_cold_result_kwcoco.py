@@ -328,7 +328,7 @@ def assemble_main(cmdline=1, **kwargs):
             ninput = 0
             for band_idx, band_name in enumerate(coefs_bands):
                 for coef_index, coef in enumerate(coefs):
-                    kwcoco_img_name = img_names_list[day]
+                    kwcoco_img_name = os.path.splitext(img_names_list[day])[0]
                     band = BAND_INFO[band_name]
                     name_parts = list(map(str, (kwcoco_img_name, band, method, coef)))
                     outname = '_'.join(name_parts) + '.tif'
