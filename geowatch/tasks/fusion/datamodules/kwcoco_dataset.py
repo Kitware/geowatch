@@ -389,6 +389,15 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         respect to the previous balancing. New in 0.17.0.
         '''))
 
+    num_balance_trees = scfg.Value(16, group=SAMPLE_GROUP, help=ub.paragraph(
+        '''
+        The number of trees used to balance samples.
+        This is useful only in the multi-label case where each sample may
+        contain examples of multiple categories / attributes that are balanced
+        over. In the case where each window can only contain one object this
+        can be safely set to 1.
+        '''))
+
     use_grid_cache = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
         '''
         If true, will cache the spacetime grid to make multiple runs quicker.
@@ -2673,12 +2682,12 @@ class BalanceMixin:
         # Initialize an instance of BalancedSampleTree
         # rng = self.rng
         rng = kwarray.ensure_rng(rng=None)
-        if has_multilabel_attributes:
+        if has_multilabel_attributes and self.config.num_balance_trees > 1:
             # If we are going to subdivide on multi-label attributes we want to
             # use a forest instead of tree.
             print('Constructing balance forest 🌲🌳🌲🌳')
             balanced_sampler = data_utils.BalancedSampleForest(
-                sample_grid, rng=rng, n_trees=16)
+                sample_grid, rng=rng, n_trees=self.config.num_balance_trees)
         else:
             print('Constructing balance tree 🌲')
             balanced_sampler = data_utils.BalancedSampleTree(

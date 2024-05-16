@@ -3213,7 +3213,11 @@ python -m geowatch.cli.experimental.recommend_size_adjustments \
 #kwcoco validate $TRAIN_FPATH
 #kwcoco validate $VALI_FPATH
 
-DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+# Find the most recent checkpoint
+PREV_CHECKPOINT=$(python -m geowatch.cli.experimental.find_recent_checkpoint --default_root_dir="$DEFAULT_ROOT_DIR")
+echo "PREV_CHECKPOINT = $PREV_CHECKPOINT"
+
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : $BATCH_SIZE
   num_workers             : 4
@@ -3355,7 +3359,7 @@ torch_globals:
     float32_matmul_precision: auto
 initializer:
     init: /home/joncrall/remote/namek/root/home/joncrall/data/dvc-repos/smart_phase3_expt/training/namek/joncrall/Drop8-ARA-Cropped2GSD-V1/runs/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/lightning_logs/version_0/checkpoints/epoch=0043-step=007436-val_loss=552296.564.ckpt.ckpt
-"
+" --ckpt_path="$PREV_CHECKPOINT"
 
 
 # shellcheck disable=SC2155
@@ -3427,7 +3431,7 @@ python -m geowatch.cli.experimental.recommend_size_adjustments \
 VALI_BATCHES_PER_EPOCH=$TRAIN_BATCHES_PER_EPOCH
 VALI_BATCHES_PER_EPOCH=128
 
-DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : $BATCH_SIZE
   num_workers             : 4
@@ -3808,7 +3812,7 @@ initializer:
 # ARA All Sensor AC FineTune, with Scotts rebalance, Fourth Pass, on horologic, starting from ARA again, alternative testing for postgres
 
 #export CUDA_VISIBLE_DEVICES="0,1,2,3"
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
@@ -3891,7 +3895,7 @@ python -m geowatch.cli.experimental.recommend_size_adjustments \
 #kwcoco validate $TRAIN_FPATH
 #kwcoco validate $VALI_FPATH
 
-DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
 data:
   batch_size              : $BATCH_SIZE
   num_workers             : 4
