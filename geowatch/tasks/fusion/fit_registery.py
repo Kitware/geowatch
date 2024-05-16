@@ -5,6 +5,7 @@ training runs were started on this machine and where they are located.
 """
 import ubelt as ub
 import warnings
+import scriptconfig as scfg
 
 
 class Registery:
@@ -285,13 +286,63 @@ class FitRegistery(ListRegistery):
 
         super().append(**kwargs)
 
+    def peek(self):
+        items = self.read()
+        if not items:
+            return None
+        else:
+            return items[-1]
+
+
+class FitRegisteryCLI(scfg.ModalCLI):
+    """
+    Command line helper
+    """
+    __command__ = 'registery'
+
+    class Append(scfg.DataConfig):
+        """
+        Register a new path (or overwrite / update an existing one)
+        """
+        __command__ = 'add'
+        path = scfg.Value(None, help='path to register', position=1)
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            registry = FitRegistery()
+            registry.append(**config)
+
+    class List(scfg.DataConfig):
+        """
+        List registered paths
+        """
+        __command__ = 'list'
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            config = dict(config)
+            registry = FitRegistery()
+            registry.list(**config)
+
+    class Peek(scfg.DataConfig):
+        """
+        Search for a path registered via ``sdvc registry add``
+        """
+        __command__ = 'peek'
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            registry = FitRegistery()
+            row = registry.peek()
+            print(f'row = {ub.urepr(row, nl=1)}')
+
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/geowatch/geowatch/tasks/fusion/fit_registery.py
+        python ~/code/geowatch/geowatch/tasks/fusion/fit_registery.py peek
     """
-    def main():
-        import rich
-        rich.print(FitRegistery().pandas())
-    main()
+    FitRegisteryCLI.main()
