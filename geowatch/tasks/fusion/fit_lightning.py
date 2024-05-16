@@ -330,7 +330,8 @@ class _ValueGetter:
     def __call__(self, data):
         if not data.did_setup:
             data.setup('fit')
-        if 1:
+
+        if data.config.num_workers > 0:
             # Hack to disconnect SQL coco databases before we fork
             # TODO: find a way to handle this more ellegantly
             if hasattr(data, 'coco_datasets'):
