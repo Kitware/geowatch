@@ -49,6 +49,7 @@ class SmartTrainer(pl.Trainer):
         # Is that so hard to do?
         print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
+            self._add_to_registery()
             self._write_inspect_helper_scripts()
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
@@ -58,6 +59,18 @@ class SmartTrainer(pl.Trainer):
             self.datamodule._notify_about_tasks(model=self.model)
 
         super()._run_stage(*args, **kwargs)
+
+    def _add_to_registery(self):
+        """
+        Register this training run with the registery.
+        """
+        from geowatch.tasks.fusion.fit_registery import FitRegistery
+        registery = FitRegistery()
+        dpath = ub.Path(self.logger.log_dir)
+        # TODO: more config options here.
+        registery.append(
+            path=dpath,
+        )
 
     def _write_inspect_helper_scripts(self):
         """
