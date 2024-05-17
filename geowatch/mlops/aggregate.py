@@ -875,7 +875,8 @@ class AggregatorAnalysisMixin:
                     if not pd.isnull(p) else None
                     for p in table[model_col].tolist()]
             hacked_groups = [
-                p if p.parent.name.startswith('Drop') else p for p in model_paths]
+                p if p is not None and p.parent.name.startswith('Drop') else p
+                for p in model_paths]
             table['_hackgroup'] = hacked_groups
 
             chosen_locs = []
