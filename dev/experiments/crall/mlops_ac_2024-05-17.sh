@@ -92,7 +92,10 @@ python -m geowatch.mlops.schedule_evaluation --params="
         sc_poly.polygon_simplify_tolerance: 2
         sc_poly.site_score_thresh: 0.3
         sc_poly.smoothing: 0.0
-        sc_poly.thresh: 0.3
+        sc_poly.thresh:
+            - 0.07
+            - 0.2
+            - 0.3
         sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
 
@@ -143,7 +146,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
     --queue_name "$MLOPS_DNAME" \
     --devices="0,1,2,3" \
     --backend=tmux --tmux_workers=6 \
-    --cache=1 --skip_existing=1 --run=0
+    --cache=1 --skip_existing=1 --run=1
 
 
 MLOPS_DNAME=_drop8_ara_sc_v1
@@ -151,7 +154,7 @@ MLOPS_DPATH=$DVC_EXPT_DPATH/$MLOPS_DNAME
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 python -m geowatch.mlops.aggregate \
-    --pipeline=bas \
+    --pipeline=sc \
     --target "
         - $MLOPS_DPATH
     " \
