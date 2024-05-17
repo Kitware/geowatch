@@ -870,7 +870,10 @@ class AggregatorAnalysisMixin:
 
             import xdev
             with xdev.embed_on_exception_context:
-                model_paths = [ub.Path(p) for p in table[model_col].tolist()]
+                model_paths = [
+                    ub.Path(p)
+                    if not pd.isnull(p) else None
+                    for p in table[model_col].tolist()]
             hacked_groups = [
                 p if p.parent.name.startswith('Drop') else p for p in model_paths]
             table['_hackgroup'] = hacked_groups
