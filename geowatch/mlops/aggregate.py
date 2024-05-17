@@ -868,7 +868,9 @@ class AggregatorAnalysisMixin:
             # models together in a folder, but this is not robust, so we Only
             # do this grouping if the parent folder has a special name
 
-            model_paths = [ub.Path(p) for p in table[model_col].tolist()]
+            import xdev
+            with xdev.embed_on_exception_context:
+                model_paths = [ub.Path(p) for p in table[model_col].tolist()]
             hacked_groups = [
                 p if p.parent.name.startswith('Drop') else p for p in model_paths]
             table['_hackgroup'] = hacked_groups
