@@ -61,3 +61,54 @@ Test your setup
 
     sudo -u postgres createdb test_kwcocodb
     python -c "from sqlalchemy import create_engine; create_engine('postgresql+psycopg2://kwcoco:kwcoco_pw@localhost:5432/test_kwcocodb').connect()"
+
+
+As a reminder in geowatch the posgresql backend can be used by setting the
+``data.sqlview=postgresql`` in the fit configuration.
+
+
+
+Other tests and introspection.
+
+TODO: commands to list tables, print contents of a table, and otherwise debug issues with postgres.
+
+.. code:: bash
+
+   sudo -u postgres psql -c "\list"
+
+
+   # export PGUSER='postgres'
+   # export PGHOST='postgres-host-end-point'
+   # export PGPORT=5432
+   # PGPASSWORD='uber-secret'
+
+   # set as a name from the previous list command
+   export PGDATABASE=_2e294_ganns-KR_R002-rawbands.kwcoco.view.v016_1x.postgresql
+   export PGDATABASE=_8a9ed_ganns-KR_R001-rawbands.kwcoco.view.v016_1x.postgresql
+   export PGDATABASE=_2e294_ganns-KR_R002-rawbands.kwcoco.view.v016_1x.postgresql
+   export PGDATABASE=_85d51_ganns-KR_R001-rawbands.kwcoco.view.v016_2x.postgresql
+   #sudo -u postgres psql -c "\c $PGDATABASE"
+
+   export TABLENAME=annotations
+   sudo -u postgres psql -d $PGDATABASE -t -q -c \
+   "
+    SELECT COUNT(*)
+    FROM $TABLENAME;
+   "
+
+   sudo -u postgres psql -d $PGDATABASE -t -q -c \
+     "SELECT table_catalog,table_schema,table_name
+       FROM information_schema.tables where table_schema='public';"
+
+   sudo -u postgres psql -d $PGDATABASE -t -q -c \
+   "select column_name, data_type, character_maximum_length, column_default, is_nullable
+   from INFORMATION_SCHEMA.COLUMNS where table_name = '$TABLENAME';"
+
+
+   sudo -u postgres psql -d $PGDATABASE -t -q -c \
+   "select column_name, data_type, character_maximum_length, column_default, is_nullable
+   from INFORMATION_SCHEMA.COLUMNS where table_name = '$TABLENAME';"
+
+   sudo -u postgres psql -d $PGDATABASE -t -q -c \
+   "\d+ $TABLENAME"
+

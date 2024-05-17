@@ -422,6 +422,11 @@ main(){
 
     check_metrics_framework
 
+    # Newer versions of torchmetrics enable pretty-errors by default, which
+    # breaks tracebacks. Just uninstall it to disable this "feature".
+    # https://github.com/Lightning-AI/torchmetrics/discussions/2544
+    pip uninstall pretty_errors
+
     # Simple tests
     set -x
     echo "Start simple tests"

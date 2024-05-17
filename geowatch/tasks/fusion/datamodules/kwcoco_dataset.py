@@ -4060,7 +4060,12 @@ def worker_init_fn(worker_id):
     if hasattr(self, 'sampler'):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
+            # print("SQL CONNECTING")
             self.sampler.dset.connect(readonly=True)
+    #     else:
+    #         print("DOES NOT HAVE CONNECT")
+    # else:
+    #     print("DOES NOT HAVE SAMPLER")
 
 
 @functools.cache

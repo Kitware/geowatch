@@ -229,8 +229,19 @@ class ProcessContext:
         _cpu_info = cpuinfo.get_cpu_info()
         cpu_info = {
             "cpu_brand": _cpu_info["brand_raw"],
+            "cpu_count": _cpu_info["count"],
         }
         return cpu_info
+
+    def _gpuinfo(self):
+        import torch
+        num_devices = torch.cuda.device_count()
+        device_infos = []
+        for device_num in num_devices:
+            device = torch.device(device_num)
+            info = self._device_info(device)
+            device_infos.append(info)
+        return device_infos
 
     def _machine(self):
         if not self.enable_most_telemetry:
@@ -415,17 +426,7 @@ class ProcessContext:
             emissions['est_dollar_to_offset'] = (co2_ton * dollar_per_ton).m
         self.properties['emissions'] = emissions
 
-    def add_device_info(self, device):
-        """
-        Add information about a torch device that was used in this process.
-
-        Does nothing if telemetry is disabled.
-
-        Args:
-            device (torch.device): torch device to add info about
-        """
-        if not self.enable_most_telemetry:
-            return
+    def _device_info(self, device):
         import torch
         try:
             device_info = {
@@ -448,7 +449,20 @@ class ProcessContext:
         except Exception as ex:
             print('Error adding device info: ex = {!r}'.format(ex))
             device_info = str(ex)
-        self.properties['device_info'] = device_info
+        return device_info
+
+    def add_device_info(self, device):
+        """
+        Add information about a torch device that was used in this process.
+
+        Does nothing if telemetry is disabled.
+
+        Args:
+            device (torch.device): torch device to add info about
+        """
+        if not self.enable_most_telemetry:
+            return
+        self.properties['device_info'] = self._device_info(device)
 
     def add_disk_info(self, path):
         """
