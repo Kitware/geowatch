@@ -5,10 +5,7 @@ import numpy as np
 from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 
 
-class WatchModuleMixins:
-    """
-    Mixin methods for geowatch lightning modules
-    """
+class ExtendTorchMixin:
 
     def reset_weights(self):
         for name, mod in self.named_modules():
@@ -46,6 +43,9 @@ class WatchModuleMixins:
                 raise NotImplementedError('no information maintained on which device is primary')
             else:
                 return list(devices)[0]
+
+
+class MSIDemoDataMixin:
 
     @classmethod
     def demo_dataset_stats(cls):
@@ -272,6 +272,9 @@ class WatchModuleMixins:
             batch.append(item)
         return batch
 
+
+class LightningModelMixin:
+
     @property
     def has_trainer(self):
         try:
@@ -279,6 +282,333 @@ class WatchModuleMixins:
             return self.trainer is not None
         except RuntimeError:
             return False
+
+
+class DeprecatedMixin:
+
+    def configure_optimizers(self):
+        """
+        Note: this is only a fallback for testing purposes. This should be
+        overwrriten in your module or done via lightning CLI.
+        """
+        from geowatch.utils import util_netharn
+        from torch.optim import lr_scheduler
+
+        # Netharn api will convert a string code into a type/class and
+        # keyword-arguments to create an instance.
+        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
+            optimizer='adamw', lr=3e-4, weight_decay=3e-6)
+        optim_kw['params'] = self.parameters()
+        optimizer = optim_cls(**optim_kw)
+        max_epochs = 160
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs)
+        return [optimizer], [scheduler]
+
+
+class OverfitMixin:
+
+    def overfit(self, batch):
+        """
+        Overfit script and demo
+
+        CommandLine:
+            python -m xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--overfit-demo)
+            >>> # ============
+            >>> # DEMO OVERFIT:
+            >>> # ============
+            >>> from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> from geowatch.tasks.fusion import methods
+            >>> from geowatch.tasks.fusion import datamodules
+            >>> from geowatch.utils.util_data import find_dvc_dpath
+            >>> import geowatch
+            >>> import kwcoco
+            >>> from os.path import join
+            >>> import os
+            >>> if 0:
+            >>>     '''
+            >>>     # Generate toy datasets
+            >>>     DATA_DPATH=$HOME/data/work/toy_change
+            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            >>>     mkdir -p "$DATA_DPATH"
+            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            >>>     '''
+            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     channels="B11,r|g|b,B1|B8|B11"
+            >>> if 1:
+            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
+            >>>     channels='blue|green|red|nir'
+            >>> if 0:
+            >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     #channels='B1|B11|B8|r|g|b|gauss'
+            >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
+            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset=coco_dset,
+            >>>     chip_size=128, batch_size=1, time_steps=5,
+            >>>     channels=channels,
+            >>>     normalize_peritem='blue|green|red|nir',
+            >>>     normalize_inputs=32, neg_to_pos_ratio=0,
+            >>>     num_workers='avail/2',
+            >>>     mask_low_quality=True,
+            >>>     observable_threshold=0.6,
+            >>>     use_grid_positives=False, use_centered_positives=True,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> dataset = torch_dset = datamodule.torch_datasets['train']
+            >>> torch_dset.disable_augmenter = True
+            >>> dataset_stats = datamodule.dataset_stats
+            >>> input_sensorchan = datamodule.input_sensorchan
+            >>> classes = datamodule.classes
+            >>> print('dataset_stats = {}'.format(ub.urepr(dataset_stats, nl=3)))
+            >>> print('input_sensorchan = {}'.format(input_sensorchan))
+            >>> print('classes = {}'.format(classes))
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     #token_dim=708,
+            >>>     #token_dim=768 - 60,
+            >>>     #backbone='vit_B_16_imagenet1k',
+            >>>     token_dim=208,
+            >>>     backbone='sits-former',
+            >>>     position_encoder=position_encoder,
+            >>>     )
+            >>> self.datamodule = datamodule
+            >>> datamodule._notify_about_tasks(model=self)
+            >>> # Run one visualization
+            >>> loader = datamodule.train_dataloader()
+            >>> # Load one batch and show it before we do anything
+            >>> batch = next(iter(loader))
+            >>> print(ub.urepr(dataset.summarize_item(batch[0]), nl=3))
+            >>> import kwplot
+            >>> plt = kwplot.autoplt(force='Qt5Agg')
+            >>> plt.ion()
+            >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
+            >>> kwplot.imshow(canvas, fnum=1)
+            >>> # Run overfit
+            >>> device = 0
+            >>> self.overfit(batch)
+        """
+        import kwplot
+        # import torch_optimizer
+        import xdev
+        import kwimage
+        import pandas as pd
+        from kwutil.slugify_ext import smart_truncate
+        from kwplot.mpl_make import render_figure_to_image
+
+        sns = kwplot.autosns()
+        datamodule = self.datamodule
+        device = 0
+        self = self.to(device)
+        # loader = datamodule.train_dataloader()
+        # batch = next(iter(loader))
+        walker = ub.IndexableWalker(batch)
+        for path, val in walker:
+            if isinstance(val, torch.Tensor):
+                walker[path] = val.to(device)
+        outputs = self.training_step(batch)
+        max_channels = 3
+        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
+        kwplot.imshow(canvas)
+
+        loss_records = []
+        loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
+        step = 0
+        _frame_idx = 0
+        # dpath = ub.ensuredir('_overfit_viz09')
+
+        try:
+            [optim], [sched] = self.configure_optimizers()
+        except Exception:
+            # optim = torch.optim.SGD(self.parameters(), lr=1e-4)
+            optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+
+        # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
+
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
+        fig.set_size_inches(15, 6)
+        fig.subplots_adjust(left=0.05, top=0.9)
+        prev = None
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
+            num_steps = 20
+            ex = None
+            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
+                optim.zero_grad()
+                outputs = self.training_step(batch)
+                # outputs['item_losses']
+                loss = outputs['loss']
+                if torch.any(torch.isnan(loss)):
+                    print('NAN OUTPUT!!!')
+                    print('loss = {!r}'.format(loss))
+                    print('prev = {!r}'.format(prev))
+                    ex = Exception('prev = {!r}'.format(prev))
+                    break
+                # elif loss > 1e4:
+                #     # Turn down the learning rate when loss gets huge
+                #     scale = (loss / 1e4).detach()
+                #     loss /= scale
+                prev = loss
+                # item_losses_ = default_collate(outputs['item_losses'])
+                # item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
+                loss.backward()
+                item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
+                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
+                optim.step()
+                step += 1
+            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
+            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
+            #kwplot.imshow(canvas, pnum=(1, 2, 1))
+            ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            try:
+                ax.set_yscale('logit')
+            except Exception:
+                ...
+            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
+            img = render_figure_to_image(fig)
+            img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
+            #kwimage.imwrite(fpath, img)
+            xdev.InteractiveIter.draw()
+            if ex:
+                raise ex
+        # TODO: can we get this batch to update in real time?
+        # TODO: start a server process that listens for new images
+        # as it gets new images, it starts playing through the animation
+        # looping as needed
+
+
+class PackageMixin:
+
+    def _save_package(self, package_path, verbose=1):
+        """
+        We define this as a protected method to allow modules to reuse the core
+        code, but force each module to define the ``save_package`` method
+        themselves with a doctest. In the future if this logic is general we
+        may remove that restriction and refactor tests to be part of unit
+        tests.
+        """
+        # import copy
+        import json
+        import torch.package
+
+        # Fix an issue on 3.10 with torch 1.12
+        from geowatch.monkey import monkey_torch
+        monkey_torch.fix_package_modules()
+
+        # shallow copy of self, to apply attribute hacks to
+        # model = copy.copy(self)
+        model = self
+
+        backup_attributes = {}
+        # Remove attributes we don't want to pickle before we serialize
+        # then restore them
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+            '_load_state_dict_pre_hooks',  # lightning 1.5
+            '_trainer',  # lightning 1.7
+        ]
+        for key in unsaved_attributes:
+            try:
+                val = getattr(model, key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                backup_attributes[key] = val
+
+        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
+        if model.has_trainer:
+            if train_dpath_hint is None:
+                train_dpath_hint = model.trainer.log_dir
+            datamodule = model.trainer.datamodule
+            if datamodule is not None:
+                model.datamodule_hparams = datamodule.hparams
+
+        metadata_fpaths = []
+        if train_dpath_hint is not None:
+            train_dpath_hint = ub.Path(train_dpath_hint)
+            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('config.yaml'))
+
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
+            arch_name = 'model.pkl'
+            module_name = 'watch_tasks_fusion'
+            """
+            exp = torch.package.PackageExporter(package_path, debug=True)
+            """
+            import warnings
+            warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
+            # with torch.package.PackageExporter(package_path) as exp:
+            with torch.package.PackageExporter(package_path) as exp:
+                # if True:
+                # TODO: this is not a problem yet, but some package types (mainly
+                # binaries) will need to be excluded and added as mocks
+                exp.extern('**', exclude=[
+                    'geowatch.tasks.fusion.**',
+                    'geowatch.tasks.fusion.methods.*'
+                ])
+                # exp.intern('geowatch.tasks.fusion.methods.*', allow_empty=False)
+                exp.intern('geowatch.tasks.fusion.**', allow_empty=False)
+
+                # Attempt to standardize some form of package metadata that can
+                # allow for model importing with fewer hard-coding requirements
+
+                # TODO:
+                # Add information about how this was trained, and what epoch it
+                # was saved at.
+                package_header = {
+                    'version': '0.3.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                    'packaging_time': ub.timestamp(),
+                    'git_hash': None,
+                    'module_path': None,
+                }
+
+                # Encode a git hash if we can identify that we are in a git
+                # repository
+                try:
+                    import os
+                    module_path = ub.Path(ub.modname_to_modpath(self.__class__.__module__)).absolute()
+                    package_header['module_path'] = os.fspath(module_path)
+                    info = ub.cmd('git rev-parse --short HEAD', cwd=module_path.parent)
+                    if info.returncode == 0:
+                        package_header['git_hash'] = info.stdout.strip()
+                except Exception:
+                    ...
+
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
+
+                # Save metadata
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+            # restore attributes
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
 
     @classmethod
     def load_package(cls, package_path, verbose=1):
@@ -297,6 +627,9 @@ class WatchModuleMixins:
         from geowatch.tasks.fusion.utils import load_model_from_package
         self = load_model_from_package(package_path)
         return self
+
+
+class CoerceMixins:
 
     def _coerce_class_weights(self, class_weights):
         """
@@ -531,6 +864,9 @@ class WatchModuleMixins:
         final_saliency_weights = torch.Tensor(_w)
         return final_saliency_weights
 
+
+class DatasetStatsMixin:
+
     def set_dataset_specific_attributes(self, input_sensorchan, dataset_stats):
         """
         Set module attributes based on dataset stats it will be trained on.
@@ -598,320 +934,10 @@ class WatchModuleMixins:
         self.input_sensorchan = input_sensorchan
         return input_stats
 
-    def overfit(self, batch):
-        """
-        Overfit script and demo
 
-        CommandLine:
-            python -m xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
-
-        Example:
-            >>> # xdoctest: +REQUIRES(--overfit-demo)
-            >>> # ============
-            >>> # DEMO OVERFIT:
-            >>> # ============
-            >>> from geowatch.tasks.fusion.methods.heterogeneous import *  # NOQA
-            >>> from geowatch.tasks.fusion import methods
-            >>> from geowatch.tasks.fusion import datamodules
-            >>> from geowatch.utils.util_data import find_dvc_dpath
-            >>> import geowatch
-            >>> import kwcoco
-            >>> from os.path import join
-            >>> import os
-            >>> if 0:
-            >>>     '''
-            >>>     # Generate toy datasets
-            >>>     DATA_DPATH=$HOME/data/work/toy_change
-            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
-            >>>     mkdir -p "$DATA_DPATH"
-            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
-            >>>     '''
-            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
-            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
-            >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 1:
-            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
-            >>>     channels='blue|green|red|nir'
-            >>> if 0:
-            >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
-            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
-            >>>     #channels='B1|B11|B8|r|g|b|gauss'
-            >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
-            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
-            >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=5,
-            >>>     channels=channels,
-            >>>     normalize_peritem='blue|green|red|nir',
-            >>>     normalize_inputs=32, neg_to_pos_ratio=0,
-            >>>     num_workers='avail/2',
-            >>>     mask_low_quality=True,
-            >>>     observable_threshold=0.6,
-            >>>     use_grid_positives=False, use_centered_positives=True,
-            >>> )
-            >>> datamodule.setup('fit')
-            >>> dataset = torch_dset = datamodule.torch_datasets['train']
-            >>> torch_dset.disable_augmenter = True
-            >>> dataset_stats = datamodule.dataset_stats
-            >>> input_sensorchan = datamodule.input_sensorchan
-            >>> classes = datamodule.classes
-            >>> print('dataset_stats = {}'.format(ub.urepr(dataset_stats, nl=3)))
-            >>> print('input_sensorchan = {}'.format(input_sensorchan))
-            >>> print('classes = {}'.format(classes))
-            >>> # Choose subclass to test this with (does not cover all cases)
-            >>> self = methods.HeterogeneousModel(
-            >>>     classes=classes,
-            >>>     dataset_stats=dataset_stats,
-            >>>     input_sensorchan=channels,
-            >>>     #token_dim=708,
-            >>>     #token_dim=768 - 60,
-            >>>     #backbone='vit_B_16_imagenet1k',
-            >>>     token_dim=208,
-            >>>     backbone='sits-former',
-            >>>     position_encoder=position_encoder,
-            >>>     )
-            >>> self.datamodule = datamodule
-            >>> datamodule._notify_about_tasks(model=self)
-            >>> # Run one visualization
-            >>> loader = datamodule.train_dataloader()
-            >>> # Load one batch and show it before we do anything
-            >>> batch = next(iter(loader))
-            >>> print(ub.urepr(dataset.summarize_item(batch[0]), nl=3))
-            >>> import kwplot
-            >>> plt = kwplot.autoplt(force='Qt5Agg')
-            >>> plt.ion()
-            >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
-            >>> kwplot.imshow(canvas, fnum=1)
-            >>> # Run overfit
-            >>> device = 0
-            >>> self.overfit(batch)
-        """
-        import kwplot
-        # import torch_optimizer
-        import xdev
-        import kwimage
-        import pandas as pd
-        from kwutil.slugify_ext import smart_truncate
-        from kwplot.mpl_make import render_figure_to_image
-
-        sns = kwplot.autosns()
-        datamodule = self.datamodule
-        device = 0
-        self = self.to(device)
-        # loader = datamodule.train_dataloader()
-        # batch = next(iter(loader))
-        walker = ub.IndexableWalker(batch)
-        for path, val in walker:
-            if isinstance(val, torch.Tensor):
-                walker[path] = val.to(device)
-        outputs = self.training_step(batch)
-        max_channels = 3
-        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
-        kwplot.imshow(canvas)
-
-        loss_records = []
-        loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
-        step = 0
-        _frame_idx = 0
-        # dpath = ub.ensuredir('_overfit_viz09')
-
-        try:
-            [optim], [sched] = self.configure_optimizers()
-        except Exception:
-            # optim = torch.optim.SGD(self.parameters(), lr=1e-4)
-            optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
-
-        # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
-
-        fnum = 2
-        fig = kwplot.figure(fnum=fnum, doclf=True)
-        fig.set_size_inches(15, 6)
-        fig.subplots_adjust(left=0.05, top=0.9)
-        prev = None
-        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
-            # for _frame_idx in list(range(_frame_idx, 1000)):
-            num_steps = 20
-            ex = None
-            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
-                optim.zero_grad()
-                outputs = self.training_step(batch)
-                # outputs['item_losses']
-                loss = outputs['loss']
-                if torch.any(torch.isnan(loss)):
-                    print('NAN OUTPUT!!!')
-                    print('loss = {!r}'.format(loss))
-                    print('prev = {!r}'.format(prev))
-                    ex = Exception('prev = {!r}'.format(prev))
-                    break
-                # elif loss > 1e4:
-                #     # Turn down the learning rate when loss gets huge
-                #     scale = (loss / 1e4).detach()
-                #     loss /= scale
-                prev = loss
-                # item_losses_ = default_collate(outputs['item_losses'])
-                # item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
-                loss.backward()
-                item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
-                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
-                optim.step()
-                step += 1
-            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
-            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
-            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
-            #kwplot.imshow(canvas, pnum=(1, 2, 1))
-            ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
-            try:
-                ax.set_yscale('logit')
-            except Exception:
-                ...
-            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
-            img = render_figure_to_image(fig)
-            img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
-            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
-            #kwimage.imwrite(fpath, img)
-            xdev.InteractiveIter.draw()
-            if ex:
-                raise ex
-        # TODO: can we get this batch to update in real time?
-        # TODO: start a server process that listens for new images
-        # as it gets new images, it starts playing through the animation
-        # looping as needed
-
-    def _save_package(self, package_path, verbose=1):
-        """
-        We define this as a protected method to allow modules to reuse the core
-        code, but force each module to define the ``save_package`` method
-        themselves with a doctest. In the future if this logic is general we
-        may remove that restriction and refactor tests to be part of unit
-        tests.
-        """
-        # import copy
-        import json
-        import torch.package
-
-        # Fix an issue on 3.10 with torch 1.12
-        from geowatch.monkey import monkey_torch
-        monkey_torch.fix_package_modules()
-
-        # shallow copy of self, to apply attribute hacks to
-        # model = copy.copy(self)
-        model = self
-
-        backup_attributes = {}
-        # Remove attributes we don't want to pickle before we serialize
-        # then restore them
-        unsaved_attributes = [
-            'trainer',
-            'train_dataloader',
-            'val_dataloader',
-            'test_dataloader',
-            '_load_state_dict_pre_hooks',  # lightning 1.5
-            '_trainer',  # lightning 1.7
-        ]
-        for key in unsaved_attributes:
-            try:
-                val = getattr(model, key, None)
-            except Exception:
-                val = None
-            if val is not None:
-                backup_attributes[key] = val
-
-        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
-        if model.has_trainer:
-            if train_dpath_hint is None:
-                train_dpath_hint = model.trainer.log_dir
-            datamodule = model.trainer.datamodule
-            if datamodule is not None:
-                model.datamodule_hparams = datamodule.hparams
-
-        metadata_fpaths = []
-        if train_dpath_hint is not None:
-            train_dpath_hint = ub.Path(train_dpath_hint)
-            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
-            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
-            metadata_fpaths += list(train_dpath_hint.glob('config.yaml'))
-
-        try:
-            for key in backup_attributes.keys():
-                setattr(model, key, None)
-            arch_name = 'model.pkl'
-            module_name = 'watch_tasks_fusion'
-            """
-            exp = torch.package.PackageExporter(package_path, debug=True)
-            """
-            import warnings
-            warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
-            # with torch.package.PackageExporter(package_path) as exp:
-            with torch.package.PackageExporter(package_path) as exp:
-                # if True:
-                # TODO: this is not a problem yet, but some package types (mainly
-                # binaries) will need to be excluded and added as mocks
-                exp.extern('**', exclude=[
-                    'geowatch.tasks.fusion.**',
-                    'geowatch.tasks.fusion.methods.*'
-                ])
-                # exp.intern('geowatch.tasks.fusion.methods.*', allow_empty=False)
-                exp.intern('geowatch.tasks.fusion.**', allow_empty=False)
-
-                # Attempt to standardize some form of package metadata that can
-                # allow for model importing with fewer hard-coding requirements
-
-                # TODO:
-                # Add information about how this was trained, and what epoch it
-                # was saved at.
-                package_header = {
-                    'version': '0.3.0',
-                    'arch_name': arch_name,
-                    'module_name': module_name,
-                    'packaging_time': ub.timestamp(),
-                    'git_hash': None,
-                    'module_path': None,
-                }
-
-                # Encode a git hash if we can identify that we are in a git
-                # repository
-                try:
-                    import os
-                    module_path = ub.Path(ub.modname_to_modpath(self.__class__.__module__)).absolute()
-                    package_header['module_path'] = os.fspath(module_path)
-                    info = ub.cmd('git rev-parse --short HEAD', cwd=module_path.parent)
-                    if info.returncode == 0:
-                        package_header['git_hash'] = info.stdout.strip()
-                except Exception:
-                    ...
-
-                exp.save_text(
-                    'package_header', 'package_header.json',
-                    json.dumps(package_header)
-                )
-                exp.save_pickle(module_name, arch_name, model)
-
-                # Save metadata
-                for meta_fpath in metadata_fpaths:
-                    with open(meta_fpath, 'r') as file:
-                        text = file.read()
-                    exp.save_text('package_header', meta_fpath.name, text)
-        finally:
-            # restore attributes
-            for key, val in backup_attributes.items():
-                setattr(model, key, val)
-
-    def configure_optimizers(self):
-        """
-        Note: this is only a fallback for testing purposes. This should be
-        overwrriten in your module or done via lightning CLI.
-        """
-        from geowatch.utils import util_netharn
-        from torch.optim import lr_scheduler
-
-        # Netharn api will convert a string code into a type/class and
-        # keyword-arguments to create an instance.
-        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
-            optimizer='adamw', lr=3e-4, weight_decay=3e-6)
-        optim_kw['params'] = self.parameters()
-        optimizer = optim_cls(**optim_kw)
-        max_epochs = 160
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max_epochs)
-        return [optimizer], [scheduler]
+class WatchModuleMixins(MSIDemoDataMixin, ExtendTorchMixin,
+                        LightningModelMixin, CoerceMixins, PackageMixin,
+                        OverfitMixin, DatasetStatsMixin, DeprecatedMixin):
+    """
+    Mixin methods for geowatch lightning modules
+    """
