@@ -155,7 +155,8 @@ def preprocess_table_for_seaborn(agg, table):
     for col in channel_cols:
         table[col] = table[col].apply(channel_mapping.get)
 
-    table['resolved_params.bas_pxl_fit.initializer.init'] = table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
+    if 'resolved_params.bas_pxl_fit.initializer.init' in table:
+        table['resolved_params.bas_pxl_fit.initializer.init'] = table['resolved_params.bas_pxl_fit.initializer.init'].apply(lambda x: '/'.join(x.split('/')[-3:]))
     # from geowatch.utils import util_pandas
     # table = util_pandas.DataFrame(table)
     # # table.match_columns('.channels')

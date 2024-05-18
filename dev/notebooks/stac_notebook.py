@@ -574,8 +574,8 @@ def demo_dsm_query():
     """
     import json
     import pystac_client
-    from datetime import datetime as datetime_cls
     import geowatch
+    # from datetime import datetime as datetime_cls
 
     dvc_data_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='hdd')
     headers = {
@@ -586,6 +586,8 @@ def demo_dsm_query():
     region_dpath = base / 'region_models'
     region_fpaths = list(region_dpath.glob('*.geojson'))
 
+    region_fpaths = [f for f in region_fpaths if 'NZ_R001' in f.name]
+
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
 
@@ -594,9 +596,9 @@ def demo_dsm_query():
     from kwutil import util_pattern
     pat = util_pattern.Pattern.coerce('ta1-dsm-ara-4').to_regex()
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
-    # collections_of_interest = [
-    #     'ta1-dsm-ara-4',
-    # ]
+    collections_of_interest = [
+        'ta1-dsm-ara-4',
+    ]
 
     from kwutil import util_progress
     mprog = util_progress.ProgressManager()
@@ -615,15 +617,15 @@ def demo_dsm_query():
                 region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
                 region_id = region_row['properties']['region_id']
                 geom = region_row['geometry']
-                start = region_row['properties']['start_date']
-                end = region_row['properties']['end_date']
-                if end is None:
-                    # end = datetime_cls.utcnow().date()
-                    end = datetime_cls.now().date().isoformat()
+                # start = region_row['properties']['start_date']
+                # end = region_row['properties']['end_date']
+                # if end is None:
+                #     # end = datetime_cls.utcnow().date()
+                #     end = datetime_cls.now().date().isoformat()
 
                 item_search = catalog.search(
                     collections=[collection],
-                    datetime=(start, end),
+                    # datetime=(start, end),
                     intersects=geom,
                     max_items=1000,
                 )

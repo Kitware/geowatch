@@ -182,9 +182,24 @@ class AggregateEvluationConfig(AggregateLoader):
 
     export_tables = Value(False, isflag=True, help='if True, aggregated tables will be written to the output directory')
 
-    plot_params = Value(False, isflag=True, help='if True, param plots will be drawn')
+    plot_params = Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, param plots will be drawn. This can also be a YAML dictionary
+        with items that give finder grained control over plotting.
+        An example set if items might look like:
+        ``{"enabled": 0, "stats_ranking": 0, "min_variations": 1,
+        "params_of_interest": ["params.bas_poly.thresh",
+        "resolved_params.bas_pxl.channels"]}``
+        '''))
 
-    stdout_report = Value(True, isflag=True, help='if True, print a report to stdout')
+    stdout_report = Value(True, isflag=True, help=ub.paragraph(
+        '''
+        if True, print a report to stdout. This can also be a YAML dictionary.
+        An example set if items might look like:
+        ``{"top_k": 100, "per_group": 1, "macro_analysis": 0, "analyze": 1,
+         "print_models": true, "reference_region": "final", "concise": 1,
+         "show_csv": 0}``
+        '''))
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
