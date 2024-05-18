@@ -89,6 +89,10 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
+    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance')
+
+    primary_display_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
+
     cache_resolved_results = Value(True, isflag=True, help=ub.paragraph(
         '''
         if True, avoid recomputing parameter resolution if possible.
@@ -99,6 +103,8 @@ class AggregateLoader(DataConfig):
     def __post_init__(self):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
+        self.primary_metric_cols = Yaml.coerce(self.primary_metric_cols)
+        self.primary_display_cols = Yaml.coerce(self.primary_display_cols)
         ####
         # Pre-corece patterned inputs for nicer reporting?
         inputs = self.target
@@ -160,7 +166,9 @@ class AggregateLoader(DataConfig):
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
             # print('TABLE2')
             # print(table['resolved_params.sc_poly.smoothing'])
-            agg = Aggregator(table)
+            agg = Aggregator(table,
+                             primary_metric_cols=config.primary_metric_cols,
+                             primary_display_cols=config.primary_display_cols)
             agg.build()
             # print('agg.TABLE')
             # print(agg.table['resolved_params.sc_poly.smoothing'])

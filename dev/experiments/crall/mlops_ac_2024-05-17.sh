@@ -184,21 +184,25 @@ python -m geowatch.mlops.aggregate \
     --target "
         - $MLOPS_DPATH
     " \
+    --primary_metric_cols="
+        - sc_poly_eval.sc_macro_f1
+        - sc_poly_eval.bas_faa_f1
+    " \
     --output_dpath="$MLOPS_DPATH/aggregate" \
     --resource_report=0 \
     --eval_nodes="
         - sc_poly_eval
     " \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
-            - params.sc_poly.thresh
-            - params.sc_poly.boundaries_as
-            - params.sc_pxl.fixed_resolution
-            - params.sc_pxl.chip_overlap
-            - params.sc_pxl.package_fpath
+            - resolved_params.sc_poly.thresh
+            - resolved_params.sc_poly.boundaries_as
+            - resolved_params.sc_pxl.fixed_resolution
+            - resolved_params.sc_pxl.chip_overlap
+            - resolved_params.sc_pxl.package_fpath
     " \
     --stdout_report="
         top_k: 100
