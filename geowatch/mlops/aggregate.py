@@ -91,7 +91,7 @@ class AggregateLoader(DataConfig):
 
     primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance')
 
-    primary_display_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
+    display_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
 
     cache_resolved_results = Value(True, isflag=True, help=ub.paragraph(
         '''
@@ -104,7 +104,7 @@ class AggregateLoader(DataConfig):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
         self.primary_metric_cols = Yaml.coerce(self.primary_metric_cols)
-        self.primary_display_cols = Yaml.coerce(self.primary_display_cols)
+        self.display_metric_cols = Yaml.coerce(self.display_metric_cols)
         ####
         # Pre-corece patterned inputs for nicer reporting?
         inputs = self.target
@@ -168,7 +168,7 @@ class AggregateLoader(DataConfig):
             # print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
-                             primary_display_cols=config.primary_display_cols)
+                             display_metric_cols=config.display_metric_cols)
             agg.build()
             # print('agg.TABLE')
             # print(agg.table['resolved_params.sc_poly.smoothing'])
