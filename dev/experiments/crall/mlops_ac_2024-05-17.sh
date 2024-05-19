@@ -66,6 +66,18 @@ MODEL_SHORTLIST="
 "
 
 
+MODEL_SHORTLIST="
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch5_step122881.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch2_step1026.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002_epoch12_step2197.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
+- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
+"
+
+
+
 mkdir -p "$MLOPS_DPATH"
 echo "$MODEL_SHORTLIST" > "$MLOPS_DPATH/ac_model_shortlist.yaml"
 cat "$MLOPS_DPATH/ac_model_shortlist.yaml"
@@ -93,7 +105,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap:
             - 0.3
-            - 0.0
+            #- 0.0
         sc_pxl.num_workers: 4
         sc_pxl.batch_size: 1
         sc_pxl.write_workers: 0
@@ -104,23 +116,32 @@ python -m geowatch.mlops.schedule_evaluation --params="
             - 8GSD
             - 6GSD
             - 4GSD
+            - 2GSD
         #####################
         ## SC POLY PARAMS  ##
         #####################
 
         sc_poly.boundaries_as:
             - bounds
-            - poly
+            #- poly
         sc_poly.new_algo: crall
         sc_poly.polygon_simplify_tolerance: 2
-        sc_poly.site_score_thresh: 0.3
+        sc_poly.site_score_thresh:
+            - 0.275
+            - 0.3
+            - 0.325
         sc_poly.smoothing: 0.0
         sc_poly.thresh:
-            - 0.07
+            #- 0.07
+            #- 0.1
             - 0.2
             - 0.25
+            - 0.275
             - 0.3
-        sc_poly.resolution: 8GSD
+            #- 0.325
+        sc_poly.resolution:
+            - 8GSD
+            - 4GSD
         sc_poly.min_area_square_meters: 7200
 
         ##########################
@@ -169,7 +190,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
     --root_dpath="$MLOPS_DPATH" \
     --queue_name "$MLOPS_DNAME" \
     --devices="0,1,2,3" \
-    --backend=tmux --tmux_workers=4 \
+    --backend=tmux --tmux_workers=8 \
     --cache=1 --skip_existing=1 --run=1
 
 
@@ -185,8 +206,8 @@ python -m geowatch.mlops.aggregate \
         - $MLOPS_DPATH
     " \
     --primary_metric_cols="
-        - sc_poly_eval.sc_macro_f1
-        - sc_poly_eval.bas_faa_f1
+        - metrics.sc_poly_eval.bas_faa_f1
+        - metrics.sc_poly_eval.sc_macro_f1
     " \
     --output_dpath="$MLOPS_DPATH/aggregate" \
     --resource_report=0 \
@@ -194,7 +215,7 @@ python -m geowatch.mlops.aggregate \
         - sc_poly_eval
     " \
     --plot_params="
-        enabled: 0
+        enabled: 1
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
@@ -236,3 +257,41 @@ python -m geowatch.mlops.aggregate \
 #sc_poly.boundaries_as: polys
 #sc_poly.resolution: 8GSD
 #sc_poly.min_area_square_meters: 7200
+#
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+MLOPS_DNAME=_drop8_ara_sc_v1
+MLOPS_DPATH=$DVC_EXPT_DPATH/$MLOPS_DNAME
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+python -m geowatch.mlops.aggregate \
+    --pipeline=sc \
+    --target "
+        - $MLOPS_DPATH
+    " \
+    --primary_metric_cols="
+        - metrics.sc_poly_eval.macro_f1_siteprep
+        - metrics.sc_poly_eval.bas_faa_f1
+        - metrics.sc_poly_eval.sc_macro_f1
+    " \
+    --output_dpath="$MLOPS_DPATH/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sc_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+    " \
+    --stdout_report="
+        top_k: 10
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 0
+        show_csv: 0
+    " \
+    --rois="KR_R002"
+
