@@ -242,32 +242,11 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Step 1: Prepare')
 
-        # metadata = None
-        log_fpath = out_dpath / 'reccg' / region_id / 'log.json'
-        if (log_fpath).exists():
-            print("Skipping step 1 because the stacked image already exists...")
-            logger.info('Skipping step 1 because the stacked image already exists...')
-            # with open(log_fpath, "r") as f:
-            #     metadata = json.load(f)
-        else:
-            prepare_kwcoco.prepare_kwcoco_main(
-                    cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
-                    adj_cloud=adj_cloud, method=method, workers=workers,
-                    resolution=config.resolution)
-            # with open(meta_fpath, "r") as f:
-            #     metadata = json.load(f)
-        #     for region in os.listdir(out_dpath / 'stacked'):
-        #         if region in str(config['coco_fpath']):
-        #             if os.path.exists(out_dpath / 'reccg' / region):
-        #                 logger.info('Skipping step 1 because the stacked image already exists...')
-        #                 for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
-        #                     for file in files:
-        #                         if file.endswith(".json"):
-        #                             json_path = os.path.join(root, file)
+        prepare_kwcoco.prepare_kwcoco_main(
+                cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
+                adj_cloud=adj_cloud, method=method, workers=workers,
+                resolution=config.resolution)
 
-        #                             with open(json_path, "r") as f:
-        #                                 metadata = json.load(f)
-        #                         break
 
         main_prog.step()
 
