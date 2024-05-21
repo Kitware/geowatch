@@ -73,7 +73,7 @@ class AggregateLoader(DataConfig):
     """
     Base config that will be mixed in to the :class:`AggregateEvluationConfig`.
     This config just defines parts related to constructing the
-    :class:`Aggregator` objects (i.e.  loading the tables).
+    :class:`Aggregator` objects (i.e. loading the tables).
     """
 
     target = Value(None, help=ub.paragraph(

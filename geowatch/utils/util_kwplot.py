@@ -128,7 +128,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     import pandas as pd
     # table_conversion = "chrome"  # matplotlib
 
-    print(f'table_conversion={table_conversion}')
+    # print(f'table_conversion={table_conversion}')
     if table_conversion == 'auto':
         if ub.find_exe('google-chrome'):
             table_conversion = 'chrome'
@@ -143,7 +143,7 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     if title is not None:
         style = style.set_caption(title)
 
-    print(f'table_conversion={table_conversion}')
+    # print(f'table_conversion={table_conversion}')
     dfi.export(
         style,
         str(fpath),
@@ -1183,3 +1183,19 @@ def _format_xaxis_as_timedelta(ax):
     import matplotlib as mpl
     formatter = mpl.ticker.FuncFormatter(timeTicks)
     ax.xaxis.set_major_formatter(formatter)
+
+
+def fix_seaborn_palette_issue(x, snskw):
+    """
+    Modifies the sns keyword arguments to fix a warning
+
+    Fix the warning:
+        Passing `palette` without assigning `hue` is deprecated and will be
+        removed in v0.14.0. Assign the `x` variable to `hue` and set
+        `legend=False` for the same effect.
+    """
+    import seaborn as sns
+    from packaging.version import parse as Version
+    if Version(sns.__version__) >= Version('0.13.2'):
+        if 'palette' in snskw:
+            snskw['hue'] = x

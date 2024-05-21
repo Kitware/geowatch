@@ -71,6 +71,8 @@ def main(cmdline=True, **kw):
         'geowatch.cli.coco_remove_bad_images': ['remove_bad_images'],
         'geowatch.cli.mlops_cli': ['mlops'],
         'geowatch.cli.special.finish_install': [],
+        'geowatch.mlops.aggregate': ['mlops.aggregate'],
+        'geowatch.mlops.schedule_evaluation': ['mlops.schedule'],
     }
 
     module_lut = {}

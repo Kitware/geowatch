@@ -44,8 +44,6 @@ def build_plotter(agg, rois, plot_config):
 
         if MARK_DELIVERED:
             SMART_HELPER.mark_delivery(macro_table)
-        # if 0:
-        #     SMART_HELPER.old_hacked_model_case(macro_table)
         param_to_palette = SMART_HELPER.shared_palettes(macro_table)
         if 0:
             SMART_HELPER.mark_star_models(macro_table)
@@ -64,10 +62,10 @@ def build_plotter(agg, rois, plot_config):
     else:
         plot_dpath = ub.Path(plot_dpath)
 
-    macro_plot_dpath = (plot_dpath / (f'all_params-{region_hash}'))
+    macro_plot_dpath = (plot_dpath / (f'macro-plots-{region_hash}'))
 
-    USE_EFFECTIVE = 1
-    if USE_EFFECTIVE:
+    USE_EFFECTIVE_HACK = 1
+    if USE_EFFECTIVE_HACK:
         # Relabel the resolved params to use the "effective-params"
         # instead.
         # print(f'agg.mappings={agg.mappings}')
@@ -165,7 +163,7 @@ def preprocess_table_for_seaborn(agg, table):
 
 class ParamPlotter:
     """
-    Builds the scatter plots and barcharts over different params.
+    Builds the scatter and box-and-whisker plots over different params.
     Working on cleaning this up
     """
     def __init__(plotter, agg, vantage_points=None):
@@ -176,6 +174,8 @@ class ParamPlotter:
         if vantage_points is None:
             vantage_points = SMART_HELPER.default_vantage_points(agg.type)
 
+        vantage_points = [Vantage(**vantage) for vantage in vantage_points]
+
         for vantage in vantage_points:
             pm = vantage['metric1'].split('.')[-1]
             sm = vantage['metric2'].split('.')[-1]
@@ -184,6 +184,9 @@ class ParamPlotter:
         plotter.vantage_points = vantage_points
 
     def plot_requested(plotter):
+        """
+        Simplified entry point
+        """
         plot_config = plotter.plot_config
         plotter.plot_dpath.ensuredir()
 
@@ -197,6 +200,9 @@ class ParamPlotter:
             plotter.plot_params()
 
     def plot_resources(plotter):
+        """
+        Draw tables that summarize the resource usage of the experiments.
+        """
         import rich
         from geowatch.utils import util_kwplot
         agg = plotter.agg
@@ -212,6 +218,10 @@ class ParamPlotter:
         rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
 
     def plot_overviews(plotter):
+        """
+        Draw the overview for each vantage point.
+        Draw tables that summarize the resource usage of the experiments.
+        """
         from kwutil.util_progress import ProgressManager
         import rich
         pman = ProgressManager()
@@ -240,6 +250,16 @@ class ParamPlotter:
         rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
 
     def plot_vantage_per_region_overview(plotter, vantage):
+        """
+        Draw scatter plots and box plots that that distinguish each region with
+        respect to a vantage point.
+
+        Args:
+            vantage (Dict):
+                The primary and secondary metric to look at results with.
+                This must have keys: metric1, metric2 and can optionally
+                contain keys: scale1, scale2, objective1, and objective2.
+        """
         from geowatch.utils import util_kwplot
         from geowatch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
@@ -314,6 +334,7 @@ class ParamPlotter:
                 boxsns_kw['order'] = region_order
             boxsns_kw.update(snskw)
 
+            util_kwplot.fix_seaborn_palette_issue(x=roi_attr, snskw=boxsns_kw)
             ax = sns.boxplot(data=single_table, x=roi_attr, y=main_metric, **boxsns_kw)
             ax.set_title(f'Per-Region Results (n={len(agg)})')
             param_histogram = single_table.groupby(roi_attr).size().to_dict()
@@ -334,12 +355,21 @@ class ParamPlotter:
         kwimage.imwrite(roi_legend_fpath, roi_legend)
 
     def plot_vantage_macro_overview(plotter, vantage):
+        """
+        Draw a scatter plot that gives an overview of the requested macro table
+        wrt to a metric vantage point.
+
+        Args:
+            vantage (Dict):
+                The primary and secondary metric to look at results with.
+                This must have keys: metric1, metric2 and can optionally
+                contain keys: scale1, scale2, objective1, and objective2.
+        """
         from geowatch.utils import util_kwplot
         from geowatch.utils.util_kwplot import scatterplot_highlight
         import kwplot
         import kwimage
         import numpy as np
-        # import rich
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -407,13 +437,32 @@ class ParamPlotter:
         A vantage point specifies the metrics to visualize and analyze.  Makes
         scatter plot, box plots, and attempts to draw legends useful for
         communicating results.
+
+        The main per-paramter logic is in :func:`_plot_single_vantage_param`.
+
+        Writes two folders in the "macro-plots-*" folder: params, and vantage.
+        Both folders contain the same data, but it is laid out differently.
+
+        1. The params folder contains a sub-folder for each parameter, and that
+           folder contains plots for all vantage points.
+
+        2. The "vantage" folder contains a sub-folder for each vantage point
+           and all parameters plotted with that vantage point are plotted here.
+           This folder will typically be symlinks into the above "params"
+           folder.
+
+        Args:
+            vantage (Dict):
+                The primary and secondary metric to look at results with.
+                This must have keys: metric1, metric2 and can optionally
+                contain keys: scale1, scale2, objective1, and objective2.
+
+            pman (ProgressManager | None):
+                a progress manager used to indicate sub-progress of plotting
         """
-        import numpy as np
         import kwplot
         import rich
         from geowatch.utils import util_pandas
-        from geowatch.utils import util_kwplot
-
         rich.print(f'[white]### Plot Vantage Params: {vantage}')
 
         plt = kwplot.autoplt()  # NOQA
@@ -422,24 +471,9 @@ class ParamPlotter:
 
         macro_table = plotter.macro_table
 
-        rois = plotter.rois
-        modifier = plotter.modifier
-        param_group_dpath = plotter.macro_plot_dpath / 'params'
-        param_to_palette = plotter.param_to_palette
-
-        vantage_dpath = ((plotter.macro_plot_dpath / vantage['name']).ensuredir()).resolve()
-
-        main_metric = y = vantage['metric1']
-        secondary_metric = x = vantage['metric2']
+        main_metric = vantage['metric1']
         main_objective = vantage['objective1']
-        yscale = vantage['scale1']
-        xscale = vantage['scale2']
         metric_objectives = {main_metric: main_objective}
-
-        finalize_figure = util_kwplot.FigureFinalizer(
-            dpath=vantage_dpath,
-            size_inches=np.array([6.4, 4.8]) * 1.0,
-        )
 
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
@@ -455,8 +489,6 @@ class ParamPlotter:
         if params_of_interest is not None:
             chosen_params = params_of_interest
             params_of_interest = set(params_of_interest)
-            # if 'param_hashid' in params_of_interest:
-            #     params_of_interest.remove(
             valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
             missing = sorted(set(params_of_interest) - set(valid_params_of_interest))
             chosen_params = valid_params_of_interest
@@ -464,14 +496,7 @@ class ParamPlotter:
                 rich.print('[yellow]WARNING: unknown params of interest!')
                 rich.print('missing: {}'.format(ub.repr2(missing)))
                 print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
-
-                try:
-                    distances = np.array(edit_distance(missing, resolved_params.columns))
-                    for got, dists in zip(missing, distances):
-                        alternative = resolved_params.columns[dists.argmin()]
-                        rich.print(f'[yellow] Got: {got}. Did you mean {alternative}?')
-                except ImportError:
-                    ...
+                suggest_did_you_mean(missing, resolved_params.columns)
         else:
             print('params_of_interest is unspecified, automatically choosing')
 
@@ -521,16 +546,9 @@ class ParamPlotter:
                 ...
                 try:
                     plotter._plot_single_vantage_param(rank, macro_table,
-                                                       param_name,
+                                                       param_name, vantage,
                                                        params_of_interest,
-                                                       param_to_palette,
-                                                       param_name_to_stats,
-                                                       modifier, main_metric,
-                                                       secondary_metric,
-                                                       vantage_dpath, x, y,
-                                                       xscale, yscale,
-                                                       param_group_dpath, rois,
-                                                       finalize_figure)
+                                                       param_name_to_stats)
                 except SkipPlot:
                     continue
 
@@ -541,11 +559,8 @@ class ParamPlotter:
                 pman.__exit__()
 
     def _plot_single_vantage_param(plotter, rank, macro_table, param_name,
-                                   params_of_interest, param_to_palette,
-                                   param_name_to_stats, modifier, main_metric,
-                                   secondary_metric, vantage_dpath, x, y,
-                                   xscale, yscale, param_group_dpath, rois,
-                                   finalize_figure):
+                                   vantage, params_of_interest,
+                                   param_name_to_stats):
         """
         Inner loop for :func:`ParamPlotter.plot_vantage_params`,
         todo: reduce arguments
@@ -557,25 +572,33 @@ class ParamPlotter:
         from kwcoco.metrics.drawing import concice_si_display
         from geowatch.utils import util_kwplot
         from geowatch.utils.util_kwplot import scatterplot_highlight
+        import numpy as np
         import seaborn as sns
+
+        param_group_dpath = plotter.macro_plot_dpath / 'params'
+        param_to_palette = plotter.param_to_palette
+        vantage_dpath = ((plotter.macro_plot_dpath / 'vantage' / vantage['name']).ensuredir()).resolve()
+        vantage_flat_dpath = (vantage_dpath / '_flat').ensuredir()
+        finalize_figure = util_kwplot.FigureFinalizer(
+            size_inches=np.array([6.4, 4.8]) * 1.0,
+        )
+
+        modifier = plotter.modifier
+
+        rois = plotter.rois
+        main_metric = y = vantage['metric1']
+        secondary_metric = x = vantage['metric2']
+        yscale = vantage['scale1']
+        xscale = vantage['scale2']
+
         stats = param_name_to_stats.get(param_name, {})
         # stats['moments']
         anova_rank_p = stats.get('anova_rank_p', None)
         # param_name = stats['param_name']
 
-        snskw = {}
-
         # if 0:
         #     # macro_table[param_name] = macro_table[param_name].apply(lambda x: config_label_mappings.get(x, x))
         #     param_to_palette[param_name] = SMART_HELPER.make_param_palette(macro_table[param_name].unique())
-
-        if param_name in param_to_palette:
-            snskw['palette'] = param_to_palette[param_name]
-
-        s = plotter.plot_config.get('scatter.markersize', None)
-        scatterkw = snskw.copy()
-        if s is not None:
-            scatterkw['s'] = s
 
         try:
             macro_table = macro_table.sort_values(param_name)
@@ -604,7 +627,20 @@ class ParamPlotter:
             sub_macro_table = macro_table[~row_is_ignored]
             if len(param_histogram) == 1:
                 raise SkipPlot
-            ...
+
+        if 1:
+            # HACK: probably want to build palettes outside of this function
+            if param_name not in param_to_palette:
+                param_to_palette[param_name] = util_kwplot.Palette.coerce(macro_table[param_name].unique())
+
+        snskw = {}
+        if param_name in param_to_palette:
+            snskw['palette'] = param_to_palette[param_name]
+
+        s = plotter.plot_config.get('scatter.markersize', None)
+        scatterkw = snskw.copy()
+        if s is not None:
+            scatterkw['s'] = s
 
         header_lines = [
             f'Results (n={len(sub_macro_table)})',
@@ -613,8 +649,6 @@ class ParamPlotter:
         if anova_rank_p is not None:
             header_lines.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
         header_text = '\n'.join(header_lines)
-
-        param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
         param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
 
@@ -635,14 +669,15 @@ class ParamPlotter:
             for param_value, num in param_histogram.items()
         })
 
-        fname_prefix = f'macro_results_{rank:03d}_{param_name}'
+        vantage_prefix = f'macro_results_{rank:03d}_{param_name}'
         param_prefix = f'macro_results_{param_name}'
         param_metric_prefix = f'{param_prefix}_{main_metric}'
-        param_metric2_prefix = f'{param_prefix}_{main_metric}_{secondary_metric}'
+        param_metric2_prefix = f'{param_prefix}_{main_metric}_vs_{secondary_metric}'
+
+        drawn_rows = []
 
         # SCATTER
         fig = kwplot.figure(fnum=4, doclf=True)
-
         # Scatter with legend
         ax = sns.scatterplot(data=sub_macro_table, x=x, y=y,
                              hue=param_name, legend=True, **scatterkw)
@@ -659,20 +694,34 @@ class ParamPlotter:
         ax.set_yscale(yscale)
         modifier.relabel(ax, ticks=False)
 
-        vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT01_scatter_legend.png'
-        param_fpath = param_dpath / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
-        finalize_figure.finalize(fig, vantage_fpath)
-        ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
+        param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
+        param_dpath_flat = (param_dpath / '_flat').ensuredir()
+
+        param_fpath = param_dpath_flat / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
+        finalize_figure.finalize(fig, param_fpath)
+        drawn_rows.append({
+            'type': 'vantage_metric_plot',
+            'plot_type': 'scatter_legend',
+            'param_fpath': param_fpath,
+            'suffix': 'PLT01_scatter_legend.png',
+            'prefix': param_metric2_prefix,
+        })
+
+        force_regen = True
 
         # Scatter legend (doesnt care about the vantage)
         try:
-            param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
-            if not param_fpath.exists():
+            param_fpath = param_dpath_flat / f'{param_prefix}_PLT03_scatter_onlylegend.png'
+            if not param_fpath.exists() or force_regen:
                 legend_ax = util_kwplot.extract_legend(ax)
                 freq_mapper_scatter.relabel(legend_ax, ticks=False)
                 finalize_figure.finalize(legend_ax.figure, param_fpath)
-            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+                drawn_rows.append({
+                    'type': 'main_param_legend',
+                    'param_fpath': param_fpath,
+                    'suffix': 'PLT03_scatter_onlylegend.png',
+                    'prefix': param_prefix,
+                })
         except RuntimeError:
             ...
         else:
@@ -680,21 +729,24 @@ class ParamPlotter:
             if legend is not None:
                 legend.remove()
         # Scatter without legend
-        vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
-        param_fpath = param_dpath / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
-        finalize_figure.finalize(fig, vantage_fpath)
-        ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
-
-        force_regen = True
+        param_fpath = param_dpath_flat / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
+        finalize_figure.finalize(fig, param_fpath)
+        drawn_rows.append({
+            'type': 'vantage_metric_plot',
+            'plot_type': 'scatter_nolegend',
+            'param_fpath': param_fpath,
+            'suffix': 'PLT02_scatter_nolegend.png',
+            'prefix': param_metric2_prefix,
+        })
 
         # BOX
-        vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT04_box.png'
-        param_fpath = param_dpath / f'{param_metric_prefix}_PLT04_box.png'
-        print(f'param_fpath={param_fpath}')
+        param_fpath = param_dpath_flat / f'{param_metric_prefix}_PLT04_box.png'
         if not param_fpath.exists() or force_regen:
             fig = kwplot.figure(fnum=5, doclf=True)
+            util_kwplot.fix_seaborn_palette_issue(x=param_name, snskw=snskw)
             try:
-                ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
+                ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y,
+                                 legend=False, **snskw)
             except Exception as box_ex:
                 box_ex = box_ex
                 rich.print(ub.codeblock(
@@ -712,13 +764,17 @@ class ParamPlotter:
                 modifier.relabel(ax, ticks=False)
                 modifier.relabel_xticks(ax)
                 finalize_figure.finalize(fig, param_fpath)
-        if param_fpath.exists():
-            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+                drawn_rows.append({
+                    'plot_type': 'box',
+                    'type': 'main_metric_plot',
+                    'param_fpath': param_fpath,
+                    'suffix': 'PLT04_box.png',
+                    'prefix': param_metric_prefix,
+                })
 
         # Output dataframe table for larger legend
-        # Varied value table (doesnt care about the vantage)
-        param_fpath = param_dpath / f'{param_prefix}_PLT05_table.png'
-        vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT05_table.png'
+        # Varied value table (doesn't care about the vantage)
+        param_fpath = param_dpath_flat / f'{param_prefix}_PLT05_table.png'
         if not param_fpath.exists() or force_regen:
             # TODO: don't check for existence, check if we generated it
             # previously in this sessions (we want this to regenerate if
@@ -736,8 +792,38 @@ class ParamPlotter:
             param_title = 'Key: ' + modifier._modify_text(param_name)
             lut_style = param_code_lut.style.set_caption(param_title)
             util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
+            drawn_rows.append({
+                'type': 'main_param_legend',
+                'param_fpath': param_fpath,
+                'suffix': 'PLT05_table.png',
+                'prefix': param_prefix,
+            })
 
-        ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+        # Symlink to other organization structures
+        for row in drawn_rows:
+            param_fpath = row['param_fpath']
+            suffix = row['suffix']
+            prefix = row['prefix']
+            vantage_fpath = vantage_flat_dpath / f'{vantage_prefix}_{suffix}'
+            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+
+            if row.get('plot_type') is not None:
+                param_plot_type_dpath = (param_dpath / row['plot_type']).ensuredir()
+                link_fpath = param_plot_type_dpath / f'{prefix}_{suffix}'
+                ub.symlink(real_path=param_fpath, link_path=link_fpath, overwrite=True)
+
+                vantage_plot_type_dpath = (vantage_dpath / row['plot_type']).ensuredir()
+                link_fpath = vantage_plot_type_dpath / f'{vantage_prefix}_{suffix}'
+                ub.symlink(real_path=param_fpath, link_path=link_fpath, overwrite=True)
+
+            if row['type'] == 'main_param_legend':
+                link_fpath = param_dpath / f'{prefix}_{suffix}'
+                ub.symlink(real_path=param_fpath, link_path=link_fpath, overwrite=True)
+            if row['type'] == 'vantage_metric_plot':
+                ...
+            if row['type'] == 'main_metric_plot':
+                ...
+        # ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
 
     def _add_sv_hack_lines(plotter, ax, table, x, y):
         import matplotlib as mpl
@@ -863,6 +949,31 @@ def edit_distance(string1, string2):
     return distmat
 
 
+def suggest_did_you_mean(invalid_options, valid_choices):
+    """
+    Args:
+        missing (List[str]): the invalid options the user chose
+        valid_choices (List[str]): the valid available options
+
+    Example:
+        >>> from geowatch.mlops.aggregate_plots import *  # NOQA
+        >>> invalid_options = ['fuber', 'yam', 'spam']
+        >>> valid_choices = ['spam', 'ham', 'foobar']
+        >>> suggest_did_you_mean(invalid_options, valid_choices)
+    """
+    import numpy as np
+    import rich
+    try:
+        distances = np.array(edit_distance(invalid_options, valid_choices))
+        for got, dists in zip(invalid_options, distances):
+            min_idx = dists.argmin()
+            if dists[min_idx] != 0:
+                alternative = valid_choices[min_idx]
+                rich.print(f'[yellow] Got: {got}. Did you mean {alternative}?')
+    except ImportError:
+        rich.print('[yellow] Warning: unable to suggest existing alternatives')
+
+
 def shrink_param_names(param_name, param_values, text_len_thresh=20):
     param_labels = [str(p) for p in param_values]
     text_label_size = len(''.join(param_labels))
@@ -883,3 +994,60 @@ def shrink_param_names(param_name, param_values, text_len_thresh=20):
 
 class SkipPlot(Exception):
     ...
+
+
+class Vantage2(dict):
+    """
+    The primary and secondary metric to look at results with.
+    This must have keys: metric1, metric2 and can optionally
+    contain keys: scale1, scale2, objective1, and objective2.
+    """
+
+    @property
+    def name(self):
+        return self['name']
+
+    @property
+    def metric1(self):
+        return self['metric1']
+
+    @property
+    def metric2(self):
+        return self['metric2']
+
+    @property
+    def scale1(self):
+        return self.get('scale1', 'linear')
+
+    @property
+    def scale2(self):
+        return self.get('scale2', 'linear')
+
+
+from dataclasses import dataclass  # NOQA
+
+
+@dataclass
+class Vantage:
+    """
+    The primary and secondary metric to look at results with.
+    This must have keys: metric1, metric2 and can optionally
+    contain keys: scale1, scale2, objective1, and objective2.
+
+    Example:
+        >>> from geowatch.mlops.aggregate_plots import *  # NOQA
+        >>> Vantage('metrics.ppv', 'metrics.tpr')
+    """
+    metric1: str
+    metric2: str
+    scale1: str = 'linear'
+    scale2: str = 'linear'
+    objective1: str = 'maximize'
+    objective2: str = 'maximize'
+    name: str = None
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        return setattr(self, key, value)

@@ -158,6 +158,8 @@ class SmartGlobalHelper:
 
         'metrics.sc_poly_eval.bas_f1': 'BAS-F1',
         'metrics.sc_poly_eval.sc_macro_f1': 'AC-F1 (macro)',
+        'sc_poly_eval.bas_f1': 'BAS-F1',
+        'sc_poly_eval.sc_macro_f1': 'AC-F1 (macro)',
     }
 
     def shared_palettes(self, macro_table):
@@ -268,15 +270,16 @@ class SmartGlobalHelper:
             'blue|green|red|nir,invariants.0:17': 'invar',
             'blue|green|red|nir|swir16|swir22': 'BGNRSH'
         })
-
-        @modifier.add_mapping
-        def humanize_label(text):
-            text = text.replace('package_epoch0_step41', 'EVAL7')
-            text = text.replace('params.', '')
-            text = text.replace('metrics.', '')
-            text = text.replace('fit.', 'fit.')
-            return text
+        modifier.add_mapping(self._humanize_label)
         return modifier
+
+    @staticmethod
+    def _humanize_label(text):
+        text = text.replace('package_epoch0_step41', 'EVAL7')
+        text = text.replace('params.', '')
+        text = text.replace('metrics.', '')
+        text = text.replace('fit.', 'fit.')
+        return text
 
     def default_vantage_points(self, eval_type):
         if eval_type == 'bas_poly_eval':
@@ -508,25 +511,6 @@ class SmartGlobalHelper:
         )]['param_hashid'].iloc[0]
         star_params += [p3]
         macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
-
-    def old_hacked_model_case(self, macro_table):
-        from geowatch.utils.util_pandas import DotDictDataFrame
-        fit_params = DotDictDataFrame(macro_table)['fit']
-        unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
-        # unique_fit_params = fit_params.loc[unique_packages.index]
-        pkgmap = {}
-        pkgver = {}
-        for id, pkg in unique_packages.items():
-            pkgver[pkg] = 'M{:02d}'.format(len(pkgver))
-            pid = pkgver[pkg]
-            out_gsd = fit_params.loc[id, 'fit.output_space_scale']
-            in_gsd = fit_params.loc[id, 'fit.input_space_scale']
-            assert in_gsd == out_gsd
-            new_name = f'{pid}'
-            if pkg == 'package_epoch0_step41':
-                new_name = f'{pid}_NOV'
-            pkgmap[pkg] = new_name
-        macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
     def mark_delivery(self, table, include=None):
         """
@@ -901,6 +885,7 @@ class SmartGlobalHelper:
             'invariants:16': 'invar' if coarsen else 'invar1',
             'invariants:17': 'invar' if coarsen else 'invar1',
             'blue|green|red': 'raw' if coarsen else 'BGR',
+            'red|green|blue': 'raw' if coarsen else 'BGR',
             'pan': 'raw' if coarsen else 'pan',
             'mae:16': 'mae',
             'sam:64': 'SAM',
@@ -927,7 +912,7 @@ class SmartGlobalHelper:
                     if concise_chans in channel_maps:
                         concise_chans = channel_maps[concise_chans]
                     else:
-                        print('warning concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
+                        print('WARNING: unregistered concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
                     new_streams.append(f'{stream.sensor.spec}:{concise_chans}')
                 new_sensorchan = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise()
 
@@ -948,6 +933,7 @@ class SmartGlobalHelper:
             'invariants:16': 'invar' if coarsen else 'invar1',
             'invariants:17': 'invar' if coarsen else 'invar1',
             'blue|green|red': 'raw' if coarsen else 'BGR',
+            'red|green|blue': 'raw' if coarsen else 'BGR',
             'pan': 'raw' if coarsen else 'pan',
             'mae:16': 'mae',
             'sam:64': 'SAM',
@@ -975,7 +961,7 @@ class SmartGlobalHelper:
                     if concise_chans in channel_maps:
                         concise_chans = channel_maps[concise_chans]
                     else:
-                        print('warning concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
+                        print('WARNING: unregistered concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
 
                     new_streams.append(f'{stream.sensor.spec}:{concise_chans}')
                 new_sensorchan = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise()

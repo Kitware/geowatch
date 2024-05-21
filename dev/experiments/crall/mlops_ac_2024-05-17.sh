@@ -66,6 +66,14 @@ MODEL_SHORTLIST="
 "
 
 
+#MODEL_SHORTLIST="
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
+#"
+
+
 MODEL_SHORTLIST="
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
@@ -75,7 +83,6 @@ MODEL_SHORTLIST="
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
 "
-
 
 
 mkdir -p "$MLOPS_DPATH"
@@ -123,7 +130,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
 
         sc_poly.boundaries_as:
             - bounds
-            #- poly
+            - poly
         sc_poly.new_algo: crall
         sc_poly.polygon_simplify_tolerance: 2
         sc_poly.site_score_thresh:
@@ -138,7 +145,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
             - 0.25
             - 0.275
             - 0.3
-            #- 0.325
+            - 0.325
         sc_poly.resolution:
             - 8GSD
             - 4GSD
@@ -181,8 +188,11 @@ python -m geowatch.mlops.schedule_evaluation --params="
     submatrices1:
         # Because there is no BAS component, we need to provide site summaries.
         # We should use BAS system outputs, but if we dont have those use truth.
+        #- sc_pxl.test_dataset: $DVC_DATA_DPATH/Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
+        #  sc_poly.site_summary: $DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R002.geojson
+
         - sc_pxl.test_dataset: $DVC_DATA_DPATH/Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
-          sc_poly.site_summary: $DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R002.geojson
+          sc_poly.site_summary: $HOME/data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson
 
         #- sc_pxl.test_dataset: $BUNDLE_DPATH/KW_C001/imgonly-KW_C001-rawbands-small.kwcoco.zip
         #  sc_poly.site_summary: $BUNDLE_DPATH/bas_small_output/region_models/KW_C501.geojson
@@ -191,7 +201,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
     --queue_name "$MLOPS_DNAME" \
     --devices="0,1,2,3" \
     --backend=tmux --tmux_workers=8 \
-    --cache=1 --skip_existing=1 --run=1
+    --cache=1 --skip_existing=1 --run=0
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
@@ -221,6 +231,8 @@ python -m geowatch.mlops.aggregate \
         params_of_interest:
             - resolved_params.sc_poly.thresh
             - resolved_params.sc_poly.boundaries_as
+            - resolved_params.sc_poly.resolution
+            - resolved_params.sc_poly.resolution
             - resolved_params.sc_pxl.fixed_resolution
             - resolved_params.sc_pxl.chip_overlap
             - resolved_params.sc_pxl.package_fpath
@@ -235,7 +247,9 @@ python -m geowatch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002"
+    --rois="KR_R002" \
+    --query "df['params.sc_poly.site_summary'] == '$HOME/data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson'"
+
 
 
 #sc_pxl.tta_fliprot: 0.0
@@ -267,13 +281,14 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 python -m geowatch.mlops.aggregate \
     --pipeline=sc \
+    --export_tables=True \
     --target "
         - $MLOPS_DPATH
     " \
     --primary_metric_cols="
-        - metrics.sc_poly_eval.macro_f1_siteprep
         - metrics.sc_poly_eval.bas_faa_f1
         - metrics.sc_poly_eval.sc_macro_f1
+        - metrics.sc_poly_eval.macro_f1_siteprep
     " \
     --output_dpath="$MLOPS_DPATH/aggregate" \
     --resource_report=0 \
@@ -287,11 +302,74 @@ python -m geowatch.mlops.aggregate \
         top_k: 10
         per_group: 1
         macro_analysis: 0
-        analyze: 0
+        analyze: 1
         print_models: True
         reference_region: final
         concise: 0
         show_csv: 0
     " \
-    --rois="KR_R002"
+    --rois="KR_R002" \
+    --query "df['params.sc_poly.site_summary'] == '$HOME/data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson'"
 
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+MLOPS_DNAME=_drop8_ara_sc_v1
+MLOPS_DPATH=$DVC_EXPT_DPATH/$MLOPS_DNAME
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+geowatch mlops.aggregate \
+    --pipeline=sc \
+    --target "
+        - $MLOPS_DPATH/sc_poly_eval_horologic_01488_2024-05-21T121410-5.csv.zip
+    " \
+    --primary_metric_cols="
+        - metrics.sc_poly_eval.bas_faa_f1
+        - metrics.sc_poly_eval.sc_macro_f1
+    " \
+    --output_dpath="$MLOPS_DPATH/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sc_poly_eval
+    " \
+    --plot_params="
+        enabled: 1
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - resolved_params.sc_poly.thresh
+            - resolved_params.sc_poly.boundaries_as
+            - resolved_params.sc_poly.resolution
+            - resolved_params.sc_poly.resolution
+            - resolved_params.sc_pxl.fixed_resolution
+            - resolved_params.sc_pxl.chip_overlap
+            - resolved_params.sc_pxl.package_fpath
+        vantage_points:
+            - metric1: metrics.sc_poly_eval.sc_macro_f1
+              metric2: metrics.sc_poly_eval.bas_faa_f1
+
+            - metric1: metrics.sc_poly_eval.bas_f1
+              metric2: metrics.sc_poly_eval.bas_ffpa
+
+            - metric1: metrics.sc_poly_eval.macro_f1_siteprep
+              metric2: metrics.sc_poly_eval.sc_macro_f1
+
+            - metric1: metrics.sc_poly_eval.macro_f1_active
+              metric2: metrics.sc_poly_eval.sc_macro_f1
+
+            - metric1: metrics.sc_poly_eval.bas_ffpa
+              metric2: metrics.sc_poly_eval.sc_macro_f1
+    " \
+    --stdout_report="
+        top_k: 10
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 1
+        show_csv: 0
+    " \
+    --rois="KR_R002"
+    #\
+    #--query "df['params.sc_poly.site_summary'] == '$HOME/data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson'"
