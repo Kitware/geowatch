@@ -158,8 +158,8 @@ RUN <<EOF
 #source $HOME/activate
 
 echo "Start simple tests"
-EAGER_IMPORT=1 python -c "import geowatch; print(geowatch.__version__)"
-EAGER_IMPORT=1 python -m geowatch --help
+EAGER_IMPORT_MODULES=geowatch python -c "import geowatch; print(geowatch.__version__)"
+EAGER_IMPORT_MODULES=geowatch python -m geowatch --help
 EOF
 
 
