@@ -357,7 +357,6 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
     flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
-    print('L8S2', flags)
     all_images = all_images.compress(flags)
 
     if len(all_images) == 0:
