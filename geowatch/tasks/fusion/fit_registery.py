@@ -163,12 +163,12 @@ class ListRegistery(Registery):
         >>> self = DemoListRegistery()
         >>> self.fpath
         >>> print(self.fpath.exists())
-        >>> print(self.fpath.stat().st_size)
         >>> self.append(path='foo', time='bar', uuid='blag')
         >>> self.append(path='foo', time='bar', uuid='blag')
         >>> list(self._open().items())
         >>> print(self.read())
         >>> print(self.pandas())
+        >>> print(self.fpath.stat().st_size)
     """
 
     def append(self, **kwargs):

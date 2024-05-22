@@ -248,7 +248,8 @@ check_metrics_framework(){
     __doc__="
     Check to see if the IARPA metrics framework is installed
     "
-    METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.modname_to_modpath('iarpa_smart_metrics'))")
+    #METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.modname_to_modpath('iarpa_smart_metrics'))")
+    METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.util_import._pkgutil_modname_to_modpath('iarpa_smart_metrics'))")
     if [[ "$METRICS_MODPATH" == "None" ]]; then
         echo "
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

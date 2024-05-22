@@ -891,12 +891,12 @@ class AggregatorAnalysisMixin:
             # models together in a folder, but this is not robust, so we Only
             # do this grouping if the parent folder has a special name
 
-            import xdev
-            with xdev.embed_on_exception_context:
-                model_paths = [
-                    ub.Path(p)
-                    if not pd.isnull(p) else None
-                    for p in table[model_col].tolist()]
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            model_paths = [
+                ub.Path(p)
+                if not pd.isnull(p) else None
+                for p in table[model_col].tolist()]
             hacked_groups = [
                 p if p is not None and p.parent.name.startswith('Drop') else p
                 for p in model_paths]
@@ -1680,29 +1680,29 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
         hashid_to_params = {}
-        import xdev
-        with xdev.embed_on_exception_context:
-            for param_vals, group in effective_params.groupby(param_cols, dropna=False):
-                # Further subdivide the group so each row only computes its hash
-                # with the parameters that were included in its row
-                is_group_included = is_param_included.loc[group.index]
+        # import xdev
+        # with xdev.embed_on_exception_context:
+        for param_vals, group in effective_params.groupby(param_cols, dropna=False):
+            # Further subdivide the group so each row only computes its hash
+            # with the parameters that were included in its row
+            is_group_included = is_param_included.loc[group.index]
 
-                # NOTE: groupby will replace None with NaN in the returned
-                # iteration values
-                # Work around this by choosing the first item from the group
-                # itself.
-                unique_params = group.iloc[0][param_cols]
+            # NOTE: groupby will replace None with NaN in the returned
+            # iteration values
+            # Work around this by choosing the first item from the group
+            # itself.
+            unique_params = group.iloc[0][param_cols]
 
-                for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
-                    # valid_param_cols = list(ub.compress(param_cols, param_flags))
-                    # valid_param_vals = list(ub.compress(param_vals, param_flags))
-                    # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
+            for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
+                # valid_param_cols = list(ub.compress(param_cols, param_flags))
+                # valid_param_vals = list(ub.compress(param_vals, param_flags))
+                # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
 
-                    valid_unique_params = unique_params[list(param_flags)].to_dict()
+                valid_unique_params = unique_params[list(param_flags)].to_dict()
 
-                    hashid = hash_param(valid_unique_params, version=1)
-                    hashid_to_params[hashid] = valid_unique_params
-                    hashids_v1.loc[subgroup.index] = hashid
+                hashid = hash_param(valid_unique_params, version=1)
+                hashid_to_params[hashid] = valid_unique_params
+                hashids_v1.loc[subgroup.index] = hashid
 
         # Update the index with an effective parameter hashid
         self.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1

@@ -74,15 +74,15 @@ MODEL_SHORTLIST="
 #"
 
 
-MODEL_SHORTLIST="
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch5_step122881.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch2_step1026.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002_epoch12_step2197.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
-- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
-"
+#MODEL_SHORTLIST="
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch5_step122881.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch2_step1026.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002_epoch12_step2197.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
+#- /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
+#"
 
 
 mkdir -p "$MLOPS_DPATH"
@@ -120,8 +120,8 @@ python -m geowatch.mlops.schedule_evaluation --params="
         sc_pxl.drop_unused_frames: true
 
         sc_pxl.fixed_resolution:
-            - 8GSD
-            - 6GSD
+            #- 8GSD
+            #- 6GSD
             - 4GSD
             - 2GSD
         #####################
@@ -130,7 +130,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
 
         sc_poly.boundaries_as:
             - bounds
-            - poly
+            #- poly
         sc_poly.new_algo: crall
         sc_poly.polygon_simplify_tolerance: 2
         sc_poly.site_score_thresh:
@@ -324,6 +324,7 @@ geowatch mlops.aggregate \
         - $MLOPS_DPATH/sc_poly_eval_horologic_01488_2024-05-21T121410-5.csv.zip
     " \
     --primary_metric_cols="
+        - metrics.sc_poly_eval.macro_f1_siteprep
         - metrics.sc_poly_eval.bas_faa_f1
         - metrics.sc_poly_eval.sc_macro_f1
     " \
@@ -333,7 +334,7 @@ geowatch mlops.aggregate \
         - sc_poly_eval
     " \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
@@ -361,15 +362,29 @@ geowatch mlops.aggregate \
               metric2: metrics.sc_poly_eval.sc_macro_f1
     " \
     --stdout_report="
-        top_k: 10
+        top_k: 1000
         per_group: 1
         macro_analysis: 0
         analyze: 0
         print_models: True
         reference_region: final
-        concise: 1
+        concise: 0
         show_csv: 0
     " \
-    --rois="KR_R002"
-    #\
-    #--query "df['params.sc_poly.site_summary'] == '$HOME/data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson'"
+    --rois="KR_R002" \
+    --query "
+    (df['params.sc_poly.site_summary'].str.contains('data/dvc-repos/smart_phase3_expt/static-results/bas-predictions/eval21/KR_R002/KR_R002.geojson')) &
+    (df['params.sc_pxl.package_fpath'].str.contains('V1_allsensors_V001_epoch0_step21021'))
+    "
+    #&
+    #(df['params.sc_pxl.fixed_resolution'].str.contains('4GSD'))
+    'enkgdgoaaktv': {
+        'params.sc_poly.boundaries_as': 'bounds',
+        'params.sc_poly.site_score_thresh': 0.3,
+        'params.sc_poly.thresh': 0.25,
+        'params.sc_poly.resolution': '4GSD',
+        'params.sc_pxl.fixed_resolution': '2GSD',
+        'params.sc_pxl.input_space_scale': '2GSD',
+        'params.sc_pxl.window_space_scale': '2GSD',
+        'params.sc_pxl.output_space_scale': '2GSD',
+    },
