@@ -190,14 +190,9 @@ def export_cold_main(cmdline=1, **kwargs):
     meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
     # Create dictionaries to store ordinal dates and image names for each sensor
-    ordinal_dates = {}
-    img_names = {}
     sensors = list(sensors.split(","))
-
-    # Initialize dictionaries for each sensor
-    for sensor in sensors:
-        ordinal_dates[sensor] = []
-        img_names[sensor] = []
+    ordinal_dates = {s: [] for s in sensors}
+    img_names = {s: [] for s in sensors}
 
     # Read metadata and populate dictionaries
     for meta in meta_files:
@@ -205,7 +200,7 @@ def export_cold_main(cmdline=1, **kwargs):
         ordinal_date = meta_config['ordinal_date']
         img_name = meta_config['image_name'] + '.npy'
         for sensor in sensors:
-            if f'_{sensor}_' in meta_config['image_name']:
+            if meta_config["sensor"] == sensor:
                 ordinal_dates[sensor].append(ordinal_date)
                 img_names[sensor].append(img_name)
                 break
