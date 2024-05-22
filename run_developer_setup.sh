@@ -249,7 +249,15 @@ check_metrics_framework(){
     Check to see if the IARPA metrics framework is installed
     "
     #METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.modname_to_modpath('iarpa_smart_metrics'))")
-    METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.util_import._pkgutil_modname_to_modpath('iarpa_smart_metrics'))")
+    #METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.util_import._pkgutil_modname_to_modpath('iarpa_smart_metrics'))")
+    METRICS_MODPATH=$(python -c "if 1:
+        try:
+            import iarpa_smart_metrics
+        except Exception:
+            print(None)
+        else:
+            print(iarpa_smart_metrics.__file__)
+    ")
     if [[ "$METRICS_MODPATH" == "None" ]]; then
         echo "
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
