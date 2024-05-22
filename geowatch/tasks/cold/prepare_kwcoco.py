@@ -165,7 +165,7 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
     method = config['method']
     out_dir = dpath / 'stacked'
     workers = config['workers']
-    
+
     # TODO: add resolution for PD data?
     resolution = config.resolution
     resolution_PD = config.resolution_PD
@@ -173,10 +173,10 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
     if 'PD' in sensors:
         sensors.remove('PD')
         meta_fpath = stack_kwcoco_PD(coco_fpath, out_dir, 'PD', adj_cloud, method,
-                              pman, workers, resolution_PD)
+                                     pman, workers, resolution_PD)
     if sensors:
         meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method,
-                                pman, workers, resolution)
+                                  pman, workers, resolution)
     return meta_fpath
 
 
@@ -385,7 +385,7 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
 
 
 def stack_kwcoco_PD(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
-                 workers=0, resolution=None):
+                    workers=0, resolution=None):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):

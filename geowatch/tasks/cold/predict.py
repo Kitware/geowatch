@@ -247,8 +247,6 @@ def cold_predict_main(cmdline=1, **kwargs):
                 cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                 adj_cloud=adj_cloud, method=method, workers=workers,
                 resolution=config.resolution)
-
-
         main_prog.step()
 
         # =========
