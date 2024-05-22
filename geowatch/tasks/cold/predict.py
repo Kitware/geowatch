@@ -229,6 +229,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     method = config['method']
     workers = util_parallel.coerce_num_workers(config['workers'])
     use_subprogress = workers == 0 or config['workermode'] != 'process'
+    # FIXME: not robust, is there a better way to get region_id?
     region_id = config['coco_fpath'].split('/')[-2]
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
