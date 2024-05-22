@@ -34,6 +34,7 @@ WITH_DVC=${WITH_DVC:=0}
 WITH_AWS=${WITH_AWS:=0}
 WITH_COLD=${WITH_COLD:=0}
 WITH_MATERIALS=${WITH_MATERIALS:=0}
+WITH_COMPAT=${WITH_COMPAT:=0}
 WITH_APT_ENSURE=${WITH_APT_ENSURE:="auto"}
 
 
@@ -134,6 +135,7 @@ WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
 WITH_AWS=$WITH_AWS
 WITH_COLD=$WITH_COLD
+WITH_COMPAT=$WITH_COMPAT
 WITH_MATERIALS=$WITH_MATERIALS
 WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
@@ -351,6 +353,8 @@ main(){
             extras.append('materials' + suffix)
         if $WITH_DVC:
             extras.append('dvc' + suffix)
+        if $WITH_COMPAT:
+            extras.append('compat' + suffix)
         print('[' + ','.join(extras) + ']')
         ")
 
