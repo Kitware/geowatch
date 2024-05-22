@@ -1611,11 +1611,13 @@ def main(argv=None, **kwargs):
             with safer.open(site_fpath, 'w', temp_file=not ub.WIN32) as f:
                 geojson.dump(site, f, indent=2)
 
+    output_dirs = ub.oset()
     if args.out_sites_fpath is not None:
         site_tracking_output = tracking_output.copy()
         site_tracking_output['files'] = site_fpaths
         out_sites_fpath = ub.Path(args.out_sites_fpath)
         out_sites_fpath.parent.ensuredir()
+        output_dirs.add(out_sites_fpath.parent)
         print(f'Write tracked site result to {out_sites_fpath}')
         with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
@@ -1624,6 +1626,7 @@ def main(argv=None, **kwargs):
     if args.out_site_summaries_dir is not None:
 
         site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
+        output_dirs.add(site_summary_dir)
         # write site summaries to region models on disk
         groups = ub.group_items(all_sites, lambda site: site.header['properties']['region_id'])
 
@@ -1654,9 +1657,13 @@ def main(argv=None, **kwargs):
         site_summary_tracking_output['files'] = site_summary_fpaths
         out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
         out_site_summaries_fpath.parent.ensuredir()
+        output_dirs.add(out_site_summaries_fpath.parent)
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
         with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
+
+    for dpath in output_dirs:
+        rich.print(f'Tracked Result Dir: [link={dpath}]{dpath}[/link]')
 
     if args.viz_out_dir is not None:
         rich.print(f'Tracking Viz: [link={args.viz_out_dir}]{args.viz_out_dir}[/link]')

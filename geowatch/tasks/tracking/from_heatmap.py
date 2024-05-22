@@ -516,7 +516,9 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
                   f'{len(gids_polys)} / {n_orig}')
         elif config.max_area_behavior == 'grid':
             # edits tracks instead of removing them
-            raise NotImplementedError
+            raise NotImplementedError(config.max_area_behavior)
+        else:
+            raise KeyError(config.max_area_behavior)
 
     if config.min_area_square_meters:
         min_area_sqpx = config.min_area_square_meters / (tracking_gsd ** 2)
