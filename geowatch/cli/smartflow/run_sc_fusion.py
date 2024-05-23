@@ -229,6 +229,56 @@ def run_sc_fusion_for_baseline(config):
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
             'test_dataset': ingressed_assets['enriched_acsc_kwcoco_file'],
         } | sc_pxl_config)
+
+        if True:
+            try:
+                # Quick inspection of how big the predicted videos are going to be.
+                from geowatch.utils import util_resolution
+                from geowatch.utils import util_units
+                import numpy as np
+                # from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig
+                # sc_pxl_config['chip_dims']
+                # input_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['input_space_scale'])
+                num_output_channels = 6  # hard coded for the quick check
+                for video in ingress_dset.dataset['videos']:
+                    output_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['output_space_scale'])
+                    output_resolution = util_resolution.ResolvedUnit.coerce('4GSD')
+                    vidname = video['name']
+                    vid_width = video['width']
+                    vid_height = video['height']
+                    num_frames = video['num_frames']
+                    video_resolution = util_resolution.ResolvedUnit.coerce(video['resolution'])
+                    video_dsize = util_resolution.ResolvedWindow((vid_width, vid_height), video_resolution)
+                    # input_dsize = video_dsize.at_resolution(input_resolution)
+                    output_dsize = video_dsize.at_resolution(output_resolution)
+                    output_frame_pixels = np.prod(output_dsize.window)
+                    bytes_per_cell = np.dtype('float32').itemsize
+                    num_raster_cells = output_frame_pixels * num_frames
+                    total_bytes = num_raster_cells * bytes_per_cell
+                    ureg = util_units.unit_registry()
+                    size_per_channel = (total_bytes * ureg.bytes).to('gigabytes')
+                    total_size = num_output_channels * size_per_channel
+
+                    memory_max_gb = 8
+                    factor = np.sqrt(total_size.m / memory_max_gb)
+                    if factor > 1:
+                        output_resolution = util_resolution.ResolvedUnit(output_resolution.mag * factor, output_resolution.unit)
+                        output_dsize = video_dsize.at_resolution(output_resolution)
+                        output_frame_pixels = np.prod(output_dsize.window)
+                        bytes_per_cell = np.dtype('float32').itemsize
+                        num_raster_cells = output_frame_pixels * num_frames
+                        total_bytes = num_raster_cells * bytes_per_cell
+                        ureg = util_units.unit_registry()
+                        size_per_channel = (total_bytes * ureg.bytes).to('gigabytes')
+                        total_size = num_output_channels * size_per_channel
+                        # output_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['output_space_scale'])
+                    print(f'{vidname} - {total_size:0.2f} - WH={output_dsize},  T={num_frames}, C={num_output_channels}')
+
+                ingress_dset.videos()
+            except Exception as ex:
+                print('Quick Introspection failed:')
+                print(f'ex = {ub.urepr(ex, nl=1)}')
+
         command = sc_pxl.command()
 
         try:

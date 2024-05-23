@@ -3401,11 +3401,14 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
+    def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):
         """
         Args:
             sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
             mode (str): fit or predict
+            autobuild (bool):
+                if False, defer potentially expensive initialization. In this
+                case the user must call ``._init()``
             **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
         """
         config = KWCocoVideoDatasetConfig(**kwargs)
@@ -3419,8 +3422,9 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                 sampler,
                 workdir=config.sampler_workdir,
                 backend=config.sampler_backend)
-            workers = util_parallel.coerce_num_workers(config.sampler_workers)
-            sampler.frames.prepare(workers=workers)
+            if autobuild:
+                workers = util_parallel.coerce_num_workers(config.sampler_workers)
+                sampler.frames.prepare(workers=workers)
 
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
@@ -3430,8 +3434,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                 chip_dims = (chip_dims, chip_dims)
             chip_h, chip_w = chip_dims
             window_dims = (chip_h, chip_w)
-        time_dims = config['time_steps']
-        window_overlap = config['chip_overlap']
+        config['chip_dims'] = window_dims
 
         self.config = config
         import rich
@@ -3479,85 +3482,10 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
-        channels = config['channels']
-        max_epoch_length = config['max_epoch_length']
-
         self.disable_augmenter = False
         self.augment_rng = kwarray.ensure_rng(None)
-
-        import os
-        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
-        common_grid_kw = dict(
-            time_dims=time_dims,
-            window_dims=window_dims,
-            window_overlap=window_overlap,
-            exclude_sensors=config['exclude_sensors'],
-            include_sensors=config['include_sensors'],
-            select_images=config['select_images'],
-            select_videos=config['select_videos'],
-            time_sampling=config['time_sampling'],
-            time_span=config['time_span'],
-            time_kernel=config['time_kernel'],
-            window_space_scale=self.config['window_space_scale'],
-            set_cover_algo=config['set_cover_algo'],
-            workers=grid_workers,  # could configure this
-            use_cache=self.config['use_grid_cache'],
-            respect_valid_regions=self.config['use_grid_valid_regions'],
-        )
-        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
-
-        grid_kw = common_grid_kw.copy()
-
-        # Remember this for backwards compat
-        self._old_balance_as_negative_classes = (
-            self.ignore_classes | self.background_classes | self.negative_classes)
-
-        annot_helper_kws = dict(
-            # negative_classes=self._old_balance_as_negative_classes,
-            keepbound=False,
-            use_annot_info=True,
-            use_centered_positives=config['use_centered_positives'],
-            use_grid_positives=config['use_grid_positives'],
-            use_grid_negatives=config['use_grid_negatives'],
-        )
-
-        if mode == 'custom':
-            new_sample_grid = None
-            self.length = 1
-        elif mode == 'test':
-            # FIXME: something is wrong with the cache when using an sqlview.
-            # In test mode we have to sample everything for BAS
-            # (TODO: for activity clf, we should only focus on candidate regions)
-
-            if test_with_annot_info:
-                grid_kw.update(annot_helper_kws)
-            else:
-                grid_kw.update(dict(
-                    keepbound=True,
-                    use_annot_info=False,
-                ))
-
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-            self.length = len(new_sample_grid['targets'])
-        else:
-            grid_kw.update(annot_helper_kws)
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-
-            if 1:
-                self._init_balance(new_sample_grid)
-
-            self.length = len(self.balanced_sampler)
-
-            if max_epoch_length is not None:
-                self.length = min(self.length, max_epoch_length)
-
-        self.new_sample_grid = new_sample_grid
+        self.mode = mode
+        self.test_with_annot_info = test_with_annot_info
 
         # Used for mutex style losses where there is no data that can be used
         # to label a pixel.
@@ -3565,13 +3493,13 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         # should probably design a clean method of communicating between the
         # dataset and model first.
         self.ignore_index = -100
-
         self.special_inputs = {}
 
+        channels = config['channels']
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
-            sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+            sensorchan_hist = kwcoco_extensions.coco_channel_stats(self.sampler.dset)['sensorchan_hist']
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
                 for c in chan_hist.keys():
@@ -3598,7 +3526,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up
             if sensorchan_hist is None:
-                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
+                sensorchan_stats = kwcoco_extensions.coco_channel_stats(self.sampler.dset)
                 sensorchan_hist = sensorchan_stats['sensorchan_hist']
 
             expanded_input_sensorchan_streams = []
@@ -3701,6 +3629,88 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             ub.oset(['sam.0', 'sam.1', 'sam.2']),
             ub.oset(['sam.3', 'sam.4', 'sam.5']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+        if autobuild:
+            self._init()
+
+    def _init(self):
+        """
+        The expensive part of initialization.
+        """
+        import os
+        config = self.config
+        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+        common_grid_kw = dict(
+            time_dims=config.time_steps,
+            window_dims=config['chip_dims'],
+            window_overlap=config['chip_overlap'],
+            exclude_sensors=config['exclude_sensors'],
+            include_sensors=config['include_sensors'],
+            select_images=config['select_images'],
+            select_videos=config['select_videos'],
+            time_sampling=config['time_sampling'],
+            time_span=config['time_span'],
+            time_kernel=config['time_kernel'],
+            window_space_scale=self.config['window_space_scale'],
+            set_cover_algo=config['set_cover_algo'],
+            workers=grid_workers,  # could configure this
+            use_cache=self.config['use_grid_cache'],
+            respect_valid_regions=self.config['use_grid_valid_regions'],
+        )
+        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
+
+        grid_kw = common_grid_kw.copy()
+
+        # Remember this for backwards compat
+        self._old_balance_as_negative_classes = (
+            self.ignore_classes | self.background_classes | self.negative_classes)
+
+        annot_helper_kws = dict(
+            # negative_classes=self._old_balance_as_negative_classes,
+            keepbound=False,
+            use_annot_info=True,
+            use_centered_positives=config['use_centered_positives'],
+            use_grid_positives=config['use_grid_positives'],
+            use_grid_negatives=config['use_grid_negatives'],
+        )
+        mode = self.mode
+        if mode == 'custom':
+            new_sample_grid = None
+            self.length = 1
+        elif mode == 'test':
+            # FIXME: something is wrong with the cache when using an sqlview.
+            # In test mode we have to sample everything for BAS
+            # (TODO: for activity clf, we should only focus on candidate regions)
+
+            if self.test_with_annot_info:
+                grid_kw.update(annot_helper_kws)
+            else:
+                grid_kw.update(dict(
+                    keepbound=True,
+                    use_annot_info=False,
+                ))
+
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                dset=self.sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+            self.length = len(new_sample_grid['targets'])
+        else:
+            grid_kw.update(annot_helper_kws)
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                self.sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+
+            if 1:
+                self._init_balance(new_sample_grid)
+
+            self.length = len(self.balanced_sampler)
+
+            if config['max_epoch_length'] is not None:
+                self.length = min(self.length, config['max_epoch_length'])
+
+        self.new_sample_grid = new_sample_grid
 
         self.prenormalizers = None
 

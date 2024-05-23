@@ -222,8 +222,8 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
     Holds just the unit information (e.g. X GSD)
 
     Example:
-        >>> from geowatch.utils.util_resolution import *  # NOQA
-        >>> self = ResolvedUnit.parse('8GSD')
+        >>> from geowatch.utils import util_resolution
+        >>> self = util_resolution.ResolvedUnit.parse('8GSD')
         >>> print('self = {}'.format(ub.urepr(self, nl=1, si=1)))
         self = <ResolvedUnit(8 GSD)>
     """

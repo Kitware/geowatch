@@ -965,6 +965,8 @@ class NodeStateDebugger:
                 # system to pull in any updates for testing.
                 git remote add host /extern_code/geowatch/.git
                 git fetch host
+                # need to git checkout <branch>
+                # need to git pull host/<branch>
                 ''')
             print()
             print(helper_text)
