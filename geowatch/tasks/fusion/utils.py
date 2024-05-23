@@ -8,13 +8,6 @@ import kwimage
 millnames = ['', ' K', ' M', ' B', ' T']
 
 
-try:
-    import xdev
-    profile = xdev.profile
-except Exception:
-    profile = ub.identity
-
-
 def millify(n):
     n = float(n)
     millidx = max(0, min(len(millnames) - 1,
@@ -381,7 +374,6 @@ class SinePositionalEncoding(nn.Module):
         encoding = torch.stack(parts, dim=1)
         return encoding
 
-    @profile
     def forward(self, x):
         device = x.device
         expanded_shape = list(x.shape)

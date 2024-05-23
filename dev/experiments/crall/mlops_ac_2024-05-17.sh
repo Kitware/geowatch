@@ -63,6 +63,14 @@ MODEL_SHORTLIST="
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002_epoch3_step676.pt
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
+
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch359_step122881.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch1_step42042.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch3_step84084.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch2_step63063.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch4_step105105.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch5_step122881.pt
 "
 
 
