@@ -751,18 +751,18 @@ class TruthMixin:
             task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
+        if self.config.upweight_centers or self.config.upweight_time is not None:
+            if self.config.upweight_time is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.upweight_time
+                upweight_time = self.config.upweight_time
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
 
         truth_info = {
             'task_tid_to_cnames': task_tid_to_cnames,
@@ -1078,7 +1078,7 @@ class TruthMixin:
                 if max_weight > 0:
                     task_target_weight['class'] /= max_weight
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
         generic_frame_weight = self._build_generic_frame_weights(output_dsize,
                                                                  mode_to_invalid_mask,
                                                                  meta_info,
@@ -1086,13 +1086,13 @@ class TruthMixin:
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-        if self.ignore_dilate > 0:
+        if self.config.ignore_dilate > 0:
             for k, v in task_target_ignore.items():
-                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.config.ignore_dilate)
 
-        if self.weight_dilate > 0:
+        if self.config.weight_dilate > 0:
             for k, v in task_target_weight.items():
-                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.config.weight_dilate)
 
         frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
@@ -1134,18 +1134,18 @@ class GetItemMixin(TruthMixin):
     """
 
     def _prepare_meta_info(self, num_frames):
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
+        if self.config.upweight_centers or self.config.upweight_time is not None:
+            if self.config.upweight_time is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.upweight_time
+                upweight_time = self.config.upweight_time
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
         meta_info = {
             'time_weights': time_weights,
         }
@@ -1289,10 +1289,10 @@ class GetItemMixin(TruthMixin):
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-        if self.upweight_centers:
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
+        if self.config.upweight_centers:
             space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+            space_weights = np.maximum(space_weights, self.config.min_spacetime_weight)
             spacetime_weights = space_weights * time_weights[time_idx]
         else:
             spacetime_weights = 1
@@ -1734,7 +1734,7 @@ class GetItemMixin(TruthMixin):
         target_['allow_augment'] = allow_augment
 
         if not self.inference_only:
-            target_['dist_weights'] = target_.get('dist_weights', self.dist_weights)
+            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
 
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
@@ -1771,7 +1771,7 @@ class GetItemMixin(TruthMixin):
         # if self.config['prenormalize_inputs'] is not None:
         #     raise NotImplementedError
 
-        if self.normalize_perframe:
+        if self.config.normalize_perframe:
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
@@ -1791,7 +1791,7 @@ class GetItemMixin(TruthMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.normalize_peritem is not None and self.normalize_peritem is not False:
+        if self.config.normalize_peritem is not None and self.config.normalize_peritem is not False:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:
@@ -1799,7 +1799,7 @@ class GetItemMixin(TruthMixin):
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
-                    common_key = mode_chan.intersection(self.normalize_peritem)
+                    common_key = mode_chan.intersection(self.config.normalize_peritem)
                     if common_key:
                         parent_data = frame_modes[mode_key]
                         for chan_name, chan_sl in mode_chan.component_indices(axis=0).items():
@@ -3410,6 +3410,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                 if False, defer potentially expensive initialization. In this
                 case the user must call ``._init()``
             **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+                these options will be stored in the ``.config`` attribute.
         """
         config = KWCocoVideoDatasetConfig(**kwargs)
 
@@ -3439,7 +3440,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         self.config = config
         import rich
         rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
-        # TODO: maintain instance variables xor items in the config, not both.
+        # TODO: remove this line. Reduce the number of top-level attributes and
+        # maintain initialization variables in the config object itself.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
 
@@ -3600,8 +3602,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         else:
             self.normalize_peritem = None
 
-        self.mode = mode
-
         # hidden option for now (todo: expose this)
         self.inference_only = False
         self.requested_tasks = {
@@ -3641,7 +3641,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         config = self.config
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
         common_grid_kw = dict(
-            time_dims=config.time_steps,
+            time_dims=config['time_steps'],
             window_dims=config['chip_dims'],
             window_overlap=config['chip_overlap'],
             exclude_sensors=config['exclude_sensors'],
