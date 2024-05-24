@@ -24,8 +24,19 @@ def coerce_kwcoco(data='geowatch-msi', **kwargs):
 
         **kwargs:
             modify how the demodata is created. For `geowatch-msi`, see
-            :func:`demo_kwcoco_multisensor`, which has args like: `dates`,
-            `geodata`, `heatmap`.
+            :func:`demo_kwcoco_multisensor`, a selection of useful args are:
+                `dates: bool` - add random dates to images
+                `geodata: bool` - assign images to random geo locations
+                `heatmap: bool` - add noisy heatmaps as channels
+                `image_size: Tuple[int, int]` - control size of images
+                `num_videos: int` - control number of videos
+                `num_frames: int` - control length of videos
+                `num_tracks: int` - control number of objects
+                `multispectral: bool` - control dummy channels
+                `multisensor: bool` - control dummy sensors
+                `bad_nodata: bool` - control if nodata values exist
+                `max_speed: float` - control speed of demo objects
+                `anchors` - bounding box templates for objects, see kwcoco demo docs..
 
     Example:
         >>> import geowatch

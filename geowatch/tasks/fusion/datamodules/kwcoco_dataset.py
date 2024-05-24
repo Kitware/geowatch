@@ -247,6 +247,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         module.
         '''))
 
+    dynamic_fixed_resolution = scfg.Value(None, help=ub.paragraph(
+        '''
+        Experimental. Added in 0.17.1
+        This is a test time option. The idea is that we will modify the input,
+        output, and window scale for large videos.
+        '''))
+
     ##############
     # TIME OPTIONS
     ##############

@@ -202,6 +202,11 @@ def sample_video_spacetime_targets(dset,
     Ask jon about what the params mean if you need this.
     This code badly needs a refactor.
 
+    TODO:
+        - [ ] Deprecate in favor of `SpacetimeGridBuilder`, and incorporate as
+              the "build" function, but with a nicer namespace to work with
+              instead of functions with tons of arguments.
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
@@ -564,6 +569,10 @@ def _sample_single_video_spacetime_targets(
 
     video_name = video_info['name']
 
+    if True:
+        # TODO: handle dynamic resolution requests here.
+        ...
+
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
     vidspace_gsd = video_info.get('target_gsd', None)
@@ -595,7 +604,12 @@ def _sample_single_video_spacetime_targets(
         else:
             raise KeyError(winspace_space_dims)
     else:
-        winspace_window_height, winspace_window_width = winspace_space_dims
+        try:
+            winspace_window_height, winspace_window_width = winspace_space_dims
+        except Exception:
+            print(f'winspace_space_dims = {ub.urepr(winspace_space_dims, nl=1)}')
+            raise
+
         winspace_window_box = kwimage.Boxes([
             [0, 0, winspace_window_width, winspace_window_height]], 'xywh')
         # The window is scaled inversely to the data
@@ -1128,16 +1142,17 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
         >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
-        >>> window_overlap = 0.0
+        >>> window_overlap = 0.2
         >>> window_dims = (32, 32)
-        >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
         >>> use_centered_positives = True
         >>> use_grid_positives = 1
-        >>> time_dims = 3
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, time_dims, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
+        >>> time_dims = 1
+        >>> sample_grid = SpacetimeGridBuilder(
+        >>>     dset=dset, time_dims=time_dims, window_dims=window_dims,
+        >>>     window_overlap=window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=use_grid_positives,
+        >>>     use_centered_positives=use_centered_positives).build()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> plt = kwplot.autoplt()
@@ -1156,11 +1171,12 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> #
         >>> # Now demo this same grid, but where we are sampling at a different resolution
         >>> window_space_scale = 0.3
-        >>> sample_grid2 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives,
+        >>> builder2 = SpacetimeGridBuilder(
+        >>>     dset=dset, time_dims=time_dims, window_dims=window_dims, window_overlap=window_overlap,
+        >>>     time_sampling=time_sampling, use_grid_positives=use_grid_positives,
         >>>     use_centered_positives=use_centered_positives,
         >>>     window_space_scale=window_space_scale)
+        >>> sample_grid2 = builder2.build()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> plt = kwplot.autoplt()
@@ -1270,10 +1286,17 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
                              'negative_grid': 0}[label]
                 for info in items:
                     space_slice = info['space_slice']
+
+                    # Hack to fix fractional slices
+                    box = kwimage.Box.from_slice(space_slice)
+                    box = box.quantize()
+                    space_slice = box.to_slice()
+
                     y_sl, x_sl = space_slice
                     # ww = x_sl.stop - x_sl.start
                     # wh = y_sl.stop - y_sl.start
-                    ss = accum[(label_idx,) + space_slice].shape
+                    _index = (label_idx,) + space_slice
+                    ss = accum[_index].shape
                     if np.prod(ss) > 0:
                         vals = util_kwimage.upweight_center_mask(ss)
                         vals = np.maximum(vals, 0.1)

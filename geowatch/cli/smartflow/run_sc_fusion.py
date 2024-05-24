@@ -258,6 +258,7 @@ def run_sc_fusion_for_baseline(config):
                     ureg = util_units.unit_registry()
                     size_per_channel = (total_bytes * ureg.bytes).to('gigabytes')
                     total_size = num_output_channels * size_per_channel
+                    print(f'{vidname} - {total_size:0.2f} - WH={output_dsize},  T={num_frames}, C={num_output_channels}')
 
                     memory_max_gb = 8
                     factor = np.sqrt(total_size.m / memory_max_gb)
