@@ -421,11 +421,11 @@ def _build_grid(builder):
             print(f'Query {len(selected_images)} sql rows, may take time')
             # self = selected_images
             # key = 'video_id'
-            with ub.Timer('sql query'):
-                selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
-                # selected_vidid_per_gid = self._dset._column_lookup(
-                #     tablename=self._key, key=key, rowids=self._ids)
-                # f1dfe5897bbf49a09a9e0a4e63809dc95248d2d3b3cbd993f0d8b399dba60d746dc537a3bde46a8a066b227efafbbb7b38dc254c7bac1bae9ff09f4d64976956
+            # with ub.Timer('sql query'):
+            selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
+            # selected_vidid_per_gid = self._dset._column_lookup(
+            #     tablename=self._key, key=key, rowids=self._ids)
+            # f1dfe5897bbf49a09a9e0a4e63809dc95248d2d3b3cbd993f0d8b399dba60d746dc537a3bde46a8a066b227efafbbb7b38dc254c7bac1bae9ff09f4d64976956
         else:
             selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
 
@@ -446,8 +446,7 @@ def _build_grid(builder):
         workers = min(len(all_vid_ids), workers)
         if workers == 1:
             workers = 0
-        mode = 'process'
-        jobs = ub.JobPool(mode=mode, max_workers=workers)
+        jobs = ub.JobPool(mode='process', max_workers=workers)
 
         # TODO: Reducing the information that needs to be passed to each worker
         # would help improve speed here. The dset itself is the biggest offender.
@@ -575,11 +574,9 @@ def _sample_single_video_spacetime_targets(
         }
 
     video_name = video_info['name']
-
-    if dynamic_fixed_resolution is not None:
-        raise NotImplementedError('todo')
-        # TODO: handle dynamic resolution requests here.
-        ...
+    vidspace_video_height = video_info['height']
+    vidspace_video_width = video_info['width']
+    vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
 
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
@@ -587,9 +584,51 @@ def _sample_single_video_spacetime_targets(
     resolved_scale = data_utils.resolve_scale_request(
         request=window_space_scale, data_gsd=vidspace_gsd)
     window_scale = resolved_scale['scale']
+    # Convert winspace to vidspace and use that for the rest of the function
+    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
+
+    # If the grid is going to force resolutions, we populate this
+    forced_resolutions = {}
+
+    # Hack: modify the window resolution if the dynamic fixed resolution
+    # behavior is on.
+    import kwutil
+    dynamic_fixed_resolution = kwutil.util_yaml.Yaml.coerce(dynamic_fixed_resolution)
+    if dynamic_fixed_resolution is not None:
+        if isinstance(dynamic_fixed_resolution, dict):
+            max_winspace_full_dims = dynamic_fixed_resolution.get('max_winspace_full_dims', None)
+            if max_winspace_full_dims is not None:
+                max_winspace_full_dims = np.array(max_winspace_full_dims)
+                dynamic_factor = (max_winspace_full_dims / winspace_full_dims).min()
+                if dynamic_factor < 1.0:
+                    print('---')
+                    print('Handle dynamic resolution adjustment')
+                    print(f'before: winspace_full_dims={winspace_full_dims}')
+                    print(f'before: resolved_scale = {ub.urepr(resolved_scale, nl=1)}')
+                    print(f'window_scale = {ub.urepr(window_scale, nl=1)}')
+                    # Adjust the scale
+                    window_scale = resolved_scale['scale'] * dynamic_factor
+                    resolved_scale = data_utils.resolve_scale_request(
+                        request=window_scale, data_gsd=vidspace_gsd)
+                    # Convert winspace to vidspace and use that for the rest of the function
+                    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
+                    # Note: these names should change to input_resolution / output_resolution at some point
+                    forced_resolutions['input_space_scale'] = str(resolved_scale['gsd']) + 'GSD'
+                    forced_resolutions['output_space_scale'] = str(resolved_scale['gsd']) + 'GSD'
+                    print(f'dynamic_factor = {ub.urepr(dynamic_factor, nl=1)}')
+                    print(f'max_winspace_full_dims = {ub.urepr(max_winspace_full_dims, nl=1)}')
+                    print(f'after: winspace_full_dims={winspace_full_dims}')
+                    print(f'after: resolved_scale = {ub.urepr(resolved_scale, nl=1)}')
+                    print('---')
+                # raise NotImplementedError
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError('todo')
+        # TODO: handle dynamic resolution requests here.
+        ...
 
     vidspace_time_dims = winspace_time_dims
-
     time_sampler = tsm.MultiTimeWindowSampler.from_coco_video(
         dset, video_id, gids=video_gids, time_window=vidspace_time_dims,
         affinity_type=affinity_type, update_rule=update_rule, name=video_name,
@@ -601,11 +640,6 @@ def _sample_single_video_spacetime_targets(
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
     time_sampler.deterministic = True
 
-    # Convert winspace to vidspace and use that for the rest of the function
-    vidspace_video_height = video_info['height']
-    vidspace_video_width = video_info['width']
-    vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
-    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
     if isinstance(winspace_space_dims, str):
         if winspace_space_dims == 'full':
             vidspace_window_dims = vidspace_full_dims
@@ -782,6 +816,10 @@ def _sample_single_video_spacetime_targets(
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
                     video_targets.append(target)
+
+        if forced_resolutions:
+            for target in video_targets:
+                target.update(forced_resolutions)
 
         _cached = {
             'video_targets': video_targets,

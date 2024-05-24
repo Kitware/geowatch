@@ -29,7 +29,7 @@ Example:
     >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
     >>>                           channels='r|g|b')
     >>> self.disable_augmenter = True
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
     >>> item = self[index]
     >>> # Summarize batch item in text
     >>> summary = self.summarize_item(item)
@@ -69,7 +69,7 @@ Example:
     >>> annots = self.sampler.dset.annots()
     >>> annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
     >>> self.disable_augmenter = False
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> summary = self.summarize_item(item)
     >>> print('item summary: ' + ub.urepr(summary, nl=3))
@@ -96,7 +96,7 @@ Example:
     >>>                           modality_dropout=0.5,
     >>>                           temporal_dropout=0.5)
     >>> assert not self.disable_augmenter
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> assert item['target']['allow_augment']
     >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
@@ -1418,7 +1418,7 @@ class GetItemMixin(TruthMixin):
         # * an integer index
 
         if isinstance(index, dict):
-            print(f'index={index}')
+            # print(f'index={index}')
             target = index
             requested_index = 'given-as-dictionary'
             resolved_index = 'given-as-dictionary'
@@ -1434,7 +1434,7 @@ class GetItemMixin(TruthMixin):
                     resolved_index = self.balanced_sampler.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
-            target = self.new_sample_grid['targets'][resolved_index]
+            target = self.sample_grid['targets'][resolved_index]
 
         target = target.copy()
         target['requested_index'] = requested_index
@@ -1698,7 +1698,7 @@ class GetItemMixin(TruthMixin):
             >>> self.catname_to_weight = catname_to_weight
             >>> #
             >>> index = 0
-            >>> index = target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][4]]
+            >>> index = target = self.sample_grid['targets'][self.sample_grid['positives_indexes'][4]]
             >>> item = self[index]
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item)
@@ -2011,7 +2011,7 @@ class GetItemMixin(TruthMixin):
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
                                    gid_to_isbad, gid_to_sample)
 
-        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+        time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
 
         # If we skipped the main gid, record why
@@ -2127,7 +2127,7 @@ class GetItemMixin(TruthMixin):
         # If any image is junk allow for a resample
         if any(gid_to_isbad.values()):
             vidid = target_['video_id']
-            time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+            time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
             for iter_idx in range(max_tries):
                 # print(f'resample try iter_idx={iter_idx}')
                 good_gids = np.array([gid for gid, flag in gid_to_isbad.items() if not flag])
@@ -2225,7 +2225,7 @@ class IntrospectMixin:
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=size, default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> canvas = self.draw_item(item, draw_weights=False)
             >>> # xdoctest: +REQUIRES(--show)
@@ -2255,8 +2255,8 @@ class IntrospectMixin:
             >>> coco_dset.clear_annotations()
             >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
             >>> #index = len(self) // 4
-            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
-            >>> index = self.new_sample_grid['targets'][0]
+            >>> #index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][5]]
+            >>> index = self.sample_grid['targets'][0]
             >>> # More controlled settings for debug
             >>> self.disable_augmenter = True
             >>> item = self[index]
@@ -2289,7 +2289,7 @@ class IntrospectMixin:
             >>> })
             >>> config, model, datamodule = _prepare_predict_modules(config)
             >>> self = datamodule.torch_datasets['test']
-            >>> index = self.new_sample_grid['targets'][0]
+            >>> index = self.sample_grid['targets'][0]
             >>> # More controlled settings for debug
             >>> self.disable_augmenter = True
             >>> combinable_extra = None
@@ -2369,7 +2369,7 @@ class IntrospectMixin:
             >>>     coco_dset, time_dims=4, window_dims=(300, 300),
             >>>     channels='r|g|b')
             >>> self.disable_augmenter = True
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> summary = self.summarize_item(item, stats=True)
             >>> print(f'summary = {ub.urepr(summary, nl=-1)}')
@@ -2469,9 +2469,9 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = 0
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
-        >>> num_targets = len(self.new_sample_grid['targets'])
-        >>> positives_indexes = self.new_sample_grid['positives_indexes']
-        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> num_targets = len(self.sample_grid['targets'])
+        >>> positives_indexes = self.sample_grid['positives_indexes']
+        >>> negatives_indexes = self.sample_grid['negatives_indexes']
         >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
         >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
         >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
@@ -2484,9 +2484,9 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = .5
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
-        >>> num_targets = len(self.new_sample_grid['targets'])
-        >>> positives_indexes = self.new_sample_grid['positives_indexes']
-        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> num_targets = len(self.sample_grid['targets'])
+        >>> positives_indexes = self.sample_grid['positives_indexes']
+        >>> negatives_indexes = self.sample_grid['negatives_indexes']
         >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
         >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
         >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
@@ -3369,7 +3369,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> target = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> item = self[target]
         >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
@@ -3395,7 +3395,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> Box = kwimage.Box
         >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
         >>> item = self[index]
@@ -3717,7 +3717,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             if config['max_epoch_length'] is not None:
                 self.length = min(self.length, config['max_epoch_length'])
 
-        self.new_sample_grid = new_sample_grid
+        self.sample_grid = new_sample_grid
 
         self.prenormalizers = None
 
@@ -3810,7 +3810,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
+            >>> for target in self.sample_grid['targets']:
             ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
             ...     shist = ub.dict_hist(sensors)
             ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
@@ -3850,7 +3850,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
+            >>> for target in self.sample_grid['targets']:
             ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
             ...     shist = ub.dict_hist(sensors)
             ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
@@ -3887,7 +3887,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>>     neg_to_pos_ratio=0, time_sampling='soft2',
             >>> )
             >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> index['allow_augment'] = False
             >>> item = self[index]
             >>> target = item['target']
@@ -3946,7 +3946,7 @@ def more_demos():
         >>> self.requested_tasks['saliency'] = 1
         >>> self.requested_tasks['class'] = 0
         >>> self.requested_tasks['boxes'] = 1
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> index['allow_augment'] = False
         >>> item = self[index]
         >>> target = item['target']
@@ -4028,9 +4028,9 @@ def more_demos():
         >>> videos = self.sampler.dset.videos()
         >>> vidid_to_cleared = ub.udict(ub.dzip(videos.lookup('id'), videos.lookup('cleared', False)))
         >>> assert self.config['use_grid_negatives'] == 'cleared'
-        >>> positive_idxs = self.new_sample_grid['positives_indexes']
-        >>> negative_idxs = self.new_sample_grid['negatives_indexes']
-        >>> targets = self.new_sample_grid['targets']
+        >>> positive_idxs = self.sample_grid['positives_indexes']
+        >>> negative_idxs = self.sample_grid['negatives_indexes']
+        >>> targets = self.sample_grid['targets']
         >>> negative_video_ids = {targets[x]['video_id'] for x in negative_idxs}
         >>> positive_video_ids = {targets[x]['video_id'] for x in positive_idxs}
         >>> assert all(vidid_to_cleared.subdict(negative_video_ids).values())
@@ -4052,7 +4052,7 @@ def more_demos():
         >>> self.config['mask_low_quality'] = True
         >>> self.config['force_bad_frames'] = True
         >>> self.config['resample_invalid_frames'] = 0
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
         >>> item1 = self[index]
         >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
         >>> item2 = self[index]

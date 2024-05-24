@@ -10,6 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Confusion analysis is now run in per-stage metrics.
 * New task: `poly_from_point` that contains various methods to transform
   point-based annotations into polygon-based ones using heuristics.
+* Added `dynamic_fixed_resolution` as an experimental kwcocodataset option
 
 ### Changed
 * Baseline tensorboard callback now also does the stacking automatically.
@@ -17,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * `geowatch.cli.draw_region` now correctly draws timeline information and does a better job at distinguishing them. 
 * Fixed issue where DinoSV would output the same decision for every site.
+* Fixed issue in GSD calculation in the grid builder when unitless scale factors are given.
 
 ### Removed
 * Removed dependency on netharn. All relevant code has been vendored into helper modules.

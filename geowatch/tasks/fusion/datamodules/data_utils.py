@@ -96,7 +96,7 @@ def resolve_scale_request(request=None, data_gsd=None):
 
     if final_gsd is None:
         if data_gsd is not None:
-            final_gsd = np.array(data_gsd) * final_scale
+            final_gsd = np.array(data_gsd) / final_scale
 
     resolved = {
         'scale': final_scale,
