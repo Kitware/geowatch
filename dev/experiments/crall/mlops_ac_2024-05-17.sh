@@ -64,6 +64,13 @@ MODEL_SHORTLIST="
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_100pctphase.pt
 - /home/local/KHQ/jon.crall/data/dvc-repos/smart_phase3_expt/models/fusion/dzyne/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_85pctphase.pt
 
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch38_step6591.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch3_step676.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch9_step1690.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch5_step2052.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch113_step38988.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch2_step1026.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch78_step27018.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch359_step122881.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch1_step42042.pt
@@ -71,6 +78,10 @@ MODEL_SHORTLIST="
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch2_step63063.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch4_step105105.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch5_step122881.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch18_step3211.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch24_step4225.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch25_step4394.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003_epoch26_step4563.pt
 "
 
 
@@ -209,7 +220,7 @@ python -m geowatch.mlops.schedule_evaluation --params="
     --queue_name "$MLOPS_DNAME" \
     --devices="0,1,2,3" \
     --backend=tmux --tmux_workers=8 \
-    --cache=1 --skip_existing=1 --run=0
+    --cache=1 --skip_existing=1 --run=1
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)

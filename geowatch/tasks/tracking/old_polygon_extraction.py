@@ -239,6 +239,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             ureg = util_units.unit_registry()
             total_size = (total_bytes * ureg.bytes).to('gigabytes')
             print(f'Loading heatmaps will use {total_size} in memory')
+            print(f'mem_info = {ub.urepr(mem_info, nl=1)}')
 
             # TODO: dynamic resolution reduction
             if total_size.m > 32:
