@@ -3696,7 +3696,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                     keepbound=True,
                     use_annot_info=False,
                 ))
-
+            grid_kw['dynamic_fixed_resolution'] = config.dynamic_fixed_resolution
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 dset=self.sampler.dset, **grid_kw
             )

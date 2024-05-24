@@ -7,7 +7,7 @@ def test_dynamic_resolution():
     self = KWCocoVideoDataset(coco_dset, time_dims=4,
                               window_dims=(128, 128), fixed_resolution='0.3GSD',
                               channels='r|g|b', autobuild=False, mode='test',
-                              use_grid_cache=False)
+                              use_grid_cache=False, dynamic_fixed_resolution=None)
     self._init()
 
     # TODO:
