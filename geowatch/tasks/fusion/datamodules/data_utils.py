@@ -72,6 +72,7 @@ def resolve_scale_request(request=None, data_gsd=None):
         >>>     print('---')
 
     """
+    # FIXME: rectify with util_resolution
     final_gsd = None
     final_scale = None
 
@@ -302,6 +303,10 @@ def _string_to_hashvec(key):
     """
     Transform a string into a 16D float32 uniformly distributed random Tensor
     based on the hash of the string.
+
+    Note there are magic numbers hard-coded in this function, and is the reason
+    for the blake3 dependency. Would likely be better to make it configurable
+    and use sha256 as the default.
     """
     key_hash = ub.hash_data(key, base=16, hasher='blake3').encode()
     key_tensor = np.frombuffer(memoryview(key_hash), dtype=np.int32).astype(np.float32)
@@ -345,6 +350,10 @@ class BalancedSampleTree(ub.NiceRepr):
     """
     Manages a sampling from a tree of indexes. Helps with balancing
     samples over multiple criteria.
+
+    TODO:
+        Move to its own file - possibly a new module. This is a very general
+        construct, and would benefit from binary-language optimizations.
 
     Example:
         >>> from geowatch.tasks.fusion.datamodules.data_utils import BalancedSampleTree
@@ -727,11 +736,10 @@ class BalancedSampleForest(ub.NiceRepr):
 
     @profile
     def _create_forest(self, sample_grid, n_trees, scoring):
-        """ Generate N BalancedSampleTree's, producing a hard assignment for
+        """
+        Generate N BalancedSampleTree's, producing a hard assignment for
         each multi-label attribute. Expects a multi-label attribute to arrive
         as a dictionary with possible values as keys and frequencies as values.
-
-        Example:
         """
         import copy
         forest = []
@@ -855,6 +863,9 @@ class MultiscaleMask:
     resolution, then this will iteravely upscale the masks to the largest
     resolution so far and perform a logical or. This helps keep the memory
     footprint small.
+
+    TODO:
+        Does this live in kwimage?
 
     CommandLine:
         xdoctest -m geowatch.tasks.fusion.datamodules.data_utils MultiscaleMask --show
