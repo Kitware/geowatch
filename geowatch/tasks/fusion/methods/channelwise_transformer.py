@@ -1274,8 +1274,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         if 0:
             train_dataset = self.trainer.datamodule.torch_datasets['train']
-            import xdev
-            xdev.embed()
+            # import xdev
+            # xdev.embed()
             if 0:
                 assert list(train_dataset.predictable_classes) == list(self.classes)
                 print(f'train_dataset.predictable_classes = {ub.urepr(train_dataset.predictable_classes, nl=1)}')

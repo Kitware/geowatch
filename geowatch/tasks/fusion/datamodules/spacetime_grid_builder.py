@@ -36,11 +36,56 @@ Example:
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> canvas = builder.visualize(max_vids=1, max_frames=3)
+    >>> canvas = builder.visualize(max_vids=5, max_frames=5)
     >>> kwplot.imshow(canvas, doclf=1, fnum=2)
     >>> plt.gca().set_title(ub.codeblock(
         '''
         Sampled using larger scaled windows
+        '''))
+    >>> kwplot.show_if_requested()
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+    >>> import geowatch
+    >>> import kwcoco
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
+    >>> coco_fpath = dvc_dpath / 'Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> wh_lut = coco_dset.videos().lookup(['width', 'height'])
+    >>> dsizes = list(zip(wh_lut['width'], wh_lut['height']))
+    >>> window_dims = 128
+    >>> builder = SpacetimeGridBuilder(
+    >>>     dset=coco_dset,
+    >>>     window_dims=window_dims,
+    >>>     time_sampling='soft2+distribute',
+    >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
+    >>>     dynamic_fixed_resolution=None, #{'max_winspace_full_dims': [300, 300]},
+    >>>     keepbound=True,
+    >>>     use_annot_info=1,
+    >>>     use_grid_positives=1,
+    >>>     use_centered_positives=True,
+    >>>     respect_valid_regions=False,  # enabling this is slow
+    >>>     use_cache=0
+    >>> )
+    >>> grid = builder.build()
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> canvas = builder.visualize(max_vids=10, max_frames=5)
+    >>> kwplot.imshow(canvas, doclf=1, fnum=2)
+    >>> relevant_params = ub.udict(builder.kw) & {'window_dims', 'window_overlap', 'time_kernel', 'use_grid_positives', 'use_centered_positives', 'dynamic_fixed_resolution'}
+    >>> relevant_text = ub.urepr(relevant_params, concise=1, nobr=1, si=1, nl=0)
+    >>> print(f'relevant_text = {ub.urepr(relevant_text, nl=1)}')
+    >>> plt.gca().set_title(ub.codeblock(
+        f'''
+        {relevant_text}
+
+        Places a red dot where there is a negative sample (at the center of the negative window)
+
+        Places a blue dot where there is a positive sample
+
+        Draws a yellow polygon over invalid spatial regions.
         '''))
     >>> kwplot.show_if_requested()
 """
@@ -94,8 +139,8 @@ class SpacetimeGridBuilder:
     def __init__(
         builder,
         dset,
-        time_dims,
-        window_dims,
+        time_dims=None,
+        window_dims=None,
         window_overlap=0.0,
         negative_classes=None,
         keepbound=True,
@@ -122,7 +167,7 @@ class SpacetimeGridBuilder:
             dset (kwcoco.CocoDataset): coco dataset
 
             time_dims (int):
-                number of time steps
+                number of time steps (Deprecated, use time_kernel)
 
             window_dims (Tuple[int, int] | str):
                 spatial height, width of the sample region or a string code.
@@ -157,6 +202,7 @@ class SpacetimeGridBuilder:
 
             time_span (str):
                 indicates the desired start/stop date range of the sample
+                (Deprecated, use time_kernel)
 
             time_kernel (str):
                 mutually exclusive with time span.
@@ -374,37 +420,6 @@ class SpacetimeGridBuilder:
                                       max_frames=max_frames)
 
 
-@profile
-def sample_video_spacetime_targets(dset,
-                                   time_dims=None,
-                                   window_dims=None,
-                                   window_overlap=0.0,
-                                   negative_classes=None,
-                                   keepbound=True,
-                                   include_sensors=None,
-                                   exclude_sensors=None,
-                                   select_images=None,
-                                   select_videos=None,
-                                   time_sampling='hard+distribute',
-                                   time_span='2y',
-                                   time_kernel=None,
-                                   use_annot_info=True,
-                                   use_grid_positives=True,
-                                   use_grid_negatives=True,
-                                   use_centered_positives=True,
-                                   window_space_scale=None,
-                                   set_cover_algo=None,
-                                   respect_valid_regions=True,
-                                   dynamic_fixed_resolution=None,
-                                   workers=0,
-                                   use_cache=1):
-    """
-    Old API. Deprecated.
-    """
-    # ub.schedule_deprecation
-    SpacetimeGridBuilder(**locals()).build()
-
-
 def _build_grid(builder):
     dset = builder.dset
     time_dims = builder.time_dims
@@ -493,6 +508,16 @@ def _build_grid(builder):
 
     # TODO: we can disable respect valid regions here and then just do it on
     # the fly in the dataloader, but it is unclear which is more efficient.
+    if winspace_time_dims is None:
+        if time_kernel is not None:
+            from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_multi_time_kernel
+            _multi_time_kernel = coerce_multi_time_kernel(time_kernel)
+            if len(_multi_time_kernel) == 1:
+                winspace_time_dims = len(_multi_time_kernel[0])
+            print(f'INFER: winspace_time_dims = {ub.urepr(winspace_time_dims, nl=1)}')
+            print(f'time_kernel = {ub.urepr(time_kernel, nl=1)}')
+        else:
+            raise ValueError('time dims required if time_kernel not given')
 
     print(f'winspace_time_dims={winspace_time_dims}')
     print(f'winspace_space_dims={winspace_space_dims}')
@@ -716,10 +741,13 @@ def _sample_single_video_spacetime_targets(
     # behavior is on.
     import kwutil
     dynamic_fixed_resolution = kwutil.util_yaml.Yaml.coerce(dynamic_fixed_resolution)
+    """
+    dynamic_fixed_resolution = {'max_winspace_full_dims': [1000, 1000]}
+    """
     if dynamic_fixed_resolution is not None:
         _debug = 1
-        if _debug:
-            print(f'dynamic_fixed_resolution = {ub.urepr(dynamic_fixed_resolution, nl=1)}')
+        # if _debug:
+        #     print(f'dynamic_fixed_resolution = {ub.urepr(dynamic_fixed_resolution, nl=1)}')
         if isinstance(dynamic_fixed_resolution, dict):
             max_winspace_full_dims = dynamic_fixed_resolution.get('max_winspace_full_dims', None)
             if max_winspace_full_dims is not None:
@@ -1443,3 +1471,34 @@ def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         kwplot.autompl()
         kwplot.imshow(dataset_canvas, doclf=1)
     return dataset_canvas
+
+
+@profile
+def sample_video_spacetime_targets(dset,
+                                   time_dims=None,
+                                   window_dims=None,
+                                   window_overlap=0.0,
+                                   negative_classes=None,
+                                   keepbound=True,
+                                   include_sensors=None,
+                                   exclude_sensors=None,
+                                   select_images=None,
+                                   select_videos=None,
+                                   time_sampling='hard+distribute',
+                                   time_span='2y',
+                                   time_kernel=None,
+                                   use_annot_info=True,
+                                   use_grid_positives=True,
+                                   use_grid_negatives=True,
+                                   use_centered_positives=True,
+                                   window_space_scale=None,
+                                   set_cover_algo=None,
+                                   respect_valid_regions=True,
+                                   dynamic_fixed_resolution=None,
+                                   workers=0,
+                                   use_cache=1):
+    """
+    Old API. Deprecated.
+    """
+    # ub.schedule_deprecation
+    SpacetimeGridBuilder(**locals()).build()

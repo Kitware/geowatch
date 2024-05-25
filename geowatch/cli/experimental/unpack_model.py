@@ -31,6 +31,7 @@ class UnpackModelCLI(scfg.DataConfig):
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + escape(ub.urepr(config, nl=1)))
         package_fpath = config.fpath
+        unpack_model(package_fpath)
 
 
 def unpack_model(package_fpath):

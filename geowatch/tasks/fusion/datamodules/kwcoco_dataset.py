@@ -3337,7 +3337,10 @@ class BackwardCompatMixin:
         return self.sample_grid
 
 
-class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMixin, IntrospectMixin, MiscMixin, SpacetimeAugmentMixin, SMARTDataMixin):
+class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
+                         PreprocessMixin, IntrospectMixin, MiscMixin,
+                         SpacetimeAugmentMixin, BackwardCompatMixin,
+                         SMARTDataMixin):
     """
     Accepted keyword arguments are specified in
     :class:`KWCocoVideoDatasetConfig`
