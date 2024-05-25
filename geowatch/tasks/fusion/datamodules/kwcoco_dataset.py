@@ -205,35 +205,30 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         '''), nargs='+')
     fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
         '''
-        If specified, fixes resolution of window, output, and input
-        space.
+        If specified, fixes resolution of window, output, and input space.
         '''))
     window_space_scale = scfg.Value(None, alias=['window_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Change the "scale" or resolution of the video space used by
-        the sliding window. Note: this modifies the GSD BEFORE the
-        sample window has been selected, so the extent and
-        resolution of the data changes. If specified as a numeric
-        value then this is applied to as a scale factor. (E.g.
-        setting this to 2 is equivalent to scaling video space by
-        2). For geospatial data where each video has a "target_gsd",
-        then this can be set to as an absolute by including the
-        "GSD" suffix. (e.g. If this is set to "10GSD", then video
-        space will be scaled to match).
+        Change the "scale" or resolution of the video space used by the sliding
+        window. Note: this modifies the GSD BEFORE the sample window has been
+        selected, so the extent and resolution of the data changes. If
+        specified as a numeric value then this is applied to as a scale factor.
+        (E.g.  setting this to 2 is equivalent to scaling video space by 2).
+        For geospatial data where each video has a "target_gsd", then this can
+        be set to as an absolute by including the "GSD" suffix. (e.g. If this
+        is set to "10GSD", then video space will be scaled to match).
         '''))
     input_space_scale = scfg.Value(None, alias=['space_scale', 'data_space_scale', 'input_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Change the "scale" or resolution of the sampled video space.
-        Note: this modifies the GSD AFTER the sample window has been
-        selected, so the extend of the data does NOT change, but the
-        resolution does. If specified as a numeric value then this
-        is applied to as a scale factor. (E.g. setting this to 2 is
-        equivalent to scaling video space by 2). For geospatial data
-        where each video has a "target_gsd", then this can be set to
-        as an absolute by including the "GSD" suffix. (e.g. If this
-        is set to "10GSD", then video space will be scaled to
-        match). This can also be set to "native" to use
-        heterogeneous sampling.
+        Change the "scale" or resolution of the sampled video space.  Note:
+        this modifies the GSD AFTER the sample window has been selected, so the
+        extend of the data does NOT change, but the resolution does. If
+        specified as a numeric value then this is applied to as a scale factor.
+        (E.g. setting this to 2 is equivalent to scaling video space by 2). For
+        geospatial data where each video has a "target_gsd", then this can be
+        set to as an absolute by including the "GSD" suffix. (e.g. If this is
+        set to "10GSD", then video space will be scaled to match). This can
+        also be set to "native" to use heterogeneous sampling.
         '''))
     output_space_scale = scfg.Value(None, alias=['target_space_scale', 'output_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
@@ -421,15 +416,15 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     prenormalize_inputs = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
         '''
-        Can specified as list of dictionaries that effectively
-        contains the dataset statistics to use. Details of that will be
-        documented as the feature matures. See the geowatch.cli.coco_spectra
-        script to help determine reasonable values for this. These
-        normalizations are applied at the dataloader getitem level. This should
-        be specified as a list of dictionaries each containing: * mean: * std:
-        * min: * max: As well as the Modality to which the normalization
-        applies, e.g.: * domain * channels * sensor If set to True, then we try
-        to automatically compute these values. New in 0.4.3.
+        Can specified as list of dictionaries that effectively contains the
+        dataset statistics to use. Details of that will be documented as the
+        feature matures. See the geowatch.cli.coco_spectra script to help
+        determine reasonable values for this. These normalizations are applied
+        at the dataloader getitem level. This should be specified as a list of
+        dictionaries each containing: * mean: * std: * min: * max: As well as
+        the Modality to which the normalization applies, e.g.: * domain *
+        channels * sensor If set to True, then we try to automatically compute
+        these values. New in 0.4.3.
         '''))
     normalize_perframe = scfg.Value(False, group=NORM_GROUP, help=ub.paragraph(
         '''
@@ -498,9 +493,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     use_cloudmask = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
         '''
         Allow the dataloader to use the quality band to skip frames.
-        DEPRECATED: set quality_threshold=0 to disable the
-        cloudmask. Set to a positive value to use it, up to that
-        threshold.
+        DEPRECATED: set quality_threshold=0 to disable the cloudmask. Set to a
+        positive value to use it, up to that threshold.
         '''))
     quality_threshold = scfg.Value(0.0, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -562,58 +556,56 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # See: ./data_augment.py
 
     augment_space_shift_rate = scfg.Value(0.9, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, perform translation augmentations in this
-            fraction of batch items.
-            '''))
+        '''
+        In fit mode, perform translation augmentations in this
+        fraction of batch items.
+        '''))
     augment_space_xflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random x-flips
-            '''))
+        '''
+        In fit mode, if true, perform random x-flips
+        '''))
     augment_space_yflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random y-flips
-            '''))
+        '''
+        In fit mode, if true, perform random y-flips
+        '''))
     augment_space_rot = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random 90 degree rotations
-            '''))
+        '''
+        In fit mode, if true, perform random 90 degree rotations
+        '''))
     augment_time_resample_rate = scfg.Value(0.8, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, perform temporal jitter this fraction of batch
-            items.
-            '''))
+        '''
+        In fit mode, perform temporal jitter this fraction of batch items.
+        '''))
     temporal_dropout_rate = scfg.Value(1.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops frames in a fraction of batch items.
-            '''))
+        '''
+        Drops frames in a fraction of batch items.
+        '''))
     temporal_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Given that a batch item is selected for temporal dropout,
-            this is the probability that each frame is dropped out. The
-            main frame is never removed.
-            '''))
+        '''
+        Given that a batch item is selected for temporal dropout,
+        this is the probability that each frame is dropped out. The
+        main frame is never removed.
+        '''))
     modality_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            The fraction of batch-items modality dropout is applied to.
-            '''))
+        '''
+        The fraction of batch-items modality dropout is applied to.
+        '''))
     modality_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops late-fused modalities in each frame with this
-            probability, except if the frame only has one modality left.
-            '''))
+        '''
+        Drops late-fused modalities in each frame with this
+        probability, except if the frame only has one modality left.
+        '''))
 
     # TODO: specify channels that are allowed to be dropped out?
     channel_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            The fraction of batch-items channel dropout is applied to.
-            '''))
+        '''
+        The fraction of batch-items channel dropout is applied to.
+        '''))
     channel_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops early-fused channels within each modality with this
-            probability except if it is the last channel within a
-            modality.
-            '''))
+        '''
+        Drops early-fused channels within each modality with this probability
+        except if it is the last channel within a modality.
+        '''))
 
     # TODO:
     # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
@@ -628,18 +620,16 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     #     '''), group=AUGMENTATION_GROUP),
 
     reseed_fit_random_generators = scfg.Value(True, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            This option forces the dataloader random number generator to
-            reseed itself, effectively ignoring any global seed in non-
-            test mode. In test mode, this has no effect. The reason this
-            defaults to True is because of our balanced sampling
-            approach, where the index of a sample passed to getitem is
-            ignored and we randomly return an item acording to the
-            balanced distribution. This relies on randomness and if this
-            was set to False dataloader clones for ddp or multiple
-            workers would generate the same sequence of data regardless
-            of split indexes.
-            '''))
+        '''
+        This option forces the dataloader random number generator to reseed
+        itself, effectively ignoring any global seed in non- test mode. In test
+        mode, this has no effect. The reason this defaults to True is because
+        of our balanced sampling approach, where the index of a sample passed
+        to getitem is ignored and we randomly return an item acording to the
+        balanced distribution. This relies on randomness and if this was set to
+        False dataloader clones for ddp or multiple workers would generate the
+        same sequence of data regardless of split indexes.
+        '''))
 
     def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
