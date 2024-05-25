@@ -680,7 +680,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
     vidid_to_geom_strat = {}
 
     if region_geom is None:
-        region_geom == 'random'
+        region_geom = 'random'
     if isinstance(region_geom, str):
         if region_geom == 'random':
             vidid_to_geom_strat = {vidid: {'type': 'random'} for vidid in video_ids}
