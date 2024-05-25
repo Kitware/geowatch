@@ -247,7 +247,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         module.
         '''))
 
-    dynamic_fixed_resolution = scfg.Value(None, help=ub.paragraph(
+    dynamic_fixed_resolution = scfg.Value(None, type=str, help=ub.paragraph(
         '''
         Experimental. Added in 0.17.1
         This is a test time option. The idea is that we will modify the input,

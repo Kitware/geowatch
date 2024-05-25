@@ -284,7 +284,7 @@ def run_sc_fusion_for_baseline(config):
         print(command)
 
         '''
-        python -m geowatch.tasks.fusion.predict \
+python -m geowatch.tasks.fusion.predict \
             --package_fpath=/root/data/smart_expt_dvc/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt \
             --test_dataset=/tmp/ingress/cropped_kwcoco_for_sc.json \
             --pred_dataset=/tmp/ingress/sc_fusion_kwcoco.json \
