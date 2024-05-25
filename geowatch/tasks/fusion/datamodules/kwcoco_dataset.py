@@ -2784,6 +2784,7 @@ class PreprocessMixin:
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         dataset_stats = cacher.tryload()
+        print('📊 Gather dataset stats')
         if dataset_stats is None or ub.argflag('--force-recompute-stats'):
             dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
@@ -2857,6 +2858,8 @@ class PreprocessMixin:
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
             num = 1  # efficiency hack
+
+        print('🖥️ 📊 Compute dataset stats')
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)
 

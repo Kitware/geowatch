@@ -519,6 +519,7 @@ def _build_grid(builder):
         else:
             raise ValueError('time dims required if time_kernel not given')
 
+    print('🛝 🌐⌚🪟 Gather Sliding Spacetime Windows')
     print(f'winspace_time_dims={winspace_time_dims}')
     print(f'winspace_space_dims={winspace_space_dims}')
     depends = [
@@ -554,6 +555,7 @@ def _build_grid(builder):
                        verbose=4)
     sample_grid = cacher.tryload()
     if sample_grid is None:
+        print('🖥️🛝 🌐⌚🪟 Compute Sliding Spacetime Windows')
 
         # Only build a grid over the selected images / videos
         selected_gids = kwcoco_extensions.filter_image_ids(

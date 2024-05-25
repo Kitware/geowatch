@@ -5,7 +5,7 @@ This demonstrates an end-to-end pipeline on multispectral toydata
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
 
-source ~/code/watch/tutorial/toy_experiments_msi.sh
+source ~/code/geowatch/docs/source/manual/tutorial/tutorial2_msi_network.sh
 "
 
 # Define wherever you want to store results and create the directories
@@ -13,12 +13,14 @@ source ~/code/watch/tutorial/toy_experiments_msi.sh
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
 DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
 
+# Create the above directories of they don't exist
 mkdir -p "$DVC_DATA_DPATH"
 mkdir -p "$DVC_EXPT_DPATH"
 
-NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
-NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
-NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
+# The user can overwrite these variables, but will default if they are not given.
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:=100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:=5}"  # If variable not set or null, use default.
+NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:=2}"  # If variable not set or null, use default.
 
 # Generate toy datasets
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
@@ -42,6 +44,7 @@ print_stats(){
     geowatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 }
 
+# If the train file path does not exist then
 if [[ ! -e "$TRAIN_FPATH" ]]; then
     generate_data
     print_stats
@@ -65,7 +68,7 @@ demo_visualize_toydata(){
 
 
 # Run the function if you want to visualize the data
-demo_visualize_toydata
+# demo_visualize_toydata
 
 # Define the channels we want to use
 # The sensors and channels are specified by the kwcoco SensorChanSpec
@@ -76,6 +79,9 @@ demo_visualize_toydata
 # A "," indicates groups of early fused channels are late fused Multiple
 # sensors can be specified to the left of the channels and will distribute over
 # commas.
+# Note: the channel names dont really mean anything. The demo data generated
+# for them is random / arbitrary. They simply simulate a case where you do have
+# a meaningful multiple-channel dataset you want to learn with.
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 echo "CHANNELS = $CHANNELS"
 
@@ -93,10 +99,19 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 
-# Accelerator is set to "GPU". Set  CUDA_VISIBLE_DEVICES to a
-# comma separated list of the GPU #'s you want to use (index may start at 0).
-export ACCELERATOR=gpu
-export CUDA_VISIBLE_DEVICES=0
+
+# Try to set the accelerator to "GPU", but fallback to cpu if nvidia-smi is not found
+if which nvidia-smi ; then
+    echo "Detected an NVIDIA GPU"
+    export ACCELERATOR=gpu
+    # Set CUDA_VISIBLE_DEVICES to a comma separated list of the GPU #'s you want to
+    # use (index may start at 0).
+    export CUDA_VISIBLE_DEVICES=0
+else
+    echo "No GPU detected, falling back to CPU"
+    export ACCELERATOR=cpu
+    export CUDA_VISIBLE_DEVICES=
+fi
 
 # However, if you have only have a cpu, the tutorial will still run.
 # Comment out the above two commands and enable the command below.
