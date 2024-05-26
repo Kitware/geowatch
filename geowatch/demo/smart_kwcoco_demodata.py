@@ -658,7 +658,8 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes5-multispectral')
         >>> modified = hack_seed_geometadata_in_dset(coco_dset, force=True)
         >>> fpath = modified[0]
-        >>> print(ub.cmd('gdalinfo ' + fpath)['out'])
+        >>> result = ub.cmd('gdalinfo ' + fpath)
+        >>> assert 'Coordinate System' in result['out'], 'should have geoinfo'
 
     Example:
         >>> # Test with multiple image sizes
@@ -680,7 +681,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
     vidid_to_geom_strat = {}
 
     if region_geom is None:
-        region_geom == 'random'
+        region_geom = 'random'
     if isinstance(region_geom, str):
         if region_geom == 'random':
             vidid_to_geom_strat = {vidid: {'type': 'random'} for vidid in video_ids}
