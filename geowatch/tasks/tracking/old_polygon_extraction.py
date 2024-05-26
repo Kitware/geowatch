@@ -14,6 +14,13 @@ from geowatch.tasks.tracking.utils import (
     gpd_len)
 
 
+class FoundNothing(Exception):
+    """
+    Error to help short-circuit the part where we return an empty list
+    """
+    ...
+
+
 class PolygonExtractConfig(scfg.DataConfig):
     # This is the base config that all from-heatmap trackers have in common
     # which has to do with how heatmaps are loaded, normalized, and aggregated.
@@ -101,6 +108,13 @@ class PolygonExtractConfig(scfg.DataConfig):
         The resolution for loading and processing the heatmaps at. E.g. 10GSD.
         '''))
 
+    dynamic_fixed_resolution = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        Experimental. Added in 0.17.1
+        Similar to the variant in kwcoco video dataset.
+        example value: {'max_trkspace_full_dims': [1000, 1000]}
+        '''))
+
     use_boundaries = scfg.Value(False, help=ub.paragraph(
         '''
         If False, then extracted polygons are used as new site boundaries.  If
@@ -138,27 +152,43 @@ def _gids_polys(sub_dset, video_id, **kwargs):
         >>> coco_dset = geowatch.coerce_kwcoco(data='geowatch-msi', dates=True, geodata=True, heatmap=True)
         >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
         >>> video_id = list(sub_dset.videos())[0]
-        >>> key = ['salient']
-        >>> agg_fn = 'probs'
-        >>> thresh = 0.001
-        >>> morph_kernel = 3
-        >>> thresh_hysteresis = 0
-        >>> norm_ord = 1
-        >>> resolution = None
-        >>> outer_window_size = None
-        >>> inner_window_size = '1year'
-        >>> kwargs = dict(key=key,
-        >>>     agg_fn=agg_fn,
-        >>>     thresh=thresh,
-        >>>     morph_kernel=morph_kernel,
-        >>>     thresh_hysteresis=thresh_hysteresis,
-        >>>     norm_ord=norm_ord,
-        >>>     resolution=resolution,
-        >>>     outer_window_size=outer_window_size,
+        >>> kwargs = dict(key=['salient'],
+        >>>     agg_fn='probs',
+        >>>     thresh=0.001,
+        >>>     morph_kernel=3,
+        >>>     thresh_hysteresis=0,
+        >>>     norm_ord=1,
+        >>>     resolution=None,
+        >>>     outer_window_size=None,
         >>>     use_boundaries=None)
         >>> results1 = list(_gids_polys(sub_dset, video_id, **kwargs))
         >>> kwargs['new_algo'] = 'crall'
         >>> results2 = list(_gids_polys(sub_dset, video_id, **kwargs))
+        >>> print(f'results1 = {ub.urepr(results1, nl=1)}')
+        >>> print(f'results2 = {ub.urepr(results2, nl=1)}')
+
+    Example:
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import *  # NOQA
+        >>> from geowatch.tasks.tracking.old_polygon_extraction import _gids_polys
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco(data='geowatch-msi', dates=True, geodata=True, heatmap=True)
+        >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
+        >>> video_id = list(sub_dset.videos())[0]
+        >>> kwargs = dict(key=['salient'],
+        >>>     agg_fn='probs',
+        >>>     thresh=0.001,
+        >>>     morph_kernel=3,
+        >>>     thresh_hysteresis=0,
+        >>>     norm_ord=1,
+        >>>     resolution=None,
+        >>>     dynamic_fixed_resolution={'max_trkspace_full_dims': [16, 16]},
+        >>>     outer_window_size=None,
+        >>>     use_boundaries=None)
+        >>> results1 = list(_gids_polys(sub_dset, video_id, **kwargs))
+        >>> kwargs['new_algo'] = 'crall'
+        >>> results2 = list(_gids_polys(sub_dset, video_id, **kwargs))
+        >>> print(f'results1 = {ub.urepr(results1, nl=1)}')
+        >>> print(f'results2 = {ub.urepr(results2, nl=1)}')
 
     Returns:
         Iterable[Tuple[List[int], MultiPolygon]] -
@@ -170,16 +200,72 @@ def _gids_polys(sub_dset, video_id, **kwargs):
     import rich
     config = PolygonExtractConfig(**kwargs)
 
+    requested_resolution = config.resolution
+
+    import kwutil
+    dynamic_fixed_resolution = kwutil.util_yaml.Yaml.coerce(config.dynamic_fixed_resolution)
+    """
+    dynamic_fixed_resolution = {'max_trkspace_full_dims': [1, 1]}
+    """
+    if dynamic_fixed_resolution is not None:
+        # _debug = 1
+        # if _debug:
+        #     print(f'dynamic_fixed_resolution = {ub.urepr(dynamic_fixed_resolution, nl=1)}')
+        if isinstance(dynamic_fixed_resolution, dict):
+            from geowatch.utils.util_resolution import ResolvedWindow
+            from geowatch.utils.util_resolution import ResolvedUnit
+            video = sub_dset.index.videos[video_id]
+            vid_w = video['width']
+            vid_h = video['height']
+            target_gsd = video['target_gsd']
+            vidspace_full_dims = ResolvedWindow.coerce(f'{vid_w} x {vid_h} @ {target_gsd} GSD')
+            if requested_resolution is None:
+                trkspace_full_dims = vidspace_full_dims
+                trk_gsd = vidspace_full_dims.resolution
+            else:
+                trk_gsd = ResolvedUnit.coerce(requested_resolution, default_unit='GSD')
+                trkspace_full_dims = vidspace_full_dims.at_resolution(trk_gsd)
+
+            max_trkspace_full_dims = dynamic_fixed_resolution.get('max_trkspace_full_dims', None)
+            if max_trkspace_full_dims is not None:
+                max_trkspace_full_dims = np.array(max_trkspace_full_dims)
+                trkspace_full_dims = np.array(trkspace_full_dims.window)
+                dynamic_factor = (max_trkspace_full_dims / trkspace_full_dims).min()
+                _debug = 1
+                if dynamic_factor < 1.0:
+                    if _debug:
+                        print('---')
+                        print('Handle dynamic resolution adjustment')
+                        print(f'max_trkspace_full_dims = {ub.urepr(max_trkspace_full_dims, nl=1)}')
+                        print(f'before: trkspace_full_dims={trkspace_full_dims}')
+                        print(f'before: trk_gsd = {ub.urepr(trk_gsd, nl=1)}')
+                    # Adjust the scale
+                    trk_gsd = (trk_gsd / dynamic_factor)
+                    if _debug:
+                        print(f'dynamic_factor = {ub.urepr(dynamic_factor, nl=1)}')
+                        print(f'after: trk_gsd = {ub.urepr(trk_gsd, nl=1)}')
+                        print('---')
+                else:
+                    dynamic_factor = 1.0
+                trk_resolution = trk_gsd.__nice__()
+                # raise NotImplementedError
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError('todo')
+    else:
+        trk_resolution = requested_resolution
+
     print(f'config.use_boundaries={config.use_boundaries}')
     if config.use_boundaries:  # for AC/SC
         raw_boundary_tracks = score_track_polys(sub_dset, video_id, [SITE_SUMMARY_CNAME],
-                                                resolution=config.resolution)
+                                                resolution=trk_resolution)
 
         if len(raw_boundary_tracks) == 0:
             gids = sub_dset.images(video_id=video_id).gids
 
             print(f'SITE_SUMMARY_CNAME={SITE_SUMMARY_CNAME}')
-            print(f'config.resolution={config.resolution}')
+            print(f'trk_resolution={trk_resolution}')
             print(f'sub_dset={sub_dset}')
             print(f'video_id={video_id}')
             # anns = sub_dset.annots(video_id=video_id)
@@ -190,7 +276,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             msg = ('need valid site boundaries!')
             warnings.warn(msg)
             # raise AssertionError(msg)
-            return []
+            raise FoundNothing(msg)
         else:
             gids = raw_boundary_tracks['gid'].unique()
             print('generating polys in bounds: number of bounds: ',
@@ -223,7 +309,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
 
         delayed_images = []
         for coco_img in coco_images:
-            delayed = coco_img.imdelay(channels=channels, space='video', resolution=config.resolution)
+            delayed = coco_img.imdelay(channels=channels, space='video', resolution=trk_resolution)
             delayed_images.append(delayed)
 
         # Some configurations can blow out memory here.
@@ -286,9 +372,8 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             # HACK TO LOAD BOUNDS FOR POLYGONS
             from geowatch.tasks.tracking.utils import _build_annot_gdf
             cnames = [SITE_SUMMARY_CNAME]
-            resolution = config.resolution
             aids = list(ub.flatten(images.annots))
-            gdf, flat_scales = _build_annot_gdf(sub_dset, aids=aids, cnames=cnames, resolution=resolution)
+            gdf, flat_scales = _build_annot_gdf(sub_dset, aids=aids, cnames=cnames, resolution=trk_resolution)
             if len(gdf) == 0:
                 # assert len(gdf) > 0, 'need valid site boundaries!'
                 bounds = None
@@ -361,6 +446,19 @@ def _gids_polys(sub_dset, video_id, **kwargs):
             result_gen = itertools.chain.from_iterable(
                 j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
             result_gen = list(result_gen)
+
+    # If we did dynamic resolution, unscale the polygons.
+    if dynamic_fixed_resolution is not None:
+        # Hacky, might want to handle the dynamic resolution at the layer above
+        # this.
+        if dynamic_factor < 1:
+            undo_factor = 1 / dynamic_factor
+            result_gen2 = []
+            for gids, poly in result_gen:
+                poly = poly.scale(undo_factor)
+                result_gen2.append((gids, poly))
+            result_gen = result_gen2
+
     return result_gen
 
 
@@ -555,6 +653,8 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
 def _compute_time_window(window, num_frames=None, heatmap_dates=None):
     """
+    Groups frame indexes into "inner" or "outer" windows.
+
     Example:
         >>> window = 5
         >>> num_frames = 23

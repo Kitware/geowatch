@@ -280,6 +280,18 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
             raise TypeError(type(data))
         return self
 
+    def __mul__(self, other):
+        if isinstance(other, numbers.Number):
+            return self.__class__(self.mag * other, self.unit)
+        else:
+            raise NotImplementedError
+
+    def __truediv__(self, other):
+        if isinstance(other, numbers.Number):
+            return self.__class__(self.mag / other, self.unit)
+        else:
+            raise NotImplementedError
+
 
 class ResolvedScalar(Resolved, ub.NiceRepr):
     """

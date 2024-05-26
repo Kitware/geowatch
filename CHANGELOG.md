@@ -10,7 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Confusion analysis is now run in per-stage metrics.
 * New task: `poly_from_point` that contains various methods to transform
   point-based annotations into polygon-based ones using heuristics.
-* Added `dynamic_fixed_resolution` as an experimental kwcocodataset option
+* Added `dynamic_fixed_resolution` as an experimental kwcocodataset and tracker option
 
 ### Changed
 * Baseline tensorboard callback now also does the stacking automatically.

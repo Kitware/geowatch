@@ -222,7 +222,8 @@ class SpacetimeGridBuilder:
                 if True, only place windows in valid regions
 
             dynamic_fixed_resolution (None | Any):
-                default None
+                Experimental. Added in 0.17.1
+                example value: {'max_winspace_full_dims': [1000, 1000]}
 
             workers (int): parallel workers
 

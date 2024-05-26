@@ -247,6 +247,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Experimental. Added in 0.17.1
         This is a test time option. The idea is that we will modify the input,
         output, and window scale for large videos.
+        example value: {'max_winspace_full_dims': [1000, 1000]}
         '''))
 
     ##############

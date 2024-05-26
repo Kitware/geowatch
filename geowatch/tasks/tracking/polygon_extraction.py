@@ -173,13 +173,17 @@ class PolygonExtractor:
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
         # TODO: better downscaling?
-        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+        if scale_factor == 1:
+            downscaled = raw_heatmap
+        else:
+            downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+            PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+            downscaled = downscaled.copy()
+
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
         else:
             small_mask = None
-        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
-        downscaled = downscaled.copy()
 
         PRINT_STEP('Impute NaN')
         imputed = impute_nans2(downscaled)
@@ -430,11 +434,17 @@ class PolygonExtractor:
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
         # TODO: better downscaling?
-        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+        if scale_factor == 1:
+            downscaled = raw_heatmap
+        else:
+            downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+            PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+            downscaled = downscaled.copy()
+
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
-        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
-        downscaled = downscaled.copy()
+        else:
+            small_mask = None
 
         PRINT_STEP('Impute NaN')
         imputed = impute_nans2(downscaled)
