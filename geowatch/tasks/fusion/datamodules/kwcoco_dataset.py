@@ -1739,8 +1739,10 @@ class GetItemMixin(TruthMixin):
         vidspace_box = resolution_info['vidspace_box']
         try:
             final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        except FailedSample as ex:
+            from geowatch.utils.util_exception import add_exception_note
+            raise add_exception_note(ex, f'target_ = {ub.urepr(target_, nl=1)}')
         except Exception as ex:
-            import warnings
             print(f'target_ = {ub.urepr(target_, nl=1)}')
             msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
             print(msg)
@@ -1992,12 +1994,12 @@ class GetItemMixin(TruthMixin):
 
         with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
-        # New true-multimodal data items
+        # These dictionaries help maintain sampling state.
+        # It might be nice to abstract this out into a smaller testable
+        # component with the _sample_one_frame method.
         gid_to_sample: Dict[int, Dict] = {}
         gid_to_isbad: Dict[int, bool] = {}
-
         for gid in target_['gids']:
-            ...
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
                                    gid_to_isbad, gid_to_sample)
 
@@ -2018,16 +2020,20 @@ class GetItemMixin(TruthMixin):
                 max_tries = 3
             else:
                 max_tries = int(resample_invalid)
-            # print(f'max_tries={max_tries}')
             vidname = video['name']
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target_,
-                num_images_wanted,
-                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
+                num_images_wanted, with_annots, gid_to_sample, vidspace_box,
+                vidname, max_tries)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
-            raise FailedSample('Cannot force a good sample')
+            raise FailedSample(ub.paragraph(
+                f'''
+                Cannot force a good sample. Tried to sample {len(gid_to_isbad)}
+                frames, but all were marked as bad. Reported reasoning:
+                gid_to_isbad={gid_to_isbad}
+                '''))
 
         final_gids = ub.oset(video_gids) & good_gids
         force_bad_frames = target_.get('force_bad_frames', 0)
