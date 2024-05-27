@@ -173,6 +173,7 @@ def run_sc_fusion_for_baseline(config):
     input_site_summary_dpath = ingressed_assets[input_region_asset_name]
     assert os.path.exists(input_site_summary_dpath)
     print(f'Found input site summary dpath: {input_site_summary_dpath}')
+    ub.cmd(f'geowatch site_stats "{input_site_summary_dpath}/*.geojson"', verbose=3)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -282,35 +283,6 @@ def run_sc_fusion_for_baseline(config):
 
         command = sc_pxl.command()
         print(command)
-
-        '''
-python -m geowatch.tasks.fusion.predict \
-            --package_fpath=/root/data/smart_expt_dvc/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_V001/Drop8-ARA-Cropped2GSD-V1_allsensors_V001_epoch0_step21021.pt \
-            --test_dataset=/tmp/ingress/cropped_kwcoco_for_sc.json \
-            --pred_dataset=/tmp/ingress/sc_fusion_kwcoco.json \
-            --chip_dims=auto \
-            --chip_overlap=0.3 \
-            --drop_unused_frames=True \
-            --input_space_scale=2GSD \
-            --mask_low_quality=True \
-            --observable_threshold=0.0 \
-            --output_space_scale=2GSD \
-            --resample_invalid_frames=3 \
-            --set_cover_algo=None \
-            --dynamic_fixed_resolution '{max_winspace_full_dims: [1000, 1000]}' \
-            --tta_fliprot=0 \
-            --tta_time=0 \
-            --window_space_scale=2GSD \
-            --write_workers=0 \
-            --with_saliency=True \
-            --with_class=True \
-            --with_change=False \
-            --saliency_chan_code=ac_salient  \
-            --batch_size=1 \
-            --num_workers=8 \
-            --devices=0,
-        '''
-
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
             node_state.print_current_state(ingress_dir)
