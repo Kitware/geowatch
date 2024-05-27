@@ -102,7 +102,15 @@ class ExtendedTransformer(Transformer):
         __grammar__
         """
         parser = cls.parser()
-        tree = parser.parse(text)
+        try:
+            tree = parser.parse(text)
+        except TypeError:
+            if isinstance(text, str) and type(text) is not str:
+                # We could be in a case where cython is failing to handle
+                # overloaded string types. Try casting to a regular str.
+                tree = parser.parse(str(text))
+            else:
+                raise
         self = cls()
         transformed = self.transform(tree)
         return transformed
@@ -257,6 +265,14 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
             >>> import pytest
             >>> with pytest.raises(ValueError):
             >>>     ResolvedUnit.coerce(8)
+
+        Example:
+            >>> import kwutil
+            >>> # Test loading from YAML.
+            >>> # https://github.com/lark-parser/lark_cython/issues/36
+            >>> from geowatch.utils.util_resolution import ResolvedUnit
+            >>> text = kwutil.Yaml.coerce('key: "1 mGSD"')['key']
+            >>> ResolvedUnit.coerce(text)
         """
         is_string = isinstance(data, str)
         if is_string:
