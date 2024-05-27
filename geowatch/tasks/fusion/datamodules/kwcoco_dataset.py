@@ -2368,84 +2368,14 @@ class IntrospectMixin:
             >>> self.disable_augmenter = True
             >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> item = self[index]
-            >>> summary = self.summarize_item(item, stats=True)
-            >>> print(f'summary = {ub.urepr(summary, nl=-1)}')
+            >>> item_summary = self.summarize_item(item, stats=True)
+            >>> print(f'item_summary = {ub.urepr(item_summary, nl=-1)}')
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
-        item_summary = {}
-        item_summary['frame_summaries'] = []
-        timestamps = []
-        for frame in item['frames']:
-            frame_summary = {}
-            for mode_key, im_mode in frame['modes'].items():
-                domain_key = frame['sensor'] + ':' + mode_key
-                frame_summary[domain_key] = {}
-                if stats:
-                    frame_summary[domain_key]['stats'] = kwarray.stats_dict(
-                        im_mode, nan=True)
-                frame_summary[domain_key]['shape'] = im_mode.shape
-            label_keys = [
-                'class_idxs', 'class_ohe', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights',
-                'output_weights', 'box_ltrb',
-                # 'box_weights', 'box_tids', 'box_cidxs',
-            ]
-            for key in label_keys:
-                if frame.get(key, None) is not None:
-                    frame_summary[key] = {}
-                    frame_summary[key]['shape'] = frame[key].shape
-                    if stats:
-                        frame_summary[key]['stats'] = kwarray.stats_dict(frame[key], nan=True)
-            item_summary['frame_summaries'].append(frame_summary)
-            if frame['date_captured']:
-                timestamps.append(ub.timeparse(frame['date_captured']))
-
-            if frame.get('ann_aids') is not None:
-                if 0:
-                    # disable as workaround for coco sql issues
-                    # (i.e. we dont want to rely on a connection to the sql
-                    # database in the main thread)
-                    annots = self.sampler.dset.annots(frame['ann_aids'])
-                    cids = annots.lookup('category_id')
-                    class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
-                    frame_summary['class_hist'] = class_hist
-                frame_summary['num_annots'] = len(frame['ann_aids'])
-
-        vidname = item.get('video_name', None)
-        if vidname is not None:
-            item_summary['video_name'] = vidname
-            try:
-                video = self.coco_dset.index.name_to_video[vidname]
-                vid_w = video['width']
-                vid_h = video['height']
-                item_summary['video_hw'] = (vid_h, vid_w)
-            except (KeyError, AttributeError):
-                item_summary['video_hw'] = '?'
-
-        if len(timestamps) > 1:
-            deltas = np.diff(timestamps)
-            deltas = [d.total_seconds() for d in deltas]
-            item_summary['min_time'] = ub.timestamp(min(timestamps))
-            item_summary['max_time'] = ub.timestamp(max(timestamps))
-            if len(deltas):
-                item_summary['min_delta'] = min(deltas)
-                item_summary['max_delta'] = max(deltas)
-                item_summary['mean_delta'] = np.mean(deltas)
-        item_summary['input_gsd'] = item['input_gsd']
-        item_summary['output_gsd'] = item['output_gsd']
-
-        if 'requested_target' in item:
-            item_summary['requested_target'] = item['requested_target']
-
-        if 'target' in item:
-            item_summary['resolved_target'] = item['target']
-
-        item_summary['producer_rank'] = item.get('producer_rank', None)
-        item_summary['producer_mode'] = item.get('producer_mode', None)
-        item_summary['requested_index'] = item.get('requested_index', None)
-        item_summary['resolved_index'] = item.get('resolved_index', None)
-
+        # Refactored to use the new BatchItem class.
+        from geowatch.tasks.fusion.datamodules.batch_item import BatchItem
+        item_summary = BatchItem.summarize(item, stats=stats)
         return item_summary
 
 

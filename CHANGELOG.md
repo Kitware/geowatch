@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.17.1 - Unreleased
 
 ### Added
+* Initial `BatchItem` class to help better organize connections between dataloaders and networks.
 * Confusion analysis is now run in per-stage metrics.
 * New task: `poly_from_point` that contains various methods to transform
   point-based annotations into polygon-based ones using heuristics.

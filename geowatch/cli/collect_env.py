@@ -6,6 +6,7 @@ This was merged into torch upstream via:
     https://github.com/pytorch/pytorch/pull/112993
 
 And could be removed in the future.
+Or maybe it moves into geowatch.cli.special?
 """
 
 import scriptconfig as scfg

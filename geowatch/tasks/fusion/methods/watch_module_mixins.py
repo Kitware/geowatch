@@ -291,18 +291,10 @@ class DeprecatedMixin:
         Note: this is only a fallback for testing purposes. This should be
         overwrriten in your module or done via lightning CLI.
         """
-        from geowatch.utils import util_netharn
         from torch.optim import lr_scheduler
-
-        # Netharn api will convert a string code into a type/class and
-        # keyword-arguments to create an instance.
-        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
-            optimizer='adamw', lr=3e-4, weight_decay=3e-6)
-        optim_kw['params'] = self.parameters()
-        optimizer = optim_cls(**optim_kw)
-        max_epochs = 160
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max_epochs)
+        from torch.optim import AdamW
+        optimizer = AdamW(lr=3e-4, weight_decay=3e-6, params=self.parameters())
+        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=160)
         return [optimizer], [scheduler]
 
 
@@ -340,8 +332,8 @@ class OverfitMixin:
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 1:
-            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
+            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop8-ARA-Median10GSD-V1') / 'KR_R001/imganns-KR_R001-rawbands.kwcoco.zip'
             >>>     channels='blue|green|red|nir'
             >>> if 0:
             >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
@@ -377,9 +369,19 @@ class OverfitMixin:
             >>>     #token_dim=708,
             >>>     #token_dim=768 - 60,
             >>>     #backbone='vit_B_16_imagenet1k',
-            >>>     token_dim=208,
-            >>>     backbone='sits-former',
-            >>>     position_encoder=position_encoder,
+            >>>     #token_dim=208,
+            >>>     #backbone='sits-former',
+            >>>     )
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.MultimodalTransformer(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     #token_dim=708,
+            >>>     #token_dim=768 - 60,
+            >>>     #backbone='vit_B_16_imagenet1k',
+            >>>     #token_dim=208,
+            >>>     #backbone='sits-former',
             >>>     )
             >>> self.datamodule = datamodule
             >>> datamodule._notify_about_tasks(model=self)
@@ -402,6 +404,7 @@ class OverfitMixin:
         import xdev
         import kwimage
         import pandas as pd
+        from torch.optim import AdamW
         from kwutil.slugify_ext import smart_truncate
         from kwplot.mpl_make import render_figure_to_image
 
@@ -426,12 +429,7 @@ class OverfitMixin:
         _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
-        try:
-            [optim], [sched] = self.configure_optimizers()
-        except Exception:
-            # optim = torch.optim.SGD(self.parameters(), lr=1e-4)
-            optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
-
+        optimizer = AdamW(lr=3e-4, weight_decay=3e-6, params=self.parameters())
         # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
 
         fnum = 2
@@ -444,7 +442,7 @@ class OverfitMixin:
             num_steps = 20
             ex = None
             for _i in ub.ProgIter(range(num_steps), desc='overfit'):
-                optim.zero_grad()
+                optimizer.zero_grad()
                 outputs = self.training_step(batch)
                 # outputs['item_losses']
                 loss = outputs['loss']
@@ -464,7 +462,7 @@ class OverfitMixin:
                 loss.backward()
                 item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
                 loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
-                optim.step()
+                optimizer.step()
                 step += 1
             canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
             kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
@@ -475,7 +473,7 @@ class OverfitMixin:
                 ax.set_yscale('logit')
             except Exception:
                 ...
-            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
+            fig.suptitle(smart_truncate(str(optimizer).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
             # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
