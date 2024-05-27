@@ -520,6 +520,9 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
         elif config.max_area_behavior == 'grid':
             # edits tracks instead of removing them
             raise NotImplementedError(config.max_area_behavior)
+        elif config.max_area_behavior == 'ignore':
+            # Do nothing, just let it go through.
+            ...
         else:
             raise KeyError(config.max_area_behavior)
 
