@@ -2318,7 +2318,7 @@ class IntrospectMixin:
         default_combinable_channels = self.default_combinable_channels
 
         if norm_over_time == 'auto':
-            norm_over_time = self.normalize_peritem is not None
+            norm_over_time = self.config['normalize_peritem'] is not None
 
         # Hack to force the categories to draw right for SMART
         # FIXME: Use the correct class colors in visualization.
@@ -3532,15 +3532,15 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             # (this probably should be extended to be a sensorchan...)
             if self.config['normalize_peritem'] is True:
                 # If True, then normalize all known channels
-                self.normalize_peritem = kwcoco.FusedChannelSpec.coerce(
+                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
                     '|'.join(sorted(set(ub.flatten([
                         s.chans.to_list()
                         for s in self.input_sensorchan.streams()])))))
             else:
                 # Otherwise assume the user specified what channels to normalize
-                self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
         else:
-            self.normalize_peritem = None
+            self.config['normalize_peritem'] = None
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
@@ -3981,13 +3981,13 @@ def more_demos():
 
     Ignore:
         >>> self.disable_augmenter = True
-        >>> self.normalize_peritem = None
+        >>> self.config['normalize_peritem'] = None
         >>> self.config['mask_low_quality'] = True
         >>> self.config['force_bad_frames'] = True
         >>> self.config['resample_invalid_frames'] = 0
         >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
         >>> item1 = self[index]
-        >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+        >>> self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
         >>> item2 = self[index]
         >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
