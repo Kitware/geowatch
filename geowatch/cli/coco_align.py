@@ -2228,7 +2228,8 @@ def _aligncrop(obj_group,
     #     xdev.embed()
 
     if asset_config.skip_previous_errors:
-        raise SkipImage('Attempting to grab this asset previously failed, skipping')
+        if error_fpath.exists():
+            raise SkipImage('Attempting to grab this asset previously failed, skipping')
 
     if not needs_recompute:
         if verbose > 2:
