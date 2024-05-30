@@ -225,6 +225,11 @@ def run_sc_fusion_for_baseline(config):
         if sc_pxl_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
 
+        # Debugging
+        # foo = '/root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt'
+        # sc_pxl_config['package_fpath'] = foo
+        # sc_pxl_config['set_cover_algo'] = 'approx'
+
         sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
         sc_pxl.configure({
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
@@ -286,6 +291,8 @@ def run_sc_fusion_for_baseline(config):
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
             node_state.print_current_state(ingress_dir)
+            # ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+            # ub.cmd(['geowatch', 'visualize', f'{sc_fusion_kwcoco_path}', '--smart'], verbose=3)
         except TimeSampleError:
             # FIXME: wont work anymore with mlops. Not sure if needed.
             # Can always catch a CalledProcessError and inspect stdout

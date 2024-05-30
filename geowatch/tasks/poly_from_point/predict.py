@@ -519,7 +519,6 @@ def main():
             --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
-        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'ellipse' \
             --filepath_output KR_R001-genpoints.geojson \
