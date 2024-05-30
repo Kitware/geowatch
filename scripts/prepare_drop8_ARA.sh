@@ -64,6 +64,17 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R001_*.geojson
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_R*_*.geojson"
 
 
+REGION_MANIFEST_TEXT="
+files:
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/HK_C001.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/HK_C002.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/KP_C001.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/PA_C001.geojson
+"
+REGION_MANIFEST_FPATH="$DVC_DATA_DPATH/annotations/drop8-v1/to_prepare_manifest.txt"
+echo "$REGION_MANIFEST_TEXT" > "$REGION_MANIFEST_FPATH"
+cat "$REGION_MANIFEST_FPATH"
+
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 export REQUESTER_PAYS=False
 #export SMART_STAC_API_KEY=""
