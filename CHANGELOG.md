@@ -4,7 +4,10 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.17.1 - Unreleased
+## Version 0.17.2 - Unreleased
+
+
+## Version 0.17.1 - Released 2024-05-31
 
 ### Added
 * Initial `BatchItem` class to help better organize connections between dataloaders and networks.
