@@ -865,7 +865,8 @@ class NodeStateDebugger:
         >>> self = NodeStateDebugger()
         >>> self.print_environment()
         >>> self.print_current_state(watch_appdir_dpath)
-        >>> self.print_current_state(watch_appdir_dpath)
+        >>> config = {'foo': 'bar'}
+        >>> self.print_local_invocation(config)
     """
 
     def __init__(self):
@@ -943,7 +944,7 @@ class NodeStateDebugger:
             mkdir -p "$LOCAL_WORK_DPATH"
             cd "$LOCAL_WORK_DPATH"
             docker run \
-                --runtime=nvidia \
+                --gpus=all \
                 --volume "$LOCAL_WORK_DPATH":/tmp/ingress \
                 --volume "$LOCAL_CODE_DPATH":/extern_code:ro \
                 --volume "$LOCAL_DATA_DPATH":/extern_data:ro \
@@ -953,6 +954,7 @@ class NodeStateDebugger:
                 --env TASK_IMAGE_NAME={TASK_IMAGE_NAME} \
                 -it {TASK_IMAGE_NAME} bash
             ''')
+        # Do we use --gpus all or --runtime=nvidia
         print()
         print(create_local_env_command)
 
@@ -963,6 +965,10 @@ class NodeStateDebugger:
                 # system to pull in any updates for testing.
                 git remote add host /extern_code/geowatch/.git
                 git fetch host
+                # may need to do some of:
+                # git reset --hard host/<branch>
+                # git checkout <branch>
+                # git pull host/<branch>
                 ''')
             print()
             print(helper_text)
@@ -977,7 +983,6 @@ class NodeStateDebugger:
 
             ipython_setup_command = ub.codeblock(
                 f'''
-                # In IPython
                 %load_ext autoreload
                 %autoreload 2
                 from {node_modname} import *
@@ -985,7 +990,12 @@ class NodeStateDebugger:
             config_text = 'config = ' + ub.urepr(config, nl=1)
             ipython_setup_command = ipython_setup_command + '\n' + config_text
             print()
-            print(ipython_setup_command)
+            print('# In IPython')
+            # print(ipython_setup_command)
+            wrapped_text = "ipython -i -c 'if 1:\n"
+            wrapped_text += ub.indent(ipython_setup_command).replace("'", '"')
+            wrapped_text += "\n'"
+            print(wrapped_text)
 
     def print_current_state(self, dpath):
         print(f' --- <NODE_STATE iter={self.current_iteration}> --- ')

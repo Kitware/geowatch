@@ -47,7 +47,10 @@ class DrawRegionCLI(scfg.DataConfig):
 
     with_timeline = scfg.Value(True, help='if True draw the timeline')
 
-    fpath = scfg.Value('auto', help='path to write viz to', alias=['output_fpath'])
+    fpath = scfg.Value('auto', help=ub.paragraph(
+        '''
+        Path to write the visualization image to.
+        '''), alias=['output_fpath'])
 
     sidecar = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''

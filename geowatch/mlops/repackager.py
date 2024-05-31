@@ -48,6 +48,7 @@ class RepackageConfig(scfg.DataConfig):
         '''))
 
     force = scfg.Value(False, isflag=True, help='if True, rewrite the packages even if they exist')
+    strict = scfg.Value(False, isflag=True, help='if True, fail if there are any errors')
 
 
 def main(cmdline=True, **kwargs):
@@ -56,14 +57,14 @@ def main(cmdline=True, **kwargs):
     config = RepackageConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
     checkpoint_fpath = config['checkpoint_fpath']
-    repackage(checkpoint_fpath, force=config['force'])
+    repackage(checkpoint_fpath, strict=config.strict, force=config.force)
 
 
 __config__ = RepackageConfig
 __config__.main = main
 
 
-def repackage(checkpoint_fpath, force=False, dry=False):
+def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
     """
     Logic for handling multiple checkpoint repackages at a time.
     Automatically chooses the new package name.
@@ -97,6 +98,8 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                                                 train_dpath_hint, model_config_fpath)
                 except Exception as ex:
                     print('ERROR: Failed to package: {!r}'.format(ex))
+                    if strict:
+                        raise
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
     from kwutil import util_yaml

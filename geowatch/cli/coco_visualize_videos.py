@@ -1480,7 +1480,6 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             if verbose > 100:
                 print('doing 1 channel cmap')
             import matplotlib as mpl
-            import matplotlib.cm  # NOQA
             if chan_group == 'pan':
                 # Use grayscale for certain 1 band images
                 canvas = np.nan_to_num(canvas)
@@ -1489,7 +1488,12 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     canvas = canvas[..., 0]
                 # canvas = kwimage.ensure_float01(canvas)
             else:
-                cmap_ = mpl.cm.get_cmap(cmap)
+                try:
+                    import matplotlib.cm  # NOQA
+                    cmap_ = mpl.cm.get_cmap(cmap)
+                except AttributeError:
+                    # https://github.com/matplotlib/matplotlib/issues/20853
+                    cmap_ = mpl.colormaps[cmap]
                 canvas = np.nan_to_num(canvas)
                 if len(canvas.shape) == 3:
                     canvas = canvas[..., 0]

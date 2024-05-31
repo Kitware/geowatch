@@ -366,6 +366,19 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                 print('Save plot: ' + str(fpath))
             ax.figure.savefig(fpath)
             ax.figure.subplots_adjust(top=0.8)
+    do_tensorboard_stack(train_dpath)
+
+
+def do_tensorboard_stack(train_dpath):
+    # Do the kwimage stack as well.
+    import kwimage
+    tensorboard_dpath = train_dpath / 'monitor/tensorboard'
+    monitor_dpath = train_dpath / 'monitor'
+    image_paths = sorted(tensorboard_dpath.glob('*.png'))
+    images = [kwimage.imread(fpath) for fpath in image_paths]
+    canvas = kwimage.stack_images_grid(images)
+    stack_fpath = monitor_dpath / 'tensorboard-stack.png'
+    kwimage.imwrite(stack_fpath, canvas)
 
 
 def smooth_curve(ydata, beta):

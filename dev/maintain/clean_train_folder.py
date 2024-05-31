@@ -234,12 +234,56 @@ def generate_from_starts(start, stop):
             if b is not None:
                 yield b
 
-from typing import Generator  # NOQA
 
-
-def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
+def farthest_from_previous(start: int, stop: int):
     """
+    Given a ordered list of items, incrementally yield indexes such that each
+    new index maximizes the distance to all other previously chosen indexes.
 
+    Args:
+        start (int): The inclusive starting index (typically 0)
+        stop (int): The exclusive maximum index (typically ``len(items)``)
+
+    Yields:
+        int: the next chosen index in the series
+
+    References:
+        .. [CSSE_167943] https://cs.stackexchange.com/questions/167943/is-this-knapsack-variant-named-studied-online-algorithm-for-farthest-from-pr
+
+    Example:
+        >>> total = 10
+        >>> start, stop = 0, 10
+        >>> gen = farthest_from_previous(start, stop)
+        >>> result = list(gen)
+        >>> assert set(result) == set(range(start, stop))
+        >>> print(result)
+        [9, 0, 5, 2, 7, 1, 6, 3, 8, 4]
+
+        list(farthest_from_previous(0, 4))
+    """
+    import itertools as it
+
+    def from_starts(start: int, stop: int):
+        if start < stop:
+            low_mid: int = (start + stop) // 2
+            high_mid: int = (start + stop + 1) // 2
+
+            left_gen = from_starts(start, low_mid)
+            right_gen = from_starts(high_mid, stop)
+
+            pairgen = it.zip_longest(left_gen, right_gen)
+            flatgen = it.chain.from_iterable(pairgen)
+            filtgen = filter(lambda x: x is not None, flatgen)
+            yield from filtgen
+            if low_mid < high_mid:
+                yield low_mid
+    if start < stop:
+        yield stop - 1
+        yield from from_starts(start, stop - 1)
+
+
+def __farthest_from_previous_writeup__():
+    """
     Use case:
 
         I have a directory of ordered images images that were generated to
@@ -247,10 +291,12 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
         directories every time I train a network.
 
         These visualizations can start to take up too much disk space, and
-        removing some percent of them would free up a lof of space, but still
+        removing some percent of them would free up a lot of space, but still
         leave some of the visualizations in case I wanted to go back and
         inspect an old run. So the question is: which of these images do I
-        keep?
+        keep? By incrementally generating "furthest from previous" indexes and
+        checking if the total size exceeds some threshold, I can stop, keep all
+        files corresponding to generated indexes, and remove the rest.
 
         To formally talk about this problem we will refer to files as "items",
         and the file size will be the "weight" of each "item".
@@ -323,31 +369,4 @@ def farthest_from_previous(start: int, stop: int) -> Generator[int, None, None]:
         This motivates a heuristic to obtain a feasible solution to the above
         objective. It will not optimize the original objective in all cases,
         but in many cases it will.
-
-    Example:
-        >>> total = 10
-        >>> start, stop = 0, 10
-        >>> gen = farthest_from_previous(start, stop)
-        >>> result = list(gen)
-        >>> assert set(result) == set(range(start, stop))
-        >>> print(result)
     """
-    import itertools as it
-
-    def from_starts(start: int, stop: int) -> Generator[int, None, None]:
-        if start < stop:
-            low_mid: int = (start + stop) // 2
-            high_mid: int = (start + stop + 1) // 2
-
-            left_gen = from_starts(start, low_mid)
-            right_gen = from_starts(high_mid, stop)
-
-            pairgen = it.zip_longest(left_gen, right_gen)
-            flatgen = it.chain.from_iterable(pairgen)
-            filtgen = filter(lambda x: x is not None, flatgen)
-            yield from filtgen
-            if low_mid < high_mid:
-                yield low_mid
-    if start < stop:
-        yield stop - 1
-        yield from from_starts(start, stop - 1)

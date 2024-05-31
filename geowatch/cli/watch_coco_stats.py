@@ -271,11 +271,11 @@ def coco_watch_stats(dset, with_video_info=False):
     rich.print('ext_stats = {}'.format(ub.urepr(ext_stats, nl=1, align=':', precision=3)))
 
     attrs = dset.videos().attribute_frequency()
-    rich.print('video_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
+    rich.print('histogram(video_attrs) = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
     attrs = dset.images().attribute_frequency()
-    rich.print('image_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
+    rich.print('histogram(image_attrs) = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
     attrs = dset.annots().attribute_frequency()
-    rich.print('annot_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
+    rich.print('histogram(annot_attrs) = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
 
     loose_image_ids = sorted(all_image_ids - all_image_ids_with_video)
     rich.print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))

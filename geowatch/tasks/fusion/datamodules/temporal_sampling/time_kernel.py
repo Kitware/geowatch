@@ -60,7 +60,7 @@ class TimeKernel(np.ndarray):
         return kernels
 
     def make_soft_mask(self, relative_unixtimes):
-        from watch.tasks.fusion.datamodules.temporal_sampling.affinity import make_soft_mask
+        from geowatch.tasks.fusion.datamodules.temporal_sampling.affinity import make_soft_mask
         kernel_masks, kernel_attrs = make_soft_mask(self, relative_unixtimes)
         return kernel_masks, kernel_attrs
 
@@ -75,7 +75,7 @@ class TimeKernel(np.ndarray):
         max_t = max(max_t, relative_unixtimes[-1])
 
         import kwplot
-        from watch.utils import util_kwplot
+        from geowatch.utils import util_kwplot
         plt = kwplot.autoplt()
         import kwimage
         kwplot.close_figures()

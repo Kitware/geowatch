@@ -108,7 +108,7 @@ class SCFusionConfig(scfg.DataConfig):
         Which site model assets to to use as input
         '''))
 
-    egress_intermediate_outputs = scfg.Value(True, isflag=True, help=ub.paragraph(
+    egress_intermediate_outputs = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
         If true egress intermediate heatmaps, otherwise only egress the geojson
         '''))
@@ -173,6 +173,7 @@ def run_sc_fusion_for_baseline(config):
     input_site_summary_dpath = ingressed_assets[input_region_asset_name]
     assert os.path.exists(input_site_summary_dpath)
     print(f'Found input site summary dpath: {input_site_summary_dpath}')
+    ub.cmd(f'geowatch site_stats "{input_site_summary_dpath}/*.geojson"', verbose=3)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -224,16 +225,74 @@ def run_sc_fusion_for_baseline(config):
         if sc_pxl_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
 
+        # Debugging
+        # foo = '/root/data/smart_expt_dvc/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt'
+        # sc_pxl_config['package_fpath'] = foo
+        # sc_pxl_config['set_cover_algo'] = 'approx'
+
         sc_pxl = smart_pipeline.SC_HeatmapPrediction(root_dpath=ingress_dir)
         sc_pxl.configure({
             'pred_pxl_fpath': sc_fusion_kwcoco_path,
             'test_dataset': ingressed_assets['enriched_acsc_kwcoco_file'],
         } | sc_pxl_config)
-        command = sc_pxl.command()
 
+        if False:
+            try:
+                # Quick inspection of how big the predicted videos are going to be.
+                from geowatch.utils import util_resolution
+                from geowatch.utils import util_units
+                import numpy as np
+                # from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig
+                # sc_pxl_config['chip_dims']
+                # input_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['input_space_scale'])
+                num_output_channels = 6  # hard coded for the quick check
+                for video in ingress_dset.dataset['videos']:
+                    output_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['output_space_scale'])
+                    output_resolution = util_resolution.ResolvedUnit.coerce('4GSD')
+                    vidname = video['name']
+                    vid_width = video['width']
+                    vid_height = video['height']
+                    num_frames = video['num_frames']
+                    video_resolution = util_resolution.ResolvedUnit.coerce(video['resolution'])
+                    video_dsize = util_resolution.ResolvedWindow((vid_width, vid_height), video_resolution)
+                    # input_dsize = video_dsize.at_resolution(input_resolution)
+                    output_dsize = video_dsize.at_resolution(output_resolution)
+                    output_frame_pixels = np.prod(output_dsize.window)
+                    bytes_per_cell = np.dtype('float32').itemsize
+                    num_raster_cells = output_frame_pixels * num_frames
+                    total_bytes = num_raster_cells * bytes_per_cell
+                    ureg = util_units.unit_registry()
+                    size_per_channel = (total_bytes * ureg.bytes).to('gigabytes')
+                    total_size = num_output_channels * size_per_channel
+                    print(f'{vidname} - {total_size:0.2f} - WH={output_dsize},  T={num_frames}, C={num_output_channels}')
+
+                    memory_max_gb = 8
+                    factor = np.sqrt(total_size.m / memory_max_gb)
+                    if factor > 1:
+                        output_resolution = util_resolution.ResolvedUnit(output_resolution.mag * factor, output_resolution.unit)
+                        output_dsize = video_dsize.at_resolution(output_resolution)
+                        output_frame_pixels = np.prod(output_dsize.window)
+                        bytes_per_cell = np.dtype('float32').itemsize
+                        num_raster_cells = output_frame_pixels * num_frames
+                        total_bytes = num_raster_cells * bytes_per_cell
+                        ureg = util_units.unit_registry()
+                        size_per_channel = (total_bytes * ureg.bytes).to('gigabytes')
+                        total_size = num_output_channels * size_per_channel
+                        # output_resolution = util_resolution.ResolvedUnit.coerce(sc_pxl_config['output_space_scale'])
+                    print(f'{vidname} - {total_size:0.2f} - WH={output_dsize},  T={num_frames}, C={num_output_channels}')
+
+                ingress_dset.videos()
+            except Exception as ex:
+                print('Quick Introspection failed:')
+                print(f'ex = {ub.urepr(ex, nl=1)}')
+
+        command = sc_pxl.command()
+        print(command)
         try:
             ub.cmd(command, check=True, verbose=3, system=True)
             node_state.print_current_state(ingress_dir)
+            # ub.cmd(['kwcoco', 'reroot', f'--src={sc_fusion_kwcoco_path}', '--inplace=1', '--absolute=0'])
+            # ub.cmd(['geowatch', 'visualize', f'{sc_fusion_kwcoco_path}', '--smart'], verbose=3)
         except TimeSampleError:
             # FIXME: wont work anymore with mlops. Not sure if needed.
             # Can always catch a CalledProcessError and inspect stdout

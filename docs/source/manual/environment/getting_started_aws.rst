@@ -153,6 +153,18 @@ credentials and a config.  The default location to store credentials is:
 ``$HOME/.aws/credentials`` The default location to store a config is:
 ``$HOME/.aws/config``.
 
+Note for admins: You can generate credentials for yourself or others in the
+browser. Login to https://us-east-1.console.aws.amazon.com/iamv2/home
+
+You can query your 12-digit account ID as follows:
+
+.. code:: bash
+
+    export AWS_PROFILE="iarpa"
+    aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text
+
+Navigate to Users -> <username> -> Security Credentials
+
 
 Obtaining Credentials
 ~~~~~~~~~~~~~~~~~~~~~

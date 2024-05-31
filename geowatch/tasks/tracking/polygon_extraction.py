@@ -78,6 +78,7 @@ class PolygonExtractor:
             'robust_normalize': False,
             'positional_encoding': True,
             'positional_encoding_scale': 1.0,
+            'polygon_simplify_tolerance': None,
             'scale_factor': 'auto',
             'thresh': 0.3,
             'viz_out_dir': None,
@@ -172,13 +173,17 @@ class PolygonExtractor:
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
         # TODO: better downscaling?
-        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+        if scale_factor == 1:
+            downscaled = raw_heatmap
+        else:
+            downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+            PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+            downscaled = downscaled.copy()
+
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
         else:
             small_mask = None
-        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
-        downscaled = downscaled.copy()
 
         PRINT_STEP('Impute NaN')
         imputed = impute_nans2(downscaled)
@@ -429,11 +434,17 @@ class PolygonExtractor:
         rich.print(f'* Given: raw_heatmap.shape={raw_heatmap.shape}')
 
         # TODO: better downscaling?
-        downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+        if scale_factor == 1:
+            downscaled = raw_heatmap
+        else:
+            downscaled = raw_heatmap[:, ::scale_factor, ::scale_factor, :]
+            PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
+            downscaled = downscaled.copy()
+
         if mask is not None:
             small_mask = mask[::scale_factor, ::scale_factor]
-        PRINT_STEP(f'Downscale by {scale_factor}x to: {downscaled.shape}')
-        downscaled = downscaled.copy()
+        else:
+            small_mask = None
 
         PRINT_STEP('Impute NaN')
         imputed = impute_nans2(downscaled)
@@ -606,6 +617,12 @@ class PolygonExtractor:
         label_img = self.predict()
         label_mask = LabelMask(label_img)
         polys = label_mask.to_multi_polygons()
+
+        if self.config['polygon_simplify_tolerance'] is not None:
+            # TODO: handle difference between pixel and world units.
+            simplify_thresh = int(self.config['polygon_simplify_tolerance'])
+            polys = [p.simplify(simplify_thresh) for p in polys]
+
         if return_info:
             info = {}
             info['label_mask'] = label_mask

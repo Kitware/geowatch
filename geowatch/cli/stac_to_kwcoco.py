@@ -725,8 +725,9 @@ def summarize_stac_item(stac_item):
     # so it takes far less time to field it.
     stac_dict = stac_item.to_dict()
     # stac_dict['geometry']
-    sensor = stac_dict['properties'].get(
-        'constellation', stac_dict['properties'].get('platform', None))
+    stac_properties = stac_dict['properties']
+    sensor = stac_properties.get(
+        'constellation', stac_properties.get('platform', None))
     # proc_level = stac_dict['landsat:correction']
     asset_names = stac_dict['assets'].keys()
 
@@ -745,7 +746,7 @@ def summarize_stac_item(stac_item):
                     elif isinstance(eo_band, str):
                         eo_bands.append(eo_band)
     eo_bands = list(ub.unique(eo_bands))
-    eo_cloud_cover = stac_dict['properties'].get('eo:cloud_cover', None)
+    eo_cloud_cover = stac_properties.get('eo:cloud_cover', None)
 
     summary = {
         'sensor': sensor,

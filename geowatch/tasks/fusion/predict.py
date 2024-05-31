@@ -101,7 +101,12 @@ class PredictConfig(DataModuleConfigMixin):
             path to the output dataset (note: test_dataset is the input
             dataset)
             '''))
-    package_fpath = scfg.Value(None, type=str, help=None)
+    package_fpath = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        The path to a packaged model file.
+        The predict script makes certain assumptions about what type of model
+        this will be. We are working on generalizing this.
+        '''), alias=['model'])
     devices = scfg.Value(None, help='lightning devices')
     thresh = scfg.Value(0.01, help=None)
     with_change = scfg.Value('auto', help=None)
@@ -434,7 +439,7 @@ def resolve_datamodule(config, model, datamodule_defaults, fit_config):
                     datamodule_vars['channels'] = hack_common.spec
 
     DZYNE_MODEL_HACK = 1
-    if DZYNE_MODEL_HACK:
+    if DZYNE_MODEL_HACK and isinstance(config['package_fpath'], str):
         package_fpath = ub.Path(config['package_fpath'])
         if package_fpath.stem == 'lc_rgb_fusion_model_package':
             # This model has an issue with the L8 features it was trained on
@@ -444,145 +449,6 @@ def resolve_datamodule(config, model, datamodule_defaults, fit_config):
         **datamodule_vars
     )
     return config, datamodule
-
-
-def _prepare_model(config):
-    """
-    Load the specified (ideally packaged) model
-    """
-    package_fpath = ub.Path(config['package_fpath']).expand()
-
-    # try:
-    # Ideally we have a package, everything is defined there
-    model = utils.load_model_from_package(package_fpath)
-    # fix einops bug
-    for _name, mod in model.named_modules():
-        if 'Rearrange' in mod.__class__.__name__:
-            try:
-                mod._recipe = mod.recipe()
-            except AttributeError:
-                pass
-    # hack: dont load the metrics
-    model.class_metrics = None
-    model.saliency_metrics = None
-    model.change_metrics = None
-    model.head_metrics = None
-    # except Exception as ex:
-    #     print('ex = {!r}'.format(ex))
-    #     print(f'Failed to read {package_fpath=!r} attempting workaround')
-    #     # If we have a checkpoint path we can load it if we make assumptions
-    #     # init model from checkpoint.
-    #     raise
-
-    # Hack to fix GELU issue
-    monkey_torch.fix_gelu_issue(model)
-
-    # Fix issue with pre-2023-02 heterogeneous models
-    if model.__class__.__name__ == 'HeterogeneousModel':
-        if not hasattr(model, 'magic_padding_value'):
-            from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
-            new_method = HeterogeneousModel(
-                **model.hparams,
-                position_encoder=model.position_encoder
-            )
-            old_state = model.state_dict()
-            new_method.load_state_dict(old_state)
-            new_method.config_cli_yaml = model.config_cli_yaml
-            model = new_method
-
-    model.eval()
-    model.freeze()
-
-    # Lookup the parameters used to fit the model (these should be stored in
-    # the model, if they are not, then the model packaging needs to be
-    # updated).
-    if hasattr(model, 'config_cli_yaml'):
-        # This should be a lightning nested dictionary
-        # with keys like "data", "model", "trainer", "optmizer", etc..
-        fit_config = model.config_cli_yaml
-    else:
-        raise AssertionError(
-            'model is missing config_cli_yaml, other mechanisms to get fit '
-            'params are commented and may need to be re-instanted')
-        # elif hasattr(model, 'fit_config'):
-        #     traintime_params = model.fit_config
-        # elif hasattr(model, 'datamodule_hparams'):
-        #     traintime_params = model.datamodule_hparams
-        # else:
-        #     # Not sure if code after is still needed for older models.
-        #     # if we hit this error, then we may need to rework this.
-        #     traintime_params = {}
-        #     if datamodule_vars['channels'] in {None, 'auto'}:
-        #         print('Warning have to make assumptions. Might not always work')
-        #         raise NotImplementedError('TODO: needs to be sensorchan if we do this')
-        #         if hasattr(model, 'input_channels'):
-        #             # note input_channels are sometimes different than the channels the
-        #             # datamodule expects. Depending on special keys and such.
-        #             traintime_params['channels'] = model.input_channels.spec
-        #         else:
-        #             traintime_params['channels'] = list(model.input_norms.keys())[0]
-
-    return model, fit_config
-
-
-def _prepare_predict_modules(config):
-    """
-    Build the modules (i.e. data / model) needed to run prediction.
-
-    Args:
-        config (PredictConfig):
-            the config for this script
-
-    Returns:
-        Tuple[PredictConfig, LightningModule, LightningDataModule]:
-            modified config, network, and dataloader
-    """
-    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
-    datamodule_defaults = config.datamodule_defaults
-
-    model, fit_config = _prepare_model(config)
-    config.fit_config = fit_config
-
-    # Determine how to construct the datamodule with correct params
-    # TODO: we should not be updating the config here
-    config, datamodule = resolve_datamodule(
-        config, model, datamodule_defaults, fit_config)
-
-    # TODO: if TTA=True, disable deterministic time sampling
-    datamodule.setup('test')
-    print('Finished dataset setup')
-
-    if config['tta_time']:
-        print('Expanding time samples')
-        # Expand targets to include time augmented samples
-        n_time_expands = config['tta_time']
-        test_torch_dset = datamodule.torch_datasets['test']
-        test_torch_dset._expand_targets_time(n_time_expands)
-
-    if config['tta_fliprot']:
-        print('Expanding fliprot samples')
-        n_fliprot = config['tta_fliprot']
-        test_torch_dset = datamodule.torch_datasets['test']
-        test_torch_dset._expand_targets_fliprot(n_fliprot)
-
-    if ub.argflag('--debug-timesample'):
-        import kwplot
-        plt = kwplot.autoplt()
-        # TODO Could
-        test_torch_dset = datamodule.torch_datasets['test']
-        vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
-        vidid = ub.peek(vidid_to_time_sampler.keys())
-        time_sampler = vidid_to_time_sampler[vidid]
-        time_sampler.show_summary()
-        plt.show()
-
-    print('Construct dataloader')
-    test_torch_dataset = datamodule.torch_datasets['test']
-    # hack this setting
-    if not config.draw_batches:
-        test_torch_dataset.inference_only = True
-
-    return config, model, datamodule
 
 
 def _debug_grid(test_dataloader):
@@ -688,7 +554,7 @@ def _jsonify(data):
     return jsonified
 
 
-def _predict_critical_loop(config, model, datamodule, result_dataset, device):
+def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset, device):
     import rich
 
     print('Predict on device = {!r}'.format(device))
@@ -772,10 +638,20 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         viz_batch_dpath = (pred_dpath / '_viz_pred_batches').ensuredir()
 
     config_resolved = _jsonify(config.asdict())
-    fit_config = _jsonify(config.fit_config)
+    fit_config = _jsonify(fit_config)
 
     from kwcoco.util import util_json
-    assert not list(util_json.find_json_unserializable(config_resolved))
+    unresolvable = list(util_json.find_json_unserializable(config_resolved))
+    if unresolvable:
+        import warnings
+        warnings.warn(f'NotReproducibleWarning: Found unresolvable configuration options: {unresolvable!r}')
+        config_walker = ub.IndexableWalker(config_resolved)
+        for unresolvable_item in unresolvable:
+            _value = unresolvable_item['data']
+            config_walker[unresolvable_item['loc']] = f'Unresolvable: {_value}'
+
+        unresolvable = list(util_json.find_json_unserializable(config_resolved))
+        assert not unresolvable, 'should have entered dummy values for unresolvable data'
 
     if config['record_context']:
         from geowatch.utils import process_context
@@ -799,7 +675,7 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
         proc_context.add_disk_info(test_coco_dataset.fpath)
 
     memory_monitor_timer = ub.Timer().tic()
-    memory_monitor_interval_seconds = 60
+    memory_monitor_interval_seconds = 60 * 60
     with_memory_units = bool(ub.modname_to_modpath('pint'))
 
     with torch.set_grad_enabled(False), pman:
@@ -979,24 +855,18 @@ def _predict_critical_loop(config, model, datamodule, result_dataset, device):
                         output_image_dsize = frame_info['output_image_dsize']
                         output_space_slice = frame_info['output_space_slice']
                         scale_outspace_from_vid = frame_info['scale_outspace_from_vid']
-                        # print(f'output_image_dsize={output_image_dsize}')
-                        # print(f'output_space_slice={output_space_slice}')
 
                         if DEBUG_PRED_SPATIAL_COVERAGE:
                             image_id_to_video_space_slices[gid].append(target['space_slice'])
                             image_id_to_output_space_slices[gid].append(output_space_slice)
 
-                        # print(f'output_space_slice={output_space_slice}')
-                        # print(f'gid={gid}')
-                        # print(f'output_image_dsize={output_image_dsize}')
-                        # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
                         output_weights = frame_info.get('output_weights', None)
 
                         try:
                             head_stitcher.accumulate_image(
                                 gid, output_space_slice, probs,
-                                dsize=output_image_dsize,
-                                scale=scale_outspace_from_vid,
+                                asset_dsize=output_image_dsize,
+                                scale_asset_from_stitchspace=scale_outspace_from_vid,
                                 weights=output_weights,
                                 downweight_edges=downweight_edges,
                             )
@@ -1331,44 +1201,212 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     import rich
+    from rich.markup import escape
     config = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    config.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
-    # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-    rich.print('config = {}'.format(ub.urepr(config, nl=2)))
+    rich.print('config = {}'.format(escape(ub.urepr(config, nl=2))))
 
-    config, model, datamodule = _prepare_predict_modules(config)
+    predictor = Predictor(config)
 
-    test_coco_dataset = datamodule.coco_datasets['test']
+    # Build the modules (i.e. data / model) needed to run prediction.
+    predictor._load_model()
+    predictor._load_dataset()
 
-    # test_torch_dataset = datamodule.torch_datasets['test']
-    # T, H, W = test_torch_dataset.window_dims
-
-    # Create the results dataset as a copy of the test CocoDataset
-    print('Populate result dataset')
-    result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
-
-    # Remove all annotations in the results copy
-    if config['clear_annots']:
-        result_dataset.clear_annotations()
-
-    # Change all paths to be absolute paths
-    result_dataset.reroot(absolute=True)
-    if not config['pred_dataset']:
-        raise ValueError(
-            f'Must specify path to the output (predicted) kwcoco file. '
-            f'Got {config["pred_dataset"]=}')
-    result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
-
-    from geowatch.utils.lightning_ext import util_device
-    print('devices = {!r}'.format(config['devices']))
-    devices = util_device.coerce_devices(config['devices'])
-    print('devices = {!r}'.format(devices))
-    if len(devices) > 1:
-        raise NotImplementedError('TODO: handle multiple devices')
-    device = devices[0]
-
-    result_dataset = _predict_critical_loop(config, model, datamodule, result_dataset, device)
+    # Execute the pipeline
+    result_dataset = predictor._run()
     return result_dataset
+
+
+class Predictor:
+    """
+    Abstracts different stages of the prediction process
+
+    New in 0.17.1, needs to be refactored with the rest of the code in this
+    file.
+    """
+    def __init__(self, config):
+        self.config = config
+
+        self.datamodule_defaults = None
+        self.fit_config = None
+
+        self.model = None
+        self.datamodule = None
+
+    def _load_model(self):
+        """
+        Load the specified (ideally packaged) model
+        """
+        config = self.config
+        self.datamodule_defaults = config.__DATAMODULE_DEFAULTS__
+
+        if isinstance(config['package_fpath'], torch.nn.Module):
+            model = config['package_fpath']
+        else:
+            package_fpath = ub.Path(config['package_fpath']).expand()
+            # try:
+            # Ideally we have a package, everything is defined there
+            model = utils.load_model_from_package(package_fpath)
+            # fix einops bug
+            for _name, mod in model.named_modules():
+                if 'Rearrange' in mod.__class__.__name__:
+                    try:
+                        mod._recipe = mod.recipe()
+                    except AttributeError:
+                        pass
+        # hack: dont load the metrics
+        model.class_metrics = None
+        model.saliency_metrics = None
+        model.change_metrics = None
+        model.head_metrics = None
+        # except Exception as ex:
+        #     print('ex = {!r}'.format(ex))
+        #     print(f'Failed to read {package_fpath=!r} attempting workaround')
+        #     # If we have a checkpoint path we can load it if we make assumptions
+        #     # init model from checkpoint.
+        #     raise
+
+        # Hack to fix GELU issue
+        monkey_torch.fix_gelu_issue(model)
+
+        # Fix issue with pre-2023-02 heterogeneous models
+        if model.__class__.__name__ == 'HeterogeneousModel':
+            if not hasattr(model, 'magic_padding_value'):
+                from geowatch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+                new_method = HeterogeneousModel(
+                    **model.hparams,
+                    position_encoder=model.position_encoder
+                )
+                old_state = model.state_dict()
+                new_method.load_state_dict(old_state)
+                new_method.config_cli_yaml = model.config_cli_yaml
+                model = new_method
+
+        model.eval()
+        model.freeze()
+
+        # Lookup the parameters used to fit the model (these should be stored in
+        # the model, if they are not, then the model packaging needs to be
+        # updated).
+        if hasattr(model, 'config_cli_yaml'):
+            # This should be a lightning nested dictionary
+            # with keys like "data", "model", "trainer", "optmizer", etc..
+            fit_config = model.config_cli_yaml
+        else:
+            raise AssertionError(
+                'model is missing config_cli_yaml, other mechanisms to get fit '
+                'params are commented and may need to be re-instanted')
+            # elif hasattr(model, 'fit_config'):
+            #     traintime_params = model.fit_config
+            # elif hasattr(model, 'datamodule_hparams'):
+            #     traintime_params = model.datamodule_hparams
+            # else:
+            #     # Not sure if code after is still needed for older models.
+            #     # if we hit this error, then we may need to rework this.
+            #     traintime_params = {}
+            #     if datamodule_vars['channels'] in {None, 'auto'}:
+            #         print('Warning have to make assumptions. Might not always work')
+            #         raise NotImplementedError('TODO: needs to be sensorchan if we do this')
+            #         if hasattr(model, 'input_channels'):
+            #             # note input_channels are sometimes different than the channels the
+            #             # datamodule expects. Depending on special keys and such.
+            #             traintime_params['channels'] = model.input_channels.spec
+            #         else:
+            #             traintime_params['channels'] = list(model.input_norms.keys())[0]
+        config.fit_config = fit_config
+        self.model = model
+        self.fit_config = fit_config
+
+    def _load_dataset(self):
+        """
+        Determine how to construct the datamodule with correct params
+        """
+
+        model = self.model
+        config = self.config
+        datamodule_defaults = self.datamodule_defaults
+        fit_config = self.fit_config
+
+        # TODO: we should not be updating the config here
+        config, datamodule = resolve_datamodule(
+            config, model, datamodule_defaults, fit_config)
+        self.config = config
+
+        # TODO: if TTA=True, disable deterministic time sampling
+        datamodule.setup('test')
+        print('Finished dataset setup')
+
+        if config['tta_time']:
+            print('Expanding time samples')
+            # Expand targets to include time augmented samples
+            n_time_expands = config['tta_time']
+            test_torch_dset = datamodule.torch_datasets['test']
+            test_torch_dset._expand_targets_time(n_time_expands)
+
+        if config['tta_fliprot']:
+            print('Expanding fliprot samples')
+            n_fliprot = config['tta_fliprot']
+            test_torch_dset = datamodule.torch_datasets['test']
+            test_torch_dset._expand_targets_fliprot(n_fliprot)
+
+        if ub.argflag('--debug-timesample'):
+            # HACK: parameterize or refactor
+            import kwplot
+            plt = kwplot.autoplt()
+            test_torch_dset = datamodule.torch_datasets['test']
+            vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
+            vidid = ub.peek(vidid_to_time_sampler.keys())
+            time_sampler = vidid_to_time_sampler[vidid]
+            time_sampler.show_summary()
+            plt.show()
+
+        print('Construct dataloader')
+        test_torch_dataset = datamodule.torch_datasets['test']
+        # hack this setting
+        if not config.draw_batches:
+            test_torch_dataset.inference_only = True
+
+        self.datamodule = datamodule
+
+    def _run(self):
+        datamodule = self.datamodule
+        model = self.model
+        config = self.config
+
+        test_coco_dataset = datamodule.coco_datasets['test']
+
+        # test_torch_dataset = datamodule.torch_datasets['test']
+        # T, H, W = test_torch_dataset.window_dims
+
+        # Create the results dataset as a copy of the test CocoDataset
+        print('Populate result dataset')
+        result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
+
+        # Remove all annotations in the results copy
+        if config['clear_annots']:
+            result_dataset.clear_annotations()
+
+        # Change all paths to be absolute paths
+        result_dataset.reroot(absolute=True)
+        if not config['pred_dataset']:
+            raise ValueError(
+                f'Must specify path to the output (predicted) kwcoco file. '
+                f'Got {config["pred_dataset"]=}')
+        result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
+
+        from geowatch.utils.lightning_ext import util_device
+        print('devices = {!r}'.format(config['devices']))
+        devices = util_device.coerce_devices(config['devices'])
+        print('devices = {!r}'.format(devices))
+        if len(devices) > 1:
+            raise NotImplementedError('TODO: handle multiple devices')
+        device = devices[0]
+
+        fit_config = self.fit_config
+
+        result_dataset = _predict_critical_loop(config, fit_config, model,
+                                                datamodule, result_dataset,
+                                                device)
+        return result_dataset
 
 
 def main(cmdline=True, **kwargs):

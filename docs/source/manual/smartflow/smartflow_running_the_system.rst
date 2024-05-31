@@ -414,8 +414,25 @@ results and debug data back to a new output bucket.
 
 See [ComputeInstanceTypes]_ for details on available instance types.
 
+Also see
+
 References:
     .. [ComputeInstanceTypes] https://smartgitlab.com/blacksky/smartflow/-/blob/main/docs/Framework/Smartflow-Framework.md#selecting-compute-resources-for-tasks
+
+
+A table as of 2024-05-26 of compute resources is::
+
+    | Purpose             | RAM/CPU ratio | GPUs     | Accelerator       | SSD*         | SSD Size                 | Price Range ($/hr) |
+    |--------------------:|--------------:|---------:|------------------:|-------------:|-------------------------:|-------------------:|
+    | general             | 4g/core       |          |                   | No           |                          | 0.10-9.677         |
+    | gpu-aws-inferentia1 | 2G/core       | 1, 4, 16 | inferentia1       | No           |                          | 0.228-4.721        |
+    | gpu-aws-inferentia2 | 2G/core       | 1, 6, 12 | inferentia2       | No           |                          | 1.967-12.99        |
+    | gpu-aws-trainium1   | 4G/core       | 1, 16    | trainium1         | Yes          | 1 x 475 GB, 4 x 1900 GB  | 1.34-21.50         |
+    | gpu-nvidia-a10g     | 4G/core       | 1, 4, 8  | nvidia-a10g       | Yes          | 1 x 250 GB - 2 x 3800 GB | 1.006-16.288       |
+    | gpu-nvidia-t4       | 4G/core       | 1, 4, 8  | nvidia-tesla-t4   | Yes          | 1 x 125 GB - 2 x 900 GB  | 0.526-7.824        |
+    | gpu-nvidia-v100     | 7.625G/core   | 1, 4, 8  | nvidia-tesla-v100 | If Requested | 2 x 900 GB               | 3.06-31.212        |
+    | high-cpu            | 2G/core       |          |                   | If Requested | 1 x 50 GB - 4 x 1900GB   | 0.085-6.4512       |
+    | high-mem            | 4G/core       |          |                   | If Requested | 1 x 75 GB - 4 x 1900GB   | 0.1068-5.34        |
 
 
 

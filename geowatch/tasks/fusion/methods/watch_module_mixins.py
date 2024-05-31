@@ -5,10 +5,7 @@ import numpy as np
 from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 
 
-class WatchModuleMixins:
-    """
-    Mixin methods for geowatch lightning modules
-    """
+class ExtendTorchMixin:
 
     def reset_weights(self):
         for name, mod in self.named_modules():
@@ -46,6 +43,9 @@ class WatchModuleMixins:
                 raise NotImplementedError('no information maintained on which device is primary')
             else:
                 return list(devices)[0]
+
+
+class MSIDemoDataMixin:
 
     @classmethod
     def demo_dataset_stats(cls):
@@ -272,6 +272,9 @@ class WatchModuleMixins:
             batch.append(item)
         return batch
 
+
+class LightningModelMixin:
+
     @property
     def has_trainer(self):
         try:
@@ -280,284 +283,22 @@ class WatchModuleMixins:
         except RuntimeError:
             return False
 
-    @classmethod
-    def load_package(cls, package_path, verbose=1):
+
+class DeprecatedMixin:
+
+    def configure_optimizers(self):
         """
-        DEPRECATE IN FAVOR OF geowatch.tasks.fusion.utils.load_model_from_package
-
-        TODO:
-            - [ ] Make the logic that defines the save_package and load_package
-                methods with appropriate package header data a lightning
-                abstraction.
+        Note: this is only a fallback for testing purposes. This should be
+        overwrriten in your module or done via lightning CLI.
         """
-        # NOTE: there is no gaurentee that this loads an instance of THIS
-        # model, the model is defined by the package and the tool that loads it
-        # is agnostic to the model contained in said package.
-        # This classmethod existing is a convinience more than anything else
-        from geowatch.tasks.fusion.utils import load_model_from_package
-        self = load_model_from_package(package_path)
-        return self
+        from torch.optim import lr_scheduler
+        from torch.optim import AdamW
+        optimizer = AdamW(lr=3e-4, weight_decay=3e-6, params=self.parameters())
+        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=160)
+        return [optimizer], [scheduler]
 
-    def _coerce_class_weights(self, class_weights):
-        """
-        Handles automatic class weighting based on dataset stats.
 
-        Args:
-            class_weights (str | FloatTensor):
-                If already a tensor does nothing. If the string "auto" then
-                class frequency weighting is used. The string "auto" can be
-                suffixed with a "class modulation code".
-
-        Note:
-            A class modulate code is a a special syntax that lets the user
-            modulate automatically computed class weights. Should be a comma
-            separated list of name*weight or name*weight+offset. E.g.
-            `auto:negative*0,background*0.001,No Activity*0.1+1`
-
-        Example:
-            >>> # xdoctest: +IGNORE_WANT
-            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
-            >>> self = WatchModuleMixins()
-            >>> self.classes = ['a', 'b', 'c', 'd', 'e']
-            >>> self.class_freq = {
-            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
-            >>> }
-            >>> self._coerce_class_weights('auto')
-            tensor([1., 1., 1., 1., 1.])
-            >>> self.class_freq = {
-            >>>     'a': 100, 'b': 100, 'c': 200, 'd': 300, 'e': 500, 'f': 800,
-            >>> }
-            >>> self._coerce_class_weights('auto')
-            tensor([1.0000, 1.0000, 0.5000, 0.3333, 0.2000])
-            >>> self._coerce_class_weights('auto:a+1,b*2,c*0+31415')
-            tensor([2.0000e+00, 2.0000e+00, 3.1415e+04, 3.3333e-01, 2.0000e-01])
-        """
-        from geowatch import heuristics
-        hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
-        if isinstance(class_weights, str):
-            if class_weights.startswith('auto'):
-                if ':' in class_weights:
-                    class_weights, modulate_class_weights = class_weights.split(':')
-                else:
-                    modulate_class_weights = None
-                class_weights.split(':')
-                if self.class_freq is None:
-                    heuristic_weights = {}
-                else:
-                    class_freq = ub.udict(self.class_freq) - hueristic_ignore_keys
-                    total_freq = np.array(list(class_freq.values()))
-                    cat_weights = _class_weights_from_freq(total_freq)
-                    catnames = list(class_freq.keys())
-                    print('total_freq = {!r}'.format(total_freq))
-                    print('cat_weights = {!r}'.format(cat_weights))
-                    print('catnames = {!r}'.format(catnames))
-                    heuristic_weights = ub.dzip(catnames, cat_weights)
-                #print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
-
-                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
-                class_weights = []
-                for catname in self.classes:
-                    w = heuristic_weights.get(catname, 1.0)
-                    class_weights.append(w)
-                using_class_weights = ub.dzip(self.classes, class_weights)
-
-                # Add in user-specific modulation of the weights
-                if modulate_class_weights:
-                    import re
-                    parts = [p.strip() for p in modulate_class_weights.split(',')]
-                    parts = [p for p in parts if p]
-                    for part in parts:
-                        toks = re.split('([+*])', part)
-                        catname = toks[0]
-                        rest_iter = iter(toks[1:])
-                        weight = using_class_weights[catname]
-                        nrhtoks = len(toks) - 1
-                        assert nrhtoks % 2 == 0
-                        nstmts = nrhtoks // 2
-                        for _ in range(nstmts):
-                            opcode = next(rest_iter)
-                            arg = float(next(rest_iter))
-                            if opcode == '*':
-                                weight = weight * arg
-                            elif opcode == '+':
-                                weight = weight + arg
-                            else:
-                                raise KeyError(opcode)
-                        # Modulate
-                        using_class_weights[catname] = weight
-
-                print('using_class_weights = {}'.format(ub.urepr(using_class_weights, nl=1, align=':')))
-                class_weights = [
-                    using_class_weights.get(catname, 1.0)
-                    for catname in self.classes
-                    if catname not in hueristic_ignore_keys
-                ]
-                class_weights = torch.FloatTensor(class_weights)
-            else:
-                raise KeyError(class_weights)
-        else:
-            raise NotImplementedError(f'{class_weights!r}')
-        return class_weights
-
-    def _coerce_saliency_weights(self, saliency_weights):
-        """
-        Finds weights to balance saliency forward / background classes.
-
-        Args:
-            saliency_weights (Tensor | str | None):
-                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
-                Can also accept a YAML mapping from the keys "bg" and "fg" to
-                their respective float weights.
-
-        Returns:
-            Tensor
-
-        CommandLine:
-            xdoctest -m geowatch.tasks.fusion.methods.watch_module_mixins WatchModuleMixins._coerce_saliency_weights
-
-        Example:
-            >>> # xdoctest: +IGNORE_WANT
-            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
-            >>> self = WatchModuleMixins()
-            >>> self.saliency_num_classes = 2
-            >>> self.background_classes = ['a', 'b', 'c']
-            >>> self.foreground_classes = ['d', 'e']
-            >>> self.class_freq = {
-            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
-            >>> }
-            >>> self._coerce_saliency_weights('auto')
-            tensor([1.0000, 1.4925])
-            >>> self.background_classes = ['a', 'b', 'c']
-            >>> self.foreground_classes = []
-            >>> self._coerce_saliency_weights('auto')
-            tensor([  1., 300.])
-            >>> self.background_classes = []
-            >>> self.foreground_classes = []
-            >>> self._coerce_saliency_weights('auto')
-            tensor([1., 0.])
-            >>> self._coerce_saliency_weights('2:1')
-            tensor([2., 1.])
-            >>> self._coerce_saliency_weights('70:20')
-            tensor([70., 20.])
-            >>> self._coerce_saliency_weights('{fg: 1, bg: 2}')
-            tensor([2., 1.])
-            >>> self._coerce_saliency_weights({'fg': 1, 'bg': 2})
-            tensor([2., 1.])
-            >>> import pytest
-            >>> with pytest.raises(Exception):
-            >>>     self._coerce_saliency_weights(123)
-        """
-        from kwutil.util_yaml import Yaml
-        saliency_weights_ = Yaml.coerce(saliency_weights)
-
-        try:
-            if saliency_weights_ is None:
-                saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
-            elif isinstance(saliency_weights_, str):
-                if saliency_weights_ == 'auto':
-                    class_freq = self.class_freq
-                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
-                    if class_freq is not None:
-                        print(f'class_freq={class_freq}')
-                        bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
-                        fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
-                        saliency_weights_['fg'] = bg_freq / (fg_freq + 1)
-                elif saliency_weights_.lower() in {'null', 'none'}:
-                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
-                else:
-                    bg_weight, fg_weight = saliency_weights_.split(':')
-                    saliency_weights_ = {
-                        'bg': float(bg_weight.strip()),
-                        'fg': float(fg_weight.strip()),
-                    }
-            elif isinstance(saliency_weights_, dict):
-                ...
-            else:
-                raise TypeError('Unexpected saliency weights type')
-        except Exception as ex:
-            from geowatch.utils import util_exception
-            notes = f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}'
-            new_ex = util_exception.add_exception_note(ex, notes)
-            raise new_ex
-
-        print(f'saliency_weights_ = {ub.urepr(saliency_weights_, nl=1)}')
-        bg_fg_weights = [
-            saliency_weights_.get('bg', 1.0),
-            saliency_weights_.get('fg', 1.0)
-        ]
-        # What is the motivation for having "saliency_num_classes" be not 2?
-        _n = self.saliency_num_classes
-        _w = bg_fg_weights + ([0.0] * (_n - len(bg_fg_weights)))
-        final_saliency_weights = torch.Tensor(_w)
-        return final_saliency_weights
-
-    def set_dataset_specific_attributes(self, input_sensorchan, dataset_stats):
-        """
-        Set module attributes based on dataset stats it will be trained on.
-
-        Args:
-            input_sensorchan (str | kwcoco.SensorchanSpec | None):
-                The input sensor channels the model should expect
-
-            dataset_stats (Dict | None):
-                See :func:`demo_dataset_stats` for an example of this structure
-
-        Returns:
-            None | Dict: input_stats
-
-        The following attributes will be set after calling this method.
-
-            * self.class_freq
-
-            * self.dataset_stats
-
-            * self.input_sensorchan
-
-            * self.unique_sensor_modes
-
-        We also return an ``input_stats`` variable which should be used for
-        setting model-dependent handling of input normalization.
-
-        The handling of dataset_stats and input_sensorchan are weirdly coupled
-        for legacy reasons and duplicated across several modules. This is a
-        common location for that code to allow it to be more easily refactored
-        and simplified at a later date.
-        """
-        if dataset_stats is not None:
-            input_stats = dataset_stats['input_stats']
-            class_freq = dataset_stats['class_freq']
-            if input_sensorchan is None:
-                input_sensorchan = ','.join(
-                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
-        else:
-            class_freq = None
-            input_stats = None
-
-        # Handle channel-wise input mean/std in the network (This is in
-        # contrast to common practice where it is done in the dataloader)
-        if input_sensorchan is None:
-            raise Exception(
-                'need to specify input_sensorchan at least as the number of '
-                'input channels')
-        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
-
-        if dataset_stats is None:
-            # Handle the case where we know what the input streams are, but not
-            # what their statistics are.
-            input_stats = None
-            unique_sensor_modes = {
-                (s.sensor.spec, s.chans.spec)
-                for s in input_sensorchan.streams()
-            }
-        else:
-            unique_sensor_modes = dataset_stats['unique_sensor_modes']
-
-        self.class_freq = class_freq
-        self.dataset_stats = dataset_stats
-        self.unique_sensor_modes = unique_sensor_modes
-        self.input_sensorchan = input_sensorchan
-        return input_stats
+class OverfitMixin:
 
     def overfit(self, batch):
         """
@@ -591,8 +332,8 @@ class WatchModuleMixins:
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 1:
-            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
+            >>>     dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop8-ARA-Median10GSD-V1') / 'KR_R001/imganns-KR_R001-rawbands.kwcoco.zip'
             >>>     channels='blue|green|red|nir'
             >>> if 0:
             >>>     coco_dset = geowatch.demo.demo_kwcoco_multisensor(max_speed=0.5)
@@ -628,9 +369,19 @@ class WatchModuleMixins:
             >>>     #token_dim=708,
             >>>     #token_dim=768 - 60,
             >>>     #backbone='vit_B_16_imagenet1k',
-            >>>     token_dim=208,
-            >>>     backbone='sits-former',
-            >>>     position_encoder=position_encoder,
+            >>>     #token_dim=208,
+            >>>     #backbone='sits-former',
+            >>>     )
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.MultimodalTransformer(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     #token_dim=708,
+            >>>     #token_dim=768 - 60,
+            >>>     #backbone='vit_B_16_imagenet1k',
+            >>>     #token_dim=208,
+            >>>     #backbone='sits-former',
             >>>     )
             >>> self.datamodule = datamodule
             >>> datamodule._notify_about_tasks(model=self)
@@ -653,6 +404,7 @@ class WatchModuleMixins:
         import xdev
         import kwimage
         import pandas as pd
+        from torch.optim import AdamW
         from kwutil.slugify_ext import smart_truncate
         from kwplot.mpl_make import render_figure_to_image
 
@@ -677,12 +429,7 @@ class WatchModuleMixins:
         _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
-        try:
-            [optim], [sched] = self.configure_optimizers()
-        except Exception:
-            # optim = torch.optim.SGD(self.parameters(), lr=1e-4)
-            optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
-
+        optimizer = AdamW(lr=3e-4, weight_decay=3e-6, params=self.parameters())
         # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
 
         fnum = 2
@@ -695,7 +442,7 @@ class WatchModuleMixins:
             num_steps = 20
             ex = None
             for _i in ub.ProgIter(range(num_steps), desc='overfit'):
-                optim.zero_grad()
+                optimizer.zero_grad()
                 outputs = self.training_step(batch)
                 # outputs['item_losses']
                 loss = outputs['loss']
@@ -715,7 +462,7 @@ class WatchModuleMixins:
                 loss.backward()
                 item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
                 loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
-                optim.step()
+                optimizer.step()
                 step += 1
             canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
             kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
@@ -726,7 +473,7 @@ class WatchModuleMixins:
                 ax.set_yscale('logit')
             except Exception:
                 ...
-            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
+            fig.suptitle(smart_truncate(str(optimizer).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
             # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
@@ -738,6 +485,9 @@ class WatchModuleMixins:
         # TODO: start a server process that listens for new images
         # as it gets new images, it starts playing through the animation
         # looping as needed
+
+
+class PackageMixin:
 
     def _save_package(self, package_path, verbose=1):
         """
@@ -858,21 +608,334 @@ class WatchModuleMixins:
             for key, val in backup_attributes.items():
                 setattr(model, key, val)
 
-    def configure_optimizers(self):
+    @classmethod
+    def load_package(cls, package_path, verbose=1):
         """
-        Note: this is only a fallback for testing purposes. This should be
-        overwrriten in your module or done via lightning CLI.
-        """
-        from geowatch.utils import util_netharn
-        from torch.optim import lr_scheduler
+        DEPRECATE IN FAVOR OF geowatch.tasks.fusion.utils.load_model_from_package
 
-        # Netharn api will convert a string code into a type/class and
-        # keyword-arguments to create an instance.
-        optim_cls, optim_kw = util_netharn.Optimizer.coerce(
-            optimizer='adamw', lr=3e-4, weight_decay=3e-6)
-        optim_kw['params'] = self.parameters()
-        optimizer = optim_cls(**optim_kw)
-        max_epochs = 160
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max_epochs)
-        return [optimizer], [scheduler]
+        TODO:
+            - [ ] Make the logic that defines the save_package and load_package
+                methods with appropriate package header data a lightning
+                abstraction.
+        """
+        # NOTE: there is no gaurentee that this loads an instance of THIS
+        # model, the model is defined by the package and the tool that loads it
+        # is agnostic to the model contained in said package.
+        # This classmethod existing is a convinience more than anything else
+        from geowatch.tasks.fusion.utils import load_model_from_package
+        self = load_model_from_package(package_path)
+        return self
+
+
+class CoerceMixins:
+
+    def _coerce_class_weights(self, class_weights):
+        """
+        Handles automatic class weighting based on dataset stats.
+
+        Args:
+            class_weights (str | FloatTensor):
+                If already a tensor does nothing. If the string "auto" then
+                class frequency weighting is used. The string "auto" can be
+                suffixed with a "class modulation code".
+
+        Note:
+            A class modulate code is a a special syntax that lets the user
+            modulate automatically computed class weights. Should be a comma
+            separated list of name*weight or name*weight+offset. E.g.
+            `auto:negative*0,background*0.001,No Activity*0.1+1`
+
+        Example:
+            >>> # xdoctest: +IGNORE_WANT
+            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> self = WatchModuleMixins()
+            >>> self.classes = ['a', 'b', 'c', 'd', 'e']
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
+            >>> }
+            >>> self._coerce_class_weights('auto')
+            tensor([1., 1., 1., 1., 1.])
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 200, 'd': 300, 'e': 500, 'f': 800,
+            >>> }
+            >>> self._coerce_class_weights('auto')
+            tensor([1.0000, 1.0000, 0.5000, 0.3333, 0.2000])
+            >>> self._coerce_class_weights('auto:a+1,b*2,c*0+31415')
+            tensor([2.0000e+00, 2.0000e+00, 3.1415e+04, 3.3333e-01, 2.0000e-01])
+        """
+        from geowatch import heuristics
+        hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
+        if isinstance(class_weights, str):
+            if class_weights.startswith('auto'):
+                if ':' in class_weights:
+                    class_weights, modulate_class_weights = class_weights.split(':')
+                else:
+                    modulate_class_weights = None
+                class_weights.split(':')
+                if self.class_freq is None:
+                    heuristic_weights = {}
+                else:
+                    class_freq = ub.udict(self.class_freq) - hueristic_ignore_keys
+                    total_freq = np.array(list(class_freq.values()))
+                    cat_weights = _class_weights_from_freq(total_freq)
+                    catnames = list(class_freq.keys())
+                    print('total_freq = {!r}'.format(total_freq))
+                    print('cat_weights = {!r}'.format(cat_weights))
+                    print('catnames = {!r}'.format(catnames))
+                    heuristic_weights = ub.dzip(catnames, cat_weights)
+                #print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
+
+                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
+                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
+                class_weights = []
+                for catname in self.classes:
+                    w = heuristic_weights.get(catname, 1.0)
+                    class_weights.append(w)
+                using_class_weights = ub.dzip(self.classes, class_weights)
+
+                # Add in user-specific modulation of the weights
+                if modulate_class_weights:
+                    import re
+                    parts = [p.strip() for p in modulate_class_weights.split(',')]
+                    parts = [p for p in parts if p]
+                    for part in parts:
+                        toks = re.split('([+*])', part)
+                        catname = toks[0]
+                        rest_iter = iter(toks[1:])
+                        weight = using_class_weights[catname]
+                        nrhtoks = len(toks) - 1
+                        assert nrhtoks % 2 == 0
+                        nstmts = nrhtoks // 2
+                        for _ in range(nstmts):
+                            opcode = next(rest_iter)
+                            arg = float(next(rest_iter))
+                            if opcode == '*':
+                                weight = weight * arg
+                            elif opcode == '+':
+                                weight = weight + arg
+                            else:
+                                raise KeyError(opcode)
+                        # Modulate
+                        using_class_weights[catname] = weight
+
+                print('using_class_weights = {}'.format(ub.urepr(using_class_weights, nl=1, align=':')))
+                class_weights = [
+                    using_class_weights.get(catname, 1.0)
+                    for catname in self.classes
+                    if catname not in hueristic_ignore_keys
+                ]
+                class_weights = torch.FloatTensor(class_weights)
+            else:
+                raise KeyError(class_weights)
+        else:
+            raise NotImplementedError(f'{class_weights!r}')
+        return class_weights
+
+    def _coerce_saliency_weights(self, saliency_weights):
+        """
+        Finds weights to balance saliency forward / background classes.
+
+        Args:
+            saliency_weights (Tensor | str | None):
+                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
+                Can also accept a YAML mapping from the keys "bg" and "fg" to
+                their respective float weights.
+
+        Returns:
+            Tensor:
+                A length-2 tensor where index 0 contains the background weight
+                and index 1 contains the foreground weight.
+
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.methods.watch_module_mixins WatchModuleMixins._coerce_saliency_weights
+
+        Example:
+            >>> # xdoctest: +IGNORE_WANT
+            >>> from geowatch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> self = WatchModuleMixins()
+            >>> self.saliency_num_classes = 2
+            >>> self.background_classes = ['a', 'b', 'c']
+            >>> self.foreground_classes = ['d', 'e']
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
+            >>> }
+            >>> self._coerce_saliency_weights('auto')
+            tensor([1.0000, 1.4925])
+            >>> self.background_classes = ['a', 'b', 'c']
+            >>> self.foreground_classes = []
+            >>> self._coerce_saliency_weights('auto')
+            tensor([  1., 300.])
+            >>> self.background_classes = []
+            >>> self.foreground_classes = []
+            >>> self._coerce_saliency_weights('auto')
+            tensor([1., 0.])
+            >>> self._coerce_saliency_weights('2:1')
+            tensor([2., 1.])
+            >>> self._coerce_saliency_weights('70:20')
+            tensor([70., 20.])
+            >>> self._coerce_saliency_weights('{fg: 1, bg: 2}')
+            tensor([2., 1.])
+            >>> self._coerce_saliency_weights({'fg': 1, 'bg': 2})
+            tensor([2., 1.])
+            >>> self._coerce_saliency_weights(ub.codeblock(
+                '''
+                foreground: 3
+                background: 5
+                '''))
+            tensor([5., 3.])
+            >>> import pytest
+            >>> with pytest.raises(ValueError):
+            >>>    self._coerce_saliency_weights(ub.codeblock(
+                        '''
+                        foreground2: 3
+                        background: 5
+                        '''))
+            >>> with pytest.raises(Exception):
+            >>>     self._coerce_saliency_weights(123)
+        """
+        from kwutil.util_yaml import Yaml
+        saliency_weights_ = Yaml.coerce(saliency_weights)
+
+        # Provide aliases for the primary keys "fg" and "bg".
+        # This allows the user to user more explicit aliases. This also allows
+        # us to change the internal representation while maintaining backwards
+        # compatability.
+        primary_key_to_aliases = {
+            'bg': ['background'],
+            'fg': ['foreground'],
+        }
+        if isinstance(saliency_weights_, dict):
+            for primary_key, aliases in primary_key_to_aliases.items():
+                for alias_key in aliases:
+                    if alias_key in saliency_weights_:
+                        saliency_weights_[primary_key] = saliency_weights_.pop(alias_key)
+
+        try:
+            if saliency_weights_ is None:
+                saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
+            elif isinstance(saliency_weights_, str):
+                if saliency_weights_ == 'auto':
+                    class_freq = self.class_freq
+                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
+                    if class_freq is not None:
+                        print(f'class_freq={class_freq}')
+                        bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
+                        fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
+                        saliency_weights_['fg'] = bg_freq / (fg_freq + 1)
+                elif saliency_weights_.lower() in {'null', 'none'}:
+                    saliency_weights_ = {'bg': 1.0, 'fg': 1.0}
+                else:
+                    bg_weight, fg_weight = saliency_weights_.split(':')
+                    saliency_weights_ = {
+                        'bg': float(bg_weight.strip()),
+                        'fg': float(fg_weight.strip()),
+                    }
+            elif isinstance(saliency_weights_, dict):
+                ...
+            else:
+                raise TypeError('Unexpected saliency weights type')
+        except Exception as ex:
+            from geowatch.utils import util_exception
+            notes = f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}'
+            new_ex = util_exception.add_exception_note(ex, notes)
+            raise new_ex
+
+        print(f'saliency_weights_ = {ub.urepr(saliency_weights_, nl=1)}')
+
+        if set(primary_key_to_aliases) != set(saliency_weights_):
+            raise ValueError(ub.paragraph(
+                '''
+                Saliency weights must contain values for each primary key or
+                use one of the known aliases. Valid primary keys and their
+                aliases are: {primary_key_to_aliases!r}. The user input for
+                saliency_weights={saliency_weights!r} and this was interpreted
+                as: {saliency_weights_!r}.
+                '''))
+
+        bg_fg_weights = [
+            saliency_weights_.get('bg', 1.0),
+            saliency_weights_.get('fg', 1.0)
+        ]
+        # What is the motivation for having "saliency_num_classes" be not 2?
+        _n = self.saliency_num_classes
+        _w = bg_fg_weights + ([0.0] * (_n - len(bg_fg_weights)))
+        final_saliency_weights = torch.Tensor(_w)
+        return final_saliency_weights
+
+
+class DatasetStatsMixin:
+
+    def set_dataset_specific_attributes(self, input_sensorchan, dataset_stats):
+        """
+        Set module attributes based on dataset stats it will be trained on.
+
+        Args:
+            input_sensorchan (str | kwcoco.SensorchanSpec | None):
+                The input sensor channels the model should expect
+
+            dataset_stats (Dict | None):
+                See :func:`demo_dataset_stats` for an example of this structure
+
+        Returns:
+            None | Dict: input_stats
+
+        The following attributes will be set after calling this method.
+
+            * self.class_freq
+
+            * self.dataset_stats
+
+            * self.input_sensorchan
+
+            * self.unique_sensor_modes
+
+        We also return an ``input_stats`` variable which should be used for
+        setting model-dependent handling of input normalization.
+
+        The handling of dataset_stats and input_sensorchan are weirdly coupled
+        for legacy reasons and duplicated across several modules. This is a
+        common location for that code to allow it to be more easily refactored
+        and simplified at a later date.
+        """
+        if dataset_stats is not None:
+            input_stats = dataset_stats['input_stats']
+            class_freq = dataset_stats['class_freq']
+            if input_sensorchan is None:
+                input_sensorchan = ','.join(
+                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
+        else:
+            class_freq = None
+            input_stats = None
+
+        # Handle channel-wise input mean/std in the network (This is in
+        # contrast to common practice where it is done in the dataloader)
+        if input_sensorchan is None:
+            raise Exception(
+                'need to specify input_sensorchan at least as the number of '
+                'input channels')
+        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
+
+        if dataset_stats is None:
+            # Handle the case where we know what the input streams are, but not
+            # what their statistics are.
+            input_stats = None
+            unique_sensor_modes = {
+                (s.sensor.spec, s.chans.spec)
+                for s in input_sensorchan.streams()
+            }
+        else:
+            unique_sensor_modes = dataset_stats['unique_sensor_modes']
+
+        self.class_freq = class_freq
+        self.dataset_stats = dataset_stats
+        self.unique_sensor_modes = unique_sensor_modes
+        self.input_sensorchan = input_sensorchan
+        return input_stats
+
+
+class WatchModuleMixins(MSIDemoDataMixin, ExtendTorchMixin,
+                        LightningModelMixin, CoerceMixins, PackageMixin,
+                        OverfitMixin, DatasetStatsMixin, DeprecatedMixin):
+    """
+    Mixin methods for geowatch lightning modules
+    """

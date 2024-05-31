@@ -91,7 +91,7 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
                 desc=f'  * loading node results: {node_name}')
             for job in collect_prog:
                 result = job.result()
-                if result['requested_params']:
+                if result['requested_params'] or True:
                     assert set(result.keys()) == set(cols.keys())
                     for k, v in result.items():
                         cols[k].append(v)

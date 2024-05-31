@@ -1863,7 +1863,6 @@ python -m geowatch.mlops.aggregate \
     " \
     --rois="KR_R002,CN_C000,KW_C001,CO_C001"
     #--rois="KR_R002"
-    #--rois="KR_R002,CN_C000"
     #--rois="CN_C000"
 
 
@@ -1877,7 +1876,7 @@ python -m geowatch.mlops.aggregate \
     --target "
         - $REMOTE_DVC_EXPT_DPATH/_preeval20_bas_grid
     " \
-    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001" \
     --output_dpath="$DVC_EXPT_DPATH/_preeval20_bas_grid3/aggregate" \
     --snapshot
 
@@ -2305,9 +2304,7 @@ initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
 "
 
-# shellcheck disable=SC2155
 export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
-# shellcheck disable=SC2155
 export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
 cd "$DVC_EXPT_DPATH"
 python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Median10GSD-V1"
@@ -2493,6 +2490,168 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop8-Median10GSD-V1/packages/Drop8_Median10GSD_allsensors_scratch_V7/Drop8_Median10GSD_allsensors_scratch_V7_epoch187_step2632.pt
 "
+
+
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "list checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "repackage checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "gather packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+
+
+
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+python -m geowatch.mlops.manager "list packages" --expt_dvc_dpath="$DVC_EXPT_DPATH" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+
+# Point based mlops evaluation
+export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop8-v1
+MLOPS_NAME=_preeval22_point_bas_grid
+MLOPS_DPATH=$DVC_EXPT_DPATH/$MLOPS_NAME
+
+MODEL_SHORTLIST="
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch56_step4788.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch119_step10001.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch62_step5292.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch61_step5208.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch60_step5124.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch66_step5628.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch5_step504.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch3_step336.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch144_step12180.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch2_step252.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch6_step588.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch149_step12600.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch118_step9996.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch147_step12432.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch119_step10080.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch4_step420.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch1_step168.pt
+"
+
+
+MODEL_SHORTLIST="
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch56_step4788.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v1_epoch60_step5124.pt
+- $DVC_EXPT_DPATH/models/fusion/Drop8-ARA-Median10GSD-V1/packages/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2/Drop8_ARA_Median10GSD_allsensors_pointannsv1_v2_epoch144_step12180.pt
+"
+
+mkdir -p "$MLOPS_DPATH"
+echo "$MODEL_SHORTLIST" > "$MLOPS_DPATH/shortlist.yaml"
+
+cat "$MLOPS_DPATH/shortlist.yaml"
+
+# FIXME: make sdvc request works with YAML lists of models
+# sdvc request --verbose=3 "$MLOPS_DPATH/shortlist.yaml"
+
+geowatch schedule --params="
+    pipeline: bas
+
+    matrix:
+        bas_pxl.package_fpath: $MLOPS_DPATH/shortlist.yaml
+
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1/CN_C000/imganns-CN_C000-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1/KW_C001/imganns-KW_C001-rawbands.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1/CO_C001/imganns-CO_C001-rawbands.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims: auto
+        bas_pxl.time_span: auto
+        bas_pxl.time_sampling: soft4
+        bas_poly.thresh:
+            - 0.36
+            - 0.37
+            - 0.375
+            - 0.38
+            - 0.39
+            - 0.40
+        bas_poly.inner_window_size: 1y
+        bas_poly.inner_agg_fn: mean
+        bas_poly.norm_ord: inf
+        bas_poly.polygon_simplify_tolerance: 1
+        bas_poly.agg_fn: probs
+        bas_poly.time_thresh:
+            - 0.85
+            - 0.8
+            - 0.75
+        bas_poly.time_pad_after:
+            - 0 months
+            - 3 months
+            - 12 months
+        bas_poly.resolution: 10GSD
+        bas_poly.moving_window_size: null
+        bas_poly.poly_merge_method: 'v2'
+        bas_poly.min_area_square_meters: 7200
+        bas_poly.max_area_square_meters: 8000000
+        bas_poly.boundary_region: $TRUTH_DPATH/region_models
+        bas_poly_eval.true_site_dpath: $TRUTH_DPATH/site_models
+        bas_poly_eval.true_region_dpath: $TRUTH_DPATH/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly_viz.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+    include:
+        - bas_poly.time_pad_after: 0 months
+          bas_poly.time_pad_before: 0 months
+        - bas_poly.time_pad_after: 3 months
+          bas_poly.time_pad_before: 3 months
+        - bas_poly.time_pad_after: 12 months
+          bas_poly.time_pad_before: 12 months
+    " \
+    --root_dpath="$MLOPS_DPATH" \
+    --devices="0,1,2,3" --tmux_workers=8 \
+    --backend=tmux --queue_name "$MLOPS_NAME" \
+    --skip_existing=1 \
+    --run=1
+
+# Point based mlops evaluation
+export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop8-v1
+MLOPS_NAME=_preeval22_point_bas_grid
+MLOPS_DPATH=$DVC_EXPT_DPATH/$MLOPS_NAME
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+python -m geowatch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $MLOPS_DPATH
+    " \
+    --output_dpath="$MLOPS_DPATH/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
+    " \
+    --stdout_report="
+        top_k: 100
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 1
+        show_csv: 0
+    " \
+    --rois="KR_R002,CN_C000,KW_C001,CO_C001"
+    #" --rois="KR_R002,CN_C000"
+    #--rois="KR_R002"
+    #--rois="CN_C000"
 
 
 # --------
@@ -2723,3 +2882,1411 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
 "
+
+
+# --------
+# ARA All Sensor AC FineTune, with Scotts rebalance, Second Pass
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+
+
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+echo "
+CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES
+DEVICES        = $DEVICES
+ACCELERATOR    = $ACCELERATOR
+STRATEGY       = $STRATEGY
+
+DDP_WORKAROUND = $DDP_WORKAROUND
+
+TARGET_LR      = $TARGET_LR
+WEIGHT_DECAY   = $WEIGHT_DECAY
+PERTERB_SCALE  = $PERTERB_SCALE
+"
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+#kwcoco validate $TRAIN_FPATH
+#kwcoco validate $VALI_FPATH
+
+DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  #sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.2
+            'Site Preparation': 0.3
+            'Active Construction': 0.3
+            'Post Construction': 0.2
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights: auto
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $TRAIN_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: $HOME/data/dvc-repos/smart_phase3_expt/training/namek/joncrall/Drop8-ARA-Cropped2GSD-V1/runs/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/lightning_logs/version_3/checkpoints/epoch=0142-step=048906-val_loss=521882.162.ckpt.ckpt
+"
+
+
+# shellcheck disable=SC2155
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+# shellcheck disable=SC2155
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+#python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+
+
+# --------
+# ARA All Sensor AC FineTune, with Scotts rebalance, Third Pass
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V003
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+
+
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+echo "
+CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES
+DEVICES        = $DEVICES
+ACCELERATOR    = $ACCELERATOR
+STRATEGY       = $STRATEGY
+
+DDP_WORKAROUND = $DDP_WORKAROUND
+
+TARGET_LR      = $TARGET_LR
+WEIGHT_DECAY   = $WEIGHT_DECAY
+PERTERB_SCALE  = $PERTERB_SCALE
+"
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+#kwcoco validate $TRAIN_FPATH
+#kwcoco validate $VALI_FPATH
+
+# Find the most recent checkpoint
+PREV_CHECKPOINT=$(python -m geowatch.cli.experimental.find_recent_checkpoint --default_root_dir="$DEFAULT_ROOT_DIR")
+echo "PREV_CHECKPOINT = $PREV_CHECKPOINT"
+
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  #sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.2
+            'Site Preparation': 0.3
+            'Active Construction': 0.3
+            'Post Construction': 0.2
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $TRAIN_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: /home/joncrall/remote/namek/root/home/joncrall/data/dvc-repos/smart_phase3_expt/training/namek/joncrall/Drop8-ARA-Cropped2GSD-V1/runs/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/lightning_logs/version_0/checkpoints/epoch=0043-step=007436-val_loss=552296.564.ckpt.ckpt
+" --ckpt_path="$PREV_CHECKPOINT"
+
+
+# shellcheck disable=SC2155
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+# shellcheck disable=SC2155
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+#python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+
+
+### on toothbrush - overfit to KR1
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="1"
+
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_overfit_KR_R001
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-3
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+VALI_BATCHES_PER_EPOCH=$TRAIN_BATCHES_PER_EPOCH
+VALI_BATCHES_PER_EPOCH=128
+
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 10240
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  #sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.2
+            'Site Preparation': 1.0
+            'Active Construction': 0.3
+            'Post Construction': 0.2
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+    verbose: False
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $VALI_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: /data/joncrall/dvc-repos/smart_phase3_expt/models/fusion/Drop8-ARA-Cropped2GSD-V1/packages/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_V002_epoch359_step122881.pt
+"
+
+
+# --------
+# ARA All Sensor AC FineTune, with Scotts rebalance, Fourth Pass, on horologic, starting from ARA again
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V004
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-3
+
+
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+echo "
+CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES
+DEVICES        = $DEVICES
+ACCELERATOR    = $ACCELERATOR
+STRATEGY       = $STRATEGY
+
+DDP_WORKAROUND = $DDP_WORKAROUND
+
+TARGET_LR      = $TARGET_LR
+WEIGHT_DECAY   = $WEIGHT_DECAY
+PERTERB_SCALE  = $PERTERB_SCALE
+"
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+#kwcoco validate $TRAIN_FPATH
+#kwcoco validate $VALI_FPATH
+
+DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  #sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.2
+            'Site Preparation': 0.3
+            'Active Construction': 0.3
+            'Post Construction': 0.2
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $TRAIN_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+"
+
+
+# --------
+# ARA All Sensor AC FineTune, with Scotts rebalance, Fourth Pass, on horologic, starting from ARA again, alternative testing for postgres
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="1"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V005
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-3
+
+
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+echo "
+CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES
+DEVICES        = $DEVICES
+ACCELERATOR    = $ACCELERATOR
+STRATEGY       = $STRATEGY
+
+DDP_WORKAROUND = $DDP_WORKAROUND
+
+TARGET_LR      = $TARGET_LR
+WEIGHT_DECAY   = $WEIGHT_DECAY
+PERTERB_SCALE  = $PERTERB_SCALE
+"
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+#kwcoco validate $TRAIN_FPATH
+#kwcoco validate $VALI_FPATH
+
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.2
+            'Site Preparation': 0.3
+            'Active Construction': 0.3
+            'Post Construction': 0.2
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $TRAIN_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84/Drop7-Cropped2GSD_SC_bgrn_gnt_split6_V84_epoch17_step1548.pt
+"
+
+
+# --------
+# ARA All Sensor AC FineTune, with Scotts rebalance, Starting again
+
+#export CUDA_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware='ssd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware='hdd')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop8-ARA-Cropped2GSD-V1
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+#ls $KWCOCO_BUNDLE_DPATH
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6_n041_9010cf6d.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6_n006_2e7a3d8f.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(L8,S2,PD,WV):(blue|green|red)"
+EXPERIMENT_NAME=Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v2_V006
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+
+
+#export VALI_FPATH
+#export TRAIN_FPATH
+## Ensure we can do a postgres database
+#python -c "if 1:
+#    import geowatch
+#    import os
+#    import ubelt as ub
+#    vali_fpath = ub.Path(os.environ.get('VALI_FPATH'))
+#    train_fpath = ub.Path(os.environ.get('TRAIN_FPATH'))
+#    vali_dset = geowatch.coerce_kwcoco(vali_fpath, sqlview='postgresql')
+#    train_dset = geowatch.coerce_kwcoco(train_fpath, sqlview='postgresql')
+#    print(vali_dset._cached_hashid())
+#    print(train_dset._cached_hashid())
+#    print(vali_dset._orig_coco_fpath())
+#    print(train_dset._orig_coco_fpath())
+#"
+
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+
+DEVICES=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(','.join(list(map(str, range(n)))) + ',')
+")
+ACCELERATOR=gpu
+STRATEGY=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print('ddp' if n > 1 else 'auto')
+")
+DDP_WORKAROUND=$(python -c "if 1:
+    import os
+    n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
+    print(int(n > 1))
+")
+
+echo "
+CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES
+DEVICES        = $DEVICES
+ACCELERATOR    = $ACCELERATOR
+STRATEGY       = $STRATEGY
+
+DDP_WORKAROUND = $DDP_WORKAROUND
+
+TARGET_LR      = $TARGET_LR
+WEIGHT_DECAY   = $WEIGHT_DECAY
+PERTERB_SCALE  = $PERTERB_SCALE
+"
+
+MAX_STEPS=122880
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=4048
+VALI_BATCHES_PER_EPOCH=512
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
+
+#kwcoco validate $TRAIN_FPATH
+#kwcoco validate $VALI_FPATH
+
+# Find the most recent checkpoint
+PREV_CHECKPOINT=$(python -m geowatch.cli.experimental.find_recent_checkpoint --default_root_dir="$DEFAULT_ROOT_DIR")
+echo "PREV_CHECKPOINT = $PREV_CHECKPOINT"
+
+REPORT_BALANCE=0 DDP_WORKAROUND=$DDP_WORKAROUND WATCH_GRID_WORKERS=0 python -m geowatch.tasks.fusion fit --config "
+data:
+  batch_size              : $BATCH_SIZE
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 196,196
+  window_resolution       : 2.0GSD
+  input_resolution        : 2.0GSD
+  output_resolution       : 2.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.6
+  normalize_inputs        : 1024
+  normalize_perframe      : false
+  normalize_peritem       : 'blue|green|red|nir|pan'
+  resample_invalid_frames : 3
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1.0y,-0.5y,-0.25y,-0.08y,0.0y,0.08y,0.25y,0.5y,1.0y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : False
+  use_grid_negatives      : False
+  verbose                 : 1
+  max_epoch_length        : $TRAIN_ITEMS_PER_EPOCH
+  mask_low_quality        : false
+  mask_samecolor_method   : null
+  observable_threshold   : 0.0
+  quality_threshold      : 0.0
+  weight_dilate          : 10
+  #sqlview                : postgresql
+  neg_to_pos_ratio       : null
+  num_balance_trees      : 4
+  balance_options :
+      - attribute: old_has_class_of_interest
+        weights:
+           True:  0.6
+           False: 0.4
+      - attribute: contains_phase
+        weights:
+            False: 0.3
+            True: 0.7
+      - attribute: phases
+        default_weight: 0.01
+        weights:
+            'No Activity': 0.1
+            'Site Preparation': 0.5
+            'Active Construction': 0.2
+            'Post Construction': 0.1
+      - attribute: region
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p24
+    attention_impl: exact
+    attention_kwargs: null
+    backbone_depth: null
+    change_head_hidden: 6
+    change_loss: cce
+    class_head_hidden: 6
+    class_loss: dicefocal
+    class_weights: auto
+    config: null
+    continual_learning: 0
+    decoder: mlp
+    decouple_resolution: false
+    dropout: 0.1
+    focal_gamma: 2.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    input_channels: null
+    input_sensorchan: null
+    learning_rate: 0.001
+    lr_scheduler: CosineAnnealingLR
+    modulate_class_weights: ''
+    multimodal_reduce: learned_linear
+    name: unnamed_model
+    negative_change_weight: 0.01
+    ohem_ratio: null
+    optimizer: RAdam
+    perterb_scale          : $PERTERB_SCALE
+    positional_dims: 48
+    positive_change_weight: 1
+    rescale_nans: null
+    saliency_head_hidden: 6
+    saliency_loss: focal
+    saliency_weights:
+        foreground: 5.0
+        background: 1.0
+    stream_channels: 16
+    tokenizer: linconv
+    predictable_classes:
+        - background
+        - No Activity
+        - Site Preparation
+        - Active Construction
+        - Post Construction
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay : $WEIGHT_DECAY
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: $ACCUMULATE_GRAD_BATCHES
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : $ACCELERATOR
+  devices              : $DEVICES
+  strategy             : $STRATEGY
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_epochs: $MAX_EPOCHS
+  num_sanity_val_steps: 0
+  limit_val_batches: $VALI_BATCHES_PER_EPOCH
+  limit_train_batches: $TRAIN_BATCHES_PER_EPOCH
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+          monitor: val_loss
+          mode: min
+          save_top_k: 5
+          filename: '{epoch:04d}-{step:06d}-{val_loss:.3f}.ckpt'
+          save_last: true
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: /home/joncrall/remote/namek/root/home/joncrall/data/dvc-repos/smart_phase3_expt/training/namek/joncrall/Drop8-ARA-Cropped2GSD-V1/runs/Drop8-ARA-Cropped2GSD-V1_allsensors_rebalance_from_v1_V002/lightning_logs/version_0/checkpoints/epoch=0043-step=007436-val_loss=552296.564.ckpt.ckpt
+    verbose: 0
+"
+
+
+# shellcheck disable=SC2155
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+# shellcheck disable=SC2155
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+#python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
+

@@ -14,7 +14,7 @@ from geowatch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from geowatch.tasks.tracking.abstract_classes import NewTrackFunction
 
 from geowatch.tasks.tracking.old_polygon_extraction import PolygonExtractConfig
-from geowatch.tasks.tracking.old_polygon_extraction import _gids_polys
+from geowatch.tasks.tracking.old_polygon_extraction import _gids_polys, FoundNothing
 
 from geowatch.tasks.tracking.utils import (
     _validate_keys,
@@ -495,7 +495,10 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
 
     # polys are in "tracking-space", i.e. video-space up to a scale factor.
     gid_poly_config = PolygonExtractConfig(**ub.udict(config).subdict(PolygonExtractConfig.__default__.keys()))
-    gids_polys = _gids_polys(sub_dset, video_id, **gid_poly_config)
+    try:
+        gids_polys = _gids_polys(sub_dset, video_id, **gid_poly_config)
+    except FoundNothing:
+        gids_polys = []
 
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
@@ -516,7 +519,12 @@ def time_aggregated_polys(sub_dset, video_id, **kwargs):
                   f'{len(gids_polys)} / {n_orig}')
         elif config.max_area_behavior == 'grid':
             # edits tracks instead of removing them
-            raise NotImplementedError
+            raise NotImplementedError(config.max_area_behavior)
+        elif config.max_area_behavior == 'ignore':
+            # Do nothing, just let it go through.
+            ...
+        else:
+            raise KeyError(config.max_area_behavior)
 
     if config.min_area_square_meters:
         min_area_sqpx = config.min_area_square_meters / (tracking_gsd ** 2)

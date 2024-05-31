@@ -73,7 +73,7 @@ class AggregateLoader(DataConfig):
     """
     Base config that will be mixed in to the :class:`AggregateEvluationConfig`.
     This config just defines parts related to constructing the
-    :class:`Aggregator` objects (i.e.  loading the tables).
+    :class:`Aggregator` objects (i.e. loading the tables).
     """
 
     target = Value(None, help=ub.paragraph(
@@ -89,6 +89,10 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
+    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance')
+
+    display_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
+
     cache_resolved_results = Value(True, isflag=True, help=ub.paragraph(
         '''
         if True, avoid recomputing parameter resolution if possible.
@@ -99,6 +103,8 @@ class AggregateLoader(DataConfig):
     def __post_init__(self):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
+        self.primary_metric_cols = Yaml.coerce(self.primary_metric_cols)
+        self.display_metric_cols = Yaml.coerce(self.display_metric_cols)
         ####
         # Pre-corece patterned inputs for nicer reporting?
         inputs = self.target
@@ -160,7 +166,9 @@ class AggregateLoader(DataConfig):
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
             # print('TABLE2')
             # print(table['resolved_params.sc_poly.smoothing'])
-            agg = Aggregator(table)
+            agg = Aggregator(table,
+                             primary_metric_cols=config.primary_metric_cols,
+                             display_metric_cols=config.display_metric_cols)
             agg.build()
             # print('agg.TABLE')
             # print(agg.table['resolved_params.sc_poly.smoothing'])
@@ -182,9 +190,24 @@ class AggregateEvluationConfig(AggregateLoader):
 
     export_tables = Value(False, isflag=True, help='if True, aggregated tables will be written to the output directory')
 
-    plot_params = Value(False, isflag=True, help='if True, param plots will be drawn')
+    plot_params = Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, param plots will be drawn. This can also be a YAML dictionary
+        with items that give finder grained control over plotting.
+        An example set if items might look like:
+        ``{"enabled": 0, "stats_ranking": 0, "min_variations": 1,
+        "params_of_interest": ["params.bas_poly.thresh",
+        "resolved_params.bas_pxl.channels"]}``
+        '''))
 
-    stdout_report = Value(True, isflag=True, help='if True, print a report to stdout')
+    stdout_report = Value(True, isflag=True, help=ub.paragraph(
+        '''
+        if True, print a report to stdout. This can also be a YAML dictionary.
+        An example set if items might look like:
+        ``{"top_k": 100, "per_group": 1, "macro_analysis": 0, "analyze": 1,
+         "print_models": true, "reference_region": "final", "concise": 1,
+         "show_csv": 0}``
+        '''))
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
@@ -868,9 +891,15 @@ class AggregatorAnalysisMixin:
             # models together in a folder, but this is not robust, so we Only
             # do this grouping if the parent folder has a special name
 
-            model_paths = [ub.Path(p) for p in table[model_col].tolist()]
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            model_paths = [
+                ub.Path(p)
+                if not pd.isnull(p) else None
+                for p in table[model_col].tolist()]
             hacked_groups = [
-                p if p.parent.name.startswith('Drop') else p for p in model_paths]
+                p if p is not None and p.parent.name.startswith('Drop') else p
+                for p in model_paths]
             table['_hackgroup'] = hacked_groups
 
             chosen_locs = []
@@ -1651,6 +1680,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
         hashid_to_params = {}
+        # import xdev
+        # with xdev.embed_on_exception_context:
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
@@ -1774,9 +1805,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 rois = [key for key in agg.macro_compatible.keys()]
         if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
             # Asked for multiple groups of ROIS.
+            print(f'Building multiple ({len(rois)}) macro tables')
             for single_rois in rois:
                 agg.build_single_macro_table(single_rois, **kwargs)
         else:
+            print(f'Building a single macro table: {rois}')
             agg.build_single_macro_table(rois, **kwargs)
 
     @profile

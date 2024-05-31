@@ -14,8 +14,8 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
     >>> import geowatch
     >>> import kwcoco
-    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-    >>> coco_fpath = dvc_dpath / 'Drop7-MedianNoWinter10GSD-V2/NZ_R001/imganns-NZ_R001-rawbands.kwcoco.zip'
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
+    >>> coco_fpath = dvc_dpath / 'Drop8-ARA-Median10GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> window_dims = 128
     >>> time_dims = 5
@@ -36,11 +36,56 @@ Example:
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> canvas = visualize_sample_grid(coco_dset, grid, max_vids=1, max_frames=3)
+    >>> canvas = builder.visualize(max_vids=5, max_frames=5)
     >>> kwplot.imshow(canvas, doclf=1, fnum=2)
     >>> plt.gca().set_title(ub.codeblock(
         '''
         Sampled using larger scaled windows
+        '''))
+    >>> kwplot.show_if_requested()
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+    >>> import geowatch
+    >>> import kwcoco
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
+    >>> coco_fpath = dvc_dpath / 'Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> wh_lut = coco_dset.videos().lookup(['width', 'height'])
+    >>> dsizes = list(zip(wh_lut['width'], wh_lut['height']))
+    >>> window_dims = 128
+    >>> builder = SpacetimeGridBuilder(
+    >>>     dset=coco_dset,
+    >>>     window_dims=window_dims,
+    >>>     time_sampling='soft2+distribute',
+    >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
+    >>>     dynamic_fixed_resolution=None, #{'max_winspace_full_dims': [300, 300]},
+    >>>     keepbound=True,
+    >>>     use_annot_info=1,
+    >>>     use_grid_positives=1,
+    >>>     use_centered_positives=True,
+    >>>     respect_valid_regions=False,  # enabling this is slow
+    >>>     use_cache=0
+    >>> )
+    >>> grid = builder.build()
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> canvas = builder.visualize(max_vids=10, max_frames=5)
+    >>> kwplot.imshow(canvas, doclf=1, fnum=2)
+    >>> relevant_params = ub.udict(builder.kw) & {'window_dims', 'window_overlap', 'time_kernel', 'use_grid_positives', 'use_centered_positives', 'dynamic_fixed_resolution'}
+    >>> relevant_text = ub.urepr(relevant_params, concise=1, nobr=1, si=1, nl=0)
+    >>> print(f'relevant_text = {ub.urepr(relevant_text, nl=1)}')
+    >>> plt.gca().set_title(ub.codeblock(
+        f'''
+        {relevant_text}
+
+        Places a red dot where there is a negative sample (at the center of the negative window)
+
+        Places a blue dot where there is a positive sample
+
+        Draws a yellow polygon over invalid spatial regions.
         '''))
     >>> kwplot.show_if_requested()
 """
@@ -61,7 +106,7 @@ except ImportError:
 
 # Bump this if the process for sampling the spacetime grid changes and old
 # caches are no longer valid.
-SPACETIME_CACHE_VERSION = 'spacetime_cache_v18'
+SPACETIME_CACHE_VERSION = 'spacetime_cache_v19'
 
 
 class SpacetimeGridBuilder:
@@ -69,15 +114,33 @@ class SpacetimeGridBuilder:
     A helper class to help build a grid of spacetime windows for a coco
     dataset.
 
-    See :func:`sample_video_spacetime_targets` for the main implementation.
-    This will move to a class based approach and ideally be cleaned up as time
-    moves on.
+    The basic idea is that you will slide a spacetime window over the
+    dataset and mark where positive andnegative "windows" are. We also put
+    windows directly on positive annotations if desired.
+
+    See the :func:`visualize_sample_grid` for a visualization of what the
+    sample grid looks like.
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import geowatch
+        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip'
+        >>> dset = geowatch.coerce_kwcoco(coco_fpath)
+        >>> window_overlap = 0.0
+        >>> window_dims = (128, 128)
+        >>> time_dims = 2
+        >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims).build()
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
     """
     def __init__(
         builder,
         dset,
-        time_dims,
-        window_dims,
+        time_dims=None,
+        window_dims=None,
         window_overlap=0.0,
         negative_classes=None,
         keepbound=True,
@@ -95,6 +158,7 @@ class SpacetimeGridBuilder:
         window_space_scale=None,
         set_cover_algo=None,
         respect_valid_regions=True,
+        dynamic_fixed_resolution=None,
         workers=0,
         use_cache=1
     ):
@@ -103,7 +167,7 @@ class SpacetimeGridBuilder:
             dset (kwcoco.CocoDataset): coco dataset
 
             time_dims (int):
-                number of time steps
+                number of time steps (Deprecated, use time_kernel)
 
             window_dims (Tuple[int, int] | str):
                 spatial height, width of the sample region or a string code.
@@ -138,6 +202,7 @@ class SpacetimeGridBuilder:
 
             time_span (str):
                 indicates the desired start/stop date range of the sample
+                (Deprecated, use time_kernel)
 
             time_kernel (str):
                 mutually exclusive with time span.
@@ -156,148 +221,232 @@ class SpacetimeGridBuilder:
             respect_valid_regions (bool):
                 if True, only place windows in valid regions
 
+            dynamic_fixed_resolution (None | Any):
+                Experimental. Added in 0.17.1
+                example value: {'max_winspace_full_dims': [1000, 1000]}
+
             workers (int): parallel workers
 
             use_cache (bool): uses a disk cache if True
         """
         builder.kw = ub.udict(locals()) - {'builder'}
+        builder.__dict__.update(ub.udict(locals()) - {'builder'})
 
     def build(builder):
-        return sample_video_spacetime_targets(**builder.kw)
+        r"""
+        This is the main driver that builds the sample grid.
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> import os
+            >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+            >>> import geowatch
+            >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> window_overlap = 0.5
+            >>> time_dims = 2
+            >>> window_dims = (128, 128)
+            >>> keepbound = False
+            >>> exclude_sensors = None
+            >>> set_cover_algo = 'approx'
+            >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims, window_overlap, set_cover_algo=set_cover_algo).build()
+            >>> time_sampling = 'hard+distribute'
+            >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+            >>> window_overlap = 0.0
+            >>> time_dims = 3
+            >>> window_dims = (256, 256)
+            >>> keepbound = False
+            >>> time_sampling = 'soft2+distribute'
+            >>> sample_grid1 = SpacetimeGridBuilder(
+            >>>     dset, time_dims, window_dims, window_overlap,
+            >>>     time_sampling='soft2+distribute').build()
+            >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
+            >>> all_boxes = kwimage.Boxes.concatenate(boxes)
+            >>> assert np.all(all_boxes.height == window_dims[0])
+            >>> assert np.all(all_boxes.width == window_dims[1])
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+            >>> window_overlap = 0.0
+            >>> time_dims = 3
+            >>> window_dims = (32, 32)
+            >>> keepbound = False
+            >>> time_sampling = 'soft2+distribute'
+            >>> sample_grid1 = SpacetimeGridBuilder(
+            >>>     dset, time_dims, window_dims, window_overlap, exclude_sensors='Foo',
+            >>>     time_sampling='soft2+distribute').build()
+            >>> sample_grid2 = SpacetimeGridBuilder(
+            >>>     dset, time_dims, window_dims, window_overlap,
+            >>>     time_sampling='contiguous+pairwise').build()
+
+            ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
+            ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
+            _ = xdev.profile_now(sample_video_spacetime_targets)(dset, time_dims, window_dims, window_overlap)
+
+            import xdev
+            globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
+        """
+        builder.sample_grid = _build_grid(builder)
+        return builder.sample_grid
+
+    def visualize(builder, max_vids=2, max_frames=6):
+        r"""
+        Debug visualization for sampling grid
+
+        Draws multiple frames.
+
+        Places a red dot where there is a negative sample (at the center of the negative window)
+
+        Places a blue dot where there is a positive sample
+
+        Draws a yellow polygon over invalid spatial regions.
+
+        TODO:
+            - [ ] Make this the `SpacetimeGridBuilder.visualize` method
+
+        Notes:
+            * Dots are more intense when there are more temporal coverage of that dot.
+
+            * Dots are placed on the center of the window.  They do not indicate its extent.
+
+            * Dots are blue if they overlap any annotation in their temporal region
+              so they may visually be near an annotation.
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+            >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
+            >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
+            >>> window_overlap = 0.2
+            >>> window_dims = (64, 64)
+            >>> time_sampling = 'soft2+distribute'
+            >>> use_centered_positives = True
+            >>> use_grid_positives = 1
+            >>> time_dims = 3
+            >>> time_kernel = '-1d,0d,1d'
+            >>> builder = SpacetimeGridBuilder(
+            >>>     dset=dset, time_dims=time_dims, time_kernel=time_kernel, window_dims=window_dims,
+            >>>     window_overlap=window_overlap, time_sampling=time_sampling,
+            >>>     use_grid_positives=use_grid_positives,
+            >>>     use_centered_positives=use_centered_positives)
+            >>> grid = builder.build()
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> plt = kwplot.autoplt()
+            >>> canvas = builder.visualize(max_vids=1, max_frames=3)
+            >>> kwplot.imshow(canvas, doclf=1)
+            >>> relevant_params = ub.udict(builder.kw) & {'window_dims', 'window_overlap', 'time_dims', 'use_grid_positives', 'use_centered_positives'}
+            >>> relevant_text = ub.urepr(relevant_params, concise=1, nobr=1, si=1, nl=0)
+            >>> print(f'relevant_text = {ub.urepr(relevant_text, nl=1)}')
+            >>> plt.gca().set_title(ub.codeblock(
+                f'''
+                {relevant_text}
+
+                Places a red dot where there is a negative sample (at the center of the negative window)
+
+                Places a blue dot where there is a positive sample
+
+                Draws a yellow polygon over invalid spatial regions.
+                '''))
+            >>> kwplot.show_if_requested()
+            >>> #
+            >>> # Now demo this same grid, but where we are sampling at a different resolution
+            >>> window_space_scale = 0.3
+            >>> builder2 = SpacetimeGridBuilder(
+            >>>     dset=dset, time_dims=time_dims, window_dims=window_dims, window_overlap=window_overlap,
+            >>>     time_sampling=time_sampling, use_grid_positives=use_grid_positives,
+            >>>     use_centered_positives=use_centered_positives,
+            >>>     window_space_scale=window_space_scale)
+            >>> sample_grid2 = builder2.build()
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> plt = kwplot.autoplt()
+            >>> canvas = builder2.visualize(max_vids=1, max_frames=3)
+            >>> kwplot.imshow(canvas, doclf=1, fnum=2)
+            >>> plt.gca().set_title(ub.codeblock(
+                '''
+                Sampled using larger scaled windows
+                '''))
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+            >>> import geowatch
+            >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+            >>> dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
+            >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
+            >>> big_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
+            >>> idxs = np.linspace(0, len(vid_gids) - 1, 12).round().astype(int)
+            >>> vid_gids = list(ub.take(vid_gids, idxs))
+            >>> dset = big_dset.subset(vid_gids)
+            >>> window_overlap = 0.0
+            >>> window_dims = (3, 256, 256)
+            >>> keepbound = False
+            >>> time_sampling = 'soft2+distribute'
+            >>> use_centered_positives = 0
+            >>> use_grid_positives = 1
+            >>> window_space_scale = '30GSD'
+            >>> sample_grid = sample_video_spacetime_targets(
+            >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+            >>>     use_grid_positives=True,
+            >>>     use_centered_positives=use_centered_positives,
+            >>>     window_space_scale=window_space_scale)
+            >>> print(list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data)))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> plt = kwplot.autoplt()
+            >>> canvas = _visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=12)
+            >>> kwplot.imshow(canvas, doclf=1)
+            >>> kwplot.show_if_requested()
+            >>> plt.gca().set_title(ub.codeblock(
+            >>>     f'''
+            >>>     Sample window {window_dims} @ {window_space_scale}
+            >>>     '''))
+        """
+        dset = builder.kw['dset']
+        sample_grid = builder.sample_grid
+        return _visualize_sample_grid(dset, sample_grid, max_vids=max_vids,
+                                      max_frames=max_frames)
 
 
-@profile
-def sample_video_spacetime_targets(dset,
-                                   time_dims=None,
-                                   window_dims=None,
-                                   window_overlap=0.0,
-                                   negative_classes=None,
-                                   keepbound=True,
-                                   include_sensors=None,
-                                   exclude_sensors=None,
-                                   select_images=None,
-                                   select_videos=None,
-                                   time_sampling='hard+distribute',
-                                   time_span='2y',
-                                   time_kernel=None,
-                                   use_annot_info=True,
-                                   use_grid_positives=True,
-                                   use_grid_negatives=True,
-                                   use_centered_positives=True,
-                                   window_space_scale=None,
-                                   set_cover_algo=None,
-                                   respect_valid_regions=True,
-                                   workers=0,
-                                   use_cache=1):
-    r"""
-    This is the main driver that builds the sample grid.
+def _build_grid(builder):
+    dset = builder.dset
+    time_dims = builder.time_dims
+    window_dims = builder.window_dims
+    window_overlap = builder.window_overlap
+    negative_classes = builder.negative_classes
+    keepbound = builder.keepbound
+    include_sensors = builder.include_sensors
+    exclude_sensors = builder.exclude_sensors
+    select_images = builder.select_images
+    select_videos = builder.select_videos
+    time_sampling = builder.time_sampling
+    time_span = builder.time_span
+    time_kernel = builder.time_kernel
+    use_annot_info = builder.use_annot_info
+    use_grid_positives = builder.use_grid_positives
+    use_grid_negatives = builder.use_grid_negatives
+    use_centered_positives = builder.use_centered_positives
+    window_space_scale = builder.window_space_scale
+    set_cover_algo = builder.set_cover_algo
+    respect_valid_regions = builder.respect_valid_regions
+    dynamic_fixed_resolution = builder.dynamic_fixed_resolution
 
-    The basic idea is that you will slide a spacetime window over the dataset
-    and mark where positive andnegative "windows" are. We also put windows
-    directly on positive annotations if desired.
+    workers = builder.workers
+    use_cache = builder.use_cache
 
-    See the above :func:`visualize_sample_grid` for a visualization of what the
-    sample grid looks like.
-
-    Ask jon about what the params mean if you need this.
-    This code badly needs a refactor.
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> import os
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import geowatch
-        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip'
-        >>> dset = geowatch.coerce_kwcoco(coco_fpath)
-        >>> window_overlap = 0.0
-        >>> window_dims = (128, 128)
-        >>> time_dims = 2
-        >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims).build()
-        >>> time_sampling = 'hard+distribute'
-        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> import os
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import geowatch
-        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> window_overlap = 0.5
-        >>> time_dims = 2
-        >>> window_dims = (128, 128)
-        >>> keepbound = False
-        >>> exclude_sensors = None
-        >>> set_cover_algo = 'approx'
-        >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims, window_overlap, set_cover_algo=set_cover_algo).build()
-        >>> time_sampling = 'hard+distribute'
-        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
-        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import ndsampler
-        >>> import kwcoco
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
-        >>> window_overlap = 0.0
-        >>> time_dims = 3
-        >>> window_dims = (256, 256)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> sample_grid1 = SpacetimeGridBuilder(
-        >>>     dset, time_dims, window_dims, window_overlap,
-        >>>     time_sampling='soft2+distribute').build()
-        >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
-        >>> all_boxes = kwimage.Boxes.concatenate(boxes)
-        >>> assert np.all(all_boxes.height == window_dims[0])
-        >>> assert np.all(all_boxes.width == window_dims[1])
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import ndsampler
-        >>> import kwcoco
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
-        >>> window_overlap = 0.0
-        >>> time_dims = 3
-        >>> window_dims = (32, 32)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> sample_grid1 = SpacetimeGridBuilder(
-        >>>     dset, time_dims, window_dims, window_overlap, exclude_sensors='Foo',
-        >>>     time_sampling='soft2+distribute').build()
-        >>> sample_grid2 = SpacetimeGridBuilder(
-        >>>     dset, time_dims, window_dims, window_overlap,
-        >>>     time_sampling='contiguous+pairwise').build()
-
-        ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
-        ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
-        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, time_dims, window_dims, window_overlap)
-
-        import xdev
-        globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
-
-    Ignore:
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import geowatch
-        >>> import kwcoco
-        >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> window_overlap = 0.0
-        bad_image_ids = []
-        good_image_ids = []
-        for ann in dset.anns.values():
-            if 'bbox' not in ann:
-                bad_image_ids.append(ann['image_id'])
-            else:
-                good_image_ids.append(ann['image_id'])
-            ...
-        dset.videos(ub.oset(dset.images(ub.oset(bad_image_ids)).lookup('video_id'))).lookup('name')
-        dset.videos(ub.oset(dset.images(ub.oset(good_image_ids)).lookup('video_id'))).lookup('name')
-    """
     if isinstance(window_dims, int):
         window_dims = (window_dims, window_dims)
 
@@ -360,7 +509,18 @@ def sample_video_spacetime_targets(dset,
 
     # TODO: we can disable respect valid regions here and then just do it on
     # the fly in the dataloader, but it is unclear which is more efficient.
+    if winspace_time_dims is None:
+        if time_kernel is not None:
+            from geowatch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_multi_time_kernel
+            _multi_time_kernel = coerce_multi_time_kernel(time_kernel)
+            if len(_multi_time_kernel) == 1:
+                winspace_time_dims = len(_multi_time_kernel[0])
+            print(f'INFER: winspace_time_dims = {ub.urepr(winspace_time_dims, nl=1)}')
+            print(f'time_kernel = {ub.urepr(time_kernel, nl=1)}')
+        else:
+            raise ValueError('time dims required if time_kernel not given')
 
+    print('🛝 🌐⌚🪟 Gather Sliding Spacetime Windows')
     print(f'winspace_time_dims={winspace_time_dims}')
     print(f'winspace_space_dims={winspace_space_dims}')
     depends = [
@@ -384,6 +544,7 @@ def sample_video_spacetime_targets(dset,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
+        dynamic_fixed_resolution,
         SPACETIME_CACHE_VERSION,
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
@@ -395,6 +556,7 @@ def sample_video_spacetime_targets(dset,
                        verbose=4)
     sample_grid = cacher.tryload()
     if sample_grid is None:
+        print('🖥️🛝 🌐⌚🪟 Compute Sliding Spacetime Windows')
 
         # Only build a grid over the selected images / videos
         selected_gids = kwcoco_extensions.filter_image_ids(
@@ -409,11 +571,11 @@ def sample_video_spacetime_targets(dset,
             print(f'Query {len(selected_images)} sql rows, may take time')
             # self = selected_images
             # key = 'video_id'
-            with ub.Timer('sql query'):
-                selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
-                # selected_vidid_per_gid = self._dset._column_lookup(
-                #     tablename=self._key, key=key, rowids=self._ids)
-                # f1dfe5897bbf49a09a9e0a4e63809dc95248d2d3b3cbd993f0d8b399dba60d746dc537a3bde46a8a066b227efafbbb7b38dc254c7bac1bae9ff09f4d64976956
+            # with ub.Timer('sql query'):
+            selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
+            # selected_vidid_per_gid = self._dset._column_lookup(
+            #     tablename=self._key, key=key, rowids=self._ids)
+            # f1dfe5897bbf49a09a9e0a4e63809dc95248d2d3b3cbd993f0d8b399dba60d746dc537a3bde46a8a066b227efafbbb7b38dc254c7bac1bae9ff09f4d64976956
         else:
             selected_vidid_per_gid = selected_images.lookup('video_id', default=None)
 
@@ -434,8 +596,7 @@ def sample_video_spacetime_targets(dset,
         workers = min(len(all_vid_ids), workers)
         if workers == 1:
             workers = 0
-        mode = 'process'
-        jobs = ub.JobPool(mode=mode, max_workers=workers)
+        jobs = ub.JobPool(mode='process', max_workers=workers)
 
         # TODO: Reducing the information that needs to be passed to each worker
         # would help improve speed here. The dset itself is the biggest offender.
@@ -454,7 +615,7 @@ def sample_video_spacetime_targets(dset,
                 affinity_type, update_rule, time_span, time_kernel, use_annot_info,
                 use_grid_positives, use_grid_negatives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
-                refine_iosa_thresh, verbose)
+                refine_iosa_thresh, dynamic_fixed_resolution, verbose)
             job.video_id = video_id
 
         targets = []
@@ -532,7 +693,7 @@ def _sample_single_video_spacetime_targets(
         keepbound, affinity_type, update_rule, time_span, time_kernel,
         use_annot_info, use_grid_positives, use_grid_negatives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
-        refine_iosa_thresh, verbose):
+        refine_iosa_thresh, dynamic_fixed_resolution, verbose):
     """
     Do this for a single video so we can parallelize.
 
@@ -563,6 +724,9 @@ def _sample_single_video_spacetime_targets(
         }
 
     video_name = video_info['name']
+    vidspace_video_height = video_info['height']
+    vidspace_video_width = video_info['width']
+    vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
 
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
@@ -570,9 +734,59 @@ def _sample_single_video_spacetime_targets(
     resolved_scale = data_utils.resolve_scale_request(
         request=window_space_scale, data_gsd=vidspace_gsd)
     window_scale = resolved_scale['scale']
+    # Convert winspace to vidspace and use that for the rest of the function
+    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
+
+    # If the grid is going to force resolutions, we populate this
+    forced_resolutions = {}
+
+    # Hack: modify the window resolution if the dynamic fixed resolution
+    # behavior is on.
+    import kwutil
+    dynamic_fixed_resolution = kwutil.util_yaml.Yaml.coerce(dynamic_fixed_resolution)
+    """
+    dynamic_fixed_resolution = {'max_winspace_full_dims': [1000, 1000]}
+    """
+    if dynamic_fixed_resolution is not None:
+        _debug = 1
+        # if _debug:
+        #     print(f'dynamic_fixed_resolution = {ub.urepr(dynamic_fixed_resolution, nl=1)}')
+        if isinstance(dynamic_fixed_resolution, dict):
+            max_winspace_full_dims = dynamic_fixed_resolution.get('max_winspace_full_dims', None)
+            if max_winspace_full_dims is not None:
+                max_winspace_full_dims = np.array(max_winspace_full_dims)
+                dynamic_factor = (max_winspace_full_dims / winspace_full_dims).min()
+                if dynamic_factor < 1.0:
+                    if _debug:
+                        print('---')
+                        print('Handle dynamic resolution adjustment')
+                        print(f'before: winspace_full_dims={winspace_full_dims}')
+                        print(f'before: resolved_scale = {ub.urepr(resolved_scale, nl=1)}')
+                        print(f'window_scale = {ub.urepr(window_scale, nl=1)}')
+                    # Adjust the scale
+                    window_scale = resolved_scale['scale'] * dynamic_factor
+                    resolved_scale = data_utils.resolve_scale_request(
+                        request=window_scale, data_gsd=vidspace_gsd)
+                    # Convert winspace to vidspace and use that for the rest of the function
+                    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
+                    # Note: these names should change to input_resolution / output_resolution at some point
+                    forced_resolutions['input_space_scale'] = str(resolved_scale['gsd']) + 'GSD'
+                    forced_resolutions['output_space_scale'] = str(resolved_scale['gsd']) + 'GSD'
+                    if _debug:
+                        print(f'dynamic_factor = {ub.urepr(dynamic_factor, nl=1)}')
+                        print(f'max_winspace_full_dims = {ub.urepr(max_winspace_full_dims, nl=1)}')
+                        print(f'after: winspace_full_dims={winspace_full_dims}')
+                        print(f'after: resolved_scale = {ub.urepr(resolved_scale, nl=1)}')
+                        print('---')
+                # raise NotImplementedError
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError('todo')
+        # TODO: handle dynamic resolution requests here.
+        ...
 
     vidspace_time_dims = winspace_time_dims
-
     time_sampler = tsm.MultiTimeWindowSampler.from_coco_video(
         dset, video_id, gids=video_gids, time_window=vidspace_time_dims,
         affinity_type=affinity_type, update_rule=update_rule, name=video_name,
@@ -584,18 +798,18 @@ def _sample_single_video_spacetime_targets(
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
     time_sampler.deterministic = True
 
-    # Convert winspace to vidspace and use that for the rest of the function
-    vidspace_video_height = video_info['height']
-    vidspace_video_width = video_info['width']
-    vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
-    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
     if isinstance(winspace_space_dims, str):
         if winspace_space_dims == 'full':
             vidspace_window_dims = vidspace_full_dims
         else:
             raise KeyError(winspace_space_dims)
     else:
-        winspace_window_height, winspace_window_width = winspace_space_dims
+        try:
+            winspace_window_height, winspace_window_width = winspace_space_dims
+        except Exception:
+            print(f'winspace_space_dims = {ub.urepr(winspace_space_dims, nl=1)}')
+            raise
+
         winspace_window_box = kwimage.Boxes([
             [0, 0, winspace_window_width, winspace_window_height]], 'xywh')
         # The window is scaled inversely to the data
@@ -760,6 +974,10 @@ def _sample_single_video_spacetime_targets(
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
                     video_targets.append(target)
+
+        if forced_resolutions:
+            for target in video_targets:
+                target.update(forced_resolutions)
 
         _cached = {
             'video_targets': video_targets,
@@ -1104,112 +1322,7 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
     return refined_sample, resampled
 
 
-def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
-    r"""
-    Debug visualization for sampling grid
-
-    Draws multiple frames.
-
-    Places a red dot where there is a negative sample (at the center of the negative window)
-
-    Places a blue dot where there is a positive sample
-
-    Draws a yellow polygon over invalid spatial regions.
-
-    Notes:
-        * Dots are more intense when there are more temporal coverage of that dot.
-
-        * Dots are placed on the center of the window.  They do not indicate its extent.
-
-        * Dots are blue if they overlap any annotation in their temporal region
-          so they may visually be near an annotation.
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
-        >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
-        >>> window_overlap = 0.0
-        >>> window_dims = (32, 32)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> use_centered_positives = True
-        >>> use_grid_positives = 1
-        >>> time_dims = 3
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, time_dims, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1,
-        >>>                                max_frames=3)
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> plt.gca().set_title(ub.codeblock(
-            '''
-            Places a red dot where there is a negative sample (at the center of the negative window)
-
-            Places a blue dot where there is a positive sample
-
-            Draws a yellow polygon over invalid spatial regions.
-            '''))
-        >>> kwplot.show_if_requested()
-        >>> #
-        >>> # Now demo this same grid, but where we are sampling at a different resolution
-        >>> window_space_scale = 0.3
-        >>> sample_grid2 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives,
-        >>>     use_centered_positives=use_centered_positives,
-        >>>     window_space_scale=window_space_scale)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid2, max_vids=1,
-        >>>                                max_frames=3)
-        >>> kwplot.imshow(canvas, doclf=1, fnum=2)
-        >>> plt.gca().set_title(ub.codeblock(
-            '''
-            Sampled using larger scaled windows
-            '''))
-        >>> kwplot.show_if_requested()
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import geowatch
-        >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
-        >>> dvc_dpath = geowatch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
-        >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
-        >>> big_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
-        >>> idxs = np.linspace(0, len(vid_gids) - 1, 12).round().astype(int)
-        >>> vid_gids = list(ub.take(vid_gids, idxs))
-        >>> dset = big_dset.subset(vid_gids)
-        >>> window_overlap = 0.0
-        >>> window_dims = (3, 256, 256)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> use_centered_positives = 0
-        >>> use_grid_positives = 1
-        >>> window_space_scale = '30GSD'
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=True,
-        >>>     use_centered_positives=use_centered_positives,
-        >>>     window_space_scale=window_space_scale)
-        >>> print(list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data)))
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=12)
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> kwplot.show_if_requested()
-        >>> plt.gca().set_title(ub.codeblock(
-        >>>     f'''
-        >>>     Sample window {window_dims} @ {window_space_scale}
-        >>>     '''))
-    """
+def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
     # Visualize the sample grid
     import pandas as pd
     from geowatch.utils import util_kwimage
@@ -1270,10 +1383,17 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
                              'negative_grid': 0}[label]
                 for info in items:
                     space_slice = info['space_slice']
+
+                    # Hack to fix fractional slices
+                    box = kwimage.Box.from_slice(space_slice)
+                    box = box.quantize()
+                    space_slice = box.to_slice()
+
                     y_sl, x_sl = space_slice
                     # ww = x_sl.stop - x_sl.start
                     # wh = y_sl.stop - y_sl.start
-                    ss = accum[(label_idx,) + space_slice].shape
+                    _index = (label_idx,) + space_slice
+                    ss = accum[_index].shape
                     if np.prod(ss) > 0:
                         vals = util_kwimage.upweight_center_mask(ss)
                         vals = np.maximum(vals, 0.1)
@@ -1354,3 +1474,34 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         kwplot.autompl()
         kwplot.imshow(dataset_canvas, doclf=1)
     return dataset_canvas
+
+
+@profile
+def sample_video_spacetime_targets(dset,
+                                   time_dims=None,
+                                   window_dims=None,
+                                   window_overlap=0.0,
+                                   negative_classes=None,
+                                   keepbound=True,
+                                   include_sensors=None,
+                                   exclude_sensors=None,
+                                   select_images=None,
+                                   select_videos=None,
+                                   time_sampling='hard+distribute',
+                                   time_span='2y',
+                                   time_kernel=None,
+                                   use_annot_info=True,
+                                   use_grid_positives=True,
+                                   use_grid_negatives=True,
+                                   use_centered_positives=True,
+                                   window_space_scale=None,
+                                   set_cover_algo=None,
+                                   respect_valid_regions=True,
+                                   dynamic_fixed_resolution=None,
+                                   workers=0,
+                                   use_cache=1):
+    """
+    Old API. Deprecated.
+    """
+    # ub.schedule_deprecation
+    SpacetimeGridBuilder(**locals()).build()

@@ -43,8 +43,11 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_*0*_*.geojson"
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KW_C001.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KW_C001_*.geojson"
 
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R002.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R002_*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R00*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R00*_*.geojson"
+
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/KR_R001.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R001_*.geojson"
 
 
 # iMerit Regions Only
@@ -59,6 +62,20 @@ SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/KR_R002_*.geojson
 # T&E Regions Only
 #REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/region_models/*_R*.geojson"
 #SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop8-v1/site_models/*_R*_*.geojson"
+
+
+REGION_MANIFEST_TEXT="
+files:
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/HK_C001.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/HK_C002.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/KP_C001.geojson
+- $DVC_DATA_DPATH/annotations/drop8-v1/empty_region_models/PA_C001.geojson
+"
+REGION_MANIFEST_FPATH="$DVC_DATA_DPATH/annotations/drop8-v1/to_prepare_manifest.yaml"
+REGION_GLOBSTR=$REGION_MANIFEST_FPATH
+SITE_GLOBSTR=""
+echo "$REGION_MANIFEST_TEXT" > "$REGION_MANIFEST_FPATH"
+cat "$REGION_MANIFEST_FPATH"
 
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
@@ -90,21 +107,21 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --convert_workers=0 \
     --align_workers=4 \
     --align_aux_workers=0 \
-    --align_skip_previous_errors=True \
+    --align_skip_previous_errors=False \
     --ignore_duplicates=1 \
     --target_gsd="10GSD" \
     --cache=$CACHE_STEPS \
     --verbose=100 \
     --skip_existing=0 \
-    --force_min_gsd=0.1 \
+    --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --align_tries=1 \
     --asset_timeout="10 minutes" \
     --image_timeout="30 minutes" \
     --hack_lazy=False \
     --backend=tmux \
-    --tmux_workers=1 \
-    --run=1
+    --tmux_workers=4 \
+    --run=0
     #--sensor_to_time_window='
     #    #S2: 2 weeks
     #    #L8: 2 weeks

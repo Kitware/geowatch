@@ -980,12 +980,15 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
 
 def coerce_geojson_paths(data, return_manifests=False):
     """
-    Resolves the argument to a list of geojson paths.  The argument can be a
-    full path, a glob string, a path to a manifest file or any combination of
-    the previous in a list.
+    Resolves the argument to a list of geojson paths.
 
     Args:
-        data (Any): argument to coerce
+        data (Any): argument to coerce.
+            The argument can be a full path, a glob string, a path to a
+            manifest file or any combination of the previous in a list.
+            If it is a manifest file. It must be a json/yaml file with a
+            top-level "files" key that points to a list of the actual file
+            paths.
 
         return_manifests (bool): if True additionally returns paths to
             any intermediate manifest files.
@@ -1026,20 +1029,30 @@ def coerce_geojson_paths(data, return_manifests=False):
         >>> assert len(info['manifest_fpaths']) == 1
         >>> assert len(info['geojson_fpaths']) == 2
     """
+    from kwutil import util_yaml
     from kwutil import util_path
     paths = util_path.coerce_patterned_paths(data, '.geojson')
     geojson_fpaths = []
     manifest_fpaths = []
     for p in paths:
         resolved = None
-        if isinstance(p, (str, os.PathLike)) and str(p).endswith('.json'):
-            # Check to see if this is a manifest file
-            peeked = json.loads(p.read_text())
-            if isinstance(peeked, dict) and 'files' in peeked:
-                manifest_fpaths.append(p)
-                resolved = list(map(ub.Path, peeked['files']))
+        if isinstance(p, (str, os.PathLike)):
+            peeked = None
+            if str(p).lower().endswith('.json'):
+                # Check to see if this is a manifest file
+                peeked = json.loads(p.read_text())
+            elif str(p).lower().endswith(('.yaml', '.yml')):
+                # Check to see if this is a manifest file
+                peeked = util_yaml.Yaml.loads(p.read_text())
+            if peeked is not None:
+                if isinstance(peeked, dict) and 'files' in peeked:
+                    manifest_fpaths.append(p)
+                    resolved = list(map(ub.Path, peeked['files']))
         if resolved is None:
             resolved = [p]
+
+        if resolved is None:
+            raise ValueError('Unable to resolve p={p!r}')
         geojson_fpaths.extend(resolved)
 
     if return_manifests:

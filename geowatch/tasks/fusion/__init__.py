@@ -1,6 +1,5 @@
 """
-mkinit -m geowatch.tasks.fusion --lazy --noattrs
--w
+mkinit geowatch.tasks.fusion --lazy --noattrs -w
 mkinit -m geowatch.tasks.fusion --noattrs -w
 """
 
@@ -26,7 +25,7 @@ from geowatch.tasks.fusion import methods
 # imports so torch.package can introspect them.
 
 
-def lazy_import(module_name, submodules, submod_attrs):
+def lazy_import(module_name, submodules, submod_attrs, eager='auto'):
     import importlib
     import os
     name_to_submod = {
@@ -54,8 +53,23 @@ def lazy_import(module_name, submodules, submod_attrs):
         globals()[name] = attr
         return attr
 
-    if os.environ.get('EAGER_IMPORT', ''):
-        for name in name_to_submod.values():
+    eager_import_flag = False
+    if eager == 'auto':
+        eager_import_text = os.environ.get('EAGER_IMPORT', '')
+        if eager_import_text:
+            eager_import_text_ = eager_import_text.lower()
+            if eager_import_text_ in {'true', '1', 'on', 'yes'}:
+                eager_import_flag = True
+
+        eager_import_module_text = os.environ.get('EAGER_IMPORT_MODULES', '')
+        if eager_import_module_text:
+            if eager_import_module_text.lower() in __name__.lower():
+                eager_import_flag = True
+    else:
+        eager_import_flag = eager
+
+    if eager_import_flag:
+        for name in submodules:
             __getattr__(name)
 
         for attrs in submod_attrs.values():
@@ -68,14 +82,14 @@ __getattr__ = lazy_import(
     __name__,
     submodules={
         'architectures',
+        'coco_stitcher',
         'datamodules',
         'evaluate',
         'fit',
+        'fit_lightning',
         'methods',
-        'organize',
-        'postprocess',
         'predict',
-        'repackage',
+        'production',
         'utils',
     },
     submod_attrs={},
@@ -85,6 +99,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = ['architectures', 'datamodules', 'evaluate', 'fit', 'methods',
-           'organize', 'postprocess', 'predict', 'repackage', 'utils']
+__all__ = ['architectures', 'coco_stitcher', 'datamodules', 'evaluate', 'fit',
+           'fit_lightning', 'methods', 'predict', 'production', 'utils']

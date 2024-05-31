@@ -93,7 +93,7 @@ class TrackFunction:
         # In the case they were updated the existing track ids should
         # be disjoint. All new tracks should not overlap with
 
-        _debug = 1
+        _debug = 0
 
         new_trackids = kwcoco_extensions.TrackidGenerator(None)
         for tracking_result in ub.ProgIter(tracking_results,

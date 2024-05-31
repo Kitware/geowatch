@@ -224,6 +224,7 @@ nameable_requirements = [
 
     'graphics',
     'headless',
+    'compat',
 ]
 
 EXTRAS_REQUIRES = {

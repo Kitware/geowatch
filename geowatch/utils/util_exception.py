@@ -19,11 +19,11 @@ def add_exception_note(ex, note, force_legacy=False):
         BaseException: modified exception
 
     Example:
-        >>> from geowatch.utils import util_exception
+        >>> from geowatch.utils.util_exception import add_exception_note
         >>> ex = Exception('foo')
-        >>> new_ex = util_exception.add_exception_note(ex, 'hello world', force_legacy=False)
+        >>> new_ex = add_exception_note(ex, 'hello world', force_legacy=False)
         >>> print(new_ex)
-        >>> new_ex = util_exception.add_exception_note(ex, 'hello world', force_legacy=True)
+        >>> new_ex = add_exception_note(ex, 'hello world', force_legacy=True)
         >>> print(new_ex)
     """
     if not force_legacy and hasattr(ex, 'add_note'):

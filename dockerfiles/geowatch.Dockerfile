@@ -142,7 +142,7 @@ pwd
 ls -altr
 
 echo "Run GeoWATCH developer setup:"
-WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
+WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_COMPAT=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF
 
@@ -158,8 +158,8 @@ RUN <<EOF
 #source $HOME/activate
 
 echo "Start simple tests"
-EAGER_IMPORT=1 python -c "import geowatch; print(geowatch.__version__)"
-EAGER_IMPORT=1 python -m geowatch --help
+EAGER_IMPORT_MODULES=geowatch python -c "import geowatch; print(geowatch.__version__)"
+EAGER_IMPORT_MODULES=geowatch python -m geowatch --help
 EOF
 
 

@@ -24,8 +24,21 @@ def coerce_kwcoco(data='geowatch-msi', **kwargs):
 
         **kwargs:
             modify how the demodata is created. For `geowatch-msi`, see
-            :func:`demo_kwcoco_multisensor`, which has args like: `dates`,
-            `geodata`, `heatmap`.
+            :func:`demo_kwcoco_multisensor`, a selection of useful args are:
+                `dates: bool` - add random dates to images
+                `geodata: bool | dict` - assign images to random geo locations.
+                    Can be a dict with extra options. See: func:`hack_seed_geometadata_in_dset`.
+                    valid keys are: enabled, region_geom
+                `heatmap: bool` - add noisy heatmaps as channels
+                `image_size: Tuple[int, int]` - control size of images
+                `num_videos: int` - control number of videos
+                `num_frames: int` - control length of videos
+                `num_tracks: int` - control number of objects
+                `multispectral: bool` - control dummy channels
+                `multisensor: bool` - control dummy sensors
+                `bad_nodata: bool` - control if nodata values exist
+                `max_speed: float` - control speed of demo objects
+                `anchors` - bounding box templates for objects, see kwcoco demo docs..
 
     Example:
         >>> import geowatch
@@ -110,6 +123,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
             the demodata.
             If a dictionary can specify extra information.
             Available keys:
+                enabled
                 region_geom
 
         bad_nodata (bool):
@@ -326,8 +340,9 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                 demo_valid_region = kwimage.Polygon.from_shapely(outer.difference(inner))
                 coco_img.img['valid_region'] = demo_valid_region.to_coco('new')
 
+        target_gsd = geodata.get('target_gsd', 0.3)
         kwcoco_extensions.populate_watch_fields(
-            coco_dset, target_gsd=0.3, enable_valid_region=True,
+            coco_dset, target_gsd=target_gsd, enable_valid_region=True,
             overwrite=True)
 
     # Rewrite the file so it contains our changes.
@@ -643,7 +658,17 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes5-multispectral')
         >>> modified = hack_seed_geometadata_in_dset(coco_dset, force=True)
         >>> fpath = modified[0]
-        >>> print(ub.cmd('gdalinfo ' + fpath)['out'])
+        >>> result = ub.cmd('gdalinfo ' + fpath)
+        >>> assert 'Coordinate System' in result['out'], 'should have geoinfo'
+
+    Example:
+        >>> # Test with multiple image sizes
+        >>> import kwcoco
+        >>> from geowatch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> coco_dset1 = kwcoco.CocoDataset.demo('vidshapes-multispectral', num_videos=1, image_size=(8, 8), num_frames=3)
+        >>> coco_dset2 = kwcoco.CocoDataset.demo('vidshapes-multispectral', num_videos=1, image_size=(64, 64), num_frames=3)
+        >>> coco_dset = coco_dset1.union(coco_dset2)
+        >>> hack_seed_geometadata_in_dset(coco_dset, force=True, region_geom='random-proportional', rng=0)
     """
     import kwarray
     import kwimage
@@ -652,16 +677,32 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
     modified = []
     print('Hacking in seed geom data')
 
-    override_geom_box = None
+    video_ids = list(coco_dset.videos())
+    vidid_to_geom_strat = {}
 
-    if region_geom is None or isinstance(region_geom, str) and region_geom == 'random':
-        ...
+    if region_geom is None:
+        region_geom = 'random'
+    if isinstance(region_geom, str):
+        if region_geom == 'random':
+            vidid_to_geom_strat = {vidid: {'type': 'random'} for vidid in video_ids}
+        elif region_geom == 'random-proportional':
+            # random location, but be proportional to the first image size in
+            # the video
+            vidid_to_geom_strat = {vidid: {'type': 'random-proportional'} for vidid in video_ids}
+        else:
+            raise KeyError(region_geom)
     else:
-        assert len(list(coco_dset.videos())) == 1, 'only handle 1 video for now'
-        override_geom_box = kwimage.Polygon.from_shapely(region_geom).box()
-        override_geom_epsg = 4326
+        assert len(video_ids) == 1, 'only handle 1 video for now'
+        vidid_to_geom_strat = {
+            vidid: {
+                'type': 'explicit',
+                'geom': kwimage.Polygon.from_shapely(region_geom).box(),
+                'epsg': 4326,
+            }
+            for vidid in video_ids
+        }
 
-    for vidid in coco_dset.videos():
+    for vidid in video_ids:
         img = coco_dset.images(video_id=vidid).peek()
         coco_img = coco_dset.coco_image(img['id'])
         obj = coco_img.primary_asset()
@@ -674,22 +715,37 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
             raise
         if force or not format_info['has_geotransform']:
 
-            if override_geom_box is None:
+            geom_strat = vidid_to_geom_strat[vidid]
+            if geom_strat['type'] == 'random':
+                # Random size and location
                 utm_box, utm_crs_info = _random_utm_box(rng=rng)
                 auth = utm_crs_info['auth']
                 assert auth[0] == 'EPSG'
                 epsg_int = int(auth[1])
                 ulx, uly, lrx, lry = utm_box.to_ltrb().data[0]
+            elif geom_strat['type'] == 'random-proportional':
+                # Random location, but fixed size
+                utm_box, utm_crs_info = _random_utm_box(rng=rng)
+                auth = utm_crs_info['auth']
+                assert auth[0] == 'EPSG'
+                epsg_int = int(auth[1])
+                utm_box = utm_box.resize(
+                    width=coco_img['width'], height=coco_img['height'],
+                    about='cxy')
+                ulx, uly, lrx, lry = utm_box.to_ltrb().data[0]
+            elif geom_strat['type'] == 'explicit':
+                # User specified
+                ulx, uly, lrx, lry = geom_strat['geom'].to_ltrb().data
+                epsg_int = int(geom_strat['epsg'])
             else:
-                ulx, uly, lrx, lry = override_geom_box.to_ltrb().data
-                epsg_int = int(override_geom_epsg)
+                raise KeyError(geom_strat['type'])
 
             command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
             cmdinfo = ub.cmd(command, shell=True)
             if cmdinfo['ret'] != 0:
                 print(cmdinfo['out'])
                 print(cmdinfo['err'])
-                assert cmdinfo['ret'] == 0
+            cmdinfo.check_returncode()
             modified.append(fpath)
     return modified
 

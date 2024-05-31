@@ -1241,6 +1241,31 @@ def make_smart_pipeline(name):
     CommandLine:
         xdoctest -m geowatch.mlops.smart_pipeline make_smart_pipeline
 
+
+    Ignore:
+        from geowatch.mlops.smart_pipeline import *  # NOQA
+        from kwutil.util_yaml import Yaml
+        dag = make_smart_pipeline('joint_bas_sv_sc')
+        dag.configure(Yaml.coerce(
+            '''
+            bas_poly_viz.enabled: 0
+            bas_pxl_eval.enabled: 0
+            sc_poly_viz.enabled: 0
+            sc_pxl_eval.enabled: 0
+            bas_poly_eval.true_site_dpath: true-sites-dpath.dummy
+            bas_poly_eval.true_region_dpath: true-regions-dpath.dummy
+            sv_dino_boxes.package_fpath: dino-weights.dummy
+            '''))
+        dag.print_process_graph()
+        queue = dag.submit_jobs()['queue']
+        queue.print_commands(with_status=0, exclude_tags='boilerplate')
+
+        from graphid import util
+        proc_graph = dag.proc_graph.copy()
+        util.util_graphviz.dump_nx_ondisk(proc_graph, 'proc_graph.png')
+        import xdev
+        xdev.startfile('proc_graph.png')
+
     Example:
         >>> from geowatch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('sc')

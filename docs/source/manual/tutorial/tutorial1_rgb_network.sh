@@ -14,7 +14,7 @@ train a fusion model on RGB data.
 
 RunMe:
     export ACCELERATOR=gpu
-    source ~/code/watch/tutorial/tutorial1_rgb_network.sh
+    source ~/code/geowatch/docs/source/manual/tutorial/tutorial1_rgb_network.sh
 "
 
 export ACCELERATOR="${ACCELERATOR:-cpu}"

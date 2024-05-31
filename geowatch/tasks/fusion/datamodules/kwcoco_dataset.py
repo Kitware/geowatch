@@ -29,7 +29,7 @@ Example:
     >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
     >>>                           channels='r|g|b')
     >>> self.disable_augmenter = True
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
     >>> item = self[index]
     >>> # Summarize batch item in text
     >>> summary = self.summarize_item(item)
@@ -69,7 +69,7 @@ Example:
     >>> annots = self.sampler.dset.annots()
     >>> annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
     >>> self.disable_augmenter = False
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> summary = self.summarize_item(item)
     >>> print('item summary: ' + ub.urepr(summary, nl=3))
@@ -96,7 +96,7 @@ Example:
     >>>                           modality_dropout=0.5,
     >>>                           temporal_dropout=0.5)
     >>> assert not self.disable_augmenter
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> assert item['target']['allow_augment']
     >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
@@ -205,35 +205,30 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         '''), nargs='+')
     fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
         '''
-        If specified, fixes resolution of window, output, and input
-        space.
+        If specified, fixes resolution of window, output, and input space.
         '''))
     window_space_scale = scfg.Value(None, alias=['window_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Change the "scale" or resolution of the video space used by
-        the sliding window. Note: this modifies the GSD BEFORE the
-        sample window has been selected, so the extent and
-        resolution of the data changes. If specified as a numeric
-        value then this is applied to as a scale factor. (E.g.
-        setting this to 2 is equivalent to scaling video space by
-        2). For geospatial data where each video has a "target_gsd",
-        then this can be set to as an absolute by including the
-        "GSD" suffix. (e.g. If this is set to "10GSD", then video
-        space will be scaled to match).
+        Change the "scale" or resolution of the video space used by the sliding
+        window. Note: this modifies the GSD BEFORE the sample window has been
+        selected, so the extent and resolution of the data changes. If
+        specified as a numeric value then this is applied to as a scale factor.
+        (E.g.  setting this to 2 is equivalent to scaling video space by 2).
+        For geospatial data where each video has a "target_gsd", then this can
+        be set to as an absolute by including the "GSD" suffix. (e.g. If this
+        is set to "10GSD", then video space will be scaled to match).
         '''))
     input_space_scale = scfg.Value(None, alias=['space_scale', 'data_space_scale', 'input_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Change the "scale" or resolution of the sampled video space.
-        Note: this modifies the GSD AFTER the sample window has been
-        selected, so the extend of the data does NOT change, but the
-        resolution does. If specified as a numeric value then this
-        is applied to as a scale factor. (E.g. setting this to 2 is
-        equivalent to scaling video space by 2). For geospatial data
-        where each video has a "target_gsd", then this can be set to
-        as an absolute by including the "GSD" suffix. (e.g. If this
-        is set to "10GSD", then video space will be scaled to
-        match). This can also be set to "native" to use
-        heterogeneous sampling.
+        Change the "scale" or resolution of the sampled video space.  Note:
+        this modifies the GSD AFTER the sample window has been selected, so the
+        extend of the data does NOT change, but the resolution does. If
+        specified as a numeric value then this is applied to as a scale factor.
+        (E.g. setting this to 2 is equivalent to scaling video space by 2). For
+        geospatial data where each video has a "target_gsd", then this can be
+        set to as an absolute by including the "GSD" suffix. (e.g. If this is
+        set to "10GSD", then video space will be scaled to match). This can
+        also be set to "native" to use heterogeneous sampling.
         '''))
     output_space_scale = scfg.Value(None, alias=['target_space_scale', 'output_resolution'], group=SPACE_GROUP, help=ub.paragraph(
         '''
@@ -245,6 +240,14 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Fraction of the spatial sliding window that will overlap.
         Only applies to training dataset when used in the data
         module.
+        '''))
+
+    dynamic_fixed_resolution = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        Experimental. Added in 0.17.1
+        This is a test time option. The idea is that we will modify the input,
+        output, and window scale for large videos.
+        example value: {'max_winspace_full_dims': [1000, 1000]}
         '''))
 
     ##############
@@ -389,6 +392,15 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         respect to the previous balancing. New in 0.17.0.
         '''))
 
+    num_balance_trees = scfg.Value(16, group=SAMPLE_GROUP, help=ub.paragraph(
+        '''
+        The number of trees used to balance samples.
+        This is useful only in the multi-label case where each sample may
+        contain examples of multiple categories / attributes that are balanced
+        over. In the case where each window can only contain one object this
+        can be safely set to 1.
+        '''))
+
     use_grid_cache = scfg.Value(True, group=SAMPLE_GROUP, help=ub.paragraph(
         '''
         If true, will cache the spacetime grid to make multiple runs quicker.
@@ -405,15 +417,15 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     prenormalize_inputs = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
         '''
-        Can specified as list of dictionaries that effectively
-        contains the dataset statistics to use. Details of that will be
-        documented as the feature matures. See the geowatch.cli.coco_spectra
-        script to help determine reasonable values for this. These
-        normalizations are applied at the dataloader getitem level. This should
-        be specified as a list of dictionaries each containing: * mean: * std:
-        * min: * max: As well as the Modality to which the normalization
-        applies, e.g.: * domain * channels * sensor If set to True, then we try
-        to automatically compute these values. New in 0.4.3.
+        Can specified as list of dictionaries that effectively contains the
+        dataset statistics to use. Details of that will be documented as the
+        feature matures. See the geowatch.cli.coco_spectra script to help
+        determine reasonable values for this. These normalizations are applied
+        at the dataloader getitem level. This should be specified as a list of
+        dictionaries each containing: * mean: * std: * min: * max: As well as
+        the Modality to which the normalization applies, e.g.: * domain *
+        channels * sensor If set to True, then we try to automatically compute
+        these values. New in 0.4.3.
         '''))
     normalize_perframe = scfg.Value(False, group=NORM_GROUP, help=ub.paragraph(
         '''
@@ -482,9 +494,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     use_cloudmask = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
         '''
         Allow the dataloader to use the quality band to skip frames.
-        DEPRECATED: set quality_threshold=0 to disable the
-        cloudmask. Set to a positive value to use it, up to that
-        threshold.
+        DEPRECATED: set quality_threshold=0 to disable the cloudmask. Set to a
+        positive value to use it, up to that threshold.
         '''))
     quality_threshold = scfg.Value(0.0, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -546,58 +557,56 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # See: ./data_augment.py
 
     augment_space_shift_rate = scfg.Value(0.9, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, perform translation augmentations in this
-            fraction of batch items.
-            '''))
+        '''
+        In fit mode, perform translation augmentations in this
+        fraction of batch items.
+        '''))
     augment_space_xflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random x-flips
-            '''))
+        '''
+        In fit mode, if true, perform random x-flips
+        '''))
     augment_space_yflip = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random y-flips
-            '''))
+        '''
+        In fit mode, if true, perform random y-flips
+        '''))
     augment_space_rot = scfg.Value(True, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, if true, perform random 90 degree rotations
-            '''))
+        '''
+        In fit mode, if true, perform random 90 degree rotations
+        '''))
     augment_time_resample_rate = scfg.Value(0.8, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            In fit mode, perform temporal jitter this fraction of batch
-            items.
-            '''))
+        '''
+        In fit mode, perform temporal jitter this fraction of batch items.
+        '''))
     temporal_dropout_rate = scfg.Value(1.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops frames in a fraction of batch items.
-            '''))
+        '''
+        Drops frames in a fraction of batch items.
+        '''))
     temporal_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Given that a batch item is selected for temporal dropout,
-            this is the probability that each frame is dropped out. The
-            main frame is never removed.
-            '''))
+        '''
+        Given that a batch item is selected for temporal dropout,
+        this is the probability that each frame is dropped out. The
+        main frame is never removed.
+        '''))
     modality_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            The fraction of batch-items modality dropout is applied to.
-            '''))
+        '''
+        The fraction of batch-items modality dropout is applied to.
+        '''))
     modality_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops late-fused modalities in each frame with this
-            probability, except if the frame only has one modality left.
-            '''))
+        '''
+        Drops late-fused modalities in each frame with this
+        probability, except if the frame only has one modality left.
+        '''))
 
     # TODO: specify channels that are allowed to be dropped out?
     channel_dropout_rate = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            The fraction of batch-items channel dropout is applied to.
-            '''))
+        '''
+        The fraction of batch-items channel dropout is applied to.
+        '''))
     channel_dropout = scfg.Value(0.0, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            Drops early-fused channels within each modality with this
-            probability except if it is the last channel within a
-            modality.
-            '''))
+        '''
+        Drops early-fused channels within each modality with this probability
+        except if it is the last channel within a modality.
+        '''))
 
     # TODO:
     # 'metadata_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
@@ -612,18 +621,16 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     #     '''), group=AUGMENTATION_GROUP),
 
     reseed_fit_random_generators = scfg.Value(True, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
-            '''
-            This option forces the dataloader random number generator to
-            reseed itself, effectively ignoring any global seed in non-
-            test mode. In test mode, this has no effect. The reason this
-            defaults to True is because of our balanced sampling
-            approach, where the index of a sample passed to getitem is
-            ignored and we randomly return an item acording to the
-            balanced distribution. This relies on randomness and if this
-            was set to False dataloader clones for ddp or multiple
-            workers would generate the same sequence of data regardless
-            of split indexes.
-            '''))
+        '''
+        This option forces the dataloader random number generator to reseed
+        itself, effectively ignoring any global seed in non- test mode. In test
+        mode, this has no effect. The reason this defaults to True is because
+        of our balanced sampling approach, where the index of a sample passed
+        to getitem is ignored and we randomly return an item acording to the
+        balanced distribution. This relies on randomness and if this was set to
+        False dataloader clones for ddp or multiple workers would generate the
+        same sequence of data regardless of split indexes.
+        '''))
 
     def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
@@ -742,18 +749,18 @@ class TruthMixin:
             task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
+        if self.config.upweight_centers or self.config.upweight_time is not None:
+            if self.config.upweight_time is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.upweight_time
+                upweight_time = self.config.upweight_time
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
 
         truth_info = {
             'task_tid_to_cnames': task_tid_to_cnames,
@@ -1069,7 +1076,7 @@ class TruthMixin:
                 if max_weight > 0:
                     task_target_weight['class'] /= max_weight
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
         generic_frame_weight = self._build_generic_frame_weights(output_dsize,
                                                                  mode_to_invalid_mask,
                                                                  meta_info,
@@ -1077,13 +1084,13 @@ class TruthMixin:
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-        if self.ignore_dilate > 0:
+        if self.config.ignore_dilate > 0:
             for k, v in task_target_ignore.items():
-                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.config.ignore_dilate)
 
-        if self.weight_dilate > 0:
+        if self.config.weight_dilate > 0:
             for k, v in task_target_weight.items():
-                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.config.weight_dilate)
 
         frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
@@ -1125,18 +1132,18 @@ class GetItemMixin(TruthMixin):
     """
 
     def _prepare_meta_info(self, num_frames):
-        if self.upweight_centers or self.upweight_time is not None:
-            if self.upweight_time is None:
+        if self.config.upweight_centers or self.config.upweight_time is not None:
+            if self.config.upweight_time is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.upweight_time
+                upweight_time = self.config.upweight_time
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
         meta_info = {
             'time_weights': time_weights,
         }
@@ -1280,10 +1287,10 @@ class GetItemMixin(TruthMixin):
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
-        if self.upweight_centers:
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
+        if self.config.upweight_centers:
             space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+            space_weights = np.maximum(space_weights, self.config.min_spacetime_weight)
             spacetime_weights = space_weights * time_weights[time_idx]
         else:
             spacetime_weights = 1
@@ -1402,7 +1409,7 @@ class GetItemMixin(TruthMixin):
         # * an integer index
 
         if isinstance(index, dict):
-            print(f'index={index}')
+            # print(f'index={index}')
             target = index
             requested_index = 'given-as-dictionary'
             resolved_index = 'given-as-dictionary'
@@ -1418,7 +1425,7 @@ class GetItemMixin(TruthMixin):
                     resolved_index = self.balanced_sampler.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
-            target = self.new_sample_grid['targets'][resolved_index]
+            target = self.sample_grid['targets'][resolved_index]
 
         target = target.copy()
         target['requested_index'] = requested_index
@@ -1682,7 +1689,7 @@ class GetItemMixin(TruthMixin):
             >>> self.catname_to_weight = catname_to_weight
             >>> #
             >>> index = 0
-            >>> index = target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][4]]
+            >>> index = target = self.sample_grid['targets'][self.sample_grid['positives_indexes'][4]]
             >>> item = self[index]
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item)
@@ -1725,7 +1732,7 @@ class GetItemMixin(TruthMixin):
         target_['allow_augment'] = allow_augment
 
         if not self.inference_only:
-            target_['dist_weights'] = target_.get('dist_weights', self.dist_weights)
+            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
 
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
@@ -1733,8 +1740,10 @@ class GetItemMixin(TruthMixin):
         vidspace_box = resolution_info['vidspace_box']
         try:
             final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
+        except FailedSample as ex:
+            from geowatch.utils.util_exception import add_exception_note
+            raise add_exception_note(ex, f'target_ = {ub.urepr(target_, nl=1)}')
         except Exception as ex:
-            import warnings
             print(f'target_ = {ub.urepr(target_, nl=1)}')
             msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
             print(msg)
@@ -1762,7 +1771,7 @@ class GetItemMixin(TruthMixin):
         # if self.config['prenormalize_inputs'] is not None:
         #     raise NotImplementedError
 
-        if self.normalize_perframe:
+        if self.config.normalize_perframe:
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
@@ -1782,7 +1791,7 @@ class GetItemMixin(TruthMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.normalize_peritem is not None and self.normalize_peritem is not False:
+        if self.config.normalize_peritem is not None and self.config.normalize_peritem is not False:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:
@@ -1790,7 +1799,7 @@ class GetItemMixin(TruthMixin):
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
-                    common_key = mode_chan.intersection(self.normalize_peritem)
+                    common_key = mode_chan.intersection(self.config.normalize_peritem)
                     if common_key:
                         parent_data = frame_modes[mode_key]
                         for chan_name, chan_sl in mode_chan.component_indices(axis=0).items():
@@ -1986,16 +1995,16 @@ class GetItemMixin(TruthMixin):
 
         with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
-        # New true-multimodal data items
+        # These dictionaries help maintain sampling state.
+        # It might be nice to abstract this out into a smaller testable
+        # component with the _sample_one_frame method.
         gid_to_sample: Dict[int, Dict] = {}
         gid_to_isbad: Dict[int, bool] = {}
-
         for gid in target_['gids']:
-            ...
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
                                    gid_to_isbad, gid_to_sample)
 
-        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+        time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
 
         # If we skipped the main gid, record why
@@ -2012,16 +2021,20 @@ class GetItemMixin(TruthMixin):
                 max_tries = 3
             else:
                 max_tries = int(resample_invalid)
-            # print(f'max_tries={max_tries}')
             vidname = video['name']
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target_,
-                num_images_wanted,
-                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
+                num_images_wanted, with_annots, gid_to_sample, vidspace_box,
+                vidname, max_tries)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
-            raise FailedSample('Cannot force a good sample')
+            raise FailedSample(ub.paragraph(
+                f'''
+                Cannot force a good sample. Tried to sample {len(gid_to_isbad)}
+                frames, but all were marked as bad. Reported reasoning:
+                gid_to_isbad={gid_to_isbad}
+                '''))
 
         final_gids = ub.oset(video_gids) & good_gids
         force_bad_frames = target_.get('force_bad_frames', 0)
@@ -2111,7 +2124,7 @@ class GetItemMixin(TruthMixin):
         # If any image is junk allow for a resample
         if any(gid_to_isbad.values()):
             vidid = target_['video_id']
-            time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+            time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
             for iter_idx in range(max_tries):
                 # print(f'resample try iter_idx={iter_idx}')
                 good_gids = np.array([gid for gid, flag in gid_to_isbad.items() if not flag])
@@ -2146,7 +2159,7 @@ class GetItemMixin(TruthMixin):
 
 class IntrospectMixin:
     """
-    Methods for introspection of data
+    Methods for introspection / visualization of data
     """
 
     def draw_item(self, item, item_output=None, combinable_extra=None,
@@ -2209,7 +2222,7 @@ class IntrospectMixin:
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=size, default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> item = self[index]
             >>> canvas = self.draw_item(item, draw_weights=False)
             >>> # xdoctest: +REQUIRES(--show)
@@ -2239,8 +2252,8 @@ class IntrospectMixin:
             >>> coco_dset.clear_annotations()
             >>> self = KWCocoVideoDataset(coco_dset, mode=mode, time_dims=5, window_dims=(530, 610), channels=channels, balance_areas=True)
             >>> #index = len(self) // 4
-            >>> #index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
-            >>> index = self.new_sample_grid['targets'][0]
+            >>> #index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][5]]
+            >>> index = self.sample_grid['targets'][0]
             >>> # More controlled settings for debug
             >>> self.disable_augmenter = True
             >>> item = self[index]
@@ -2273,7 +2286,7 @@ class IntrospectMixin:
             >>> })
             >>> config, model, datamodule = _prepare_predict_modules(config)
             >>> self = datamodule.torch_datasets['test']
-            >>> index = self.new_sample_grid['targets'][0]
+            >>> index = self.sample_grid['targets'][0]
             >>> # More controlled settings for debug
             >>> self.disable_augmenter = True
             >>> combinable_extra = None
@@ -2305,7 +2318,12 @@ class IntrospectMixin:
         default_combinable_channels = self.default_combinable_channels
 
         if norm_over_time == 'auto':
-            norm_over_time = self.normalize_peritem is not None
+            norm_over_time = self.config['normalize_peritem'] is not None
+
+        # Hack to force the categories to draw right for SMART
+        # FIXME: Use the correct class colors in visualization.
+        from geowatch import heuristics
+        heuristics.ensure_heuristic_category_tree_colors(self.predictable_classes, force=True)
 
         from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
@@ -2348,83 +2366,16 @@ class IntrospectMixin:
             >>>     coco_dset, time_dims=4, window_dims=(300, 300),
             >>>     channels='r|g|b')
             >>> self.disable_augmenter = True
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> item = self[index]
-            >>> summary = self.summarize_item(item, stats=True)
-            >>> print(f'summary = {ub.urepr(summary, nl=-2)}')
+            >>> item_summary = self.summarize_item(item, stats=True)
+            >>> print(f'item_summary = {ub.urepr(item_summary, nl=-1)}')
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
-        item_summary = {}
-        item_summary['frame_summaries'] = []
-        timestamps = []
-        for frame in item['frames']:
-            frame_summary = {}
-            for mode_key, im_mode in frame['modes'].items():
-                domain_key = frame['sensor'] + ':' + mode_key
-                if stats:
-                    frame_summary[domain_key] = kwarray.stats_dict(
-                        im_mode, nan=True)
-                else:
-                    frame_summary[domain_key] = im_mode.shape
-            label_keys = [
-                'class_idxs', 'class_ohe', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights',
-                'output_weights', 'box_ltrb',
-                # 'box_weights', 'box_tids', 'box_cidxs',
-            ]
-            for key in label_keys:
-                if frame.get(key, None) is not None:
-                    frame_summary[key] = frame[key].shape
-            item_summary['frame_summaries'].append(frame_summary)
-            if frame['date_captured']:
-                timestamps.append(ub.timeparse(frame['date_captured']))
-
-            if frame.get('ann_aids') is not None:
-                if 0:
-                    # disable as workaround for coco sql issues
-                    # (i.e. we dont want to rely on a connection to the sql
-                    # database in the main thread)
-                    annots = self.sampler.dset.annots(frame['ann_aids'])
-                    cids = annots.lookup('category_id')
-                    class_hist = ub.dict_hist(ub.udict(self.classes.id_to_node).take(cids))
-                    frame_summary['class_hist'] = class_hist
-                frame_summary['num_annots'] = len(frame['ann_aids'])
-
-        vidname = item.get('video_name', None)
-        if vidname is not None:
-            item_summary['video_name'] = vidname
-            try:
-                video = self.coco_dset.index.name_to_video[vidname]
-                vid_w = video['width']
-                vid_h = video['height']
-                item_summary['video_hw'] = (vid_h, vid_w)
-            except (KeyError, AttributeError):
-                item_summary['video_hw'] = '?'
-
-        if len(timestamps) > 1:
-            deltas = np.diff(timestamps)
-            deltas = [d.total_seconds() for d in deltas]
-            item_summary['min_time'] = ub.timestamp(min(timestamps))
-            item_summary['max_time'] = ub.timestamp(max(timestamps))
-            if len(deltas):
-                item_summary['min_delta'] = min(deltas)
-                item_summary['max_delta'] = max(deltas)
-                item_summary['mean_delta'] = np.mean(deltas)
-        item_summary['input_gsd'] = item['input_gsd']
-        item_summary['output_gsd'] = item['output_gsd']
-
-        if 'requested_target' in item:
-            item_summary['requested_target'] = item['requested_target']
-
-        if 'target' in item:
-            item_summary['resolved_target'] = item['target']
-
-        item_summary['producer_rank'] = item.get('producer_rank', None)
-        item_summary['producer_mode'] = item.get('producer_mode', None)
-        item_summary['requested_index'] = item.get('requested_index', None)
-        item_summary['resolved_index'] = item.get('resolved_index', None)
-
+        # Refactored to use the new BatchItem class.
+        from geowatch.tasks.fusion.datamodules.batch_item import BatchItem
+        item_summary = BatchItem.summarize(item, stats=stats)
         return item_summary
 
 
@@ -2445,9 +2396,9 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = 0
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
-        >>> num_targets = len(self.new_sample_grid['targets'])
-        >>> positives_indexes = self.new_sample_grid['positives_indexes']
-        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> num_targets = len(self.sample_grid['targets'])
+        >>> positives_indexes = self.sample_grid['positives_indexes']
+        >>> negatives_indexes = self.sample_grid['negatives_indexes']
         >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
         >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
         >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
@@ -2460,9 +2411,9 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = .5
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
-        >>> num_targets = len(self.new_sample_grid['targets'])
-        >>> positives_indexes = self.new_sample_grid['positives_indexes']
-        >>> negatives_indexes = self.new_sample_grid['negatives_indexes']
+        >>> num_targets = len(self.sample_grid['targets'])
+        >>> positives_indexes = self.sample_grid['positives_indexes']
+        >>> negatives_indexes = self.sample_grid['negatives_indexes']
         >>> print('dataset positive ratio:', len(positives_indexes) / num_targets)
         >>> print('dataset negative ratio:', len(negatives_indexes) / num_targets)
         >>> print('specified neg_to_pos_ratio:', neg_to_pos_ratio)
@@ -2656,7 +2607,7 @@ class BalanceMixin:
                     }
                 }] + balance_options
 
-        print('Balancing over attributes')
+        print('⚖️ - Balancing over attributes')
         df_sample_attributes, multilabel_attributes = self._setup_attribute_dataframe(new_sample_grid)
         sample_grid = df_sample_attributes.to_dict('records')
         balance_attrs = [d['attribute'] for d in balance_options]
@@ -2665,14 +2616,14 @@ class BalanceMixin:
         # Initialize an instance of BalancedSampleTree
         # rng = self.rng
         rng = kwarray.ensure_rng(rng=None)
-        if has_multilabel_attributes:
+        if has_multilabel_attributes and self.config.num_balance_trees > 1:
             # If we are going to subdivide on multi-label attributes we want to
             # use a forest instead of tree.
-            print('Constructing balance forest')
+            print('Constructing balance forest 🌲🌳🌲🌳')
             balanced_sampler = data_utils.BalancedSampleForest(
-                sample_grid, rng=rng, n_trees=16)
+                sample_grid, rng=rng, n_trees=self.config.num_balance_trees)
         else:
-            print('Constructing balance tree')
+            print('Constructing balance tree 🌲')
             balanced_sampler = data_utils.BalancedSampleTree(
                 sample_grid, rng=rng)
 
@@ -2684,7 +2635,8 @@ class BalanceMixin:
             balanced_sampler.subdivide(key=key, weights=key_weights,
                                            default_weight=default_weight)
 
-        REPORT_BALANCE = 1
+        from kwutil import util_environ
+        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 1)
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
@@ -2693,37 +2645,46 @@ class BalanceMixin:
             num_samples = min(10_000, num_targets)
 
             normalizer = num_samples / num_targets
-            print('Report Balance:')
+            print('Report Balance ⚖️  :')
             print(f'num_targets={num_targets}')
             print(f'num_samples={num_samples}')
             print(f'normalizer={normalizer}')
+            print(ub.paragraph(
+                '''
+                Note: you can ctrl+c to skip this step while it is running.
+                Or you can set the environment variable ``REPORT_BALANCE=0`` to
+                prevent it from running at all.
+                '''))
 
-            sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
+            try:
+                sampled_idxs = [balanced_sampler.sample() for _ in ub.ProgIter(range(num_samples), desc='sample')]
 
-            # Inspect the attributes you balanced over and compare to the naive
-            # case.
-            balance_attrs = [d['attribute'] for d in balance_options]
+                # Inspect the attributes you balanced over and compare to the naive
+                # case.
+                balance_attrs = [d['attribute'] for d in balance_options]
 
-            naive_targets = df_sample_attributes.copy()
-            balanced_targets = naive_targets.iloc[sampled_idxs]
-            for attr in balance_attrs:
-                if attr in multilabel_attributes:
-                    from collections import Counter
-                    naive = Counter()
-                    for row in naive_targets[attr]:
-                        naive.update(row)
-                    balanced = Counter()
-                    for row in balanced_targets[attr]:
-                        balanced.update(row)
-                else:
-                    naive = naive_targets.value_counts(attr)
-                    balanced = balanced_targets.value_counts(attr)
-                freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
-                freq_table = freq_table.sort_values('balanced', ascending=0)
-                freq_table['naive'] *= normalizer
-                print('--- Balance Report ---')
-                print(f'attr={attr}')
-                print(freq_table.to_string())
+                naive_targets = df_sample_attributes.copy()
+                balanced_targets = naive_targets.iloc[sampled_idxs]
+                for attr in balance_attrs:
+                    if attr in multilabel_attributes:
+                        from collections import Counter
+                        naive = Counter()
+                        for row in naive_targets[attr]:
+                            naive.update(row)
+                        balanced = Counter()
+                        for row in balanced_targets[attr]:
+                            balanced.update(row)
+                    else:
+                        naive = naive_targets.value_counts(attr)
+                        balanced = balanced_targets.value_counts(attr)
+                    freq_table = pd.DataFrame({'balanced': balanced, 'naive': naive})
+                    freq_table = freq_table.sort_values('balanced', ascending=0)
+                    freq_table['naive'] *= normalizer
+                    print('--- Balance Report ---')
+                    print(f'attr={attr}')
+                    print(freq_table.to_string())
+            except KeyboardInterrupt:
+                print('Caught keyboard interrupt. Skipping balance report')
 
         self.balanced_sampler = balanced_sampler
         if self.config['reseed_fit_random_generators']:
@@ -2760,6 +2721,7 @@ class PreprocessMixin:
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         dataset_stats = cacher.tryload()
+        print('📊 Gather dataset stats')
         if dataset_stats is None or ub.argflag('--force-recompute-stats'):
             dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
@@ -2833,6 +2795,8 @@ class PreprocessMixin:
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
             num = 1  # efficiency hack
+
+        print('🖥️ 📊 Compute dataset stats')
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)
 
@@ -3313,7 +3277,10 @@ class BackwardCompatMixin:
         return self.sample_grid
 
 
-class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMixin, IntrospectMixin, MiscMixin, SpacetimeAugmentMixin, SMARTDataMixin):
+class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
+                         PreprocessMixin, IntrospectMixin, MiscMixin,
+                         SpacetimeAugmentMixin, BackwardCompatMixin,
+                         SMARTDataMixin):
     """
     Accepted keyword arguments are specified in
     :class:`KWCocoVideoDatasetConfig`
@@ -3335,7 +3302,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> target = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> item = self[target]
         >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
@@ -3361,7 +3328,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> Box = kwimage.Box
         >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
         >>> item = self[index]
@@ -3374,12 +3341,16 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, mode='fit', test_with_annot_info=False, **kwargs):
+    def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):
         """
         Args:
             sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
             mode (str): fit or predict
+            autobuild (bool):
+                if False, defer potentially expensive initialization. In this
+                case the user must call ``._init()``
             **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+                these options will be stored in the ``.config`` attribute.
         """
         config = KWCocoVideoDatasetConfig(**kwargs)
 
@@ -3392,8 +3363,9 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                 sampler,
                 workdir=config.sampler_workdir,
                 backend=config.sampler_backend)
-            workers = util_parallel.coerce_num_workers(config.sampler_workers)
-            sampler.frames.prepare(workers=workers)
+            if autobuild:
+                workers = util_parallel.coerce_num_workers(config.sampler_workers)
+                sampler.frames.prepare(workers=workers)
 
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
@@ -3403,13 +3375,13 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
                 chip_dims = (chip_dims, chip_dims)
             chip_h, chip_w = chip_dims
             window_dims = (chip_h, chip_w)
-        time_dims = config['time_steps']
-        window_overlap = config['chip_overlap']
+        config['chip_dims'] = window_dims
 
         self.config = config
         import rich
         rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
-        # TODO: maintain instance variables xor items in the config, not both.
+        # TODO: remove this line. Reduce the number of top-level attributes and
+        # maintain initialization variables in the config object itself.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
 
@@ -3452,85 +3424,10 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
 
         self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
-        channels = config['channels']
-        max_epoch_length = config['max_epoch_length']
-
         self.disable_augmenter = False
         self.augment_rng = kwarray.ensure_rng(None)
-
-        import os
-        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
-        common_grid_kw = dict(
-            time_dims=time_dims,
-            window_dims=window_dims,
-            window_overlap=window_overlap,
-            exclude_sensors=config['exclude_sensors'],
-            include_sensors=config['include_sensors'],
-            select_images=config['select_images'],
-            select_videos=config['select_videos'],
-            time_sampling=config['time_sampling'],
-            time_span=config['time_span'],
-            time_kernel=config['time_kernel'],
-            window_space_scale=self.config['window_space_scale'],
-            set_cover_algo=config['set_cover_algo'],
-            workers=grid_workers,  # could configure this
-            use_cache=self.config['use_grid_cache'],
-            respect_valid_regions=self.config['use_grid_valid_regions'],
-        )
-        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
-
-        grid_kw = common_grid_kw.copy()
-
-        # Remember this for backwards compat
-        self._old_balance_as_negative_classes = (
-            self.ignore_classes | self.background_classes | self.negative_classes)
-
-        annot_helper_kws = dict(
-            # negative_classes=self._old_balance_as_negative_classes,
-            keepbound=False,
-            use_annot_info=True,
-            use_centered_positives=config['use_centered_positives'],
-            use_grid_positives=config['use_grid_positives'],
-            use_grid_negatives=config['use_grid_negatives'],
-        )
-
-        if mode == 'custom':
-            new_sample_grid = None
-            self.length = 1
-        elif mode == 'test':
-            # FIXME: something is wrong with the cache when using an sqlview.
-            # In test mode we have to sample everything for BAS
-            # (TODO: for activity clf, we should only focus on candidate regions)
-
-            if test_with_annot_info:
-                grid_kw.update(annot_helper_kws)
-            else:
-                grid_kw.update(dict(
-                    keepbound=True,
-                    use_annot_info=False,
-                ))
-
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-            self.length = len(new_sample_grid['targets'])
-        else:
-            grid_kw.update(annot_helper_kws)
-            builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset, **grid_kw
-            )
-            new_sample_grid = builder.build()
-
-            if 1:
-                self._init_balance(new_sample_grid)
-
-            self.length = len(self.balanced_sampler)
-
-            if max_epoch_length is not None:
-                self.length = min(self.length, max_epoch_length)
-
-        self.new_sample_grid = new_sample_grid
+        self.mode = mode
+        self.test_with_annot_info = test_with_annot_info
 
         # Used for mutex style losses where there is no data that can be used
         # to label a pixel.
@@ -3538,13 +3435,13 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
         # should probably design a clean method of communicating between the
         # dataset and model first.
         self.ignore_index = -100
-
         self.special_inputs = {}
 
+        channels = config['channels']
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
-            sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+            sensorchan_hist = kwcoco_extensions.coco_channel_stats(self.sampler.dset)['sensorchan_hist']
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
                 for c in chan_hist.keys():
@@ -3571,7 +3468,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up
             if sensorchan_hist is None:
-                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
+                sensorchan_stats = kwcoco_extensions.coco_channel_stats(self.sampler.dset)
                 sensorchan_hist = sensorchan_stats['sensorchan_hist']
 
             expanded_input_sensorchan_streams = []
@@ -3635,17 +3532,15 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             # (this probably should be extended to be a sensorchan...)
             if self.config['normalize_peritem'] is True:
                 # If True, then normalize all known channels
-                self.normalize_peritem = kwcoco.FusedChannelSpec.coerce(
+                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
                     '|'.join(sorted(set(ub.flatten([
                         s.chans.to_list()
                         for s in self.input_sensorchan.streams()])))))
             else:
                 # Otherwise assume the user specified what channels to normalize
-                self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
         else:
-            self.normalize_peritem = None
-
-        self.mode = mode
+            self.config['normalize_peritem'] = None
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
@@ -3674,6 +3569,88 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             ub.oset(['sam.0', 'sam.1', 'sam.2']),
             ub.oset(['sam.3', 'sam.4', 'sam.5']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+        if autobuild:
+            self._init()
+
+    def _init(self):
+        """
+        The expensive part of initialization.
+        """
+        import os
+        config = self.config
+        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+        common_grid_kw = dict(
+            time_dims=config['time_steps'],
+            window_dims=config['chip_dims'],
+            window_overlap=config['chip_overlap'],
+            exclude_sensors=config['exclude_sensors'],
+            include_sensors=config['include_sensors'],
+            select_images=config['select_images'],
+            select_videos=config['select_videos'],
+            time_sampling=config['time_sampling'],
+            time_span=config['time_span'],
+            time_kernel=config['time_kernel'],
+            window_space_scale=self.config['window_space_scale'],
+            set_cover_algo=config['set_cover_algo'],
+            workers=grid_workers,  # could configure this
+            use_cache=self.config['use_grid_cache'],
+            respect_valid_regions=self.config['use_grid_valid_regions'],
+        )
+        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
+
+        grid_kw = common_grid_kw.copy()
+
+        # Remember this for backwards compat
+        self._old_balance_as_negative_classes = (
+            self.ignore_classes | self.background_classes | self.negative_classes)
+
+        annot_helper_kws = dict(
+            # negative_classes=self._old_balance_as_negative_classes,
+            keepbound=False,
+            use_annot_info=True,
+            use_centered_positives=config['use_centered_positives'],
+            use_grid_positives=config['use_grid_positives'],
+            use_grid_negatives=config['use_grid_negatives'],
+        )
+        mode = self.mode
+        if mode == 'custom':
+            new_sample_grid = None
+            self.length = 1
+        elif mode == 'test':
+            # FIXME: something is wrong with the cache when using an sqlview.
+            # In test mode we have to sample everything for BAS
+            # (TODO: for activity clf, we should only focus on candidate regions)
+
+            if self.test_with_annot_info:
+                grid_kw.update(annot_helper_kws)
+            else:
+                grid_kw.update(dict(
+                    keepbound=True,
+                    use_annot_info=False,
+                ))
+            grid_kw['dynamic_fixed_resolution'] = config.dynamic_fixed_resolution
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                dset=self.sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+            self.length = len(new_sample_grid['targets'])
+        else:
+            grid_kw.update(annot_helper_kws)
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                self.sampler.dset, **grid_kw
+            )
+            new_sample_grid = builder.build()
+
+            if 1:
+                self._init_balance(new_sample_grid)
+
+            self.length = len(self.balanced_sampler)
+
+            if config['max_epoch_length'] is not None:
+                self.length = min(self.length, config['max_epoch_length'])
+
+        self.sample_grid = new_sample_grid
 
         self.prenormalizers = None
 
@@ -3766,7 +3743,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
+            >>> for target in self.sample_grid['targets']:
             ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
             ...     shist = ub.dict_hist(sensors)
             ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
@@ -3806,7 +3783,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
+            >>> for target in self.sample_grid['targets']:
             ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
             ...     shist = ub.dict_hist(sensors)
             ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
@@ -3843,7 +3820,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             >>>     neg_to_pos_ratio=0, time_sampling='soft2',
             >>> )
             >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
             >>> index['allow_augment'] = False
             >>> item = self[index]
             >>> target = item['target']
@@ -3902,7 +3879,7 @@ def more_demos():
         >>> self.requested_tasks['saliency'] = 1
         >>> self.requested_tasks['class'] = 0
         >>> self.requested_tasks['boxes'] = 1
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
         >>> index['allow_augment'] = False
         >>> item = self[index]
         >>> target = item['target']
@@ -3984,9 +3961,9 @@ def more_demos():
         >>> videos = self.sampler.dset.videos()
         >>> vidid_to_cleared = ub.udict(ub.dzip(videos.lookup('id'), videos.lookup('cleared', False)))
         >>> assert self.config['use_grid_negatives'] == 'cleared'
-        >>> positive_idxs = self.new_sample_grid['positives_indexes']
-        >>> negative_idxs = self.new_sample_grid['negatives_indexes']
-        >>> targets = self.new_sample_grid['targets']
+        >>> positive_idxs = self.sample_grid['positives_indexes']
+        >>> negative_idxs = self.sample_grid['negatives_indexes']
+        >>> targets = self.sample_grid['targets']
         >>> negative_video_ids = {targets[x]['video_id'] for x in negative_idxs}
         >>> positive_video_ids = {targets[x]['video_id'] for x in positive_idxs}
         >>> assert all(vidid_to_cleared.subdict(negative_video_ids).values())
@@ -4004,13 +3981,13 @@ def more_demos():
 
     Ignore:
         >>> self.disable_augmenter = True
-        >>> self.normalize_peritem = None
+        >>> self.config['normalize_peritem'] = None
         >>> self.config['mask_low_quality'] = True
         >>> self.config['force_bad_frames'] = True
         >>> self.config['resample_invalid_frames'] = 0
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
+        >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
         >>> item1 = self[index]
-        >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+        >>> self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
         >>> item2 = self[index]
         >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
@@ -4033,7 +4010,12 @@ def worker_init_fn(worker_id):
     if hasattr(self, 'sampler'):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
+            # print("SQL CONNECTING")
             self.sampler.dset.connect(readonly=True)
+    #     else:
+    #         print("DOES NOT HAVE CONNECT")
+    # else:
+    #     print("DOES NOT HAVE SAMPLER")
 
 
 @functools.cache
