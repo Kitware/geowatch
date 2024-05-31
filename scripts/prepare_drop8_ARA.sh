@@ -518,6 +518,7 @@ export REGION_IDS_STR=$(python -c "if 1:
     print(' '.join(sorted(final_names)))
     ")
 #export REGION_IDS_STR="KR_R001"
+export REGION_IDS_STR="HK_C001 HK_C002"
 
 # Dump regions to a file
 # FIXME: tmp_region_names.yaml is not a robust interchange.
