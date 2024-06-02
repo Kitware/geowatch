@@ -2325,6 +2325,8 @@ class IntrospectMixin:
                 color='red')
             return bad_canvas
 
+        # TODO: when the BatchItem.draw method is complete just use that.
+
         default_combinable_channels = self.default_combinable_channels
 
         if norm_over_time == 'auto':
@@ -2352,7 +2354,6 @@ class IntrospectMixin:
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
             canvas = kwimage.stack_images([canvas, header])
-
         return canvas
 
     def summarize_item(self, item, stats=False):
@@ -4049,6 +4050,9 @@ sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_t
 
 
 class FailedSample(Exception):
+    """
+    Used to indicate that a sample should be skipped.
+    """
     ...
 
 
@@ -4064,6 +4068,7 @@ class Modality(NamedTuple):
 class Domain(NamedTuple):
     """
     DO NOT USE. BUT DO NOT REMOVE. NEEDED FOR BACKWARDS COMPAT
+    Use Modality instead.
     """
     sensor: str
     channels: str

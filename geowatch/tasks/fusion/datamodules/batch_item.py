@@ -71,6 +71,69 @@ class BatchItem(dict):
         )
         return histogram
 
+    def draw(self, item_output=None, combinable_extra=None, max_channels=5,
+             max_dim=224, norm_over_time='auto', overlay_on_image=False,
+             draw_weights=True, rescale='auto', classes=None,
+             predictable_classes=None, show_summary_text=True,
+             requested_tasks=None,
+             **kwargs):
+        """
+        Visualize this batch item.
+        Corresponds to the dataset :func:`IntrospectMixin.draw_item` method.
+
+        Not finished. The dataset draw_item class has context not currently
+        available like predictable classes, that needs to be represented in the
+        item itself.
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+            >>> self = BatchItem.demo()
+            >>> canvas = self.draw()
+            >>> print(self)
+            >>> print(ub.urepr(self.summarize(), nl=2))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
+            >>> kwplot.show_if_requested()
+        """
+        import kwimage
+        item = self
+
+        default_combinable_channels = []
+        if requested_tasks is None:
+            requested_tasks = {'class': True, 'saliency': True, 'change': True, 'outputs': False, 'boxes': False}
+        # self.default_combinable_channels
+        # if rescale == 'auto':
+        #     rescale = self.config['input_space_scale'] != 'native'
+        # if norm_over_time == 'auto':
+        #     norm_over_time = self.config['normalize_peritem'] is not None
+
+        # Hack to force the categories to draw right for SMART
+        # FIXME: Use the correct class colors in visualization.
+        from geowatch import heuristics
+        if predictable_classes is not None:
+            heuristics.ensure_heuristic_category_tree_colors(predictable_classes, force=True)
+
+        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
+        builder = BatchVisualizationBuilder(
+            item=item, item_output=item_output,
+            default_combinable_channels=default_combinable_channels,
+            norm_over_time=norm_over_time, max_dim=max_dim,
+            max_channels=max_channels, overlay_on_image=overlay_on_image,
+            draw_weights=draw_weights, combinable_extra=combinable_extra,
+            classes=predictable_classes, requested_tasks=requested_tasks,
+            rescale=rescale, **kwargs)
+        canvas = builder.build()
+
+        if show_summary_text:
+            summary = item.summarize()
+            summary = ub.udict(summary) - {'frame_summaries'}
+            summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
+            header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
+            canvas = kwimage.stack_images([canvas, header])
+        return canvas
+
     def summarize(self, coco_dset=None, stats=False):
         """
         Return debugging stats about the item
