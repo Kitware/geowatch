@@ -5,7 +5,7 @@ import ubelt as ub
 
 class RunAllPointgenCLI(scfg.DataConfig):
     method = scfg.Value('ellipse', help='pointgen method')
-    ignore_buffer = scfg.Value('20GSD', help='kwcoco ignore buffer size')
+    ignore_buffer = scfg.Value('20@10GSD', help='kwcoco ignore buffer size')
 
 
 def main(cmdline=1, **kwargs):
