@@ -47,7 +47,6 @@ def main(cmdline=1, **kwargs):
     import kwimage
     from geowatch.utils import util_resolution
     from shapely.ops import unary_union
-    import geopandas as gpd
     import ubelt as ub
     import numpy as np
     import kwcoco
