@@ -22,15 +22,15 @@ class CocoAddIgnoreBufferConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     IGNORE:
-        python /home/local/KHQ/vincenzo.dimatteo/Desktop/geowatch/geowatch/cli/coco_add_ignore_buffer.py --src /home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip --dst /home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002_modified-rawbands.kwcoco.zip  
+        python /home/local/KHQ/vincenzo.dimatteo/Desktop/geowatch/geowatch/cli/coco_add_ignore_buffer.py --src /home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip --dst /home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002_modified-rawbands.kwcoco.zip
 
 
     CommandLine:
-        xdoctest -m geowatch.cli.coco_add_ignore_buffer 
-        xdoctest -m geowatch.cli.coco_add_ignore_buffer.py 
+        xdoctest -m geowatch.cli.coco_add_ignore_buffer
+        xdoctest -m geowatch.cli.coco_add_ignore_buffer.py
         xdoctest /home/local/KHQ/vincenzo.dimatteo/Desktop/geowatch/geowatch/cli/coco_add_ignore_buffer.py
- 
-         
+
+
     Example:
         >>> from geowatch.cli.coco_add_ignore_buffer import *
         >>> import geowatch
@@ -44,7 +44,6 @@ def main(cmdline=1, **kwargs):
 
     """
 
-
     import kwimage
     from geowatch.utils import util_resolution
     import kwplot
@@ -57,8 +56,10 @@ def main(cmdline=1, **kwargs):
     import rich
     from rich.markup import escape
 
-    config = CocoAddIgnoreBufferConfig.cli(cmdline=cmdline, data=kwargs, special_options=False)
-    rich.print('config = ' + escape(ub.urepr(config)))
+    config = CocoAddIgnoreBufferConfig.cli(
+        cmdline=cmdline, data=kwargs, special_options=False
+    )
+    rich.print("config = " + escape(ub.urepr(config)))
 
     dset = kwcoco.CocoDataset(config.src)
     utm_gsd = util_resolution.ResolvedUnit.coerce("1GSD")
@@ -67,7 +68,7 @@ def main(cmdline=1, **kwargs):
     ignore_buffer_gsd = ignore_buffer.at_resolution(utm_gsd).scalar
     videos = dset.videos()
     # Ignore eff
-    for video_id in ub.ProgIter(videos,desc="looping over videos..."):
+    for video_id in ub.ProgIter(videos, desc="looping over videos..."):
         images = dset.images(video_id=video_id)
 
         for image_id in images:
@@ -127,8 +128,7 @@ def main(cmdline=1, **kwargs):
     out_path = config.dst
     # Write to the compressed path
     dset.dump(out_path)
-    rich.print(f'Wrote modified kwcoco to: [link={out_path}]{out_path}[/link]')
-
+    rich.print(f"Wrote modified kwcoco to: [link={out_path}]{out_path}[/link]")
 
 
 if __name__ == "__main__":
