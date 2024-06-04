@@ -1,4 +1,14 @@
-def main():
+#!/usr/bin/env python3
+import scriptconfig as scfg
+import ubelt as ub
+
+
+class RunAllPointgenCLI(scfg.DataConfig):
+    method = scfg.Value('ellipse', help='pointgen method')
+    ignore_buffer = scfg.Value('20GSD', help='kwcoco ignore buffer size')
+
+
+def main(cmdline=1, **kwargs):
     """
     Developer script to get point-based polygons generated.
     Needs cleanup.
@@ -9,6 +19,11 @@ def main():
         echo "$DVC_DATA_DPATH"
         echo "$DVC_EXPT_DPATH"
     """
+    import rich
+    from rich.markup import escape
+    config = RunAllPointgenCLI.cli(cmdline=cmdline, data=kwargs, strict=True)
+    rich.print('config = ' + escape(ub.urepr(config, nl=1)))
+
     import cmd_queue
     import ubelt as ub
 
@@ -42,15 +57,18 @@ def main():
     points_gdf_crs84['region_id'] = points_gdf_crs84['site_id'].apply(lambda s: '_'.join(s.split('_')[0:2]))
     regions_with_points = sorted(points_gdf_crs84['region_id'].unique())
 
+    # TODO: put into the CLI config
     common_params = dict(
         size_prior='20.06063 x 20.0141229 @ 10mGSD',
-        ignore_buffer=None,
         time_prior='1year',
         filepath_to_points=points_fpath,
     )
 
-    dest_region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-points-v1/region_models').ensuredir()
-    viz_region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-points-v1/region_models_viz').ensuredir()
+    # TODO: do a hash of the config in this output, or just specify it in config?
+    dest_annot_dpath = ((data_dvc_dpath / 'annotations') / f'drop8-{config.method}-points-v1')
+
+    dest_region_dpath = (dest_annot_dpath / 'region_models').ensuredir()
+    viz_region_dpath = (dest_annot_dpath / 'region_models_viz').ensuredir()
 
     region_model_list = list(region_dpath.glob("*.geojson"))
 
@@ -62,16 +80,6 @@ def main():
             assert region_fpath.exists()
             region_model_list.append(region_fpath)
 
-    queue = cmd_queue.Queue.create(backend="tmux", size=16)
-    # queue.add_header_command(
-    #     ub.codeblock(
-    #         """
-    #         pyenv shell 3.10.5
-    #         source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
-    #         """
-    #     )
-    # )
-
     # Handle sites with "xxx" patterns that may be associated with multiple regions
     import kwutil
     region_with_points_patterns = []
@@ -80,8 +88,6 @@ def main():
             region_id = region_id.replace('xxx', '*')
         region_with_points_patterns.append(region_id)
     region_with_points_pattern = kwutil.util_pattern.MultiPattern.coerce(region_with_points_patterns)
-
-    force_rerun = 0
 
     status_rows = []
     for region_path in region_model_list:
@@ -104,33 +110,21 @@ def main():
     import pandas as pd
     import rich
     status_df = pd.DataFrame(status_rows)
+    status_df.value_counts('has_kwcoco')
+    # rows_to_process = status_df[status_df.has_kwcoco & status_df.has_points]
+    # rows_to_process['annotation_type'].value_counts()
+    # status_df[~status_df['has_kwcoco']]
     rich.print(status_df)
 
     polygen_template = ub.codeblock(
         r"""
         python -m geowatch.tasks.poly_from_point.predict \
-            --method 'ellipse' \
+            --method '{method}' \
             --region_id "{region_id}" \
             --filepath_to_images "{filepath_to_images}" \
             --filepath_to_points "{filepath_to_points}" \
             --filepath_to_region "{filepath_to_region}" \
             --time_prior "{time_prior}" \
-            --ignore_buffer "{ignore_buffer}" \
-            --size_prior "{size_prior}" \
-            --filepath_output "{filepath_output}"
-        """
-    )
-
-    regionviz_template = ub.codeblock(
-        r"""
-        python -m geowatch.tasks.poly_from_point.predict \
-            --method 'ellipse' \
-            --region_id "{region_id}" \
-            --filepath_to_images "{filepath_to_images}" \
-            --filepath_to_points "{filepath_to_points}" \
-            --filepath_to_region "{filepath_to_region}" \
-            --time_prior "{time_prior}" \
-            --ignore_buffer "{ignore_buffer}" \
             --size_prior "{size_prior}" \
             --filepath_output "{filepath_output}"
         """
@@ -142,6 +136,21 @@ def main():
         '''
     )
 
+    force_rerun = 1
+
+    queue = cmd_queue.Queue.create(
+        backend="tmux",
+        # backend="serial",
+        size=16
+    )
+    # queue.add_header_command(
+    #     ub.codeblock(
+    #         """
+    #         pyenv shell 3.10.5
+    #         source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
+    #         """
+    #     )
+    # )
     for row in status_rows:
         region_id = row['region_id']
         has_kwcoco = row['has_kwcoco']
@@ -152,6 +161,7 @@ def main():
 
         if has_kwcoco and has_points:
             fmtkw = {
+                "method": config.method,
                 "region_id": region_id,
                 "filepath_to_images": None,
                 "filepath_to_region": region_path,
@@ -177,28 +187,47 @@ def main():
                     queue.submit(regionviz_cmd, name=f'Viz_{region_id}',
                                  depends=polygen_job)
 
-            out_kwcoco_path = (
+            final_out_kwcoco_fpath = (
                 kwcoco_bundle_dpath / region_id / (f"pointannv1-{region_id}-rawbands.kwcoco.zip")
             )
+
+            if config.ignore_buffer:
+                reproject_out_kwcoco_fpath = (
+                    kwcoco_bundle_dpath / region_id / (f"_preignore-pointannv1-{region_id}-rawbands.kwcoco.zip")
+                )
+            else:
+                reproject_out_kwcoco_fpath = final_out_kwcoco_fpath
+
             reproject_cmd = ub.codeblock(
                 fr'''
                 geowatch reproject_annotations \
                     --src "{kwcoco_path}" \
-                    --dst "{out_kwcoco_path}" \
+                    --dst "{reproject_out_kwcoco_fpath}" \
                     --region_models="{filepath_output}"
                 ''')
-            if not out_kwcoco_path.exists() or force_rerun:
-                queue.submit(reproject_cmd, name=f'reproject_{region_id}',
-                             depends=polygen_job)
+            if not reproject_out_kwcoco_fpath.exists() or force_rerun:
+                reproject_job = queue.submit(
+                    reproject_cmd, name=f'reproject_{region_id}',
+                    depends=polygen_job)
+            else:
+                reproject_job = None
 
-        status_rows.append(row)
-
-    import pandas as pd
-    status_df = pd.DataFrame(status_rows)
-    status_df.value_counts('has_kwcoco')
-    # rows_to_process = status_df[status_df.has_kwcoco & status_df.has_points]
-    # rows_to_process['annotation_type'].value_counts()
-    # status_df[~status_df['has_kwcoco']]
+            if config.ignore_buffer:
+                ignore_buffer_kwcoco_fpath = final_out_kwcoco_fpath
+                add_kwcoco_ignore_buffer_command = ub.codeblock(
+                    fr"""
+                    python -m geowatch.cli.coco_add_ignore_buffer \
+                        --ignore_buffer_size '{config.ignore_buffer}' \
+                        --src "{reproject_out_kwcoco_fpath}" \
+                        --dst "{ignore_buffer_kwcoco_fpath}"
+                    """
+                )
+                if not ignore_buffer_kwcoco_fpath.exists() or force_rerun:
+                    add_ignore_buffer_job = queue.submit(
+                        add_kwcoco_ignore_buffer_command, name=f'add_ignore_buffer_{region_id}',
+                        depends=reproject_job)
+                else:
+                    add_ignore_buffer_job = None  # NOQA
 
     queue.print_graph()
     queue.print_commands()
@@ -220,5 +249,8 @@ def main():
     """
 
 
+__cli__ = RunAllPointgenCLI
+
+
 if __name__ == "__main__":
-    main()
+    __cli__.main()
