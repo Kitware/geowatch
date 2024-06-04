@@ -392,7 +392,21 @@ def load_point_annots(filepath_to_points, region_id):
         points_gdf_crs84 = gpd.read_file(file)
     # Simplified logic to grab only the rows corresponding to this video based on
     # assumptions about site-id patterns. Not robust.
-    flags = points_gdf_crs84.site_id.str.startswith(region_id)
+
+    if 1:
+        # hack to handle xxx region ids
+        import kwutil
+        site_region_ids = points_gdf_crs84['site_id'].apply(lambda s: '_'.join(s.split('_')[0:2]))
+        original_regionid_to_flag = {}
+        for orig_site_region_id in set(site_region_ids):
+            site_region_id = orig_site_region_id
+            if site_region_id.endswith('xxx'):
+                site_region_id = site_region_id.replace('xxx', '*')
+            site_region_id_pat = kwutil.util_pattern.Pattern.coerce(site_region_id)
+            flag = site_region_id_pat.match(region_id)
+            original_regionid_to_flag[orig_site_region_id] = flag
+
+    flags = [original_regionid_to_flag[rid] for rid in site_region_ids]
     points_gdf_crs84 = points_gdf_crs84[flags]
     return points_gdf_crs84
 
@@ -590,6 +604,13 @@ def main():
     size_prior_utm = config.size_prior.at_resolution(utm_gsd)
 
     points_gdf_crs84 = load_point_annots(filepath_to_points, config.region_id)
+    # TODO: filter rows out of points_gdf_crs84 so all points are inside
+    # of the main_region geometry.
+    # Outline:
+    # * Get the CRS84 region geometry from main_region_header
+    # * Check if each CRS84 point in points_gdf_crs84 is inside the
+    #   main_region_header geometry (use shapely method)
+    # * Filter to only the points that pass this test.
 
     # Transform the points into a UTM CRS. If we didn't determine a which UTM
     # crs to work with from the kwcoco file, then we need to infer a good one.
