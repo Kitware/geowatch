@@ -46,7 +46,6 @@ def main(cmdline=1, **kwargs):
 
     import kwimage
     from geowatch.utils import util_resolution
-    import kwplot
     import geowatch
     from shapely.ops import unary_union
     import geopandas as gpd
@@ -85,7 +84,7 @@ def main(cmdline=1, **kwargs):
             annot_cat_ids = annots.lookup("category_id")
             annot_segmenations = annots.lookup("segmentation")
             # print(annot_segmenations)
-            annot_cat_names = dset.categories(annot_cat_ids).lookup("name")
+            #annot_cat_names = dset.categories(annot_cat_ids).lookup("name")
 
             annot_polys = [
                 kwimage.MultiPolygon.coerce(s).to_shapely() for s in annot_segmenations
