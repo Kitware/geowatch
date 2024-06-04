@@ -231,20 +231,21 @@ def main(cmdline=1, **kwargs):
     queue.print_commands()
     queue.run()
 
-    """
-    Next Step is to run this splitgen:
+    print(ub.codeblock(
+        r"""
+        Next Step is to run this splitgen:
 
-    export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
-    export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1
+        export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+        export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1
 
-    python -m geowatch.cli.queue_cli.prepare_splits \
-        --src_kwcocos "$DST_BUNDLE_DPATH"/*/pointannv1-*-rawbands.kwcoco.zip \
-        --dst_dpath "$DST_BUNDLE_DPATH" \
-        --suffix=rawbands_pointannv1 \
-        --backend=tmux --tmux_workers=2 \
-        --splits split6 \
-        --run=1
-    """
+        python -m geowatch.cli.queue_cli.prepare_splits \
+            --src_kwcocos "$DST_BUNDLE_DPATH"/*/pointannv1-*-rawbands.kwcoco.zip \
+            --dst_dpath "$DST_BUNDLE_DPATH" \
+            --suffix=rawbands_pointannv1 \
+            --backend=tmux --tmux_workers=2 \
+            --splits split6 \
+            --run=1
+        """))
 
 
 if __name__ == "__main__":
