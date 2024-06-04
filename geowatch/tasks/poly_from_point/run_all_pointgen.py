@@ -249,8 +249,9 @@ def main(cmdline=1, **kwargs):
     """
 
 
-__cli__ = RunAllPointgenCLI
-
-
 if __name__ == "__main__":
-    __cli__.main()
+    """
+    CommandLine:
+        python -m geowatch.tasks.poly_from_point.run_all_pointgen
+    """
+    main()
