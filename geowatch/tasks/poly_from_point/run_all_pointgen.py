@@ -149,6 +149,7 @@ def main(cmdline=1, **kwargs):
     #         """
     #     )
     # )
+    status_rows = status_rows[-1:]
     for row in status_rows:
         region_id = row['region_id']
         has_kwcoco = row['has_kwcoco']
