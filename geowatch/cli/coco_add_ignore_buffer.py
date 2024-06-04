@@ -3,7 +3,7 @@ import scriptconfig as scfg
 
 class CocoAddIgnoreBufferConfig(scfg.DataConfig):
     """
-    HELLO WORLD!
+    Given a kwcoco file and buffer size update annotations to include ignore buffer regions around polygons
     """
 
     src = scfg.Value(
