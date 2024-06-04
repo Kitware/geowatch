@@ -4289,4 +4289,3 @@ python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Crop
 #python -m geowatch.mlops.manager "add packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
 python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
 python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
-

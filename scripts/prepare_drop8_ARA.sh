@@ -603,3 +603,24 @@ git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
 
+
+## --- Special DVC add for specific regions only
+
+cd "$DST_BUNDLE_DPATH"
+python -c "if 1:
+    import ubelt as ub
+    import os
+
+    root = ub.Path('.')
+    region_ids = os.environ.get('REGION_IDS_STR').split()
+
+    to_add = []
+    for region_id in region_ids:
+        region_dpath = root / region_id
+        to_add += list(region_dpath.glob('raw_bands'))
+        to_add += list(region_dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+
+    import simple_dvc as sdvc
+    dvc_repo = sdvc.SimpleDVC.coerce(root)
+    dvc_repo.add(to_add, verbose=1)
+"
