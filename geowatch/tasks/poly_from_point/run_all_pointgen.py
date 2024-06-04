@@ -25,8 +25,6 @@ def main(cmdline=1, **kwargs):
     rich.print('config = ' + escape(ub.urepr(config, nl=1)))
 
     import cmd_queue
-    import ubelt as ub
-
     import geowatch
     data_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
     # expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_expt', hardware='auto')
