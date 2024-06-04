@@ -46,7 +46,6 @@ def main(cmdline=1, **kwargs):
 
     import kwimage
     from geowatch.utils import util_resolution
-    import geowatch
     from shapely.ops import unary_union
     import geopandas as gpd
     import ubelt as ub
@@ -81,7 +80,7 @@ def main(cmdline=1, **kwargs):
             #       buffer region suggested is used.
             ignore_buffer_pixel = ignore_buffer_pixel.mean()
             annots = coco_img.annots()
-            annot_cat_ids = annots.lookup("category_id")
+            #annot_cat_ids = annots.lookup("category_id")
             annot_segmenations = annots.lookup("segmentation")
             # print(annot_segmenations)
             #annot_cat_names = dset.categories(annot_cat_ids).lookup("name")
@@ -132,6 +131,6 @@ def main(cmdline=1, **kwargs):
 
 if __name__ == "__main__":
     """
-    python -m geowatch.cli.experimental.ignore_buffer
+    python -m geowatch.cli.coco_addignore_buffer
     """
     main()
