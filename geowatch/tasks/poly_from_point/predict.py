@@ -392,7 +392,21 @@ def load_point_annots(filepath_to_points, region_id):
         points_gdf_crs84 = gpd.read_file(file)
     # Simplified logic to grab only the rows corresponding to this video based on
     # assumptions about site-id patterns. Not robust.
-    flags = points_gdf_crs84.site_id.str.startswith(region_id)
+
+    if 1:
+        # hack to handle xxx region ids
+        import kwutil
+        site_region_ids = points_gdf_crs84['site_id'].apply(lambda s: '_'.join(s.split('_')[0:2]))
+        original_regionid_to_flag = {}
+        for orig_site_region_id in set(site_region_ids):
+            site_region_id = orig_site_region_id
+            if site_region_id.endswith('xxx'):
+                site_region_id = site_region_id.replace('xxx', '*')
+            site_region_id_pat = kwutil.util_pattern.Pattern.coerce(site_region_id)
+            flag = site_region_id_pat.match(region_id)
+            original_regionid_to_flag[orig_site_region_id] = flag
+
+    flags = [original_regionid_to_flag[rid] for rid in site_region_ids]
     points_gdf_crs84 = points_gdf_crs84[flags]
     return points_gdf_crs84
 

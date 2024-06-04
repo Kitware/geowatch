@@ -2,6 +2,12 @@ def main():
     """
     Developer script to get point-based polygons generated.
     Needs cleanup.
+
+    Ignore:
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+        echo "$DVC_DATA_DPATH"
+        echo "$DVC_EXPT_DPATH"
     """
     import cmd_queue
     import ubelt as ub
@@ -12,13 +18,15 @@ def main():
 
     kwcoco_bundle_dpath = (data_dvc_dpath / 'Drop8-ARA-Median10GSD-V1')
 
-    region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-v1/region_models')
     points_fpath = data_dvc_dpath / 'annotations/point_based_annotations.zip'
+    region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-v1/region_models')
+    empty_region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-v1/empty_region_models')
 
     if 1:
         # Based on T&E submodule
         points_fpath = data_dvc_dpath / 'submodules/annotations/supplemental_data/point_based_annotations.geojson'
         region_dpath = data_dvc_dpath / 'submodules/annotations/region_models/'
+        empty_region_dpath = data_dvc_dpath / 'submodules/annotations/empty_region_models/'
 
     assert points_fpath.exists()
 
@@ -32,7 +40,7 @@ def main():
         points_gdf_crs84 = gpd.read_file(file)
 
     points_gdf_crs84['region_id'] = points_gdf_crs84['site_id'].apply(lambda s: '_'.join(s.split('_')[0:2]))
-    regions_with_points = points_gdf_crs84['region_id'].unique()
+    regions_with_points = sorted(points_gdf_crs84['region_id'].unique())
 
     common_params = dict(
         size_prior='20.06063 x 20.0141229 @ 10mGSD',
@@ -43,6 +51,60 @@ def main():
 
     dest_region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-points-v1/region_models').ensuredir()
     viz_region_dpath = ((data_dvc_dpath / 'annotations') / 'drop8-points-v1/region_models_viz').ensuredir()
+
+    region_model_list = list(region_dpath.glob("*.geojson"))
+
+    if 1:
+        # Hack to add special point-only regions
+        hacked_regions = ['HK_C001', 'HK_C002']
+        for r in hacked_regions:
+            region_fpath = empty_region_dpath / (r + '.geojson')
+            assert region_fpath.exists()
+            region_model_list.append(region_fpath)
+
+    queue = cmd_queue.Queue.create(backend="tmux", size=16)
+    # queue.add_header_command(
+    #     ub.codeblock(
+    #         """
+    #         pyenv shell 3.10.5
+    #         source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
+    #         """
+    #     )
+    # )
+
+    # Handle sites with "xxx" patterns that may be associated with multiple regions
+    import kwutil
+    region_with_points_patterns = []
+    for region_id in regions_with_points:
+        if region_id.endswith('xxx'):
+            region_id = region_id.replace('xxx', '*')
+        region_with_points_patterns.append(region_id)
+    region_with_points_pattern = kwutil.util_pattern.MultiPattern.coerce(region_with_points_patterns)
+
+    force_rerun = 0
+
+    status_rows = []
+    for region_path in region_model_list:
+        region_id = region_path.stem.strip()
+        kwcoco_path = (
+            kwcoco_bundle_dpath / region_id / (f"imgonly-{region_id}-rawbands.kwcoco.zip")
+        )
+        # has_points = region_id in regions_with_points
+        has_points = region_with_points_pattern.match(region_id)
+        has_kwcoco = kwcoco_path.exists()
+        row = {
+            'region_id': region_id,
+            'annotation_type': region_id.split('_')[1][0],
+            'has_points': has_points,
+            'has_kwcoco': has_kwcoco,
+            'kwcoco_path': kwcoco_path,
+        }
+        status_rows.append(row)
+
+    import pandas as pd
+    import rich
+    status_df = pd.DataFrame(status_rows)
+    rich.print(status_df)
 
     polygen_template = ub.codeblock(
         r"""
@@ -73,40 +135,21 @@ def main():
             --filepath_output "{filepath_output}"
         """
     )
-    region_model_list = list(region_dpath.glob("*.geojson"))
-
-    queue = cmd_queue.Queue.create(backend="tmux", size=16)
-    # queue.add_header_command(
-    #     ub.codeblock(
-    #         """
-    #         pyenv shell 3.10.5
-    #         source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
-    #         """
-    #     )
-    # )
 
     regionviz_template = ub.codeblock(
         '''
         geowatch draw_region "{region_fpath}" --fpath "{viz_fpath}"
-        ''')
+        '''
+    )
 
-    force_rerun = 0
+    for row in status_rows:
+        region_id = row['region_id']
+        has_kwcoco = row['has_kwcoco']
+        has_points = row['has_points']
+        kwcoco_path = row['kwcoco_path']
 
-    status_rows = []
-    for region_path in region_model_list:
-        region_id = region_path.stem.strip()
-        kwcoco_path = (
-            kwcoco_bundle_dpath / region_id / (f"imgonly-{region_id}-rawbands.kwcoco.zip")
-        )
-        has_points = region_id in regions_with_points
-        has_kwcoco = kwcoco_path.exists()
         filepath_output = dest_region_dpath / f'{region_id}.geojson'
-        row = {
-            'region_id': region_id,
-            'annotation_type': region_id.split('_')[1][0],
-            'has_points': has_points,
-            'has_kwcoco': has_kwcoco,
-        }
+
         if has_kwcoco and has_points:
             fmtkw = {
                 "region_id": region_id,
