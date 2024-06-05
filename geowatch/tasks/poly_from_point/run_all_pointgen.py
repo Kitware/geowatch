@@ -21,7 +21,7 @@ def main(cmdline=1, **kwargs):
     """
     import rich
     from rich.markup import escape
-    config = RunAllPointgenCLI.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config = RunAllPointgenCLI.cli(cmdline=0,strict=True)
     rich.print('config = ' + escape(ub.urepr(config, nl=1)))
 
     import cmd_queue
@@ -138,7 +138,7 @@ def main(cmdline=1, **kwargs):
 
     queue = cmd_queue.Queue.create(
         backend="tmux",
-        # backend="serial",
+        #backend="serial",
         size=16
     )
     # queue.add_header_command(
@@ -186,12 +186,12 @@ def main(cmdline=1, **kwargs):
                                  depends=polygen_job)
 
             final_out_kwcoco_fpath = (
-                kwcoco_bundle_dpath / region_id / (f"pointannv1-{region_id}-rawbands.kwcoco.zip")
+                kwcoco_bundle_dpath / region_id / (f"pointannv2_ellipse-{region_id}-rawbands.kwcoco.zip")
             )
 
             if config.ignore_buffer:
                 reproject_out_kwcoco_fpath = (
-                    kwcoco_bundle_dpath / region_id / (f"_preignore-pointannv1-{region_id}-rawbands.kwcoco.zip")
+                    kwcoco_bundle_dpath / region_id / (f"_preignore-pointannv2_ellipse-{region_id}-rawbands.kwcoco.zip")
                 )
             else:
                 reproject_out_kwcoco_fpath = final_out_kwcoco_fpath
@@ -239,9 +239,9 @@ def main(cmdline=1, **kwargs):
         export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Median10GSD-V1
 
         python -m geowatch.cli.queue_cli.prepare_splits \
-            --src_kwcocos "$DST_BUNDLE_DPATH"/*/pointannv1-*-rawbands.kwcoco.zip \
+            --src_kwcocos "$DST_BUNDLE_DPATH"/*/pointannv2_ellipse-*-rawbands.kwcoco.zip \
             --dst_dpath "$DST_BUNDLE_DPATH" \
-            --suffix=rawbands_pointannv1 \
+            --suffix=rawbands_pointannv2_ellipse \
             --backend=tmux --tmux_workers=2 \
             --splits split6 \
             --run=1

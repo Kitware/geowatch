@@ -63,7 +63,7 @@ def main(cmdline=1, **kwargs):
         >>>         iou = isect_poly.area / union_poly.area
         >>>         print(f'image_id={image_id}, iou = {ub.urepr(iou, nl=1)}')
         >>>         # FIXME: this iou should be zero but it appears not to be!
-        >>>         assert iou < 0.1
+        >>>         assert iou < 0.001
     """
     import rich
     from rich.markup import escape
@@ -121,12 +121,21 @@ def main(cmdline=1, **kwargs):
                 # For each existing annotation
                 new_ignore_polys = []
                 for poly in annot_polys:
-                    # Expand the region around it
+                    iou = 1
                     expanded_poly = poly.buffer(ignore_buffer_pixel)
-                    # Remove any regions touching existing annotation
-                    new_ignore_geom = expanded_poly - do_not_ignore_poly
+                    while(iou >0.0001 and not expanded_poly.is_empty):
+                        # Expand the region around it
+                        expanded_poly = poly.buffer(ignore_buffer_pixel)
+                        # Remove any regions touching existing annotation
+                        new_ignore_geom = expanded_poly - do_not_ignore_poly
+                        for nonignore_poly in annot_polys:
+                            isect_poly = nonignore_poly.intersection(new_ignore_geom)
+                            union_poly = nonignore_poly.union(new_ignore_geom)
+                        iou = isect_poly.area / union_poly.area
+                        #print(iou)
+                        expanded_poly=new_ignore_geom
                     if not new_ignore_geom.is_empty:
-                        new_ignore_polys.append(new_ignore_geom)
+                        new_ignore_polys.append(expanded_poly)
 
                 if 0:
                     # kwimage.MultiPolygon.coerce(do_not_ignore_poly).draw(setlim=1,color='kitware_red')

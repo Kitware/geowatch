@@ -532,7 +532,7 @@ def main():
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
             --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
 
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'ellipse' \
             --filepath_output KR_R001-genpoints.geojson \
@@ -540,14 +540,15 @@ def main():
             --size_prior "20x20@10mGSD" \
             --ignore_buffer "10@10mGSD" \
             --filepath_to_images None \
-            --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
-            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+            --filepath_to_points "$DVC_DATA_DPATH/home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
+            --filepath_to_region "$DVC_DATA_DPATH/home/local/KHQ/vincenzo.dimatteo/Desktop/dvc_repos/smart_phase3_data/annotations/drop8/region_models/KR_R001.geojson" \
 
         geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
     """
     config = HeatMapConfig.cli(cmdline=1)
     import rich
     from rich.markup import escape
+    from shapely import geometry
 
     rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
 
@@ -611,7 +612,15 @@ def main():
     # * Check if each CRS84 point in points_gdf_crs84 is inside the
     #   main_region_header geometry (use shapely method)
     # * Filter to only the points that pass this test.
-
+    main_region_header_points=[geometry.Point(point)for point in main_region_header['geometry']['coordinates'][0]]
+    poly= geometry.Polygon(main_region_header_points)
+    indexs=points_gdf_crs84.index
+    for idx,point in enumerate(points_gdf_crs84['geometry']):
+          if poly.contains(point):
+            continue
+          else:
+            points_gdf_crs84.drop(indexs[idx],axis=0,inplace=True)
+      
     # Transform the points into a UTM CRS. If we didn't determine a which UTM
     # crs to work with from the kwcoco file, then we need to infer a good one.
     if utm_crs is None:
