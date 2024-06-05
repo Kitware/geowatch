@@ -83,6 +83,20 @@ sudo setfacl -d -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
 sudo setfacl -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
 
 
+# https://www.youtube.com/watch?v=Dn6b-mIKHmM&t=2049s
+getfacl /data/projects/smart
+sudo setfacl -m "group:smart:rwx" "/data/projects/smart"
+getfacl /data/projects/smart
+
+
+sudo setfacl -m "group:smart:rwx" /data/projects/smart/smart_phase3_expt
+
+getfacl .
+sudo setfacl -m "group:smart:rwx" "."
+getfacl .
+
+getfacl /data
+getfacl .
 
 # Moving data to new directory
 rsync -avprRP /data/projects/smart/smart_phase3_data/.dvc/./cache /data2/projects/smart/smart_phase3_data/.dvc

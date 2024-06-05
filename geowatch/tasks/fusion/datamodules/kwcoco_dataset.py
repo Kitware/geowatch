@@ -1973,6 +1973,13 @@ class GetItemMixin(TruthMixin):
             'target': resolved_target_subset,
             'requested_target': requested_target_subset,
         }
+
+        if True:
+            # Abstract away details of the dictionary structure by wrapping in
+            # a helper class.
+            from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
+            item = HeterogeneousBatchItem(item)
+
         return item
 
     @profile
@@ -2325,7 +2332,7 @@ class IntrospectMixin:
                 color='red')
             return bad_canvas
 
-        # TODO: when the BatchItem.draw method is complete just use that.
+        # TODO: when the HeterogeneousBatchItem.draw method is complete just use that.
 
         default_combinable_channels = self.default_combinable_channels
 
@@ -2384,9 +2391,9 @@ class IntrospectMixin:
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
-        # Refactored to use the new BatchItem class.
-        from geowatch.tasks.fusion.datamodules.batch_item import BatchItem
-        item_summary = BatchItem.summarize(item, stats=stats)
+        # Refactored to use the new HeterogeneousBatchItem class.
+        from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
+        item_summary = HeterogeneousBatchItem.summarize(item, stats=stats)
         return item_summary
 
 
@@ -2652,7 +2659,7 @@ class BalanceMixin:
                                            default_weight=default_weight)
 
         from kwutil import util_environ
-        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 1)
+        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 0)
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']

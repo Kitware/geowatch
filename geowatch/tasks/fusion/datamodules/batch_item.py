@@ -13,19 +13,10 @@ import numpy as np
 
 class BatchItem(dict):
     """
-    A BatchItem is a container to help organize the output of the
-    KWCocoVideoDataset. For backwards compatibility it retains the original
-    dictionary interface.
-
-    Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
-        >>> self = BatchItem.demo()
-        >>> print(self)
-        >>> print(ub.urepr(self.summarize(), nl=2))
+    Ideally a batch item is simply an unstructured dictionary.
+    This is the base class for more specific implementations, which are going
+    to all be dictionaries, but the class will expose convinience methods.
     """
-
-    def __nice__(self):
-        return f'num_frames={self.num_frames}, sensorchans={self.sensorchan_histogram}'
 
     def __repr__(self):
         """
@@ -45,6 +36,46 @@ class BatchItem(dict):
         nice = self.__nice__()
         return '<{0}({1})>'.format(classname, nice)
 
+    def draw(self, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def demo(cls, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def summarize(cls, **kwargs):
+        raise NotImplementedError
+
+
+class HeterogeneousBatchItem(BatchItem):
+    """
+    A BatchItem is a container to help organize the output of the
+    KWCocoVideoDataset. For backwards compatibility it retains the original
+    dictionary interface.
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> self = HeterogeneousBatchItem.demo()
+        >>> print(self)
+        >>> print(ub.urepr(self.summarize(), nl=2))
+    """
+
+    def __nice__(self):
+        return f'num_frames={self.num_frames}, sensorchans={self.sensorchan_histogram}'
+
+    @property
+    def num_frames(self):
+        return len(self['frames'])
+
+    @property
+    def sensorchan_histogram(self):
+        histogram = ub.dict_hist(
+            frame['sensor'] + ':' + mode_key for frame in self['frames']
+            for mode_key in frame['modes'].keys()
+        )
+        return histogram
+
     @classmethod
     def demo(cls):
         from geowatch.tasks.fusion.datamodules import kwcoco_dataset
@@ -58,18 +89,6 @@ class BatchItem(dict):
         item = dataset[index]
         self = cls(**item)
         return self
-
-    @property
-    def num_frames(self):
-        return len(self['frames'])
-
-    @property
-    def sensorchan_histogram(self):
-        histogram = ub.dict_hist(
-            frame['sensor'] + ':' + mode_key for frame in self['frames']
-            for mode_key in frame['modes'].keys()
-        )
-        return histogram
 
     def draw(self, item_output=None, combinable_extra=None, max_channels=5,
              max_dim=224, norm_over_time='auto', overlay_on_image=False,
@@ -87,7 +106,7 @@ class BatchItem(dict):
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
-            >>> self = BatchItem.demo()
+            >>> self = HeterogeneousBatchItem.demo()
             >>> canvas = self.draw()
             >>> print(self)
             >>> print(ub.urepr(self.summarize(), nl=2))
@@ -150,7 +169,7 @@ class BatchItem(dict):
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
-            >>> self = BatchItem.demo()
+            >>> self = HeterogeneousBatchItem.demo()
             >>> item_summary = self.summarize(stats=0)
             >>> print(f'item_summary = {ub.urepr(item_summary, nl=-2)}')
         """

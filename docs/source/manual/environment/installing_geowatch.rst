@@ -76,6 +76,19 @@ or more explicitly via:
    pip install -e .[development,optional,headless]
 
 
+Submodules
+~~~~~~~~~~
+
+All necessary submodules live in `geowatch_tpl` and are statically "vendored"
+into the repo, but if you need to develop these submodules, you can use:
+
+.. code:: bash
+
+    git submodule update --init --recursive
+
+
+See the geowatch_tpl README and docs for more information.
+
 
 Testing
 ~~~~~~~
