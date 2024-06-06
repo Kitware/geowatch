@@ -54,7 +54,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --collated False \
     --requester_pays=$REQUESTER_PAYS \
     --dvc_dpath="$DEMO_DPATH" \
-    --aws_profile=iarpa \
+    --aws_profile=None \
     --region_globstr="$REGION_FPATH" \
     --site_globstr="$SITE_GLOBSTR" \
     --fields_workers=8 \
