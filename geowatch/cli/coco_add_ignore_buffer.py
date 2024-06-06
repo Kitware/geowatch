@@ -67,6 +67,7 @@ def main(cmdline=1, **kwargs):
     """
     import rich
     from rich.markup import escape
+
     config = CocoAddIgnoreBufferConfig.cli(
         cmdline=cmdline, data=kwargs,
         # special_options=False  # requires recent scriptconfig
@@ -82,6 +83,8 @@ def main(cmdline=1, **kwargs):
 
     dset = kwcoco.CocoDataset(config.src)
 
+    dset = dset.reroot(absolute=True)
+
     # TODO: if unit is not specified, work in videospace instead of world space
     utm_gsd = util_resolution.ResolvedUnit.coerce("1GSD")
     ignore_buffer = util_resolution.ResolvedScalar.coerce(config.ignore_buffer_size)
@@ -95,7 +98,7 @@ def main(cmdline=1, **kwargs):
         for video_id in pman.progiter(videos, desc="looping over videos..."):
             images = dset.images(video_id=video_id)
 
-            for image_id in pman.progiter(images, desc='looping over images...'):
+            for image_id in pman.progiter(images, desc="looping over images..."):
                 coco_img = dset.coco_image(image_id)
                 _imgspace_resolution = coco_img.resolution(space="image")
                 image_pxl_per_meter = 1 / np.array(_imgspace_resolution["mag"])
@@ -106,10 +109,10 @@ def main(cmdline=1, **kwargs):
                 # buffer region suggested is used.
                 ignore_buffer_pixel = ignore_buffer_pixel.mean()
                 annots = coco_img.annots()
-                #annot_cat_ids = annots.lookup("category_id")
+                # annot_cat_ids = annots.lookup("category_id")
                 annot_segmenations = annots.lookup("segmentation")
                 # print(annot_segmenations)
-                #annot_cat_names = dset.categories(annot_cat_ids).lookup("name")
+                # annot_cat_names = dset.categories(annot_cat_ids).lookup("name")
 
                 annot_polys = [
                     kwimage.MultiPolygon.coerce(s).to_shapely()
@@ -123,7 +126,7 @@ def main(cmdline=1, **kwargs):
                 for poly in annot_polys:
                     iou = 1
                     expanded_poly = poly.buffer(ignore_buffer_pixel)
-                    while(iou >0.0001 and not expanded_poly.is_empty):
+                    while iou > 0.0001 and not expanded_poly.is_empty:
                         # Expand the region around it
                         expanded_poly = poly.buffer(ignore_buffer_pixel)
                         # Remove any regions touching existing annotation
@@ -132,14 +135,16 @@ def main(cmdline=1, **kwargs):
                             isect_poly = nonignore_poly.intersection(new_ignore_geom)
                             union_poly = nonignore_poly.union(new_ignore_geom)
                         iou = isect_poly.area / union_poly.area
-                        #print(iou)
-                        expanded_poly=new_ignore_geom
+                        # print(iou)
+                        expanded_poly = new_ignore_geom
                     if not new_ignore_geom.is_empty:
                         new_ignore_polys.append(expanded_poly)
 
                 if 0:
                     # kwimage.MultiPolygon.coerce(do_not_ignore_poly).draw(setlim=1,color='kitware_red')
-                    kwimage.MultiPolygon.coerce(annot_polys[0]).draw(color="kitware_green")
+                    kwimage.MultiPolygon.coerce(annot_polys[0]).draw(
+                        color="kitware_green"
+                    )
                     for poly in new_ignore_polys:
                         kwimage.MultiPolygon.coerce(poly).draw(color="kitware_blue")
                     kwimage.MultiPolygon.coerce(do_not_ignore_poly).draw(

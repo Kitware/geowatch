@@ -711,7 +711,7 @@ class TruthMixin:
                     {target_=!r}
                     '''
                 ))
-            # The returne detections will live in the "input/data" space
+            # The return detections will live in the "input/data" space
             gid_to_dets[gid] = frame_dets
 
         for gid, frame_dets in gid_to_dets.items():
@@ -988,7 +988,7 @@ class TruthMixin:
                     task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
 
             for poly in saliency_sseg_groups['ignore']:
-                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                #poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
                 poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
 
             if not self.config.absolute_weighting:
@@ -3424,7 +3424,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self.non_salient_classes = self.background_classes | self.negative_classes
         self.salient_ignore_classes = self.ignore_classes
         # should we remove the ignore classes from salient_classes in the future?
-        self.salient_classes = set(self.classes) - self.non_salient_classes
+        # yes
+        self.salient_classes = set(self.classes) - (self.non_salient_classes | self.ignore_classes)
 
         # define foreground classes for the class activity head
         self.class_foreground_classes = set(self.classes) - (
