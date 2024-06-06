@@ -36,6 +36,9 @@ class BatchItem(dict):
         nice = self.__nice__()
         return '<{0}({1})>'.format(classname, nice)
 
+    def __nice__(self):
+        return ''
+
     def draw(self, **kwargs):
         raise NotImplementedError
 
@@ -59,6 +62,12 @@ class HeterogeneousBatchItem(BatchItem):
         >>> self = HeterogeneousBatchItem.demo()
         >>> print(self)
         >>> print(ub.urepr(self.summarize(), nl=2))
+        >>> canvas = self.draw()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
+        >>> kwplot.show_if_requested()
     """
 
     def __nice__(self):
@@ -80,10 +89,10 @@ class HeterogeneousBatchItem(BatchItem):
     def demo(cls):
         from geowatch.tasks.fusion.datamodules import kwcoco_dataset
         import geowatch
-        coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+        coco_dset = geowatch.coerce_kwcoco('geowatch-msi', num_frames=10)
         dataset = kwcoco_dataset.KWCocoVideoDataset(
             coco_dset, time_dims=4, window_dims=(300, 300),
-            channels='r|g|b')
+            channels='auto')
         dataset.disable_augmenter = True
         index = dataset.sample_grid['targets'][dataset.sample_grid['positives_indexes'][0]]
         item = dataset[index]
@@ -94,8 +103,7 @@ class HeterogeneousBatchItem(BatchItem):
              max_dim=224, norm_over_time='auto', overlay_on_image=False,
              draw_weights=True, rescale='auto', classes=None,
              predictable_classes=None, show_summary_text=True,
-             requested_tasks=None,
-             **kwargs):
+             requested_tasks=None, legend=True, **kwargs):
         """
         Visualize this batch item.
         Corresponds to the dataset :func:`IntrospectMixin.draw_item` method.
@@ -103,23 +111,22 @@ class HeterogeneousBatchItem(BatchItem):
         Not finished. The dataset draw_item class has context not currently
         available like predictable classes, that needs to be represented in the
         item itself.
-
-        Example:
-            >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
-            >>> self = HeterogeneousBatchItem.demo()
-            >>> canvas = self.draw()
-            >>> print(self)
-            >>> print(ub.urepr(self.summarize(), nl=2))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
-            >>> kwplot.show_if_requested()
         """
         import kwimage
         item = self
 
-        default_combinable_channels = []
+        from geowatch import heuristics
+        default_combinable_channels = [
+            ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['impervious', 'forest', 'water']),
+            ub.oset(['baren', 'field', 'water']),
+            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
+        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
         if requested_tasks is None:
             requested_tasks = {'class': True, 'saliency': True, 'change': True, 'outputs': False, 'boxes': False}
         # self.default_combinable_channels
@@ -130,7 +137,8 @@ class HeterogeneousBatchItem(BatchItem):
 
         # Hack to force the categories to draw right for SMART
         # FIXME: Use the correct class colors in visualization.
-        from geowatch import heuristics
+        requested_tasks = item['requested_tasks']
+        predictable_classes = item['predictable_classes']
         if predictable_classes is not None:
             heuristics.ensure_heuristic_category_tree_colors(predictable_classes, force=True)
 
@@ -151,6 +159,16 @@ class HeterogeneousBatchItem(BatchItem):
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
             canvas = kwimage.stack_images([canvas, header])
+
+        if legend:
+            from geowatch.tasks.fusion import utils
+            label_to_color = {
+                node: data['color']
+                for node, data in self['predictable_classes'].graph.nodes.items()}
+            legend_img = utils._memo_legend(label_to_color)
+            legend_img = kwimage.imresize(legend_img, scale=4.0)
+            canvas = kwimage.stack_images([canvas, legend_img], axis=1)
+
         return canvas
 
     def summarize(self, coco_dset=None, stats=False):
@@ -248,3 +266,118 @@ class HeterogeneousBatchItem(BatchItem):
         item_summary['requested_index'] = item.get('requested_index', None)
         item_summary['resolved_index'] = item.get('resolved_index', None)
         return item_summary
+
+
+class HomogeneousBatchItem(HeterogeneousBatchItem):
+    """
+    Ideally this is a simplified representation that "just works" with standard
+    off the shelf networks.
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> self = HomogeneousBatchItem.demo()
+        >>> print(self)
+        >>> print(ub.urepr(self.summarize(), nl=2))
+        >>> canvas = self.draw()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
+        >>> kwplot.show_if_requested()
+    """
+
+    @classmethod
+    def demo(cls):
+        """
+        Example:
+            cls = HomogeneousBatchItem
+            self = cls.demo()
+        """
+        from geowatch.tasks.fusion.datamodules import kwcoco_dataset
+        import geowatch
+        coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+        dataset = kwcoco_dataset.KWCocoVideoDataset(
+            coco_dset, time_dims=3, window_dims=(300, 300),
+            channels='r|g|b')
+        dataset.disable_augmenter = True
+        index = dataset.sample_grid['targets'][dataset.sample_grid['positives_indexes'][0]]
+        item = dataset[index]
+        self = cls(**item)
+        return self
+
+
+class RGBImageBatchItem(HomogeneousBatchItem):
+    """
+    Only allows a single RGB image as the input.
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> self = RGBImageBatchItem.demo()
+        >>> print(self)
+        >>> print(ub.urepr(self.summarize(), nl=2))
+        >>> canvas = self.draw()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
+        >>> kwplot.show_if_requested()
+    """
+
+    def __nice__(self):
+        return f'num_frames={self.num_frames}, sensorchans={self.sensorchan_histogram}'
+
+    @property
+    def frame(self):
+        frame = self['frames'][0]
+        return frame
+
+    @property
+    def channels(self):
+        frame = self.frame
+        modes = frame['modes']
+        mode_keys = list(modes.keys())
+        assert len(mode_keys) == 1
+        mode_key = mode_keys[0]
+        return mode_key
+
+    @property
+    def imdata_chw(self):
+        frame = self.frame
+        modes = frame['modes']
+        mode_keys = list(modes.keys())
+        assert len(mode_keys) == 1
+        mode_key = mode_keys[0]
+        mode_val = modes[mode_key]
+        imdata_chw = mode_val
+        return imdata_chw
+
+    @classmethod
+    def demo(cls, index=None):
+        """
+        cls = RGBImageBatchItem
+        """
+        from geowatch.tasks.fusion.datamodules import kwcoco_dataset
+        import geowatch
+        coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=1)
+        dataset = kwcoco_dataset.KWCocoVideoDataset(
+            coco_dset, time_dims=1, window_dims=(300, 300),
+            channels='r|g|b')
+        dataset.disable_augmenter = True
+        if index is None:
+            index = dataset.sample_grid['targets'][dataset.sample_grid['positives_indexes'][0]]
+        item = dataset[index]
+        self = cls(**item)
+        assert len(item['frames']) == 1
+        frame = self['frames'][0]
+        modes = frame['modes']
+        mode_keys = list(modes.keys())
+        assert len(mode_keys) == 1
+        # mode_key = mode_keys[0]
+        # mode_val = modes[mode_key]
+
+        # new_item = ub.udict(item) - {'frames'}
+        # new_frame = ub.udict(frame) - {'modes'}
+        # new_frame['channels'] = mode_key
+        # new_frame['imdata_chw'] = mode_val
+        # new_item.update(new_frame)
+        return self

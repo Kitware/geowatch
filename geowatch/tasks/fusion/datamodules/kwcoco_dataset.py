@@ -143,6 +143,7 @@ from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
+from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
 
 try:
     import xdev
@@ -1977,7 +1978,8 @@ class GetItemMixin(TruthMixin):
         if True:
             # Abstract away details of the dictionary structure by wrapping in
             # a helper class.
-            from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
+            item['predictable_classes'] = self.predictable_classes
+            item['requested_tasks'] = self.requested_tasks
             item = HeterogeneousBatchItem(item)
 
         return item
@@ -2332,7 +2334,10 @@ class IntrospectMixin:
                 color='red')
             return bad_canvas
 
-        # TODO: when the HeterogeneousBatchItem.draw method is complete just use that.
+        if False:
+            # TODO: ready, use the class method
+            # HeterogeneousBatchItem.draw(legend=False)
+            ...
 
         default_combinable_channels = self.default_combinable_channels
 
@@ -2392,7 +2397,6 @@ class IntrospectMixin:
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
         # Refactored to use the new HeterogeneousBatchItem class.
-        from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
         item_summary = HeterogeneousBatchItem.summarize(item, stats=stats)
         return item_summary
 
@@ -3459,7 +3463,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # should probably design a clean method of communicating between the
         # dataset and model first.
         self.ignore_index = -100
-        self.special_inputs = {}
 
         channels = config['channels']
         if channels is None or channels == 'auto':
@@ -3524,6 +3527,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         _sample_channels = []
         _input_sensorchans = []
         _sample_sensorchans = []
+        self.special_inputs = {}  # Unused? Remove?
         for fused_sensorchan in self.sensorchan.streams():
             sensor = fused_sensorchan.sensor
             chans = fused_sensorchan.chans
@@ -3568,6 +3572,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
+
+        # TODO: better "notification of heads" specification and implementation
         self.requested_tasks = {
             'change': True,
             'class': True,
