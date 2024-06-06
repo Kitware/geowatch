@@ -3617,7 +3617,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             self.ignore_classes | self.background_classes | self.negative_classes)
 
         annot_helper_kws = dict(
-            # negative_classes=self._old_balance_as_negative_classes,
+            negative_classes=self._old_balance_as_negative_classes,
             keepbound=False,
             use_annot_info=True,
             use_centered_positives=config['use_centered_positives'],
