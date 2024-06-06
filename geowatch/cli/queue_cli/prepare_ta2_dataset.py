@@ -145,9 +145,9 @@ class PrepareTA2Config(CMDQueueConfig):
             sensors.
             '''), nargs='+')
 
-    aws_profile = scfg.Value('iarpa', group='stac', help=ub.paragraph(
+    aws_profile = scfg.Value(None, group='stac', help=ub.paragraph(
             '''
-            AWS profile to use for remote data access
+            AWS profile to use for remote data access. (e.g. iarpa)
             '''))
 
     out_dpath = scfg.Value('auto', alias=['dvc_dpath'], help=ub.paragraph(
