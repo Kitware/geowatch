@@ -8,10 +8,11 @@ This is a simplified version of tutorial 6 that does not require COLD features.
 # TODO: add instructions for how to set these if they are unset.
 #
 # If you can access our DVC repo:
-DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+#DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_DATA_DPATH=$HOME/data/dvc-repos/tutorial7-data
 
 # The "name" of the demo dataset we will create
-DATASET_SUFFIX=KHQ_Tutorial6_Data
+DATASET_SUFFIX=KHQ_Tutorial7_Data
 
 # Set this to where you want to build the dataset
 DEMO_DPATH=$DVC_DATA_DPATH/$DATASET_SUFFIX
