@@ -49,21 +49,24 @@ def main(cmdline=1, **kwargs):
         >>> for video_id in result_dest.videos():
         >>>     images = result_dest.images(video_id=video_id)
         >>>     for image_id in images:
-        >>>         coco_img = result_dest.coco_image(image_id)
-        >>>         annots = coco_img.annots()
-        >>>         dets = annots.detections
-        >>>         catnames = [dets.classes[idx] for idx in dets.class_idxs]
-        >>>         polys = [p.to_shapely() for p in annots.detections.data['segmentations']]
-        >>>         catname_to_polys = ub.group_items(polys, catnames)
-        >>>         ignore_poly = unary_union(catname_to_polys.get('ignore', []))
-        >>>         nonignore_polys = ub.udict(catname_to_polys) - {'ignore'}
-        >>>         nonignore_poly = unary_union(list(ub.flatten(nonignore_polys.values())))
-        >>>         isect_poly = nonignore_poly.intersection(ignore_poly)
-        >>>         union_poly = nonignore_poly.union(ignore_poly)
+        >>>         src_coco_img = src.coco_image(image_id)
+        >>>         dst_coco_img = result_dest.coco_image(image_id)
+        >>>         src_annots = src_coco_img.annots()
+        >>>         dst_annots = dst_coco_img.annots()
+        >>>         new_aids = ub.oset(dst_annots) - ub.oset(src_annots)
+        >>>         old_aids = list(src_annots)
+        >>>         # The old polygons (new polys should not intersect these)
+        >>>         old_polys = [p.to_shapely() for p in result_dest.annots(old_aids).detections.data['segmentations']]
+        >>>         # The new polygons that should be the ignored regions
+        >>>         new_polys = [p.to_shapely() for p in result_dest.annots(new_aids).detections.data['segmentations']]
+        >>>         new_poly = unary_union(new_polys)
+        >>>         old_poly = unary_union(old_polys)
+        >>>         isect_poly = new_poly.intersection(old_poly)
+        >>>         union_poly = new_poly.union(old_poly)
         >>>         iou = isect_poly.area / union_poly.area
         >>>         print(f'image_id={image_id}, iou = {ub.urepr(iou, nl=1)}')
-        >>>         # FIXME: this iou should be zero but it appears not to be!
-        >>>         assert iou < 0.001
+        >>>         # The iou should be nearly zero (up to float errors)
+        >>>         assert iou < 1e-5
     """
     import rich
     from rich.markup import escape
@@ -124,8 +127,11 @@ def main(cmdline=1, **kwargs):
                 # For each existing annotation
                 new_ignore_polys = []
                 for poly in annot_polys:
-                    iou = 1
                     expanded_poly = poly.buffer(ignore_buffer_pixel)
+                    # SANITY_CHECK = 0
+                    # TODO: dont use big whiles
+                    # SANITY_CHECK
+                    iou = 1
                     while iou > 0.0001 and not expanded_poly.is_empty:
                         # Expand the region around it
                         expanded_poly = poly.buffer(ignore_buffer_pixel)
