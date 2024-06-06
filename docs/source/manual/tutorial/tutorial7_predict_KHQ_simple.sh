@@ -47,7 +47,7 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 # This is a cmdqueue pipeline of simpler commands
 python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
-    --cloud_cover=30 \
+    --cloud_cover=20 \
     --stac_query_mode=auto \
     --sensors "$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
@@ -65,7 +65,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --target_gsd="10GSD" \
     --visualize=False \
-    --max_products_per_region=100 \
+    --max_products_per_region=10 \
     --backend=serial \
     --run=1
 
