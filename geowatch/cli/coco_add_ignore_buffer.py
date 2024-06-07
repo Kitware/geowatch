@@ -126,25 +126,37 @@ def main(cmdline=1, **kwargs):
 
                 # For each existing annotation
                 new_ignore_polys = []
-                for poly in annot_polys:
-                    expanded_poly = poly.buffer(ignore_buffer_pixel)
-                    # SANITY_CHECK = 0
-                    # TODO: dont use big whiles
-                    # SANITY_CHECK
-                    iou = 1
-                    while iou > 0.0001 and not expanded_poly.is_empty:
-                        # Expand the region around it
+                SANITY_CHECK = 0 
+                if SANITY_CHECK == 1:
+                    for poly in annot_polys:
                         expanded_poly = poly.buffer(ignore_buffer_pixel)
-                        # Remove any regions touching existing annotation
-                        new_ignore_geom = expanded_poly - do_not_ignore_poly
-                        for nonignore_poly in annot_polys:
-                            isect_poly = nonignore_poly.intersection(new_ignore_geom)
-                            union_poly = nonignore_poly.union(new_ignore_geom)
-                        iou = isect_poly.area / union_poly.area
-                        # print(iou)
-                        expanded_poly = new_ignore_geom
-                    if not new_ignore_geom.is_empty:
-                        new_ignore_polys.append(expanded_poly)
+                        # SANITY_CHECK = 0
+                        # TODO: dont use big whiles
+                        # SANITY_CHECK
+                        iou = 1
+                        while iou > 0.0001 and not expanded_poly.is_empty:
+                            # Expand the region around it
+                            expanded_poly = poly.buffer(ignore_buffer_pixel)
+                            # Remove any regions touching existing annotation
+                            new_ignore_geom = expanded_poly - do_not_ignore_poly
+                            for nonignore_poly in annot_polys:
+                                isect_poly = nonignore_poly.intersection(new_ignore_geom)
+                                union_poly = nonignore_poly.union(new_ignore_geom)
+                            iou = isect_poly.area / union_poly.area
+                            # print(iou)
+                            expanded_poly = new_ignore_geom
+                        if not new_ignore_geom.is_empty:
+                            new_ignore_polys.append(expanded_poly)
+                else:
+                    for poly in annot_polys:
+                            expanded_poly = poly.buffer(ignore_buffer_pixel)
+                            # Expand the region around it
+                            # Remove any regions touching existing annotation
+                            new_ignore_geom = expanded_poly - do_not_ignore_poly
+                            if not new_ignore_geom.is_empty:
+                                new_ignore_polys.append(new_ignore_geom)
+
+
 
                 if 0:
                     # kwimage.MultiPolygon.coerce(do_not_ignore_poly).draw(setlim=1,color='kitware_red')
@@ -179,6 +191,6 @@ def main(cmdline=1, **kwargs):
 
 if __name__ == "__main__":
     """
-    python -m geowatch.cli.coco_addignore_buffer
+    python -m geowatch.cli.coco_add_ignore_buffer
     """
     main()
