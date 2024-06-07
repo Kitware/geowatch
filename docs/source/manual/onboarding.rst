@@ -36,12 +36,12 @@ recommend the following directory structure:
 
    # Clone the data repos
    mkdir -p $HOME/data/dvc-repos
-   git clone https://gitlab.kitware.com/smart/smart_data_dvc/ $HOME/data/dvc-repos/smart_data_dvc
-   git clone https://gitlab.kitware.com/smart/smart_expt_dvc/ $HOME/data/dvc-repos/smart_expt_dvc
+   git clone https://gitlab.kitware.com/smart/smart_phase3_data/ $HOME/data/dvc-repos/smart_phase3_data
+   git clone https://gitlab.kitware.com/smart/smart_phase3_expt/ $HOME/data/dvc-repos/smart_phase3_expt
 
    # Or if you have credentials
-   git clone git@gitlab.kitware.com:smart/smart_data_dvc.git $HOME/data/dvc-repos/smart_data_dvc
-   git clone git@gitlab.kitware.com:smart/smart_expt_dvc.git $HOME/data/dvc-repos/smart_expt_dvc
+   git clone git@gitlab.kitware.com:smart/smart_phase3_data.git $HOME/data/dvc-repos/smart_phase3_data
+   git clone git@gitlab.kitware.com:smart/smart_phase3_expt.git $HOME/data/dvc-repos/smart_phase3_expt
 
 
 For details on installing the geowatch system in development mode see
