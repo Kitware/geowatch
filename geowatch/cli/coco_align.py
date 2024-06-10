@@ -1683,7 +1683,9 @@ class SimpleDataCube:
 
         img_iter = image_jobs.as_completed(timeout=image_timeout)
         img_prog = ub.ProgIter(
-            img_iter, desc='collect extract jobs', total=len(image_jobs),
+            img_iter,
+            desc=ub.color_text('collect extract jobs', 'green'),
+            total=len(image_jobs),
             clearline=False)
 
         for job in img_prog:

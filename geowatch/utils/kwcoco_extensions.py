@@ -281,16 +281,17 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             known_errors['connection_reset'] = "Connection reset by peer" in repr(ex)
             known_errors['failed_to_read'] = 'Failed to read' in repr(ex)
 
+            print('')
             print(f'known_errors = {ub.urepr(known_errors, nl=1)}')
             if any(known_errors.values()):
                 broken_image_ids.append(gid)
                 print('')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
-                print('num_broken = {}'.format(len(broken_image_ids)))
-                print('num_working = {}'.format(len(working_image_ids)))
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
+                print('num_broken = {}'.format(len(broken_image_ids)))
+                print('num_working = {}'.format(len(working_image_ids)))
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
             else:
                 coco_img = coco_dset.coco_image(gid)
@@ -326,6 +327,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                             forbidden_paths.append(fspath)
 
                 if missing_paths or forbidden_paths:
+                    broken_image_ids.append(gid)
                     print('')
                     rich.print('[yellow]WARNING: OTHER ERROR IN GEO HEURISTICS')
                     print(f'existing_paths = {ub.urepr(existing_paths, nl=1)}')
@@ -339,17 +341,16 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                     print('num_working = {}'.format(len(working_image_ids)))
                     rich.print('[yellow]WARNING: OTHER ERROR IN GEO HEURISTICS')
                     print('')
-                    broken_image_ids.append(gid)
                     # raise FileNotFoundError(str(missing_paths))
                 else:
                     print('')
                     rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
-                    print('num_broken = {}'.format(len(broken_image_ids)))
-                    print('num_working = {}'.format(len(working_image_ids)))
                     print(f'ex={ex!r}')
                     print(f'ex={ex}')
                     print(f'ex.__dict__={ex.__dict__}')
                     print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
+                    print('num_broken = {}'.format(len(broken_image_ids)))
+                    print('num_working = {}'.format(len(working_image_ids)))
                     rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
                     print('')
                     # if 0:
