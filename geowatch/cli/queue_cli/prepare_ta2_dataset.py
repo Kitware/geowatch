@@ -871,7 +871,7 @@ def main(cmdline=False, **kwargs):
     if isinstance(cache, str):
         cache = [p.strip() for p in cache.split(',')]
 
-    config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
+    config.tmux_workers = max(min(len(stac_jobs), config.tmux_workers), 1)
     queue = config.create_queue(environ=environ)
 
     new_pipeline.build_nx_graphs()
@@ -958,8 +958,8 @@ def main(cmdline=False, **kwargs):
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
-    if len(queue) == 0:
-        raise Exception('No jobs were submitted, are region files pointed to correctly?')
+    # if len(queue) == 0:
+    #     raise Exception('No jobs were submitted, are region files pointed to correctly?')
 
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
 

@@ -267,6 +267,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         job.gid = gid
 
     broken_image_ids = []
+    working_image_ids = []
     for job in ub.ProgIter(jobs.as_completed(), total=len(jobs), desc='collect populate imgs'):
         gid = job.gid
         try:
@@ -285,6 +286,8 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 broken_image_ids.append(gid)
                 print('')
                 rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                print('num_broken = {}'.format(len(broken_image_ids)))
+                print('num_working = {}'.format(len(working_image_ids)))
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
@@ -297,6 +300,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 from geowatch.utils import util_fsspec
                 missing_paths = []
                 existing_paths = []
+                forbidden_paths = []
 
                 HACK_CHECK_EXISTS = 1
                 if HACK_CHECK_EXISTS:
@@ -313,31 +317,41 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                     for p in coco_img.iter_image_filepaths():
                         # Use fsspec to check if the files exist
                         fspath = util_fsspec.FSPath.coerce(p)
-                        if not fspath.exists():
-                            missing_paths.append(fspath)
-                        else:
-                            existing_paths.append(fspath)
+                        try:
+                            if not fspath.exists():
+                                missing_paths.append(fspath)
+                            else:
+                                existing_paths.append(fspath)
+                        except PermissionError:
+                            forbidden_paths.append(fspath)
 
-                if missing_paths:
+                if missing_paths or forbidden_paths:
                     print('')
-                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    rich.print('[yellow]WARNING: OTHER ERROR IN GEO HEURISTICS')
                     print(f'existing_paths = {ub.urepr(existing_paths, nl=1)}')
                     print(f'missing_paths = {ub.urepr(missing_paths, nl=1)}')
+                    print(f'forbidden_paths = {ub.urepr(forbidden_paths, nl=1)}')
                     print(f'ex={ex!r}')
                     print(f'ex={ex}')
                     print(f'ex.__dict__={ex.__dict__}')
                     print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
-                    rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
+                    print('num_broken = {}'.format(len(broken_image_ids)))
+                    print('num_working = {}'.format(len(working_image_ids)))
+                    rich.print('[yellow]WARNING: OTHER ERROR IN GEO HEURISTICS')
+                    print('')
                     broken_image_ids.append(gid)
                     # raise FileNotFoundError(str(missing_paths))
                 else:
                     print('')
                     rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    print('num_broken = {}'.format(len(broken_image_ids)))
+                    print('num_working = {}'.format(len(working_image_ids)))
                     print(f'ex={ex!r}')
                     print(f'ex={ex}')
                     print(f'ex.__dict__={ex.__dict__}')
                     print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                     rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
+                    print('')
                     # if 0:
                     #     job.job_args
                     #     job.job_kwargs
@@ -346,6 +360,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                     #     # result = coco_populate_geo_img_heuristics2(*job.job_args, **job.job_kwargs)
                     raise
         else:
+            working_image_ids.append(gid)
             if mode == 'process':
                 # for multiprocessing
                 real_img = coco_dset.index.imgs[gid]
