@@ -313,7 +313,7 @@ class ImageExtractConfig(AssetExtractConfig):
         the geotiff metadata.
         '''))
 
-    aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs')
+    aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs', alias=['asset_workers'])
 
     image_timeout = scfg.Value('8hours', help=ub.paragraph(
         '''
