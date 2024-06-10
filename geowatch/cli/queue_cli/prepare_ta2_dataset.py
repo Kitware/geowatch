@@ -958,6 +958,9 @@ def main(cmdline=False, **kwargs):
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
+    if len(queue) == 0:
+        raise Exception('No jobs were submitted, are region files pointed to correctly?')
+
     config.run_queue(queue, system=True, print_kwargs=print_kwargs)
 
     # TODO: team features
