@@ -494,7 +494,7 @@ def _build_grid(builder):
     if not update_rule:
         update_rule = 'distribute'
 
-    if negative_classes is not None:      
+    if negative_classes is not None:
         if 0:
             warnings.warn(ub.paragraph(
                 '''

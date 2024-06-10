@@ -38,5 +38,8 @@ def test_ignore_buffer_region():
     kwplot.imshow(canvas)
     kwplot.show_if_requested()
 
+if __name__ == "__main__":
+    test_ignore_buffer_region()
+
     
     
