@@ -4,7 +4,6 @@ def test_ignore_buffer_region():
 
     # Basic Data Sampling
     from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-
     import ndsampler
     import kwcoco
     import geowatch

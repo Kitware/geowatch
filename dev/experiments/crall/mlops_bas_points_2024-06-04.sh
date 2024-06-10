@@ -1,4 +1,4 @@
-
+#!/bin/bash
 
 export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
 export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
@@ -137,7 +137,9 @@ python -m geowatch.mlops.aggregate \
         reference_region: final
         concise: 0
         show_csv: 0
-    " \export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+    "
+
+export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop8-v1
 MLOPS_NAME=_preeval23_point_bas_grid
