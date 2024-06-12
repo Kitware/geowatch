@@ -966,9 +966,10 @@ class NodeStateDebugger:
                 git remote add host /extern_code/geowatch/.git
                 git fetch host
                 # may need to do some of:
-                # git reset --hard host/<branch>
-                # git checkout <branch>
-                # git pull host/<branch>
+                # BRANCH=<branch>
+                # git reset --hard "host/$BRANCH"
+                # git checkout "$BRANCH"
+                # git pull "host/$BRANCH"
                 ''')
             print()
             print(helper_text)
@@ -987,6 +988,8 @@ class NodeStateDebugger:
                 %autoreload 2
                 from {node_modname} import *
                 ''')
+            # TODO: some configs which have quotes need to be escaped,
+            # otherwise they break here.
             config_text = 'config = ' + ub.urepr(config, nl=1)
             ipython_setup_command = ipython_setup_command + '\n' + config_text
             print()
