@@ -80,10 +80,4 @@ def coerce_criterion(loss_code, weights, ohem_ratio=None, focal_gamma=2.0):
     criterion.logit_shape = logit_shape
     criterion.target_shape = target_shape
     criterion.in_channels = len(weights)
-    # criterion_info = {
-    #     'criterion': criterion,
-    #     'target_encoding': target_encoding,
-    #     'logit_shape': logit_shape,
-    #     'target_shape': target_shape,
-    # }
     return criterion
