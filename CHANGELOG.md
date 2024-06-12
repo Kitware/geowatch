@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.18.0 - Unreleased
 
 
+### Added
+* New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.
+
+### Changed
+* `add_coco_fields` is now more robust to forbidden permission errors.
+* datagen smartflow steps output more debugging information.
+
+
 ## Version 0.17.1 - Released 2024-05-31
 
 ### Added
@@ -26,7 +34,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 * Removed dependency on netharn. All relevant code has been vendored into helper modules.
-* Hardcoded gewatch_dvc paths
+* Removed hardcoded `gewatch_dvc` paths
 
 
 ## Version 0.16.2 - Released 2024-04-15

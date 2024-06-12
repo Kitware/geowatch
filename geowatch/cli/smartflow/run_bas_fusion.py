@@ -203,6 +203,11 @@ def run_bas_fusion_for_baseline(config):
     print('bas_pxl_config = {}'.format(ub.urepr(bas_pxl_config, nl=1)))
 
     ingress_kwcoco_path = ingressed_assets['enriched_bas_kwcoco_file']
+    if 1:
+        # Print debug info about input BAS items
+        print('-- input BAS kwcoco stats --')
+        ub.cmd(f'kwcoco stats {ingress_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {ingress_kwcoco_path}', verbose=3)
 
     if 0:
         import kwcoco
@@ -322,6 +327,15 @@ def run_bas_fusion_for_baseline(config):
         '--min_area_square_meters', str(min_area_square_meters)
     ]
     ub.cmd(crop_cmd, check=True, verbose=3)
+
+    if 1:
+        # Print debug info about output BAS items
+        print('-- output BAS kwcoco stats --')
+        ub.cmd(f'kwcoco stats {tracked_bas_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {tracked_bas_kwcoco_path}', verbose=3)
+
+        print('Show stats about site inputs:')
+        ub.cmd(f'geowatch site_stats {cropped_region_models_outdir}', verbose=3, system=True)
 
     # Validate and fix all outputs
     try:

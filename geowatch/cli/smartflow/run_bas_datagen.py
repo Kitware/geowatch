@@ -486,6 +486,7 @@ def run_stac_to_cropped_kwcoco(config):
     # downloaded results
     ub.cmd(['kwcoco', 'reroot', f'--src={ta1_cropped_kwcoco_path}', '--inplace=1', '--absolute=0'])
 
+
     node_state.print_current_state(ingress_dir)
 
     # 5. Do the time_combine for BAS
@@ -590,6 +591,15 @@ def run_stac_to_cropped_kwcoco(config):
     (ta1_cropped_rawband_dpath / 'dummy').write_text('dummy')
 
     node_state.print_current_state(ingress_dir)
+
+    if 1:
+        # Print debug info about items we are about to egress
+        print('-- stats about combined_timecombined_kwcoco_path --')
+        ub.cmd(f'kwcoco stats {combined_timecombined_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {combined_timecombined_kwcoco_path}', verbose=3)
+        print('-- stats about ta1_sc_kwcoco_path --')
+        ub.cmd(f'kwcoco stats {ta1_sc_kwcoco_path}', verbose=3)
+        ub.cmd(f'geowatch stats {ta1_sc_kwcoco_path}', verbose=3)
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {
