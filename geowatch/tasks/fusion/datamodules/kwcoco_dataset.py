@@ -957,16 +957,48 @@ class TruthMixin:
                     weight = weight * area_weight
                 if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+            #Convert Coco polys to Shapely Polys
+            saliency_sseg_groups_polys = [p.to_shapely() for p in saliency_sseg_groups['foreground']]
+            visited = set()
+            for id, poly in enumerate(saliency_sseg_groups['foreground']):
+                #Grab Shapely poly
+                poly_shapely = saliency_sseg_groups_polys[id]
+                #Identify all regions of intersection for a given poly
+                intersection_polys = [poly_shapely.intersection(poly2) for poly2 in saliency_sseg_groups_polys]
+                #Grab polys weight
+                weight1 = poly.meta['weight']
+                for id2, poly2 in  enumerate( saliency_sseg_groups['foreground']):
+                    if not (intersection_polys[id2]) in visited and intersection_polys[id2].area > 0 and id != id2:
+                        #Grab second poly for comparison and weight
+                        poly2_shapely = saliency_sseg_groups_polys[id2]
+                        weight2 = poly2.meta['weight']
+                        #if First poly is weighted higher, remove intersect from second poly
+                        if weight1 > weight2:
+                            saliency_sseg_groups_polys[id2] = poly2_shapely - intersection_polys[id2]
+                        # if Second poly is weighted higher, remove intersect from first poly
+                        elif weight2 > weight1:
+                            saliency_sseg_groups_polys[id] = poly_shapely - intersection_polys[id2]
 
-            for poly in saliency_sseg_groups['foreground']:
+                        visited.add(intersection_polys[id2])
+            #Convert modified polygons back to coco format
+            saliency_sseg_groups_polys = [kwimage.MultiPolygon.from_shapely(poly) for poly in saliency_sseg_groups_polys]
+            weights = [poly.meta['weight'] for poly in saliency_sseg_groups['foreground']]
+            for id , poly in enumerate(saliency_sseg_groups_polys):
+                saliency_sseg_groups['foreground'][id] = poly
+                saliency_sseg_groups['foreground'][id].meta['weight'] = weights[id]
+
+            saliency_sseg_groups_polys = 0
+            for id, poly in enumerate(saliency_sseg_groups['foreground']):
+                print(poly.area)
                 task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                #and still grab original weight
                 weight = poly.meta['weight']
+
                 if balance_areas:
                     area_weight = (1 - (poly.area / (total_area + 1)))
                     weight = weight * area_weight
                 if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
-
                 if truth_info['dist_weights']:
                     # New feature where we encode that we care much more about
                     # segmenting the inside of the object than the outside.

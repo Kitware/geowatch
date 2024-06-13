@@ -82,3 +82,52 @@ def test_dynamic_resolution():
         scale2 = sample2['frames'][0]['scale_outspace_from_vid']
         import numpy as np
         assert np.all(scale1 < scale2)
+
+
+def distance_weights():
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    import geowatch
+    import ubelt as ub
+    # Demo toy data without augmentation
+    import kwcoco
+    import numpy as np
+    #src = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True)
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
+    channels = 'B10,B8a|B1,B8'
+    self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=(300, 300),
+                              channels=channels,
+                              input_space_scale='native',
+                              output_space_scale=None,
+                              window_space_scale=1.2,
+                              augment_space_shift_rate=0.5,
+                              use_grid_negatives=False,
+                              use_grid_positives=False,
+                              use_centered_positives=True,
+                              absolute_weighting=True,
+                              time_sampling='uniform',
+                              time_kernel='-1year,0,1month,1year',
+                              modality_dropout=0.5,
+                              channel_dropout=0.5,
+                              temporal_dropout=0.7,
+                              temporal_dropout_rate=1.0)
+    # Add weights to annots
+    annots = self.sampler.dset.annots()
+    annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
+    self.disable_augmenter = False
+    # Summarize batch item in text
+    summary = self.summarize_item(item)
+    index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
+    item = self[index]
+    print('item summary: ' + ub.urepr(summary, nl=2))
+    # Draw batch item
+    canvas = self.draw_item(item,draw_weights=True)
+    # xdoctest: +REQUIRES(--show)
+    import kwplot
+    kwplot.autompl()
+    kwplot.imshow(canvas)
+    kwplot.show_if_requested()
+
+
+if __name__ == "__main__":
+    distance_weights()
+
