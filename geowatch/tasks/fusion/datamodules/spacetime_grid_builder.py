@@ -1480,8 +1480,8 @@ def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6, video_id
                 img=img, vidname=vidname)
             header_text = '\n'.join(header_lines)
 
-            if 1:
-                final_canvas = kwimage.imresize(final_canvas, dsize=(None, 1024))
+            # if 1:
+            #     final_canvas = kwimage.imresize(final_canvas, dsize=(None, 1024))
 
             final_canvas = kwimage.draw_header_text(final_canvas, header_text, fit=True)
             video_canvases.append(final_canvas)
