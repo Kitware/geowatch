@@ -49,8 +49,9 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
     >>> import geowatch
     >>> import kwcoco
-    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
-    >>> coco_fpath = dvc_dpath / 'Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='hdd')
+    >>> #coco_fpath = dvc_dpath / 'submodules/Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> coco_fpath = dvc_dpath / 'submodules/Drop8-ARA-Cropped2GSD-V1/AE_R001/imganns-AE_R001-rawbands.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> wh_lut = coco_dset.videos().lookup(['width', 'height'])
     >>> dsizes = list(zip(wh_lut['width'], wh_lut['height']))
@@ -312,7 +313,7 @@ class SpacetimeGridBuilder:
         Draws a yellow polygon over invalid spatial regions.
 
         TODO:
-            - [ ] Make this the `SpacetimeGridBuilder.visualize` method
+            - [x] Make this the `SpacetimeGridBuilder.visualize` method
 
         Notes:
             * Dots are more intense when there are more temporal coverage of that dot.

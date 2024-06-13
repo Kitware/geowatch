@@ -6,13 +6,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.18.0 - Unreleased
 
-
 ### Added
 * New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.
 
 ### Changed
-* `add_coco_fields` is now more robust to forbidden permission errors.
-* datagen smartflow steps output more debugging information.
+* `geowatch.cli.reproject_annotations` now attempts to fix simple invalid geometries.
+* `geowatch.cli.geojson_site_stats` now reports information about invalid geometries.
+* `geowatch.cli.coco_add_watch_fields` is now more robust to forbidden permission errors.
+* `geowatch.cli.smartflow.run_bas_datagen` now outputs more debugging information.
 
 
 ## Version 0.17.1 - Released 2024-05-31

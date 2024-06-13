@@ -494,7 +494,7 @@ def separate_region_model_types(regions):
 
 def expand_site_models_with_site_summaries(sites, regions, validate_checks=True):
     """
-    Takes all site summaries from region models that do not have a
+    Take all site summaries from region models that do not have a
     corresponding site model and makes a "pseudo-site-model" for use in BAS.
 
     Args:
@@ -752,6 +752,37 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
                 _sites.append(site_gdf)
             new_region_id_to_sites[region_id] = _sites
         region_id_to_sites = new_region_id_to_sites
+
+    FIX_INVALID_GEOM = True
+    if FIX_INVALID_GEOM:
+
+        def make_valid2(invalid_geom):
+            import shapely
+            from shapely.validation import make_valid
+            new_geom = make_valid(invalid_geom)
+            if isinstance(new_geom, shapely.geometry.GeometryCollection):
+                poly_parts = [
+                    p for p in new_geom.geoms
+                    if isinstance(p, (shapely.geometry.Polygon, shapely.geometry.MultiPolygon))
+                ]
+                num_parts = len(poly_parts)
+                if num_parts == 1:
+                    new_geom = poly_parts[0]
+                elif num_parts > 1:
+                    new_geom = shapely.geometry.MultiPolygon(poly_parts)
+                else:
+                    raise Exception(f'null geometry: num_parts={num_parts}')
+            return new_geom
+
+        for region_id, region_sites in region_id_to_sites.items():
+            for site_gdf in region_sites:
+                is_invalid_flags = ~site_gdf.geometry.is_valid
+                num_invalid = is_invalid_flags.sum()
+                if num_invalid:
+                    print(f'Fixing {num_invalid} invalid geometries')
+                    invalid_gdf = site_gdf.geometry[is_invalid_flags]
+                    fixed_gdf = invalid_gdf.geometry.apply(make_valid2)
+                    site_gdf.geometry[is_invalid_flags] = fixed_gdf.geometry
 
     if 0:
         site_high_level_summaries = []

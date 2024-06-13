@@ -185,7 +185,13 @@ def main(cmdline=1, **kwargs):
             summary_df = region.pandas_summaries()
             summary_df['status'].value_counts()
             summary_df = summary_df.sort_values('status')
+            summary_df = summary_df.reset_index(drop=True)
             summary_utm = util_gis.project_gdf_to_local_utm(summary_df, mode=1)
+
+            is_sitesum_crs84_invalid = ~summary_df.geometry.is_valid
+            is_sitesum_utm_invalid = ~summary_utm.geometry.is_valid
+            is_sitesum_geom_invalid = (is_sitesum_crs84_invalid | is_sitesum_utm_invalid)
+            summary_utm['geom_invalid'] = is_sitesum_geom_invalid
 
             region_df = region.pandas_region()
             region_utm = util_gis.project_gdf_to_local_utm(region_df, mode=1)
@@ -233,11 +239,38 @@ def main(cmdline=1, **kwargs):
                     'max_area': group.area_square_meters.max(),
                     'min_date': min_date,
                     'max_date': max_date,
+                    'invalid_geoms': group.geom_invalid.sum()
                 }
                 status_summaries.append(row)
             print('Summary Stats:')
             summary_stats = pd.DataFrame(status_summaries)
             rich.print(summary_stats)
+
+            has_invalid_crs84_geom = is_sitesum_crs84_invalid.sum() > 0
+            if has_invalid_crs84_geom:
+                invalid_crs84_rows = summary_df[is_sitesum_crs84_invalid]
+                from shapely import validation
+                invalid_crs84_reasons = invalid_crs84_rows.geometry.apply(validation.explain_validity).to_list()
+                print(f'invalid_crs84_reasons = {ub.urepr(invalid_crs84_reasons, nl=1)}')
+                # TODO: report if we can make the polygon valid.
+                try:
+                    from shapely.validation import make_valid
+                    invalid_crs84_rows.geometry.apply(make_valid)
+                except Exception:
+                    ...
+
+            has_invalid_utm_geom = is_sitesum_utm_invalid.sum() > 0
+            if has_invalid_utm_geom:
+                invalid_utm_rows = summary_utm[is_sitesum_utm_invalid]
+                from shapely import validation
+                invalid_utm_reasons = invalid_utm_rows.geometry.apply(validation.explain_validity).to_list()
+                print(f'invalid_utm_reasons = {ub.urepr(invalid_utm_reasons, nl=1)}')
+                # TODO: report if we can make the polygon valid.
+                try:
+                    from shapely.validation import make_valid
+                    invalid_utm_rows.geometry.apply(make_valid)
+                except Exception:
+                    ...
 
             import pint
             ureg = pint.UnitRegistry()
