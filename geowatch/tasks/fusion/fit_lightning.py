@@ -297,6 +297,12 @@ class SmartLightningCLI(LightningCLI_Extension):
             "model.init_args.dataset_stats",
             compute_fn=_data_value_getter('dataset_stats'),
             apply_on="instantiate")
+
+        # TODO: we don't want to force the model to take a classes argument.
+        # The classes a model predicts is really a property of one or more of
+        # its heads. We need to determine a better way to have the dataloader
+        # notify the appropriate model head about what classes it can produce
+        # training examples for.
         parser.link_arguments(
             "data",
             "model.init_args.classes",

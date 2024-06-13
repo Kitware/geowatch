@@ -208,8 +208,8 @@ class SpacetimeGridBuilder:
                 mutually exclusive with time span.
 
             time_sampling (str):
-                code for specific temporal sampler: see temporal_sampling.py for
-                more information.
+                code for specific temporal sampler: see
+                temporal_sampling/sampler.py for more information.
 
             exclude_sensors (List[str]):
                 A list of sensors to exclude from the grid

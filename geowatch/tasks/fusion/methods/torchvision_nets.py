@@ -18,8 +18,9 @@ Example:
 
 """
 import pytorch_lightning as pl
-from torch.nn import functional as F
+# from torch.nn import functional as F
 from geowatch.tasks.fusion.methods import heads as heads_module
+from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 # from geowatch.tasks.fusion.methods.loss import coerce_criterion
 # from geowatch.tasks.fusion.methods.heads import TaskHeads
 
@@ -79,7 +80,7 @@ class TorchvisionDetectionWrapper(TorchvisionWrapper):
 #         return ots_model
 
 
-class FCNResNet50(TorchvisionSegmentationWrapper):
+class FCNResNet50(TorchvisionSegmentationWrapper, WatchModuleMixins):
     """
     Ignore:
         from geowatch.tasks.fusion.datamodules.batch_item import RGBImageBatchItem
@@ -107,12 +108,33 @@ class FCNResNet50(TorchvisionSegmentationWrapper):
             heads=head_text,
         )
         batch = self.collate(batch_items)
+
+    Ignore:
+        >>> # Test with datamodule
+        >>> import ubelt as ub
+        >>> from geowatch.tasks.fusion import datamodules
+        >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
+        >>>     train_dataset='special:vidshapes8', chip_size=32,
+        >>>     batch_size=1, time_steps=1, num_workers=2, normalize_inputs=10)
+        >>> datamodule.setup('fit')
+        >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
+        >>> classes = datamodule.torch_datasets['train'].classes
+
+        >>> # Use one of our fusion.architectures in a test
+        >>> self = FCNResNet50(
+        >>>     classes=classes,
+        >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
+
     """
-    def __init__(self, heads):
+    def __init__(self, heads, dataset_stats=None):
         super().__init__()
         self.ots_model = self.define_ots_model()
         feat_dim = self.ots_model.backbone.layer4[2].conv3.out_channels
         assert feat_dim == 2048, 'hard coded sanity check'
+
+        # import kwcoco
+        # self.classes = kwcoco.CategoryTree.coerce(classes)
+        self.num_classes = len(self.classes)
         self.heads = heads_module.TaskHeads(heads)
 
     def define_ots_model(self):
@@ -132,3 +154,37 @@ class FCNResNet50(TorchvisionSegmentationWrapper):
         # x = F.interpolate(downscaled_feats, size=input_hw, mode="bilinear", align_corners=False)
         # out = self.ots_model.forward(imdata_bchw)['out']
         return out
+
+    def save_package(self, package_path, verbose=1):
+        self._save_package(package_path, verbose=verbose)
+
+    def forward_step(self, batch, batch_idx=None, with_loss=True):
+        outputs = {
+            "change_probs": [
+                [
+                    0.5 * torch.ones(*frame["output_dims"])
+                    for frame in example["frames"]
+                    if frame["change"] is not None
+                ]
+                for example in batch
+            ],
+            "saliency_probs": [
+                [
+                    torch.ones(*frame["output_dims"], 2).sigmoid()
+                    for frame in example["frames"]
+                ]
+                for example in batch
+            ],
+            "class_probs": [
+                [
+                    torch.ones(*frame["output_dims"], self.num_classes).softmax(dim=-1)
+                    for frame in example["frames"]
+                ]
+                for example in batch
+            ],
+        }
+
+        if with_loss:
+            outputs["loss"] = self.dummy_param
+
+        return outputs
