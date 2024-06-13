@@ -1,6 +1,8 @@
 import scriptconfig as scfg
 import ubelt as ub
 
+#TODO: Either use coco_add_ignore_buffer here or use run_all_pointgen to calculate it
+
 
 class CocoAddIgnoreBufferConfig(scfg.DataConfig):
     """

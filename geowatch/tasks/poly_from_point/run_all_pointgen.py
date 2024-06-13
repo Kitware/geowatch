@@ -24,7 +24,7 @@ def main(cmdline=1, **kwargs):
     import rich
     from rich.markup import escape
 
-    config = RunAllPointgenCLI.cli(cmdline=0, strict=True)
+    config = RunAllPointgenCLI.cli(cmdline=1, strict=True)
     rich.print("config = " + escape(ub.urepr(config, nl=1)))
 
     import cmd_queue
@@ -41,7 +41,7 @@ def main(cmdline=1, **kwargs):
         data_dvc_dpath / "annotations"
     ) / "drop8-v1/empty_region_models"
 
-    if 1:
+    if 0:
         # Based on T&E submodule
         points_fpath = (
             data_dvc_dpath
@@ -85,7 +85,7 @@ def main(cmdline=1, **kwargs):
 
     region_model_list = list(region_dpath.glob("*.geojson"))
 
-    if 1:
+    if 0:
         # Hack to add special point-only regions
         hacked_regions = ["HK_C001", "HK_C002"]
         for r in hacked_regions:
@@ -157,9 +157,9 @@ def main(cmdline=1, **kwargs):
     force_rerun = 1
 
     queue = cmd_queue.Queue.create(
-        backend="tmux",
-        # backend="serial",
-        size=16,
+        #backend="tmux",
+         backend="serial",
+        #size=16,
     )
     # queue.add_header_command(
     #     ub.codeblock(
@@ -256,7 +256,7 @@ def main(cmdline=1, **kwargs):
 
     queue.print_graph()
     queue.print_commands()
-    queue.run()
+    #queue.run()
 
     print(
         ub.codeblock(

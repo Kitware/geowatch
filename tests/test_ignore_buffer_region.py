@@ -8,7 +8,7 @@ def test_ignore_buffer_region():
     import kwcoco
     import geowatch
     import ubelt as ub
-    from geowatch.cli import coco_add_ignore_buffer
+    import geowatch.cli.coco_add_ignore_buffer
     import geowatch
     import ubelt as ub
     import kwcoco
@@ -18,7 +18,7 @@ def test_ignore_buffer_region():
     dst = dpath / 'out.kwcoco.zip'
     src = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True)
     kwargs = dict(src=src.data_fpath, dst=dst, ignore_buffer_size=ignore_buffer_size)
-    coco_add_ignore_buffer.main(cmdline=0, **kwargs)
+    geowatch.cli.coco_add_ignore_buffer.main(cmdline=0, **kwargs)
     coco_dset = kwcoco.CocoDataset.coerce(dst)
     sampler = ndsampler.CocoSampler(coco_dset)
     self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
@@ -37,8 +37,6 @@ def test_ignore_buffer_region():
     kwplot.imshow(canvas)
     kwplot.show_if_requested()
 
-if __name__ == "__main__":
-    test_ignore_buffer_region()
 
     
     
