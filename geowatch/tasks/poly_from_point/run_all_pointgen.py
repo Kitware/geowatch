@@ -158,7 +158,7 @@ def main(cmdline=1, **kwargs):
 
     queue = cmd_queue.Queue.create(
         #backend="tmux",
-         backend="serial",
+        backend="serial",
         #size=16,
     )
     # queue.add_header_command(

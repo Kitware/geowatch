@@ -139,7 +139,7 @@ python -m geowatch.mlops.aggregate \
             - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
-        top_k: 100000000000
+        top_k: 10
         per_group: 1
         macro_analysis: 0
         analyze: 0
