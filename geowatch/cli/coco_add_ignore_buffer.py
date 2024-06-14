@@ -190,7 +190,7 @@ def main(cmdline=1, **kwargs):
     dset.dump(out_path)
     rich.print(f"Wrote modified kwcoco to: [link={out_path}]{out_path}[/link]")
 
-
+__config__ = CocoAddIgnoreBufferConfig
 if __name__ == "__main__":
     """
     python -m geowatch.cli.coco_add_ignore_buffer
