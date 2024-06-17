@@ -957,41 +957,9 @@ class TruthMixin:
                     weight = weight * area_weight
                 if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
-            #Convert Coco polys to Shapely Polys
-            saliency_sseg_groups_polys = [p.to_shapely() for p in saliency_sseg_groups['foreground']]
-            visited = set()
-            for id, poly in enumerate(saliency_sseg_groups['foreground']):
-                #Grab Shapely poly
-                poly_shapely = saliency_sseg_groups_polys[id]
-                #Identify all regions of intersection for a given poly
-                intersection_polys = [poly_shapely.intersection(poly2) for poly2 in saliency_sseg_groups_polys]
-                #Grab polys weight
-                weight1 = poly.meta['weight']
-                for id2, poly2 in  enumerate( saliency_sseg_groups['foreground']):
-                    if not (intersection_polys[id2]) in visited and intersection_polys[id2].area > 0 and id != id2:
-                        #Grab second poly for comparison and weight
-                        poly2_shapely = saliency_sseg_groups_polys[id2]
-                        weight2 = poly2.meta['weight']
-                        #if First poly is weighted higher, remove intersect from second poly
-                        if weight1 > weight2:
-                            saliency_sseg_groups_polys[id2] = poly2_shapely - intersection_polys[id2]
-                        # if Second poly is weighted higher, remove intersect from first poly
-                        elif weight2 > weight1:
-                            saliency_sseg_groups_polys[id] = poly_shapely - intersection_polys[id2]
 
-                        visited.add(intersection_polys[id2])
-            #Convert modified polygons back to coco format
-            saliency_sseg_groups_polys = [kwimage.MultiPolygon.from_shapely(poly) for poly in saliency_sseg_groups_polys]
-            weights = [poly.meta['weight'] for poly in saliency_sseg_groups['foreground']]
-            for id , poly in enumerate(saliency_sseg_groups_polys):
-                saliency_sseg_groups['foreground'][id] = poly
-                saliency_sseg_groups['foreground'][id].meta['weight'] = weights[id]
-
-            saliency_sseg_groups_polys = 0
-            for id, poly in enumerate(saliency_sseg_groups['foreground']):
-                print(poly.area)
+            for poly in saliency_sseg_groups['foreground']:
                 task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
-                #and still grab original weight
                 weight = poly.meta['weight']
 
                 if balance_areas:
@@ -999,17 +967,25 @@ class TruthMixin:
                     weight = weight * area_weight
                 if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
-                if truth_info['dist_weights']:
-                    # New feature where we encode that we care much more about
-                    # segmenting the inside of the object than the outside.
-                    # Effectively boundaries become uncertain.
-                    dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape)
-                    max_dist = dist.max()
-                    if max_dist > 0:
-                        dist_weight = dist / max_dist
-                        weight_mask = dist_weight + (1 - poly_mask)
-                        task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
+
+            if truth_info['dist_weights']:
+                # New feature where we encode that we care much more about
+                # segmenting the inside of the object than the outside.
+                # Effectively boundaries become uncertain.
+                # ---
+                # handle distance weight transform in one go, might want to
+                # bring in prior code wrt to balance areas and polygon specific
+                # weights here so overlapping polygons dont clobber each other.
+                # (i.e. the order of the polygons matter when they overlap, and this
+                # logic works around that to some degree. The real way to
+                # handle this would be a layering system.)
+                dist, poly_mask = util_kwimage.multiple_polygon_distance_transform_weighting(
+                    saliency_sseg_groups['foreground'], shape=space_shape)
+                max_dist = dist.max()
+                if max_dist > 0:
+                    dist_weight = dist / max_dist
+                    weight_mask = dist_weight + (1 - poly_mask)
+                    task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
 
             for poly in saliency_sseg_groups['ignore']:
                 poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
@@ -1086,22 +1062,24 @@ class TruthMixin:
                 if weight != 1:
                     poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
 
-                if truth_info['dist_weights']:
-                    # New feature where we encode that we care much more about
-                    # segmenting the inside of the object than the outside.
-                    # Effectively boundaries become uncertain.
-                    dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape)
-                    max_dist = dist.max()
-                    if max_dist > 0:
-                        # TODO: Can we modify this so weights from one polygon
-                        # don't clobber weights of overlapping neighbors? This
-                        # might involve starting from 0 and building up for
-                        # foreground objects and then multiplying this into
-                        # background weights.
-                        dist_weight = dist / max_dist
-                        weight_mask = dist_weight + (1 - poly_mask)
-                        task_target_weight['class'] = task_target_weight['class'] * weight_mask
+            if truth_info['dist_weights']:
+                # New feature where we encode that we care much more about
+                # segmenting the inside of the object than the outside.
+                # Effectively boundaries become uncertain.
+                # ---
+                # handle distance weight transform in one go, might want to
+                # bring in prior code wrt to balance areas and polygon specific
+                # weights here so overlapping polygons dont clobber each other.
+                # (i.e. the order of the polygons matter when they overlap, and this
+                # logic works around that to some degree. The real way to
+                # handle this would be a layering system.)
+                dist, poly_mask = util_kwimage.multiple_polygon_distance_transform_weighting(
+                    class_sseg_groups['foreground'], shape=space_shape)
+                max_dist = dist.max()
+                if max_dist > 0:
+                    dist_weight = dist / max_dist
+                    weight_mask = dist_weight + (1 - poly_mask)
+                    task_target_weight['class'] = task_target_weight['class'] * weight_mask
 
             if not self.config.absolute_weighting:
                 max_weight = task_target_weight['class'].max()

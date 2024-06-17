@@ -1125,6 +1125,15 @@ def polygon_distance_transform(poly, shape):
     """
     The API needs work, but I think the idea could be useful
 
+    Args:
+        poly (kwimage.Polygon): polygon to create distance weights for
+        shape (Tuple[int, int]): size of canvas to draw onto
+
+    Returns:
+        Tuple[ndarray, ndarray] -
+            dist - pixels inside the polygon contain the distance to the edge of the polygon.
+            poly_mask - a binary mask where 1s indicate where the polygon is.
+
     Example:
         >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import cv2
@@ -1135,8 +1144,9 @@ def polygon_distance_transform(poly, shape):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(dist, cmap='viridis', doclf=1)
+        >>> kwplot.imshow(dist, cmap='viridis', doclf=1, pnum=(1, 2, 1), title='distance weights')
         >>> poly.draw(fill=0, border=1)
+        >>> kwplot.imshow(poly_mask.astype(np.float32), pnum=(1, 2, 2), title='poly-mask')
     """
     import cv2
     poly_mask = np.zeros(shape, dtype=np.uint8)
@@ -1144,6 +1154,62 @@ def polygon_distance_transform(poly, shape):
     dist = cv2.distanceTransform(
         src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
     return dist, poly_mask
+
+
+def multiple_polygon_distance_transform_weighting(polys, shape):
+    """
+    import cv2
+    import kwimage
+    poly1 = kwimage.Polygon.random().scale(32)
+    poly2 = poly1.translate((5, 5))
+    poly3 = poly2.translate((5, 5))
+    poly4 = poly3.translate((5, 5))
+    poly5 = poly4.translate((5, 5))
+
+    poly1.meta['weight'] = 0.9
+    poly2.meta['weight'] = 0.5
+    shape = (32, 32)
+    polys = [poly1, poly2, poly3, poly4, poly5]
+    """
+
+    dist_accum = None
+    poly_accum = None
+    for poly in polys:
+        dist, poly_mask = polygon_distance_transform(poly, shape)
+        max_dist = dist.max()
+        if max_dist > 0:
+            dist_weight = dist / max_dist
+            if poly_accum is None:
+                poly_accum = poly_mask
+            else:
+                poly_accum = np.maximum(poly_accum, poly_mask, out=poly_accum)
+
+            if dist_accum is None:
+                dist_accum = dist_weight
+            else:
+                dist_accum = np.maximum(dist_weight, dist_accum, out=dist_accum)
+
+    dist, poly_mask = dist_accum, poly_accum
+    return dist, poly_mask
+
+    # kwplot.imshow(poly_accum > 0, fnum=3)
+    # kwplot.imshow(dist_accum, fnum=3)
+    # new_factor = (1 - poly_accum) + dist_accum
+    # kwplot.imshow(new_factor)
+
+    # # max_mask = np.max(np.stack(masks), axis=0)
+    # # max_mask = np.prod(np.stack(masks), axis=0)
+
+    # # canvas = kwimage.stack_images(masks)
+    # kwplot.figure(fnum=1, pnum=(1, 2, 1), doclf=1)
+    # kwplot.imshow(max_mask)
+    # for poly in polys:
+    #     poly.draw(fill=False, border=True)
+
+    # kwplot.figure(fnum=1, pnum=(1, 2, 2))
+    # masks2 = [kwimage.atleast_3channels(m) for m in masks]
+    # canvas = kwimage.stack_images_grid(masks2, pad=10, bg_value='green')
+    # kwplot.imshow(canvas)
 
 
 def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
