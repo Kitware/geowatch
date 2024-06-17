@@ -68,7 +68,7 @@ def main(cmdline=True, **kw):
         'geowatch.cli.find_dvc': ['dvc', 'dvcdir'],
         'geowatch.cli.coco_average_features': ['average_features', 'ensemble'],
         'geowatch.cli.coco_time_combine': ['time_combine'],
-        'geowatch.cli.coco_add_ignore_buffer':['ignore_buffer'],
+        'geowatch.cli.coco_add_ignore_buffer': ['ignore_buffer'],
         'geowatch.cli.crop_sites_to_regions': ['crop_sitemodels'],
         'geowatch.cli.coco_remove_bad_images': ['remove_bad_images'],
         'geowatch.cli.mlops_cli': ['mlops'],
