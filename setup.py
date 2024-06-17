@@ -262,6 +262,7 @@ if __name__ == '__main__':
         # while we transition.
         'watch', 'watch.*',
     ]) + tpl_packages
+    print(f'packages={packages}')
 
     setup(
         name=NAME,
