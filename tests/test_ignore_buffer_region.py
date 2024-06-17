@@ -3,7 +3,7 @@ def test_ignore_buffer_region():
     # Basic Data Sampling
     from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
     import geowatch
-    # from geowatch.cli import coco_add_ignore_buffer
+    from geowatch.cli import coco_add_ignore_buffer
     import kwcoco
     import ndsampler
     import ubelt as ub
@@ -13,6 +13,7 @@ def test_ignore_buffer_region():
     dst = dpath / 'out.kwcoco.zip'
     src = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True)
     kwargs = dict(src=src.data_fpath, dst=dst, ignore_buffer_size=ignore_buffer_size)
+
     coco_add_ignore_buffer.main(cmdline=0, **kwargs)
     coco_dset = kwcoco.CocoDataset.coerce(dst)
     sampler = ndsampler.CocoSampler(coco_dset)
