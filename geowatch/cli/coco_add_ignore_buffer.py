@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -85,6 +86,9 @@ def main(cmdline=1, **kwargs):
     import numpy as np
     import kwcoco
     import kwutil
+
+    if config.src is None:
+        raise ValueError('must specify src kwcoco')
 
     dset = kwcoco.CocoDataset(config.src)
 
@@ -191,6 +195,8 @@ def main(cmdline=1, **kwargs):
     rich.print(f"Wrote modified kwcoco to: [link={out_path}]{out_path}[/link]")
 
 __config__ = CocoAddIgnoreBufferConfig
+
+
 if __name__ == "__main__":
     """
     python -m geowatch.cli.coco_add_ignore_buffer
