@@ -146,8 +146,8 @@ from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
 
 try:
-    import xdev
-    profile = xdev.profile
+    import line_profiler
+    profile = line_profiler.profile
 except Exception:
     profile = ub.identity
 
@@ -676,6 +676,21 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 class TruthMixin:
     """
     Methods related to drawing truth rasters / training objectives
+
+    ComamndLine:
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset TruthMixin:0 --bench
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--bench)
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=0)
+        >>> for index in ub.ProgIter(range(1000)):
+        >>>     self.getitem(index)
     """
 
     def _prepare_truth_info(self, final_gids, gid_to_sample, num_frames, target, target_):
@@ -1292,7 +1307,24 @@ class GetItemMixin(TruthMixin):
             frame_items.append(frame_item)
         return frame_items
 
+    @profile
     def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
+        """
+        Ignore:
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+            >>> import ndsampler
+            >>> import geowatch
+            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
+            >>>                           channels='r|g|b', neg_to_pos_ratio=0, autobuild=False, upweight_centers=True)
+            >>> # Setup example inputs this function might be run with
+            >>> output_dsize = (196, 196)
+            >>> mode_to_invalid_mask = {'r|g|b': None}
+            >>> meta_info = {'time_weights': np.array([0.9, 1. , 1. , 0.9])}
+            >>> time_idx = 0
+            >>> generic_frame_weight = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+        """
         time_weights = meta_info['time_weights']
 
         frame_target_shape = output_dsize[::-1]
@@ -1446,6 +1478,47 @@ class GetItemMixin(TruthMixin):
         if target is None:
             raise FailedSample('no target')
         return target
+
+    def _prepare_target(self, target):
+        """
+        Creates a copy of the target with modified information expected by the
+        getitem method.
+        """
+        sampler = self.sampler
+        coco_dset = self.sampler.dset
+        target_ = target.copy()
+
+        target_['as_xarray'] = False
+        target_['legacy_annots'] = False
+        target_['legacy_target'] = False
+
+        if 'video_id' not in target_:
+            _gid = ub.peek(target_['gids'])
+            target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
+
+        vidid = target_['video_id']
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # hack for single image datasets
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
+
+        vidid = target_['video_id']
+        video = coco_dset.index.videos[vidid]
+        resolution_info = self._resolve_resolution(target_, video)
+
+        # Resolve per-target parameters
+        allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
+        target_['allow_augment'] = allow_augment
+
+        if not self.inference_only:
+            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
+
+        if allow_augment:
+            target_ = self._augment_spacetime_target(target_)
+        return target_, resolution_info
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
@@ -1711,42 +1784,9 @@ class GetItemMixin(TruthMixin):
         """
         target = self._coerce_target(index)
 
-        sampler = self.sampler
-        coco_dset = self.sampler.dset
-
-        ###
         # Handle details about the sampling target
-        ###
-        target_ = target.copy()
-
-        target_['as_xarray'] = False
-        target_['legacy_annots'] = False
-        target_['legacy_target'] = False
-
-        if 'video_id' not in target_:
-            _gid = ub.peek(target_['gids'])
-            target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
-
-        vidid = target_['video_id']
-        try:
-            video = coco_dset.index.videos[vidid]
-        except KeyError:
-            # hack for single image datasets
-            assert len(target_['gids']) == 1
-            gid = target_['gids'][0]
-            video = coco_dset.index.imgs[gid]
-
-        resolution_info = self._resolve_resolution(target_, video)
-
-        # Resolve per-target parameters
-        allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
-        target_['allow_augment'] = allow_augment
-
-        if not self.inference_only:
-            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
-
-        if allow_augment:
-            target_ = self._augment_spacetime_target(target_)
+        # Fill in details that might be missing. Does not modify the input.
+        target_, resolution_info = self._prepare_target(target)
 
         vidspace_box = resolution_info['vidspace_box']
         try:
@@ -1954,7 +1994,10 @@ class GetItemMixin(TruthMixin):
         # sequence should be. The requested output sequence could be disjoint
         # from the input sequence. It could also be aligned, or perhaps it is
         # just a single classification prediction over the entire sequence.
-        LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
+        LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
+        vidid = target_['video_id']
+        vidid = target_['video_id']
+        video = self.sampler.dset.index.videos[vidid]
         item = {
             'producer_mode': self.mode,
             'producer_rank': LOCAL_RANK,
@@ -3574,12 +3617,16 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self.inference_only = False
 
         # TODO: better "notification of heads" specification and implementation
+        # TODO: modify these names to be less ambiguous.
         self.requested_tasks = {
-            'change': True,
-            'class': True,
-            'saliency': True,
-            # 'boxes': True,
-            'boxes': True,
+
+            'change': True,  # Note: this is sequential frame change segmentation.
+
+            'class': True,     # Note: this is per-frame class segmentation.
+            'saliency': True,  # Note: this is per-frame saliency segmentation.
+            'boxes': True,     # Note: this is per-frame bbox detection.
+
+            'perframe_classification': False,  # each frame is assigned non-localized class labels.
 
             # ouputs is not really a task, it requests the weights needed for
             # predict-time stitching.
@@ -4054,7 +4101,8 @@ def _space_weights(space_shape):
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
         (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
     )
-    space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+    gauss_patch = kwimage.gaussian_patch(space_shape, sigma=sigma)
+    space_weights = kwarray.normalize(gauss_patch, out=gauss_patch)
     return space_weights
 
 
