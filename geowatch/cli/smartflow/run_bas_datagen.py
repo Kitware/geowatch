@@ -486,7 +486,6 @@ def run_stac_to_cropped_kwcoco(config):
     # downloaded results
     ub.cmd(['kwcoco', 'reroot', f'--src={ta1_cropped_kwcoco_path}', '--inplace=1', '--absolute=0'])
 
-
     node_state.print_current_state(ingress_dir)
 
     # 5. Do the time_combine for BAS
