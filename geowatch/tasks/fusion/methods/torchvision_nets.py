@@ -119,7 +119,6 @@ class FCNResNet50(TorchvisionSegmentationWrapper, WatchModuleMixins):
         >>> datamodule.setup('fit')
         >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
         >>> classes = datamodule.torch_datasets['train'].classes
-
         >>> # Use one of our fusion.architectures in a test
         >>> self = FCNResNet50(
         >>>     classes=classes,
@@ -145,46 +144,47 @@ class FCNResNet50(TorchvisionSegmentationWrapper, WatchModuleMixins):
         return ots_model
 
     def forward(self, batch):
-        imdata_bchw = batch['imdata_bchw']
-        input_hw = imdata_bchw.shape[-2:]
+        # imdata_bchw = batch['imdata_bchw']
+        # input_hw = imdata_bchw.shape[-2:]
         # self.ots_model.features.forward(imdata_bchw).shape
-        downscaled_feats = self.ots_model.backbone.forward(imdata_bchw)['out']
-        downscaled_task_outs = self.heads(downscaled_feats)
+        # downscaled_feats = self.ots_model.backbone.forward(imdata_bchw)['out']
+        # downscaled_task_outs = self.heads(downscaled_feats)
+        raise NotImplementedError
 
         # x = F.interpolate(downscaled_feats, size=input_hw, mode="bilinear", align_corners=False)
         # out = self.ots_model.forward(imdata_bchw)['out']
-        return out
+        # return out
 
     def save_package(self, package_path, verbose=1):
         self._save_package(package_path, verbose=verbose)
 
     def forward_step(self, batch, batch_idx=None, with_loss=True):
-        outputs = {
-            "change_probs": [
-                [
-                    0.5 * torch.ones(*frame["output_dims"])
-                    for frame in example["frames"]
-                    if frame["change"] is not None
-                ]
-                for example in batch
-            ],
-            "saliency_probs": [
-                [
-                    torch.ones(*frame["output_dims"], 2).sigmoid()
-                    for frame in example["frames"]
-                ]
-                for example in batch
-            ],
-            "class_probs": [
-                [
-                    torch.ones(*frame["output_dims"], self.num_classes).softmax(dim=-1)
-                    for frame in example["frames"]
-                ]
-                for example in batch
-            ],
-        }
+        raise NotImplementedError
+        # outputs = {
+        #     "change_probs": [
+        #         [
+        #             0.5 * torch.ones(*frame["output_dims"])
+        #             for frame in example["frames"]
+        #             if frame["change"] is not None
+        #         ]
+        #         for example in batch
+        #     ],
+        #     "saliency_probs": [
+        #         [
+        #             torch.ones(*frame["output_dims"], 2).sigmoid()
+        #             for frame in example["frames"]
+        #         ]
+        #         for example in batch
+        #     ],
+        #     "class_probs": [
+        #         [
+        #             torch.ones(*frame["output_dims"], self.num_classes).softmax(dim=-1)
+        #             for frame in example["frames"]
+        #         ]
+        #         for example in batch
+        #     ],
+        # }
 
-        if with_loss:
-            outputs["loss"] = self.dummy_param
-
-        return outputs
+        # if with_loss:
+        #     outputs["loss"] = self.dummy_param
+        # return outputs

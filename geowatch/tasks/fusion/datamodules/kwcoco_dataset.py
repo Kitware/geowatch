@@ -796,8 +796,13 @@ class TruthMixin:
         No return value ``frame_item`` is modified inplace.
 
         Helper function to populate truth labels for a frame in a video
-        sequence. This was factored out of the original getitem, and
-        could use work to reduce the number of input params.
+        sequence.
+
+        TODO:
+            - [ ] Reduce number of input parameters such that this function is
+                  ammenable to a MWE doctest. This was factored out of the
+                  original getitem, and could use work to reduce the number of
+                  input params.
         """
 
         common_input_scale = resolution_info['common_input_scale']
@@ -865,7 +870,7 @@ class TruthMixin:
         ann_cids    = dets.data['cids']
         ann_tids    = dets.data['tids']
         ann_weights = dets.data['weights']
-        ann_boxes    = dets.data['boxes']
+        ann_boxes   = dets.data['boxes']
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
@@ -880,6 +885,7 @@ class TruthMixin:
         wants_class = self.requested_tasks['class']
         wants_change = self.requested_tasks['change']
         wants_boxes = self.requested_tasks['boxes']
+        wants_nonlocal_class = self.requested_tasks['nonlocal_class']
 
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
@@ -888,6 +894,10 @@ class TruthMixin:
         frame_box = frame_box.to_shapely()
 
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
+
+        if wants_nonlocal_class:
+            # populate the frame with a list of categories that appear in it.
+            ...
 
         # Note: it is important to respect class indexes, ids, and
         # name mappings
@@ -1740,6 +1750,9 @@ class GetItemMixin(TruthMixin):
 
         Returns:
             Dict
+
+        CommandLine:
+            LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -3626,7 +3639,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             'saliency': True,  # Note: this is per-frame saliency segmentation.
             'boxes': True,     # Note: this is per-frame bbox detection.
 
-            'perframe_classification': False,  # each frame is assigned non-localized class labels.
+            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
 
             # ouputs is not really a task, it requests the weights needed for
             # predict-time stitching.
