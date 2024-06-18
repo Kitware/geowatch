@@ -46,7 +46,7 @@ def main(cmdline=1, **kwargs):
         >>> result_dest = kwcoco.CocoDataset(dst)
         >>> # Check non of the ignore polygons are overlaping non-ignore
         >>> from shapely.ops import unary_union
-        >>> for video_id in result.videos():
+        >>> for video_id in result_dest.videos():
         >>>     images = result_dest.images(video_id=video_id)
         >>>     for image_id in images:
         >>>         coco_img = result_dest.coco_image(image_id)
@@ -68,7 +68,8 @@ def main(cmdline=1, **kwargs):
     import rich
     from rich.markup import escape
     config = CocoAddIgnoreBufferConfig.cli(
-        cmdline=cmdline, data=kwargs, special_options=False
+        cmdline=cmdline, data=kwargs,
+        # special_options=False  # requires recent scriptconfig
     )
     rich.print("config = " + escape(ub.urepr(config)))
 

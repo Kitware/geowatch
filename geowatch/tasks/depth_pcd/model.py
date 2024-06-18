@@ -89,9 +89,9 @@ def getModel(proto=TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto',
     #    ds = 4
     fs = 16
     mask = Layer(name='mask')(
-        # UpSampling2D((ds,ds),name='maskUp')(\
+        # UpSampling2D((ds,ds),name='maskUp')(
         Dense(1, activation='sigmoid', name='maskDense')(
-            # BatchNormalization(name='maskBN')(\
+            # BatchNormalization(name='maskBN')(
             # MaxPooling2D((ds,ds),name='maskPool')(
             Conv2D(64, fs, padding='same', name='maskConv', activation='gelu')(
                 BatchNormalization(name='maskBN')(diffL)))[..., 0])

@@ -1125,6 +1125,15 @@ def polygon_distance_transform(poly, shape):
     """
     The API needs work, but I think the idea could be useful
 
+    Args:
+        poly (kwimage.Polygon): polygon to create distance weights for
+        shape (Tuple[int, int]): size of canvas to draw onto
+
+    Returns:
+        Tuple[ndarray, ndarray] -
+            dist - pixels inside the polygon contain the distance to the edge of the polygon.
+            poly_mask - a binary mask where 1s indicate where the polygon is.
+
     Example:
         >>> from geowatch.utils.util_kwimage import *  # NOQA
         >>> import cv2
@@ -1135,14 +1144,67 @@ def polygon_distance_transform(poly, shape):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(dist, cmap='viridis', doclf=1)
+        >>> kwplot.imshow(dist, cmap='viridis', doclf=1, pnum=(1, 2, 1), title='distance weights')
         >>> poly.draw(fill=0, border=1)
+        >>> kwplot.imshow(poly_mask.astype(np.float32), pnum=(1, 2, 2), title='poly-mask')
     """
     import cv2
     poly_mask = np.zeros(shape, dtype=np.uint8)
     poly_mask = poly.fill(poly_mask, value=1)
     dist = cv2.distanceTransform(
         src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
+    return dist, poly_mask
+
+
+def multiple_polygon_distance_transform_weighting(polys, shape):
+    """
+    Does a distance tranform on multiple polygons independently and then
+    combines their weights such that each pixels uses the maximum distance
+    to a polygon it is contained in.
+
+    Args:
+        polys (list[kwimage.Polygon]): polygons to draw.
+        shape (Tuple[int, int]): size of canvas to draw onto
+
+    Returns:
+        Tuple[ndarray, ndarray] -
+            dist - pixels inside the polygon contain the distance to the edge of the polygon.
+            poly_mask - a binary mask where 1s indicate where the polygon is.
+
+    CommandLine:
+        xdoctest -m geowatch.utils.util_kwimage multiple_polygon_distance_transform_weighting --show
+
+    Example:
+        >>> from geowatch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> poly1 = kwimage.Polygon.random(rng=0).scale(32)
+        >>> poly2 = poly1.translate((5, 5))
+        >>> poly3 = poly2.translate((5, 5))
+        >>> poly4 = poly3.translate((5, 5))
+        >>> poly5 = poly4.translate((5, 5))
+        >>> polys = [poly1, poly2, poly3, poly4, poly5]
+        >>> shape = (32, 32)
+        >>> dist, poly_mask = multiple_polygon_distance_transform_weighting(polys, shape)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(dist, cmap='viridis', doclf=1, pnum=(1, 2, 1), title='distance weights')
+        >>> for poly in polys:
+        >>>     poly.draw(fill=0, border=1)
+        >>> kwplot.imshow(poly_mask.astype(np.float32), pnum=(1, 2, 2), title='poly-mask')
+        >>> kwplot.show_if_requested()
+    """
+    dist_accum = np.zeros(shape, dtype=np.float32)
+    poly_accum = np.zeros(shape, dtype=np.uint8)
+    for poly in polys:
+        dist, poly_mask = polygon_distance_transform(poly, shape)
+        max_dist = dist.max()
+        if max_dist > 0:
+            dist_weight = dist / max_dist
+            poly_accum = np.maximum(poly_accum, poly_mask, out=poly_accum)
+            dist_accum = np.maximum(dist_weight, dist_accum, out=dist_accum)
+
+    dist, poly_mask = dist_accum, poly_accum
     return dist, poly_mask
 
 
