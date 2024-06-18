@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.
+* Dataloader can now produce frame-level classification labels.
 
 ### Changed
 * `geowatch.cli.reproject_annotations` now attempts to fix simple invalid geometries.

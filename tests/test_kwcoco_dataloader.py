@@ -147,3 +147,27 @@ def test_resolution_on_nongeo_dataset():
 
         canvas = item['frames'][0]['modes']['r|g|b'].numpy().transpose(1, 2, 0).astype(np.uint8)
         kwplot.imshow(canvas, pnum=(1, 3, 3), fnum=1)
+
+
+def test_nonlocal_perframe_classification_labels():
+    coco_dset = geowatch.coerce_kwcoco('vidshapes8')
+    sampler = ndsampler.CocoSampler(coco_dset)
+    self = KWCocoVideoDataset(
+        sampler,
+        time_dims=1,
+        window_dims=(128, 128),
+        channels=None,
+        window_resolution=1,
+        input_resolution=0.5,
+        output_resolution=0.5,
+        use_grid_positives=1,
+        use_centered_positives=0,
+    )
+    self.requested_tasks['nonlocal_class'] = True
+    self.disable_augmenter = True
+    index = 0
+    item = self[index]
+    # ensure the nonlocal class one-hot-embedding exists
+    nonlocal_class_ohe = item['frames'][0]['nonlocal_class_ohe']
+    import torch
+    assert torch.is_tensor(nonlocal_class_ohe)

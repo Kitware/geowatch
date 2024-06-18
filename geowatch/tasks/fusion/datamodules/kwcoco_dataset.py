@@ -896,8 +896,16 @@ class TruthMixin:
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
         if wants_nonlocal_class:
-            # populate the frame with a list of categories that appear in it.
-            ...
+            # Create an indicator vector that just says if the category appears
+            # in the frame or not. This will help support simple classification
+            # networks.
+            nonlocal_class_ohe = np.zeros((self.num_predictable_classes,), dtype=np.uint8)
+            for cid in ann_cids:
+                cname = self.classes.id_to_node[cid]
+                if cname in self.predictable_classes.node_to_idx:
+                    cidx = self.predictable_classes.node_to_idx[cname]
+                    nonlocal_class_ohe[cidx] = 1
+            frame_item['nonlocal_class_ohe'] = nonlocal_class_ohe
 
         # Note: it is important to respect class indexes, ids, and
         # name mappings
@@ -1039,9 +1047,9 @@ class TruthMixin:
             for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
-                orig_cidx = self.classes.id_to_idx[cid]
+                # orig_cidx = self.classes.id_to_idx[cid]
                 poly.meta['new_class_cidx'] = new_class_cidx
-                poly.meta['orig_cidx'] = orig_cidx
+                # poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
                     class_sseg_groups['ignore'].append(poly)
                 elif new_class_catname in self.class_foreground_classes.intersection(self.predictable_classes):
@@ -1943,10 +1951,13 @@ class GetItemMixin(TruthMixin):
             # 'box_tids',
             'box_cidx', 'box_weight',
         ]
+        framewise_truth_keys = [
+            'nonlocal_class_ohe'
+        ]
         coord_truth_keys = [
             'box_ltrb',
         ]
-        truth_keys = pixelwise_truth_keys + annotwise_truth_keys
+        truth_keys = pixelwise_truth_keys + annotwise_truth_keys + framewise_truth_keys
 
         # If we are augmenting
         fliprot_params = target_.get('fliprot_params', None)
