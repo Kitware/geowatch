@@ -545,7 +545,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_pointannv1_split6_n045_d1bf6e67.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_pointannv1_split6_n005_4f11856c.kwcoco.zip
 CHANNELS="(L8,S2,PD,WV):(blue|green|red)"
-EXPERIMENT_NAME=Drop8_ARA_Median10GSD_allsensors_pointannsv1_v3
+EXPERIMENT_NAME=Drop8_ARA_Median10GSD_allsensors_pointannsv1_fixeddataloader_v4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 

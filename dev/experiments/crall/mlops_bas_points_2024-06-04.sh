@@ -1,3 +1,13 @@
+#!/bin/bash
+
+export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
+export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase3_expt")
+cd "$DVC_EXPT_DPATH"
+python -m geowatch.mlops.manager "status" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "list checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "repackage checkpoints" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "gather packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
+python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Median10GSD-V1"
 
 
 export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase3_data")
@@ -129,7 +139,7 @@ python -m geowatch.mlops.aggregate \
             - resolved_params.bas_pxl.channels
     " \
     --stdout_report="
-        top_k: 100000000000
+        top_k: 10
         per_group: 1
         macro_analysis: 0
         analyze: 0
@@ -137,7 +147,9 @@ python -m geowatch.mlops.aggregate \
         reference_region: final
         concise: 0
         show_csv: 0
-    " \export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+    "
+
+export DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
 TRUTH_DPATH=$DVC_DATA_DPATH/annotations/drop8-v1
 MLOPS_NAME=_preeval23_point_bas_grid

@@ -711,7 +711,7 @@ class TruthMixin:
                     {target_=!r}
                     '''
                 ))
-            # The returne detections will live in the "input/data" space
+            # The return detections will live in the "input/data" space
             gid_to_dets[gid] = frame_dets
 
         for gid, frame_dets in gid_to_dets.items():
@@ -988,7 +988,7 @@ class TruthMixin:
                     task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
 
             for poly in saliency_sseg_groups['ignore']:
-                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                #poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
                 poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
 
             if not self.config.absolute_weighting:
@@ -2397,6 +2397,7 @@ class BalanceMixin:
         LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin:1 --bench
 
     Example:
+        >>> # Test the legacy neg_to_pos_ratio setting (todo: use more general balance_options)
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
@@ -2418,7 +2419,10 @@ class BalanceMixin:
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
         >>> assert all([x in positives_indexes for x in sampled_indexes])
-        >>> neg_to_pos_ratio = .5
+        >>> assert num_negatives == 0
+        >>> assert num_positives > num_negatives
+        >>> #...
+        >>> neg_to_pos_ratio = .1
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
         >>> num_targets = len(self.sample_grid['targets'])
@@ -2432,6 +2436,7 @@ class BalanceMixin:
         >>> num_negatives = num_samples - num_positives
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert num_negatives > 0
         >>> assert num_positives > num_negatives
 
     Example:
@@ -3424,7 +3429,8 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self.non_salient_classes = self.background_classes | self.negative_classes
         self.salient_ignore_classes = self.ignore_classes
         # should we remove the ignore classes from salient_classes in the future?
-        self.salient_classes = set(self.classes) - self.non_salient_classes
+        # yes
+        self.salient_classes = set(self.classes) - (self.non_salient_classes | self.ignore_classes)
 
         # define foreground classes for the class activity head
         self.class_foreground_classes = set(self.classes) - (
@@ -3616,7 +3622,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             self.ignore_classes | self.background_classes | self.negative_classes)
 
         annot_helper_kws = dict(
-            # negative_classes=self._old_balance_as_negative_classes,
+            negative_classes=self._old_balance_as_negative_classes,
             keepbound=False,
             use_annot_info=True,
             use_centered_positives=config['use_centered_positives'],

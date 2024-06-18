@@ -34,7 +34,10 @@ class HeatMapConfig(scfg.DataConfig):
         # "/mnt/ssd3/segment-anything/demo/model/sam_vit_h_4b8939.pth",
         help="If the methos id SAM, specify the filepath to the SAM weights",
     )
-    filepath_output = scfg.Value("output_region.geojson", help="Output region model with the polygons inferred from the points")
+    filepath_output = scfg.Value(
+        "output_region.geojson",
+        help="Output region model with the polygons inferred from the points",
+    )
 
     size_prior = scfg.Value(
         "20.06063 x 20.0141229 @ 10mGSD",
@@ -63,6 +66,11 @@ class HeatMapConfig(scfg.DataConfig):
         "ellipse",
         choices=["sam", "box", "ellipse"],
         help="Method for extracting polygons from points",
+    )
+
+    threshold = scfg.Value(
+        0.45,
+        help="If Sam is used specify a threshold for the frequencey polygons appear across images",
     )
 
     time_prior = scfg.Value(
@@ -184,7 +192,8 @@ def convert_polygons_to_region_model(
             "start_date": start_date.date().isoformat(),
             "end_date": end_date.date().isoformat(),
             "score": 1,
-            "originator": "poly_from_point",  # TODO: add some config info here
+            "originator": "poly_from_point"
+            + config.method,  # TODO: add some config info here
             "model_content": "annotation",
             "validated": "False",
             "cache": {
@@ -258,7 +267,8 @@ def convert_polygons_to_region_model(
                     "start_date": start_date,
                     "end_date": end_date,
                     "score": 1,
-                    "originator": "poly_from_point",  # TODO: add some config info here
+                    "originator": "poly_from_point_"
+                    + config.method,  # TODO: right now just added method not sure what else from config might be useful
                     "model_content": "annotation",
                     "validated": "False",
                     "cache": {},
@@ -384,10 +394,10 @@ def get_vidspace_info(video_obj):
 def load_point_annots(filepath_to_points, region_id):
     fpath = filepath_to_points
     # Read json text directly from the zipfile
-    if fpath.endswith('.zip'):
+    if fpath.endswith(".zip"):
         file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
     else:
-        file = open(fpath, 'r')
+        file = open(fpath, "r")
     with file:
         points_gdf_crs84 = gpd.read_file(file)
     # Simplified logic to grab only the rows corresponding to this video based on
@@ -396,12 +406,15 @@ def load_point_annots(filepath_to_points, region_id):
     if 1:
         # hack to handle xxx region ids
         import kwutil
-        site_region_ids = points_gdf_crs84['site_id'].apply(lambda s: '_'.join(s.split('_')[0:2]))
+
+        site_region_ids = points_gdf_crs84["site_id"].apply(
+            lambda s: "_".join(s.split("_")[0:2])
+        )
         original_regionid_to_flag = {}
         for orig_site_region_id in set(site_region_ids):
             site_region_id = orig_site_region_id
-            if site_region_id.endswith('xxx'):
-                site_region_id = site_region_id.replace('xxx', '*')
+            if site_region_id.endswith("xxx"):
+                site_region_id = site_region_id.replace("xxx", "*")
             site_region_id_pat = kwutil.util_pattern.Pattern.coerce(site_region_id)
             flag = site_region_id_pat.match(region_id)
             original_regionid_to_flag[orig_site_region_id] = flag
@@ -494,7 +507,7 @@ def convert_points_to_poly_with_sam_method(dset, video_obj, points_gdf_utm, conf
 
     all_predicted_regions /= num_frames
 
-    threshold = 0.45  # TODO: parameterize
+    threshold = config.threshold
     for idx, mask in enumerate(all_predicted_regions):
         try:
             res = mask > threshold
@@ -532,7 +545,7 @@ def main():
             --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
             --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
 
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
         python -m geowatch.tasks.poly_from_point.predict \
             --method 'ellipse' \
             --filepath_output KR_R001-genpoints.geojson \
@@ -548,6 +561,7 @@ def main():
     config = HeatMapConfig.cli(cmdline=1)
     import rich
     from rich.markup import escape
+    from shapely import geometry
 
     rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
 
@@ -604,13 +618,20 @@ def main():
     size_prior_utm = config.size_prior.at_resolution(utm_gsd)
 
     points_gdf_crs84 = load_point_annots(filepath_to_points, config.region_id)
-    # TODO: filter rows out of points_gdf_crs84 so all points are inside
-    # of the main_region geometry.
-    # Outline:
-    # * Get the CRS84 region geometry from main_region_header
-    # * Check if each CRS84 point in points_gdf_crs84 is inside the
-    #   main_region_header geometry (use shapely method)
-    # * Filter to only the points that pass this test.
+
+    main_region_header_points = [
+        geometry.Point(point)
+        for point in main_region_header["geometry"]["coordinates"][0]
+    ]
+    poly = geometry.Polygon(main_region_header_points)
+    indexs = points_gdf_crs84.index
+    for idx, point in enumerate(points_gdf_crs84["geometry"]):
+        if poly.contains(point):
+            print("hit")
+            continue
+        else:
+            points_gdf_crs84.drop(indexs[idx], axis=0, inplace=True)
+    print("\n", points_gdf_crs84)
 
     # Transform the points into a UTM CRS. If we didn't determine a which UTM
     # crs to work with from the kwcoco file, then we need to infer a good one.
@@ -618,7 +639,8 @@ def main():
         from geowatch.utils import util_gis
 
         points_gdf_utm = util_gis.project_gdf_to_local_utm(
-            points_gdf_crs84, max_utm_zones=10, mode=1)
+            points_gdf_crs84, max_utm_zones=10, mode=1
+        )
         utm_crs = points_gdf_utm.crs
     else:
         points_gdf_utm = points_gdf_crs84.to_crs(utm_crs)

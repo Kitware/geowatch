@@ -106,7 +106,7 @@ except ImportError:
 
 # Bump this if the process for sampling the spacetime grid changes and old
 # caches are no longer valid.
-SPACETIME_CACHE_VERSION = 'spacetime_cache_v19'
+SPACETIME_CACHE_VERSION = 'spacetime_cache_v20'
 
 
 class SpacetimeGridBuilder:
@@ -216,7 +216,7 @@ class SpacetimeGridBuilder:
 
             negative_classes (List[str]):
                 indicate class names that should not count towards a region being
-                marked as positive. NOTE: This is old and unused.
+                marked as positive. NOTE: This is old and deprecated.
 
             respect_valid_regions (bool):
                 if True, only place windows in valid regions
@@ -495,12 +495,13 @@ def _build_grid(builder):
         update_rule = 'distribute'
 
     if negative_classes is not None:
-        warnings.warn(ub.paragraph(
-            '''
-            Grid sampler no longer handles negative classes. Instead it
-            provides the user the information to balance positive/negatives
-            after the fact.
-            '''))
+        if 0:
+            warnings.warn(ub.paragraph(
+                '''
+                Grid sampler no longer handles negative classes. Instead it
+                provides the user the information to balance positive/negatives
+                after the fact.
+                '''))
 
     dset_hashid = dset._cached_hashid()
 
@@ -546,6 +547,7 @@ def _build_grid(builder):
         respect_valid_regions,
         dynamic_fixed_resolution,
         SPACETIME_CACHE_VERSION,
+        negative_classes
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -615,7 +617,7 @@ def _build_grid(builder):
                 affinity_type, update_rule, time_span, time_kernel, use_annot_info,
                 use_grid_positives, use_grid_negatives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
-                refine_iosa_thresh, dynamic_fixed_resolution, verbose)
+                refine_iosa_thresh, dynamic_fixed_resolution, negative_classes, verbose)
             job.video_id = video_id
 
         targets = []
@@ -693,7 +695,7 @@ def _sample_single_video_spacetime_targets(
         keepbound, affinity_type, update_rule, time_span, time_kernel,
         use_annot_info, use_grid_positives, use_grid_negatives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
-        refine_iosa_thresh, dynamic_fixed_resolution, verbose):
+        refine_iosa_thresh, dynamic_fixed_resolution, negative_classes, verbose):
     """
     Do this for a single video so we can parallelize.
 
@@ -839,6 +841,7 @@ def _sample_single_video_spacetime_targets(
         respect_valid_regions,
         set_cover_algo,
         SPACETIME_CACHE_VERSION,
+        negative_classes
     ]
 
     # Only use the cache if this is probably going to be a slow operation.
@@ -919,7 +922,7 @@ def _sample_single_video_spacetime_targets(
                     dset, video_id, vidspace_region, use_annot_info, qtree,
                     main_idx_to_gids, refine_iosa_thresh, time_sampler,
                     image_props, respect_valid_regions,
-                    set_cover_algo)
+                    set_cover_algo, negative_classes)
                 new_targets = list(new_targets)
 
                 if not use_annot_info:
@@ -1076,7 +1079,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                                      use_annot_info, qtree, main_idx_to_gids,
                                      refine_iosa_thresh, time_sampler,
                                      image_props, respect_valid_regions,
-                                     set_cover_algo):
+                                     set_cover_algo, negative_classes):
     """
     Called for each spatial grid in the sliding window.
     This adds multiple targets
@@ -1093,6 +1096,10 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         isect_aids = list(qtree.intersect(query))
         isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
         isect_aids_catnames = dset.annots(isect_aids).category_names
+        if negative_classes is not None:
+            isect_positive_catnames = set(isect_aids_catnames) - set(negative_classes)
+        else:
+            isect_positive_catnames = set(isect_aids_catnames)
         aid_to_catname = dict(zip(isect_aids, isect_aids_catnames))
         gid_to_aids = {x: dset.index.gid_to_aids[x] & set(isect_aids) for x in isect_gids}
         gid_to_catnames = {k: list(ub.take(aid_to_catname, v)) for k, v in gid_to_aids.items()}
@@ -1132,7 +1139,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
 
         if use_annot_info:
             if isect_aids:
-                has_annot = bool(isect_gids & set(gids))
+                has_annot = bool(isect_gids & set(gids)) and bool(isect_positive_catnames)
             else:
                 has_annot = False
             if has_annot:
