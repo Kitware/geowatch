@@ -2397,6 +2397,7 @@ class BalanceMixin:
         LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset BalanceMixin:1 --bench
 
     Example:
+        >>> # Test the legacy neg_to_pos_ratio setting (todo: use more general balance_options)
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
@@ -2418,7 +2419,10 @@ class BalanceMixin:
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
         >>> assert all([x in positives_indexes for x in sampled_indexes])
-        >>> neg_to_pos_ratio = .5
+        >>> assert num_negatives == 0
+        >>> assert num_positives > num_negatives
+        >>> #...
+        >>> neg_to_pos_ratio = .1
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
         >>> num_targets = len(self.sample_grid['targets'])
@@ -2432,6 +2436,7 @@ class BalanceMixin:
         >>> num_negatives = num_samples - num_positives
         >>> print('sampled positive ratio:', num_positives / num_samples)
         >>> print('sampled negative ratio:', num_negatives / num_samples)
+        >>> assert num_negatives > 0
         >>> assert num_positives > num_negatives
 
     Example:
