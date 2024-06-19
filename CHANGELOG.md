@@ -15,6 +15,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `geowatch.cli.geojson_site_stats` now reports information about invalid geometries.
 * `geowatch.cli.coco_add_watch_fields` is now more robust to forbidden permission errors.
 * `geowatch.cli.smartflow.run_bas_datagen` now outputs more debugging information.
+* Dataloader now returns a `class HeterogeneousBatchItem(dict)` to facilitate evolution of the dataloader.
+* Reorganized `SpacetimeGridBuilder` to move it in an object oriented direction and attempt to clean it up.
+
+### Fixed
+* DataLoader with `dist_weights=True` no longer has distance transforms weights
+  of annotations clobber each other when they overlap.
+* Re-enable the "negative-classes" concept in the `spacetime_grid_builder`.
 
 
 ## Version 0.17.1 - Released 2024-05-31
