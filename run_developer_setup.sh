@@ -297,6 +297,8 @@ main(){
         set -x
     fi
 
+    show_config
+
     if [[ "$WITH_APT_ENSURE" == "auto" ]]; then
         # If on debian/ubuntu ensure the dependencies are installed
         if command_exists apt; then

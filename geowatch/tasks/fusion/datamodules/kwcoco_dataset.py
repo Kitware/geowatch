@@ -143,10 +143,11 @@ from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
+from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
 
 try:
-    import xdev
-    profile = xdev.profile
+    import line_profiler
+    profile = line_profiler.profile
 except Exception:
     profile = ub.identity
 
@@ -675,6 +676,21 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 class TruthMixin:
     """
     Methods related to drawing truth rasters / training objectives
+
+    ComamndLine:
+        LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset TruthMixin:0 --bench
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--bench)
+        >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import geowatch
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
+        >>>                           channels='r|g|b', neg_to_pos_ratio=0)
+        >>> for index in ub.ProgIter(range(1000)):
+        >>>     self.getitem(index)
     """
 
     def _prepare_truth_info(self, final_gids, gid_to_sample, num_frames, target, target_):
@@ -780,8 +796,13 @@ class TruthMixin:
         No return value ``frame_item`` is modified inplace.
 
         Helper function to populate truth labels for a frame in a video
-        sequence. This was factored out of the original getitem, and
-        could use work to reduce the number of input params.
+        sequence.
+
+        TODO:
+            - [ ] Reduce number of input parameters such that this function is
+                  ammenable to a MWE doctest. This was factored out of the
+                  original getitem, and could use work to reduce the number of
+                  input params.
         """
 
         common_input_scale = resolution_info['common_input_scale']
@@ -849,7 +870,7 @@ class TruthMixin:
         ann_cids    = dets.data['cids']
         ann_tids    = dets.data['tids']
         ann_weights = dets.data['weights']
-        ann_boxes    = dets.data['boxes']
+        ann_boxes   = dets.data['boxes']
 
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
@@ -864,6 +885,7 @@ class TruthMixin:
         wants_class = self.requested_tasks['class']
         wants_change = self.requested_tasks['change']
         wants_boxes = self.requested_tasks['boxes']
+        wants_nonlocal_class = self.requested_tasks['nonlocal_class']
 
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
@@ -872,6 +894,18 @@ class TruthMixin:
         frame_box = frame_box.to_shapely()
 
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
+
+        if wants_nonlocal_class:
+            # Create an indicator vector that just says if the category appears
+            # in the frame or not. This will help support simple classification
+            # networks.
+            nonlocal_class_ohe = np.zeros((self.num_predictable_classes,), dtype=np.uint8)
+            for cid in ann_cids:
+                cname = self.classes.id_to_node[cid]
+                if cname in self.predictable_classes.node_to_idx:
+                    cidx = self.predictable_classes.node_to_idx[cname]
+                    nonlocal_class_ohe[cidx] = 1
+            frame_item['nonlocal_class_ohe'] = nonlocal_class_ohe
 
         # Note: it is important to respect class indexes, ids, and
         # name mappings
@@ -1013,9 +1047,9 @@ class TruthMixin:
             for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
-                orig_cidx = self.classes.id_to_idx[cid]
+                # orig_cidx = self.classes.id_to_idx[cid]
                 poly.meta['new_class_cidx'] = new_class_cidx
-                poly.meta['orig_cidx'] = orig_cidx
+                # poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
                     class_sseg_groups['ignore'].append(poly)
                 elif new_class_catname in self.class_foreground_classes.intersection(self.predictable_classes):
@@ -1291,7 +1325,24 @@ class GetItemMixin(TruthMixin):
             frame_items.append(frame_item)
         return frame_items
 
+    @profile
     def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
+        """
+        Ignore:
+            >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+            >>> import ndsampler
+            >>> import geowatch
+            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
+            >>>                           channels='r|g|b', neg_to_pos_ratio=0, autobuild=False, upweight_centers=True)
+            >>> # Setup example inputs this function might be run with
+            >>> output_dsize = (196, 196)
+            >>> mode_to_invalid_mask = {'r|g|b': None}
+            >>> meta_info = {'time_weights': np.array([0.9, 1. , 1. , 0.9])}
+            >>> time_idx = 0
+            >>> generic_frame_weight = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
+        """
         time_weights = meta_info['time_weights']
 
         frame_target_shape = output_dsize[::-1]
@@ -1445,6 +1496,47 @@ class GetItemMixin(TruthMixin):
         if target is None:
             raise FailedSample('no target')
         return target
+
+    def _prepare_target(self, target):
+        """
+        Creates a copy of the target with modified information expected by the
+        getitem method.
+        """
+        sampler = self.sampler
+        coco_dset = self.sampler.dset
+        target_ = target.copy()
+
+        target_['as_xarray'] = False
+        target_['legacy_annots'] = False
+        target_['legacy_target'] = False
+
+        if 'video_id' not in target_:
+            _gid = ub.peek(target_['gids'])
+            target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
+
+        vidid = target_['video_id']
+        try:
+            video = coco_dset.index.videos[vidid]
+        except KeyError:
+            # hack for single image datasets
+            assert len(target_['gids']) == 1
+            gid = target_['gids'][0]
+            video = coco_dset.index.imgs[gid]
+
+        vidid = target_['video_id']
+        video = coco_dset.index.videos[vidid]
+        resolution_info = self._resolve_resolution(target_, video)
+
+        # Resolve per-target parameters
+        allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
+        target_['allow_augment'] = allow_augment
+
+        if not self.inference_only:
+            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
+
+        if allow_augment:
+            target_ = self._augment_spacetime_target(target_)
+        return target_, resolution_info
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
@@ -1667,6 +1759,9 @@ class GetItemMixin(TruthMixin):
         Returns:
             Dict
 
+        CommandLine:
+            LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem
+
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -1710,42 +1805,9 @@ class GetItemMixin(TruthMixin):
         """
         target = self._coerce_target(index)
 
-        sampler = self.sampler
-        coco_dset = self.sampler.dset
-
-        ###
         # Handle details about the sampling target
-        ###
-        target_ = target.copy()
-
-        target_['as_xarray'] = False
-        target_['legacy_annots'] = False
-        target_['legacy_target'] = False
-
-        if 'video_id' not in target_:
-            _gid = ub.peek(target_['gids'])
-            target_['video_id'] = sampler.dset.imgs[_gid]['video_id']
-
-        vidid = target_['video_id']
-        try:
-            video = coco_dset.index.videos[vidid]
-        except KeyError:
-            # hack for single image datasets
-            assert len(target_['gids']) == 1
-            gid = target_['gids'][0]
-            video = coco_dset.index.imgs[gid]
-
-        resolution_info = self._resolve_resolution(target_, video)
-
-        # Resolve per-target parameters
-        allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
-        target_['allow_augment'] = allow_augment
-
-        if not self.inference_only:
-            target_['dist_weights'] = target_.get('dist_weights', self.config['dist_weights'])
-
-        if allow_augment:
-            target_ = self._augment_spacetime_target(target_)
+        # Fill in details that might be missing. Does not modify the input.
+        target_, resolution_info = self._prepare_target(target)
 
         vidspace_box = resolution_info['vidspace_box']
         try:
@@ -1889,10 +1951,13 @@ class GetItemMixin(TruthMixin):
             # 'box_tids',
             'box_cidx', 'box_weight',
         ]
+        framewise_truth_keys = [
+            'nonlocal_class_ohe'
+        ]
         coord_truth_keys = [
             'box_ltrb',
         ]
-        truth_keys = pixelwise_truth_keys + annotwise_truth_keys
+        truth_keys = pixelwise_truth_keys + annotwise_truth_keys + framewise_truth_keys
 
         # If we are augmenting
         fliprot_params = target_.get('fliprot_params', None)
@@ -1953,7 +2018,10 @@ class GetItemMixin(TruthMixin):
         # sequence should be. The requested output sequence could be disjoint
         # from the input sequence. It could also be aligned, or perhaps it is
         # just a single classification prediction over the entire sequence.
-        LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
+        LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
+        vidid = target_['video_id']
+        vidid = target_['video_id']
+        video = self.sampler.dset.index.videos[vidid]
         item = {
             'producer_mode': self.mode,
             'producer_rank': LOCAL_RANK,
@@ -1973,6 +2041,14 @@ class GetItemMixin(TruthMixin):
             'target': resolved_target_subset,
             'requested_target': requested_target_subset,
         }
+
+        if True:
+            # Abstract away details of the dictionary structure by wrapping in
+            # a helper class.
+            item['predictable_classes'] = self.predictable_classes
+            item['requested_tasks'] = self.requested_tasks
+            item = HeterogeneousBatchItem(item)
+
         return item
 
     @profile
@@ -2325,6 +2401,11 @@ class IntrospectMixin:
                 color='red')
             return bad_canvas
 
+        if False:
+            # TODO: ready, use the class method
+            # HeterogeneousBatchItem.draw(legend=False)
+            ...
+
         default_combinable_channels = self.default_combinable_channels
 
         if norm_over_time == 'auto':
@@ -2352,7 +2433,6 @@ class IntrospectMixin:
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')
             canvas = kwimage.stack_images([canvas, header])
-
         return canvas
 
     def summarize_item(self, item, stats=False):
@@ -2383,9 +2463,8 @@ class IntrospectMixin:
         """
         if item is None:
             raise ValueError('Cant summarize a failed sample item=None')
-        # Refactored to use the new BatchItem class.
-        from geowatch.tasks.fusion.datamodules.batch_item import BatchItem
-        item_summary = BatchItem.summarize(item, stats=stats)
+        # Refactored to use the new HeterogeneousBatchItem class.
+        item_summary = HeterogeneousBatchItem.summarize(item, stats=stats)
         return item_summary
 
 
@@ -2651,7 +2730,7 @@ class BalanceMixin:
                                            default_weight=default_weight)
 
         from kwutil import util_environ
-        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 1)
+        REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 0)
         if REPORT_BALANCE:
             # Reporting for debugging
             targets = new_sample_grid['targets']
@@ -3451,7 +3530,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # should probably design a clean method of communicating between the
         # dataset and model first.
         self.ignore_index = -100
-        self.special_inputs = {}
 
         channels = config['channels']
         if channels is None or channels == 'auto':
@@ -3516,6 +3594,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         _sample_channels = []
         _input_sensorchans = []
         _sample_sensorchans = []
+        self.special_inputs = {}  # Unused? Remove?
         for fused_sensorchan in self.sensorchan.streams():
             sensor = fused_sensorchan.sensor
             chans = fused_sensorchan.chans
@@ -3560,12 +3639,18 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
+
+        # TODO: better "notification of heads" specification and implementation
+        # TODO: modify these names to be less ambiguous.
         self.requested_tasks = {
-            'change': True,
-            'class': True,
-            'saliency': True,
-            # 'boxes': True,
-            'boxes': True,
+
+            'change': True,  # Note: this is sequential frame change segmentation.
+
+            'class': True,     # Note: this is per-frame class segmentation.
+            'saliency': True,  # Note: this is per-frame saliency segmentation.
+            'boxes': True,     # Note: this is per-frame bbox detection.
+
+            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
 
             # ouputs is not really a task, it requests the weights needed for
             # predict-time stitching.
@@ -4040,7 +4125,8 @@ def _space_weights(space_shape):
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
         (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
     )
-    space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+    gauss_patch = kwimage.gaussian_patch(space_shape, sigma=sigma)
+    space_weights = kwarray.normalize(gauss_patch, out=gauss_patch)
     return space_weights
 
 
@@ -4049,6 +4135,9 @@ sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_t
 
 
 class FailedSample(Exception):
+    """
+    Used to indicate that a sample should be skipped.
+    """
     ...
 
 
@@ -4064,6 +4153,7 @@ class Modality(NamedTuple):
 class Domain(NamedTuple):
     """
     DO NOT USE. BUT DO NOT REMOVE. NEEDED FOR BACKWARDS COMPAT
+    Use Modality instead.
     """
     sensor: str
     channels: str

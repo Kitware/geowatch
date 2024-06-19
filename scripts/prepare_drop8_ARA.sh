@@ -283,19 +283,35 @@ export SRC_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
 export DST_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
 
 export SRC_BUNDLE_DPATH=$SRC_DVC_DATA_DPATH/Aligned-Drop8-ARA
-export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/Drop8-ARA-Cropped2GSD-V1
+export DST_BUNDLE_DPATH=$DST_DVC_DATA_DPATH/submodules/Drop8-ARA-Cropped2GSD-V1
 
 export TRUTH_DPATH=$SRC_DVC_DATA_DPATH/annotations/drop8-v1
 export TRUTH_REGION_DPATH="$SRC_DVC_DATA_DPATH/annotations/drop8-v1/region_models"
 
+
+show_path_variable(){
+    VARNAME="$1"
+    VARVALUE="${!VARNAME}"
+    if test -d "$VARVALUE"; then
+        _STATUS="✅"
+    else
+        _STATUS="❌"
+    fi
+    echo "$_STATUS $VARNAME=$VARVALUE"
+}
+
 echo "
-SRC_DVC_DATA_DPATH=$SRC_DVC_DATA_DPATH
-DST_DVC_DATA_DPATH=$DST_DVC_DATA_DPATH
+-------------------------------------------
+Paths for Building Drop8-ARA-Cropped2GSD-V1
+-------------------------------------------
 
-SRC_BUNDLE_DPATH=$SRC_BUNDLE_DPATH
-DST_BUNDLE_DPATH=$DST_BUNDLE_DPATH
+$(show_path_variable SRC_DVC_DATA_DPATH)
+$(show_path_variable DST_DVC_DATA_DPATH)
 
-TRUTH_REGION_DPATH=$TRUTH_REGION_DPATH
+$(show_path_variable SRC_BUNDLE_DPATH)
+$(show_path_variable DST_BUNDLE_DPATH)
+
+$(show_path_variable TRUTH_REGION_DPATH)
 "
 
 mkdir -p "$DST_BUNDLE_DPATH"
@@ -320,6 +336,7 @@ REGION_IDS_STR=$(python -c "if 1:
     print(' '.join(sorted(final_names)))
     ")
 #REGION_IDS_STR="CN_C000 KW_C001 SA_C001 CO_C001 VN_C002"
+#REGION_IDS_STR="AE_R001"
 
 echo "REGION_IDS_STR = $REGION_IDS_STR"
 # shellcheck disable=SC2206
@@ -406,16 +423,23 @@ python -m cmd_queue new "reproject_for_sc"
 # shellcheck disable=SC3054
 for REGION_ID in "${REGION_IDS_ARR[@]}"; do
     echo "REGION_ID = $REGION_ID"
-    if ! test -f "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip"; then
-        if test -f "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip"; then
+    _IMGONLY_FPATH="$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip"
+    _IMGANNS_FPATH="$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip"
+    if ! test -f "$_IMGANNS_FPATH"; then
+        if test -f "$_IMGONLY_FPATH"; then
+            echo "Submit job to construct $_IMGANNS_FPATH"
             python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_for_sc \
                 geowatch reproject_annotations \
-                    --src "$DST_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID-rawbands.kwcoco.zip" \
-                    --dst "$DST_BUNDLE_DPATH/$REGION_ID/imganns-$REGION_ID-rawbands.kwcoco.zip" \
+                    --src "$_IMGONLY_FPATH" \
+                    --dst "$_IMGANNS_FPATH" \
                     --io_workers="avail/2" \
                     --region_models="$TRUTH_DPATH/region_models/${REGION_ID}.geojson" \
                     --site_models="$TRUTH_DPATH/site_models/${REGION_ID}_*.geojson"
+        else
+            echo "Want to construct imganns, but do not have $_IMGONLY_FPATH"
         fi
+    else
+        echo "Already have $_IMGANNS_FPATH"
     fi
 done
 python -m cmd_queue show "reproject_for_sc"
@@ -518,6 +542,7 @@ export REGION_IDS_STR=$(python -c "if 1:
     print(' '.join(sorted(final_names)))
     ")
 #export REGION_IDS_STR="KR_R001"
+export REGION_IDS_STR="HK_C001 HK_C002"
 
 # Dump regions to a file
 # FIXME: tmp_region_names.yaml is not a robust interchange.
@@ -602,3 +627,24 @@ git commit -m "Update Drop8 Median 10mGSD BAS" && \
 git push && \
 dvc push -r aws -R . -vvv
 
+
+## --- Special DVC add for specific regions only
+
+cd "$DST_BUNDLE_DPATH"
+python -c "if 1:
+    import ubelt as ub
+    import os
+
+    root = ub.Path('.')
+    region_ids = os.environ.get('REGION_IDS_STR').split()
+
+    to_add = []
+    for region_id in region_ids:
+        region_dpath = root / region_id
+        to_add += list(region_dpath.glob('raw_bands'))
+        to_add += list(region_dpath.glob('imgonly-*-rawbands.kwcoco.zip'))
+
+    import simple_dvc as sdvc
+    dvc_repo = sdvc.SimpleDVC.coerce(root)
+    dvc_repo.add(to_add, verbose=1)
+"

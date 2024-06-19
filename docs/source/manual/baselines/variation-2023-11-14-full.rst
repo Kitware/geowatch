@@ -25,9 +25,6 @@ python -c "if 1:
         if p.name not in blocklist:
             print(p)
             p.delete()
-
-
-
 "
 
 

@@ -4,7 +4,27 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.17.1 - Unreleased
+## Version 0.18.0 - Unreleased
+
+### Added
+* New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.
+* Dataloader can now produce frame-level classification labels.
+
+### Changed
+* `geowatch.cli.reproject_annotations` now attempts to fix simple invalid geometries.
+* `geowatch.cli.geojson_site_stats` now reports information about invalid geometries.
+* `geowatch.cli.coco_add_watch_fields` is now more robust to forbidden permission errors.
+* `geowatch.cli.smartflow.run_bas_datagen` now outputs more debugging information.
+* Dataloader now returns a `class HeterogeneousBatchItem(dict)` to facilitate evolution of the dataloader.
+* Reorganized `SpacetimeGridBuilder` to move it in an object oriented direction and attempt to clean it up.
+
+### Fixed
+* DataLoader with `dist_weights=True` no longer has distance transforms weights
+  of annotations clobber each other when they overlap.
+* Re-enable the "negative-classes" concept in the `spacetime_grid_builder`.
+
+
+## Version 0.17.1 - Released 2024-05-31
 
 ### Added
 * Initial `BatchItem` class to help better organize connections between dataloaders and networks.
@@ -23,7 +43,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 * Removed dependency on netharn. All relevant code has been vendored into helper modules.
-* Hardcoded gewatch_dvc paths
+* Removed hardcoded `gewatch_dvc` paths
 
 
 ## Version 0.16.2 - Released 2024-04-15

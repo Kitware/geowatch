@@ -4290,3 +4290,20 @@ python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Crop
 python -m geowatch.mlops.manager "push packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
 python -m geowatch.mlops.manager "list packages" --dataset_codes "Drop8-ARA-Cropped2GSD-V1"
 
+
+
+MAX_STEPS=5000
+MAX_EPOCHS=720
+TRAIN_BATCHES_PER_EPOCH=2666
+VALI_BATCHES_PER_EPOCH=512
+ACCUMULATE_GRAD_BATCHES=24
+BATCH_SIZE=4
+TRAIN_ITEMS_PER_EPOCH=$(python -c "print($TRAIN_BATCHES_PER_EPOCH * $BATCH_SIZE)")
+
+python -m geowatch.cli.experimental.recommend_size_adjustments \
+    --MAX_STEPS=$MAX_STEPS \
+    --MAX_EPOCHS=$MAX_EPOCHS \
+    --BATCH_SIZE=$BATCH_SIZE \
+    --ACCUMULATE_GRAD_BATCHES=$ACCUMULATE_GRAD_BATCHES \
+    --TRAIN_BATCHES_PER_EPOCH="$TRAIN_BATCHES_PER_EPOCH" \
+    --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"

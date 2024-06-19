@@ -645,7 +645,7 @@ class GoogleStyleDocstringProcessor:
         #     import xdev
         #     xdev.embed()
 
-        render_doc_images = 1
+        render_doc_images = 0
 
         if MAX_TIME_MINUTES and TIMER.toc() > (60 * MAX_TIME_MINUTES):
             render_doc_images = False  # FIXME too slow on RTD

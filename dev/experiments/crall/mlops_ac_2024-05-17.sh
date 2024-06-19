@@ -321,7 +321,7 @@ python -m geowatch.mlops.aggregate \
         top_k: 10
         per_group: 1
         macro_analysis: 0
-        analyze: 1
+        analyze: 0
         print_models: True
         reference_region: final
         concise: 0

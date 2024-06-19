@@ -49,8 +49,9 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
     >>> import geowatch
     >>> import kwcoco
-    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='ssd')
-    >>> coco_fpath = dvc_dpath / 'Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> dvc_dpath = geowatch.find_dvc_dpath(tags='phase3_data', hardware='hdd')
+    >>> #coco_fpath = dvc_dpath / 'submodules/Drop8-ARA-Cropped2GSD-V1/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip'
+    >>> coco_fpath = dvc_dpath / 'submodules/Drop8-ARA-Cropped2GSD-V1/AE_R001/imganns-AE_R001-rawbands.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> wh_lut = coco_dset.videos().lookup(['width', 'height'])
     >>> dsizes = list(zip(wh_lut['width'], wh_lut['height']))
@@ -60,19 +61,28 @@ Example:
     >>>     window_dims=window_dims,
     >>>     time_sampling='soft2+distribute',
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     dynamic_fixed_resolution=None, #{'max_winspace_full_dims': [300, 300]},
+    >>>     dynamic_fixed_resolution=None,
+    >>>     #dynamic_fixed_resolution={'max_winspace_full_dims': [1024, 1024]},
     >>>     keepbound=True,
     >>>     use_annot_info=1,
     >>>     use_grid_positives=1,
     >>>     use_centered_positives=True,
     >>>     respect_valid_regions=False,  # enabling this is slow
-    >>>     use_cache=0
+    >>>     use_cache=1
     >>> )
     >>> grid = builder.build()
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> canvas = builder.visualize(max_vids=10, max_frames=5)
+    >>> #infos = [ub.udict(v) & {'video_name', 'vidspace_full_dims'} for v in grid['vidid_to_meta'].values()]
+    >>> #infos = sorted([d | {'area': np.prod(d['vidspace_full_dims'])} for d in infos], key=lambda d: d['area'])
+    >>> # Show big and small clusters
+    >>> #chosen = [infos[30], infos[-1]]
+    >>> video_ids = None
+    >>> video_ids = coco_dset.videos(names=['AE_R001_CLUSTER_073', 'AE_R001_CLUSTER_000']).ids
+    >>> canvas = builder.visualize(max_vids=10, max_frames=1, video_ids=video_ids)
+    >>> print(f'canvas.shape={canvas.shape}')
+    >>> kwimage.imwrite('canvas.jpg', canvas)
     >>> kwplot.imshow(canvas, doclf=1, fnum=2)
     >>> relevant_params = ub.udict(builder.kw) & {'window_dims', 'window_overlap', 'time_kernel', 'use_grid_positives', 'use_centered_positives', 'dynamic_fixed_resolution'}
     >>> relevant_text = ub.urepr(relevant_params, concise=1, nobr=1, si=1, nl=0)
@@ -208,8 +218,8 @@ class SpacetimeGridBuilder:
                 mutually exclusive with time span.
 
             time_sampling (str):
-                code for specific temporal sampler: see temporal_sampling.py for
-                more information.
+                code for specific temporal sampler: see
+                temporal_sampling/sampler.py for more information.
 
             exclude_sensors (List[str]):
                 A list of sensors to exclude from the grid
@@ -299,7 +309,7 @@ class SpacetimeGridBuilder:
         builder.sample_grid = _build_grid(builder)
         return builder.sample_grid
 
-    def visualize(builder, max_vids=2, max_frames=6):
+    def visualize(builder, max_vids=2, max_frames=6, video_ids=None):
         r"""
         Debug visualization for sampling grid
 
@@ -312,7 +322,7 @@ class SpacetimeGridBuilder:
         Draws a yellow polygon over invalid spatial regions.
 
         TODO:
-            - [ ] Make this the `SpacetimeGridBuilder.visualize` method
+            - [x] Make this the `SpacetimeGridBuilder.visualize` method
 
         Notes:
             * Dots are more intense when there are more temporal coverage of that dot.
@@ -321,6 +331,11 @@ class SpacetimeGridBuilder:
 
             * Dots are blue if they overlap any annotation in their temporal region
               so they may visually be near an annotation.
+
+        Args:
+            max_vids (int): maximum videos that can be shown
+            max_frames (int): maximum frame from each video to draw
+            video_ids (List[int] | None): if specified, show these videos
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
@@ -418,7 +433,8 @@ class SpacetimeGridBuilder:
         dset = builder.kw['dset']
         sample_grid = builder.sample_grid
         return _visualize_sample_grid(dset, sample_grid, max_vids=max_vids,
-                                      max_frames=max_frames)
+                                      max_frames=max_frames,
+                                      video_ids=video_ids)
 
 
 def _build_grid(builder):
@@ -1329,7 +1345,7 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
     return refined_sample, resampled
 
 
-def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
+def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6, video_ids=None):
     # Visualize the sample grid
     import pandas as pd
     from geowatch.utils import util_kwimage
@@ -1344,7 +1360,11 @@ def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
 
     orientation = 1
 
-    for vidid, video_df in vidid_to_videodf.items():
+    if video_ids is None:
+        video_ids = list(vidid_to_videodf.keys())
+
+    for vidid in video_ids:
+        video_df = vidid_to_videodf[vidid]
         video = dset.index.videos[vidid]
         vidname = video['name']
         gid_to_infos = ub.ddict(list)
@@ -1372,7 +1392,7 @@ def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
                 unixtimes=unixtimes, sensors=sensors, time_window=max_frames,
                 time_span='1y', affinity_type='hardish3',
                 update_rule='distribute+pairwise')
-            sample = time_sampler.sample()
+            sample = time_sampler.sample(rng=0)
             common = list(ub.take(common, sample))
 
         for gid in common:
@@ -1459,6 +1479,9 @@ def _visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
             header_lines = heuristics.build_image_header_text(
                 img=img, vidname=vidname)
             header_text = '\n'.join(header_lines)
+
+            # if 1:
+            #     final_canvas = kwimage.imresize(final_canvas, dsize=(None, 1024))
 
             final_canvas = kwimage.draw_header_text(final_canvas, header_text, fit=True)
             video_canvases.append(final_canvas)

@@ -154,10 +154,8 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
-            >>> from os.path import join
-            >>> #from geowatch.tasks.fusion.methods.noop_model import *  # NOQA
             >>> dpath = ub.Path.appdir('geowatch/tests/package').ensuredir()
-            >>> package_path = join(dpath, 'my_package.pt')
+            >>> package_path = dpath / 'my_package.pt'
 
             >>> # Use one of our fusion.architectures in a test
             >>> from geowatch.tasks.fusion import methods
@@ -198,7 +196,6 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Test with datamodule
             >>> import ubelt as ub
-            >>> from os.path import join
             >>> from geowatch.tasks.fusion import datamodules
             >>> from geowatch.tasks.fusion import methods
             >>> from geowatch.tasks.fusion.methods.noop_model import *  # NOQA
