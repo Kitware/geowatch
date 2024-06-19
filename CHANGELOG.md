@@ -4,7 +4,10 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.18.0 - Unreleased
+## Version 0.18.1 - Unreleased
+
+
+## Version 0.18.0 - Released 2024-06-18
 
 ### Added
 * New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.
