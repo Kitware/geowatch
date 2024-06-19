@@ -14,6 +14,8 @@ import torch
 
 class TaskHeads(torch.nn.ModuleDict):
     """
+    Experimental feature. Not finished.
+
     Sends features to task specific heads.
     """
 
@@ -24,6 +26,7 @@ class TaskHeads(torch.nn.ModuleDict):
 
         Example:
             >>> from geowatch.tasks.fusion.methods.heads import *  # NOQA
+            >>> import ubelt as ub
             >>> heads_config = ub.codeblock(
             >>>     '''
             >>>     feat_dim: 1024
@@ -80,6 +83,8 @@ class TaskHeads(torch.nn.ModuleDict):
                     )
                     if 'loss' in task_config:
                         raise ValueError('DETR-HEAD handles its own loss')
+                elif task_type == 'nonlocal_clf':
+                    raise NotImplementedError
                 elif task_type == 'mlp':
                     from geowatch.utils.util_netharn import MultiLayerPerceptronNd
                     loss_config = task_config.pop('loss', {})
