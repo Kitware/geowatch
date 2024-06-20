@@ -1497,10 +1497,13 @@ class GetItemMixin(TruthMixin):
             raise FailedSample('no target')
         return target
 
-    def _prepare_target(self, target):
+    def _resolve_target(self, target):
         """
         Creates a copy of the target with modified information expected by the
-        getitem method.
+        getitem method. This applies any sampling augmentation if enabled.  It
+        also handles enriching the target with configuration level information
+        if needed. There are other places in the code that do that, and it may
+        be better if those are moved here.
         """
         sampler = self.sampler
         coco_dset = self.sampler.dset
@@ -1524,7 +1527,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.imgs[gid]
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        # video = coco_dset.index.videos[vidid]
         resolution_info = self._resolve_resolution(target_, video)
 
         # Resolve per-target parameters
@@ -1536,7 +1539,7 @@ class GetItemMixin(TruthMixin):
 
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
-        return target_, resolution_info
+        return target_, video, resolution_info
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
@@ -1807,7 +1810,7 @@ class GetItemMixin(TruthMixin):
 
         # Handle details about the sampling target
         # Fill in details that might be missing. Does not modify the input.
-        target_, resolution_info = self._prepare_target(target)
+        target_, video, resolution_info = self._resolve_target(target)
 
         vidspace_box = resolution_info['vidspace_box']
         try:
@@ -2020,8 +2023,6 @@ class GetItemMixin(TruthMixin):
         # just a single classification prediction over the entire sequence.
         LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
         vidid = target_['video_id']
-        vidid = target_['video_id']
-        video = self.sampler.dset.index.videos[vidid]
         item = {
             'producer_mode': self.mode,
             'producer_rank': LOCAL_RANK,
