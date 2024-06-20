@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.18.1 - Unreleased
 
 
+### Fixed
+* Fix box head visualizations
+
+### Changed
+* Better training restart invocation docs
+
+### Removed
+* The old "watch" module is no longer packaged in the pypi install. The
+  "geowatch" module now must be used. The mirror module will be removed from
+  the repo in the next minor version increment.
+
 ## Version 0.18.0 - Released 2024-06-18
 
 ### Added

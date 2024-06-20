@@ -260,7 +260,7 @@ if __name__ == '__main__':
         'geowatch_tpl.*',
         # Alias of the old module name to maintain backwards compatability
         # while we transition.
-        'watch', 'watch.*',
+        # 'watch', 'watch.*',
     ]) + tpl_packages
     print(f'packages={packages}')
 

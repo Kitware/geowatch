@@ -163,18 +163,19 @@ TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 1e-2)")
 python -m geowatch.tasks.fusion fit --config "
 data:
-    num_workers          : 4
+    num_workers          : 0
     train_dataset        : $TRAIN_FPATH
     vali_dataset         : $VALI_FPATH
     channels             : 'r|g|b'
     time_steps           : 5
     chip_dims            : 128
-    batch_size           : 2
+    batch_size           : 3
 model:
     class_path: MultimodalTransformer
     init_args:
         name        : $EXPERIMENT_NAME
         arch_name   : smt_it_stm_p8
+        global_box_weight: 1
 optimizer:
   class_path: torch.optim.AdamW
   init_args:

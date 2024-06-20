@@ -790,10 +790,12 @@ class BatchVisualizationBuilder:
                 'type': 'data',
             })
 
-        key = 'pred_ltrb'
+        key = 'box'
         overlay_index = 0
         if item_output and key in item_output and builder.requested_tasks['boxes']:
-            pred_ltrb = item_output[key][frame_idx]
+            pred_box = item_output[key][frame_idx]
+            pred_ltrb = pred_box['box_ltrb']
+            pred_scores = pred_box['box_probs']
             pred_boxes = kwimage.Boxes(pred_ltrb, 'ltrb')
             x_shape = overlay_shape
             if builder.overlay_on_image:
@@ -801,8 +803,20 @@ class BatchVisualizationBuilder:
                 norm_signal = kwimage.imresize(norm_signal, dsize=x_shape[::-1])
             else:
                 norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
-            pred_part = pred_boxes.draw_on(norm_signal, alpha=0.7,
-                                           color='kitware_blue', thickness=16)
+
+            # TODO:
+            # The style of box drawing is something the user should have
+            # control over.
+            if 0:
+                pred_part = pred_boxes.draw_on(norm_signal, alpha=0.7,
+                                               color='kitware_blue', thickness=8)
+            else:
+                pred_dets = kwimage.Detections(
+                    boxes=pred_boxes,
+                    scores=pred_scores
+                )
+                pred_part = pred_dets.draw_on(norm_signal, alpha='score')
+
             if builder.rescale:
                 pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
 

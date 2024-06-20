@@ -1304,6 +1304,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
     def forward_item(self, item, with_loss=False):
         """
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.forward_item:1
+
         Example:
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
@@ -1318,6 +1321,27 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> print(_debug_inbatch_shapes(item))
             >>> print('outputs')
             >>> print(_debug_inbatch_shapes(outputs))
+
+        Example:
+            >>> # Box head
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels,
+            >>>     decouple_resolution=False, global_box_weight=1)
+            >>> batch = self.demo_batch(width=64, height=64, num_timesteps=3)
+            >>> item = batch[0]
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(batch))
+            >>> result1 = self.forward_step(batch, with_loss=True)
+            >>> assert len(result1['box'])
+            >>> assert 'box_ltrb' in result1['box'][0]
+            >>> assert len(result1['box'][0]['box_ltrb'].shape) == 2
+            >>> print(_debug_inbatch_shapes(result1))
+            >>> # Check we can go backward
+            >>> result1['loss'].backward()
 
         Example:
             >>> # Decoupled resolutions
@@ -1581,33 +1605,38 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
                 criterion_encoding = self.criterions["class"].target_encoding
-                logits = resampled_logits['class'].detach()
+                _logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
-                    probs['class'] = logits.sigmoid()[0]
+                    probs['class'] = _logits.sigmoid()[0]
                 elif criterion_encoding == "index":
-                    probs['class'] = logits.softmax(dim=-1)[0]
+                    probs['class'] = _logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
             if 'box' in resampled_logits:
                 perframe_output_dims = [frame['output_dims'] for frame in item['frames']]
-                perframe_norm_boxes = kwimage.Boxes(resampled_logits['box'][0].detach(), 'cxywh').to_ltrb()
+
+                _raw_cxywh, _raw_scores = resampled_logits['box']
+                # Hack because we know we did boxes with only 2 classes
+                _raw_binary_scores = _raw_scores[:, :, 0].detach()
+                perframe_norm_boxes = kwimage.Boxes(_raw_cxywh.detach(), 'cxywh').to_ltrb()
                 # Rescale each box from predicted 0-1 coords to the size of the
                 # input frames.
-                perframe_boxes = []
+                perframe_ltrb_list = []
                 for norm_boxes, dims in zip(perframe_norm_boxes, perframe_output_dims):
                     boxes = norm_boxes.scale(dims)
                     # uncomment if we want to clip boxes
                     # boxes = boxes.clip(0, 0, dims[1], dims[0])
-                    perframe_boxes.append(boxes[None, ...])
+                    perframe_ltrb_list.append(boxes.data[None, ...])
                 # Create final Tx100x4 tensor of boxes
                 # todo perhaps we don't concat and just return a list
                 # to make it more clear that these are per-frame boxes:w
-                perframe_boxes = kwimage.Boxes.concatenate(perframe_boxes, axis=0)
+                perframe_ltrb = torch.concatenate(perframe_ltrb_list, dim=0)
+                perframe_boxes = kwimage.Boxes(perframe_ltrb, 'ltrb')
                 probs['box'] = {
                     'box_ltrb': perframe_boxes.to_ltrb().data,
-                    'box_probs': resampled_logits['box'][1][..., 1].detach().sigmoid()
+                    'box_probs': _raw_binary_scores.sigmoid()
                 }
         else:
             # NOTE: decoupled resolution lacks support here and may be removed.
