@@ -145,9 +145,9 @@ class PrepareTA2Config(CMDQueueConfig):
             sensors.
             '''), nargs='+')
 
-    aws_profile = scfg.Value('iarpa', group='stac', help=ub.paragraph(
+    aws_profile = scfg.Value(None, group='stac', help=ub.paragraph(
             '''
-            AWS profile to use for remote data access
+            AWS profile to use for remote data access. (e.g. iarpa)
             '''))
 
     out_dpath = scfg.Value('auto', alias=['dvc_dpath'], help=ub.paragraph(
@@ -389,8 +389,9 @@ def main(cmdline=False, **kwargs):
     # Job environments are specific to single jobs
     job_environs = [
         # 'PROJ_DEBUG=3',
-        f'AWS_DEFAULT_PROFILE={aws_profile}',
     ]
+    if aws_profile is not None:
+        job_environs.append(f'AWS_DEFAULT_PROFILE={aws_profile}')
     if config['requester_pays']:
         job_environs.append("AWS_REQUEST_PAYER='requester'")
     job_environ_str = ' '.join(job_environs)

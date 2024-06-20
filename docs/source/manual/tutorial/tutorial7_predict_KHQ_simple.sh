@@ -8,10 +8,11 @@ This is a simplified version of tutorial 6 that does not require COLD features.
 # TODO: add instructions for how to set these if they are unset.
 #
 # If you can access our DVC repo:
-DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+#DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_DATA_DPATH=$HOME/data/dvc-repos/tutorial7-data
 
 # The "name" of the demo dataset we will create
-DATASET_SUFFIX=KHQ_Tutorial6_Data
+DATASET_SUFFIX=KHQ_Tutorial7_Data
 
 # Set this to where you want to build the dataset
 DEMO_DPATH=$DVC_DATA_DPATH/$DATASET_SUFFIX
@@ -46,14 +47,14 @@ export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 # This is a cmdqueue pipeline of simpler commands
 python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
-    --cloud_cover=30 \
+    --cloud_cover=20 \
     --stac_query_mode=auto \
     --sensors "$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
     --collated False \
     --requester_pays=$REQUESTER_PAYS \
     --dvc_dpath="$DEMO_DPATH" \
-    --aws_profile=iarpa \
+    --aws_profile=None \
     --region_globstr="$REGION_FPATH" \
     --site_globstr="$SITE_GLOBSTR" \
     --fields_workers=8 \
@@ -64,7 +65,7 @@ python -m geowatch.cli.queue_cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --target_gsd="10GSD" \
     --visualize=False \
-    --max_products_per_region=100 \
+    --max_products_per_region=10 \
     --backend=serial \
     --run=1
 
