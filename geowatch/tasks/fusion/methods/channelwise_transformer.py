@@ -1632,7 +1632,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 # Create final Tx100x4 tensor of boxes
                 # todo perhaps we don't concat and just return a list
                 # to make it more clear that these are per-frame boxes:w
-                perframe_ltrb = torch.concatenate(perframe_ltrb_list, dim=0)
+                perframe_ltrb = torch.concat(perframe_ltrb_list, dim=0)
                 perframe_boxes = kwimage.Boxes(perframe_ltrb, 'ltrb')
                 probs['box'] = {
                     'box_ltrb': perframe_boxes.to_ltrb().data,

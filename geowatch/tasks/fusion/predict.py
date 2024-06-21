@@ -560,7 +560,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     print('Predict on device = {!r}'.format(device))
     downweight_edges = config.downweight_edges
 
-    UNPACKAGE_METHOD_HACK = 1
+    UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
         # unpackage model hack, this only works if we know the model that will
         # be loaded a-priori
