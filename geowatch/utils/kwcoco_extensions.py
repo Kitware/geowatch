@@ -2200,6 +2200,7 @@ def coco_channel_stats(coco_dset):
         coco_img: CocoImage = coco_dset.coco_image(_gid)
         channels = []
         for obj in coco_img.iter_asset_objs():
+            # TODO: perhaps replace unknown-chan with a "*"?
             channels.append(obj.get('channels', 'unknown-chan'))
         channels = sorted(channels)
         chan = ','.join(channels)

@@ -472,8 +472,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
-        # import xdev
-        # with xdev.embed_on_exception_context:
         for k in sorted(sensor_modes):
             if isinstance(k, str):
                 if k == '*':
@@ -485,6 +483,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
+            if mode_code.spec == 'unknown-chan':
+                # hack: special case for unknown channels
+                # dont trust channel numel, see if we can lookup
+                # the number of channels from dataset stats.
+                in_chan = self.input_norms[s][c].mean.shape[0]
+
             if s not in self.sensor_channel_tokenizers:
                 self.sensor_channel_tokenizers[s] = RobustModuleDict()
 

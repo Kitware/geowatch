@@ -872,11 +872,19 @@ class TruthMixin:
         ann_weights = dets.data['weights']
         ann_boxes   = dets.data['boxes']
 
+        missing_poly_flags = [poly is None for poly in ann_polys]
+        if any(missing_poly_flags):
+            missing_idxs = np.where(missing_poly_flags)[0]
+            _box_polys = ann_boxes[missing_idxs].to_polygons()
+            for idx, _poly in zip(missing_idxs, _box_polys):
+                ann_polys.data[idx] = _poly
+
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
             if weight is None:
                 weight = 1.0
-            poly.meta['weight'] = weight
+            if poly is not None:
+                poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
@@ -1058,6 +1066,8 @@ class TruthMixin:
                     class_sseg_groups['background'].append(poly)
                 elif new_class_catname in self.undistinguished_classes.intersection(self.predictable_classes):
                     class_sseg_groups['undistinguished'].append(poly)
+
+            balance_areas = self.config['balance_areas']
 
             if balance_areas:
                 big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
@@ -1625,6 +1635,12 @@ class GetItemMixin(TruthMixin):
             tr_frame['padkw' ] = {'constant_values': np.nan}
             tr_frame['nodata' ] = 'float'
             tr_frame['dtype'] = np.float32
+
+            if stream.spec == 'unknown-chan':
+                # Hack: unknown channels mean that the kwcoco didnt specify
+                # them. Thus we should assume there are homogeneous.
+                tr_frame.pop('channels', None)
+
             # FIXME: each kwcoco asset should be able to control its own
             # interpolation as a function of its role.
             sample = sampler.load_sample(
@@ -1823,6 +1839,7 @@ class GetItemMixin(TruthMixin):
             msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
             print(msg)
             warnings.warn(msg)
+            raise
             raise FailedSample(msg)
 
         num_frames = len(final_gids)

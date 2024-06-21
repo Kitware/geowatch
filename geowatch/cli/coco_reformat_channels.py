@@ -226,7 +226,7 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 
     kwimage.imwrite(new_fpath, new_imdata, backend='gdal',
                     compress='DEFLATE', blocksize=128,
-                    nodata=quantize_nan)
+                    nodata_value=quantize_nan)
 
     return fpath, new_fpath, new_obj
 
