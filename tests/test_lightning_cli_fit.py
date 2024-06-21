@@ -41,12 +41,16 @@ python -m geowatch.tasks.fusion fit \
 
 
 def test_noop_model_training():
-    import pytest
-    pytest.skip()
+    """
+    pytest ~/code/geowatch/tests/test_lightning_cli_fit.py -k test_noop_model_training -vs
+    """
+    # import pytest
+    # pytest.skip()
     from geowatch.tasks.fusion import fit_lightning
     import ubelt as ub
+    default_root_dir = ub.Path.appdir('geowatch/tests/test_fusion_fit/test_noop_model_training').ensuredir()
     config = ub.codeblock(
-        '''
+        f'''
         subcommand: fit
         fit:
             model:
@@ -54,16 +58,35 @@ def test_noop_model_training():
             data:
               train_dataset: geowatch-msi-dates-geodata-gsize64-videos5-frames10
               vali_dataset: geowatch-msi-dates-geodata-gsize64-videos2-frames10
-              chip_size: 64
+              chip_dims: 64
               num_workers: 0
               batch_size: 1
               time_steps: 2
               channels: B1,B10,B11
             trainer:
+              default_root_dir: {default_root_dir}
+              devices: 0,
               max_steps: 2
               num_sanity_val_steps: 0
+            initializer:
+                remember_initial_state: True
         ''')
     fit_lightning.main(config=config)
+    version_dirs = list((default_root_dir / 'lightning_logs').glob('version_*'))
+    latest_dpath = sorted(version_dirs, key=lambda p: int(p.name.split('_', 1)[1]))[-1]
+
+    # Test that the initial checkpoint is written
+    analysis_checkpoints = list(latest_dpath.glob('analysis_checkpoints/*'))
+    assert 'initial_state.ckpt' in [p.name for p in analysis_checkpoints]
+
+    # Check that files we expect to be there are present
+    top_level_paths = list(latest_dpath.glob('*'))
+    top_level_names = [p.name for p in top_level_paths]
+    assert 'telemetry.json' in top_level_names
+    assert 'config.yaml' in top_level_names
+    assert 'checkpoints' in top_level_names
+    assert 'draw_tensorboard.sh' in top_level_names
+    assert 'draw_vali_batches.sh' in top_level_names
 
 
 def test_fit_cli_training():

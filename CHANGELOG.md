@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.18.1 - Unreleased
 
+### Added
+* Trainer now remembers the initial weights if requested.
 
 ### Fixed
 * Fix box head visualizations
