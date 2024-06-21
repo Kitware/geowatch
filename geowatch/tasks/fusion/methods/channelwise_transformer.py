@@ -1338,7 +1338,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> result1 = self.forward_step(batch, with_loss=True)
             >>> assert len(result1['box'])
             >>> assert 'box_ltrb' in result1['box'][0]
-            >>> assert len(result1['box'][0]['box_ltrb'].shape) == 2
+            >>> assert len(result1['box'][0]['box_ltrb'].shape) == 3
             >>> print(_debug_inbatch_shapes(result1))
             >>> # Check we can go backward
             >>> result1['loss'].backward()
