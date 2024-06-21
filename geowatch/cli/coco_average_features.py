@@ -580,7 +580,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         # TODO: Possibly add `wld_crs_info` to write_kwargs.
 
         # Write the averaged image data
-        kwimage.imwrite(average_fpath, quant_data, backend="gdal", nodata=quantization['nodata'], **write_kwargs)
+        kwimage.imwrite(average_fpath, quant_data, backend="gdal", nodata_value=quantization['nodata'], **write_kwargs)
 
         # Update all channels with projection info.
         try:
