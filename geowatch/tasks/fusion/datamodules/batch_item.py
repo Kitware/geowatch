@@ -351,6 +351,12 @@ class RGBImageBatchItem(HomogeneousBatchItem):
         imdata_chw = mode_val
         return imdata_chw
 
+    @property
+    def nonlocal_class_ohe(self):
+        frame = self.frame
+        nonlocal_class_ohe = frame['nonlocal_class_ohe']
+        return nonlocal_class_ohe
+
     @classmethod
     def demo(cls, index=None):
         """

@@ -7,7 +7,9 @@ For unit tests see:
 For tutorials see:
     ../../../docs/source/manual/tutorial/tutorial1_rgb_network.sh
 """
+# TODO: lets avoid the import * here.
 from geowatch.tasks.fusion.methods import *  # NOQA
+
 from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 from geowatch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
 from geowatch.utils.lightning_ext.lightning_cli_ext import LightningArgumentParser
@@ -52,12 +54,37 @@ class SmartTrainer(pl.Trainer):
     the training loop. (so annoying that we can't reorder callbacks)
     """
 
+    def __init__(self, *args, add_to_registery=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.add_to_registery = add_to_registery
+
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
+        self._on_before_run()
+
+        super()._run_stage(*args, **kwargs)
+
+    @property
+    def log_dpath(self):
+        """
+        Get path to the the log directory if it exists.
+        """
+        if self.logger is None:
+            raise Exception('cannot get a log_dpath when no logger exists')
+        if self.logger.log_dir is None:
+            raise Exception('cannot get a log_dpath when logger.log_dir is None')
+        return ub.Path(self.logger.log_dir)
+
+    def _on_before_run(self):
+        """
+        Our custom "callback"
+        """
         print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
-            self._add_to_registery()
+            # TODO: add condition so tests do not add to the registery
+            if self.add_to_registery:
+                self._add_to_registery()
             self._write_inspect_helper_scripts()
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
@@ -65,8 +92,6 @@ class SmartTrainer(pl.Trainer):
             # able to determine what tasks it should be producing data for.
             # We currently infer this from information in the model.
             self.datamodule._notify_about_tasks(model=self.model)
-
-        super()._run_stage(*args, **kwargs)
 
     def _add_to_registery(self):
         """
@@ -85,17 +110,6 @@ class SmartTrainer(pl.Trainer):
         registery.append(
             path=dpath,
         )
-
-    @property
-    def log_dpath(self):
-        """
-        Get path to the the log directory if it exists.
-        """
-        if self.logger is None:
-            raise Exception('cannot get a log_dpath when no logger exists')
-        if self.logger.log_dir is None:
-            raise Exception('cannot get a log_dpath when logger.log_dir is None')
-        return ub.Path(self.logger.log_dir)
 
     def _write_inspect_helper_scripts(self):
         """
@@ -129,6 +143,8 @@ class SmartTrainer(pl.Trainer):
             from geowatch.utils.util_chmod import new_chmod
             for key, script in scripts.items():
                 fpath = script['fpath']
+                # Can use new ubelt
+                # ub.Path(fpath).chmod('u+x')
                 new_chmod(fpath, 'u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
@@ -209,7 +225,9 @@ class WeightInitializer(pl.callbacks.Callback):
             # Only weight initialize once, on whatever stage happens first.
             return
         self._did_once = True
-        if self.verbose:
+
+        _verbose = self.verbose and trainer.global_rank == 0
+        if _verbose:
             print('🏋 Initializing weights')
 
         if self.init == 'noop':
@@ -237,7 +255,7 @@ class WeightInitializer(pl.callbacks.Callback):
 
             initializer.association = self.association
             info = initializer.forward(model)  # NOQA
-            if self.verbose >= 3:
+            if _verbose >= 3:
                 if info:
                     mapping = info.get('mapping', None)
                     unset = info.get('self_unset', None)
@@ -246,7 +264,7 @@ class WeightInitializer(pl.callbacks.Callback):
                     print(f'unused={unused}')
                     print(f'unset={unset}')
 
-            if self.verbose:
+            if _verbose:
                 print('🏋 - Finalize weight initialization')
             updated = model.state_dict() | to_preserve
             model.load_state_dict(updated)

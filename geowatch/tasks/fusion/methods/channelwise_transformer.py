@@ -342,7 +342,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.hparams.update(**_cfgdict)
 
         input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
-
         input_norms = None
         if input_stats is not None:
             input_norms = RobustModuleDict()
@@ -1699,7 +1698,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         if with_loss:
             item_loss_parts, item_truths = self._build_item_loss_parts(
                 item, resampled_logits)
-
         else:
             item_loss_parts = None
             item_truths = None
@@ -1776,7 +1774,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         frame_sensor_chan_tokens = einops.rearrange(x2, '1 hs ws f -> hs ws f')
         return frame_sensor_chan_tokens, space_shape
 
-    def _head_loss_heatmaps(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+    def _head_loss_heatmaps(self, head_key, head_logits, head_truth, head_weights, truth_encoding):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
@@ -1795,12 +1793,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_weights_input = head_weights_input[:, 0]
         elif criterion.target_encoding == 'onehot':
             # Note: 1HE is much easier to work with
-            if head_encoding == 'index':
+            if truth_encoding == 'index':
                 head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
-            elif head_encoding == 'ohe':
+            elif truth_encoding == 'ohe':
                 head_true_ohe = head_truth
             else:
-                raise KeyError(head_encoding)
+                raise KeyError(truth_encoding)
             head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
         else:
             raise KeyError(criterion.target_encoding)
@@ -1815,7 +1813,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         return head_loss
 
-    def _head_loss_boxes(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+    def _head_loss_boxes(self, head_key, head_logits, head_truth, head_weights, truth_encoding):
         final_loss = 0
         for i in range(len(head_truth)):
             out_boxes = kwimage.Boxes(head_logits[i: i + 1], 'ltrb')
