@@ -123,6 +123,7 @@ import os
 import pandas as pd
 import scriptconfig as scfg
 import torch
+import rich
 import ubelt as ub
 import warnings
 
@@ -1490,12 +1491,17 @@ class GetItemMixin(TruthMixin):
                 # In test-mode the index directly determines the grid location.
                 resolved_index = requested_index
             else:
-                # In non-test-mode we discard the user index and randomly
-                # sample a grid location to achive balanced sampling.
-                try:
-                    resolved_index = self.balanced_sampler.sample()
-                except Exception as ex:
-                    raise FailedSample(f'Failed to sample grid location: {ex=}')
+                if self.balanced_sampler is None:
+                    # If we don't construct a balancer, then do the normal
+                    # sequential sampling.
+                    resolved_index = requested_index
+                else:
+                    # In non-test-mode we discard the user index and randomly
+                    # sample a grid location to achive balanced sampling.
+                    try:
+                        resolved_index = self.balanced_sampler.sample()
+                    except Exception as ex:
+                        raise FailedSample(f'Failed to sample grid location: {ex=}')
             target = self.sample_grid['targets'][resolved_index]
 
         target = target.copy()
@@ -2681,6 +2687,10 @@ class BalanceMixin:
         # Balance options are specified as an ordered list of the properties we
         # want to balance over, which can contain optional information about
         # how to do balancing.
+        if self.config.balance_options == 'sequential_without_replacement':
+            self.balanced_sampler = None
+            return
+
         if self.config.balance_options == 'scott':
             # Hard coded special mapping for scott
             balance_options = kwutil.Yaml.coerce(
@@ -3239,8 +3249,8 @@ class MiscMixin:
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
             rng = kwarray.ensure_rng(rng=seed)
-            self.balanced_sampler.rng = rng
-        ...
+            if self.balanced_sampler is not None:
+                self.balanced_sampler.rng = rng
 
     @property
     def coco_dset(self):
@@ -3453,6 +3463,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         >>> kwplot.show_if_requested()
     """
 
+    @profile
     def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):
         """
         Args:
@@ -3490,7 +3501,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         config['chip_dims'] = window_dims
 
         self.config = config
-        import rich
         rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
         # TODO: remove this line. Reduce the number of top-level attributes and
         # maintain initialization variables in the config object itself.
@@ -3692,11 +3702,11 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         if autobuild:
             self._init()
 
+    @profile
     def _init(self):
         """
         The expensive part of initialization.
         """
-        import os
         config = self.config
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
         common_grid_kw = dict(
@@ -3734,7 +3744,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         )
         mode = self.mode
         if mode == 'custom':
-            new_sample_grid = None
+            sample_grid = None
             self.length = 1
         elif mode == 'test':
             # FIXME: something is wrong with the cache when using an sqlview.
@@ -3752,24 +3762,25 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 dset=self.sampler.dset, **grid_kw
             )
-            new_sample_grid = builder.build()
-            self.length = len(new_sample_grid['targets'])
+            sample_grid = builder.build()
+            self.length = len(sample_grid['targets'])
         else:
             grid_kw.update(annot_helper_kws)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 self.sampler.dset, **grid_kw
             )
-            new_sample_grid = builder.build()
+            sample_grid = builder.build()
 
-            if 1:
-                self._init_balance(new_sample_grid)
-
-            self.length = len(self.balanced_sampler)
+            self._init_balance(sample_grid)
+            if self.balanced_sampler is None:
+                self.length = len(sample_grid['targets'])
+            else:
+                self.length = len(self.balanced_sampler)
 
             if config['max_epoch_length'] is not None:
                 self.length = min(self.length, config['max_epoch_length'])
 
-        self.sample_grid = new_sample_grid
+        self.sample_grid = sample_grid
 
         self.prenormalizers = None
 

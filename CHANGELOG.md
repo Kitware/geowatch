@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Trainer now remembers the initial weights if requested.
+* Option to `KWCocoVideoDatasetConfig` `(balance_options=sequential_without_replacement)` to iterate sequentially through the dataset without replacement.
 
 ### Fixed
 * Fix box head visualizations

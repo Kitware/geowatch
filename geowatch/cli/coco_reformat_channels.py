@@ -232,6 +232,7 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 
 
 def schedule_quantization():
+    # TODO: can remove this code, or move it to a "dev" or "scripts" dir.
     # Temporary job
     import geowatch
     dvc_dpath = ub.Path(str(geowatch.find_dvc_dpath()) + '-hdd')

@@ -77,10 +77,10 @@ fi
 echo "${PREV_CHECKPOINT_ARGS[@]}"
 
 
-DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 5
+    num_workers            : 0
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
@@ -113,6 +113,7 @@ data:
     use_grid_positives     : False
     use_grid_negatives     : False
     normalize_inputs       : 80960
+    balance_options        : sequential_without_replacement
     balance_areas          : false
 model:
     class_path: geowatch.tasks.fusion.methods.torchvision_nets.Resnet50
