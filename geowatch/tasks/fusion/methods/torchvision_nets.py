@@ -48,7 +48,6 @@ class TorchvisionWrapper(pl.LightningModule):
         return out
 
     def collate(self, batch_items):
-        import torch
         imdatas = [batch_item.imdata_chw for batch_item in batch_items]
         imdata_bchw = torch.stack(imdatas)
         nonlocal_class_ohes = [batch_item.nonlocal_class_ohe for batch_item in batch_items]
@@ -110,7 +109,7 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         >>>     heads=heads,
         >>>     classes=classes,
         >>>     dataset_stats=dataset_stats)
-        >>> self.forward_step(batch_items, with_loss=True)
+        >>> outputs = self.forward_step(batch_items, with_loss=True)
     """
 
     def __init__(self, heads, classes=None, dataset_stats=None):
