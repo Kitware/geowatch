@@ -251,7 +251,7 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         self.num_classes = len(self.classes)
 
         assert feat_dim == 2048, 'hard coded sanity check'
-        self.heads = heads_module.TaskHeads(heads)
+        self.heads = heads_module.TaskHeads(heads, feat_dim=feat_dim)
 
     def forward(self, batch):
         imdata_bchw = batch['imdata_bchw']

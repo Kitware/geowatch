@@ -675,14 +675,9 @@ def _build_grid(builder):
         # Using urepr is quite slow here for large number of targets
         # reduce to a subset of video ids to reduce the time this takes
         from kwutil.slugify_ext import smart_truncate
+        from geowatch.utils.util_kwutil import distributed_subitems
         vidid_to_meta = sample_grid['vidid_to_meta']
-        video_ids = list(vidid_to_meta.keys())
-        num_videos = len(video_ids)
-        chosen_idxs = sorted(set([0, 1, num_videos // 2 - 1, num_videos // 2 + 1, num_videos - 2, num_videos - 1]))
-        chosen_vidids = list(ub.take(video_ids, chosen_idxs))
-        subvidid_to_meta = ub.udict(vidid_to_meta).subdict(chosen_vidids)
-        video_ids[0], video_ids[num_videos // 2], video_ids[num_videos - 1]
-        # ub.unique([video_ids[0], video_ids[-1])
+        subvidid_to_meta = distributed_subitems(vidid_to_meta, 6)
         _text = ub.urepr(subvidid_to_meta, nl=-1)
         # _text = repr(subvidid_to_meta)
         _trunc_text = smart_truncate(_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')

@@ -77,7 +77,7 @@ fi
 echo "${PREV_CHECKPOINT_ARGS[@]}"
 
 
-LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 0
