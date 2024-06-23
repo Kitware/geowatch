@@ -34,7 +34,7 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc', predicate='intersect
            (e.g. if intersection finds intersections between geometries)
 
     References:
-        ..[1] https://en.wikipedia.org/wiki/DE-9IM
+        .. [DE_9IM] https://en.wikipedia.org/wiki/DE-9IM
 
     TODO:
         - [ ] This can move to geowatch.utils

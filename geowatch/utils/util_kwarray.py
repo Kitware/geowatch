@@ -1,13 +1,13 @@
 """
 Functions that may eventually be moved to kwarray
 """
-import numpy as np
 import functools
+import itertools as it
 import math
+import numpy as np
+import os
 import ubelt as ub
 import warnings
-import os
-import itertools as it
 
 try:
     from packaging.version import parse as Version
@@ -451,20 +451,16 @@ def normalize(arr, mode='linear', alpha=None, beta=None, out=None,
     Example:
         >>> raw_f = np.random.rand(8, 8)
         >>> norm_f = normalize(raw_f)
-
         >>> raw_f = np.random.rand(8, 8) * 100
         >>> norm_f = normalize(raw_f)
         >>> assert isclose(norm_f.min(), 0)
         >>> assert isclose(norm_f.max(), 1)
-
         >>> raw_u = (np.random.rand(8, 8) * 255).astype(np.uint8)
         >>> norm_u = normalize(raw_u)
-
         >>> raw_m = (np.zeros((8, 8)) + 10)
         >>> norm_m = normalize(raw_m, min_val=0, max_val=20)
         >>> assert isclose(norm_m.min(), 0.5)
         >>> assert isclose(norm_m.max(), 0.5)
-
         >>> # Ensure that we're clamping if explicit min or max values
         >>> # are provided
         >>> raw_m = (np.zeros((8, 8)) + 10)
@@ -488,60 +484,6 @@ def normalize(arr, mode='linear', alpha=None, beta=None, out=None,
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(norms))
         >>> for key, img in norms.items():
         >>>     kwplot.imshow(img, pnum=pnum_(), title=key)
-
-    Benchmark:
-        # Our method is faster than standard in-line implementations.
-
-        import timerit
-        ti = timerit.Timerit(100, bestof=10, verbose=2, unit='ms')
-        arr = kwimage.grab_test_image('lowcontrast', dsize=(512, 512))
-
-        print('--- uint8 ---')
-        arr = ensure_float01(arr)
-        out = arr.copy()
-        for timer in ti.reset('naive1-float'):
-            with timer:
-                (arr - arr.min()) / (arr.max() - arr.min())
-
-        import timerit
-        for timer in ti.reset('simple-float'):
-            with timer:
-                max_ = arr.max()
-                min_ = arr.min()
-                result = (arr - min_) / (max_ - min_)
-
-        for timer in ti.reset('normalize-float'):
-            with timer:
-                normalize(arr)
-
-        for timer in ti.reset('normalize-float-inplace'):
-            with timer:
-                normalize(arr, out=out)
-
-        print('--- float ---')
-        arr = ensure_uint255(arr)
-        out = arr.copy()
-        for timer in ti.reset('naive1-uint8'):
-            with timer:
-                (arr - arr.min()) / (arr.max() - arr.min())
-
-        import timerit
-        for timer in ti.reset('simple-uint8'):
-            with timer:
-                max_ = arr.max()
-                min_ = arr.min()
-                result = (arr - min_) / (max_ - min_)
-
-        for timer in ti.reset('normalize-uint8'):
-            with timer:
-                normalize(arr)
-
-        for timer in ti.reset('normalize-uint8-inplace'):
-            with timer:
-                normalize(arr, out=out)
-
-    Ignore:
-        globals().update(xdev.get_func_kwargs(normalize))
     """
     if out is None:
         out = arr.copy()

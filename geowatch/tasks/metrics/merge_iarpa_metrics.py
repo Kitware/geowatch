@@ -143,27 +143,30 @@ class RegionResult:
     @property
     def sc_df(self):
         '''
-        index:
-            region_id, site_id, [predicted] phase (w/o No Activity)
-            incl. special site_id __avg__
-                F1: micro (or option for macro)
-                TIoU: ~micro over all truth-prediction pairs, skipping
-                    undetected truth sites
-                TE(p): micro
-                confusion: micro
-        columns:
-            F1, TIoU, TE, TEp, [true] phase (incl. No Activity)
+
+        Notes:
+            index:
+                region_id, site_id, [predicted] phase (w/o No Activity)
+                incl. special site_id __avg__
+                    F1: micro (or option for macro)
+                    TIoU: ~micro over all truth-prediction pairs, skipping
+                        undetected truth sites
+                    TE(p): micro
+                    confusion: micro
+            columns:
+                F1, TIoU, TE, TEp, [true] phase (incl. No Activity)
 
         confusion matrix and f1 scores apprently ignore subsites,
         so we must do the same
         https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
-        MWE:
-        >>> from sklearn.metrics import f1_score, confusion_matrix
-        >>> f1 = f1_score(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'],
-        >>>               average=None)
-        >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
-        array([[0, 1],
-               [0, 0]])
+
+        Example:
+            >>> from sklearn.metrics import f1_score, confusion_matrix
+            >>> f1 = f1_score(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'],
+            >>>               average=None)
+            >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
+            array([[0, 1],
+                   [0, 0]])
         '''
         sc_dpath, sites = self.sc_dpath, self.site_ids
 
@@ -223,22 +226,24 @@ class RegionResult:
     def sc_te_df(self):
         '''
         More detailed temporal error results; main value is included in sc_df.
-        index:
-            region_id, (site | __micro__), (ac | ap), phase
 
-        columns:
-            mean days (all detections)  <-- main value
-            std days (all)
-            mean days (early detections)
-            std days (early)
-            mean days (late detections)
-            std days (late)
-            all detections
-            early
-            late
-            perfect
-            missing proposals
-            missing truth sites
+        Notes:
+            index:
+                region_id, (site | __micro__), (ac | ap), phase
+
+            columns:
+                mean days (all detections)  <-- main value
+                std days (all)
+                mean days (early detections)
+                std days (early)
+                mean days (late detections)
+                std days (late)
+                all detections
+                early
+                late
+                perfect
+                missing proposals
+                missing truth sites
         '''
         raise NotImplementedError
 
@@ -290,7 +295,10 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
     with MultiIndex([region_id', 'rho', 'tau'])
     incl. special region_ids __micro__, __macro__
 
-    and columns:
+    and columns
+
+    .. code::
+
         min_area                  int64
         tp sites                  int64
         tp exact                  int64
@@ -334,7 +342,8 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
             latitude only
             https://en.wikipedia.org/wiki/Geographic_coordinate_system#Length_of_a_degree
 
-            :return: square meters per degree for latitude coordinate
+            Returns:
+                float:  square meters per degree for latitude coordinate
             """
 
             lat *= np.pi / 180.0  # convert to radians

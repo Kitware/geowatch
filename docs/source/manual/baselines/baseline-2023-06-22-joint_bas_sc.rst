@@ -1,6 +1,9 @@
-The following is a baseline joint BAS + SC grid that runs BAS, crops the
-candidates, and then runs the baseline SC model. This is effectively a superset
-of the corresponding BAS model for this date.
+Baseline 2023-06-22 Joint BAS+AC/SC
+-----------------------------------
+
+The following is a baseline joint BAS + AC/SC grid that runs BAS, crops the
+candidates, and then runs the baseline AC/SC model. This is effectively a
+superset of the corresponding BAS model for this date.
 
 
 The most important difference is that the ``--pipeline=bas`` parameter changed

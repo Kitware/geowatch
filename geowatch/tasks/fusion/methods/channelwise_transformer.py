@@ -2,6 +2,9 @@
 Our data might look like this, a sequence of frames where the frames can contain
 heterogeneous data:
 
+
+.. code::
+
     [
         {
             'frame_index': 0,
@@ -251,15 +254,12 @@ class MultimodalTransformerConfig(scfg.DataConfig):
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     """
-    CommandLine:
-        xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
-
     TODO:
         - [ ] Change name MultimodalTransformer -> FusionModel
         - [ ] Move parent module methods -> models
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/geowatch/tasks/fusion/methods/channelwise_transformer.py MultimodalTransformer
+        xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
 
     Example:
         >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
@@ -2173,7 +2173,6 @@ def perterb_params(optimizer, std):
         θ[i, t] = λ * θ[i, t - 1] + p[t]
 
         where p[t] ∼ N (0, (σ ** 2)) and 0 < λ < 1.
-
 
     References:
         .. [ShrinkAndPerterb] https://arxiv.org/pdf/1910.08475.pdf

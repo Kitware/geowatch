@@ -1,3 +1,7 @@
+Variation 2023-11-14 Full
+-------------------------
+
+
 This is the full BAS+SV+AC pipeline that extends the joint_bas_sc pipeline.
 
 Currrently WIP, might not be totally right yet. Help wanted.
