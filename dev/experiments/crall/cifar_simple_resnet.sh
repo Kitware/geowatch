@@ -18,13 +18,13 @@ inspect_kwcoco_files(){
     #geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 }
 #inspect_kwcoco_files
-EXPERIMENT_NAME="cifar10_simple_resnet_v2"
+EXPERIMENT_NAME="cifar10_simple_resnet_v3"
 
 CHANNELS="auto"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=3e-4
+TARGET_LR=1e-2
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
-PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
+#PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
 DEVICES=$(python -c "if 1:
     import os
     n = len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(','))
@@ -46,12 +46,12 @@ echo "DDP_WORKAROUND = $DDP_WORKAROUND"
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 
 
-MAX_STEPS=60000
+MAX_STEPS=6000
 MAX_EPOCHS=120
 TRAIN_ITEMS_PER_EPOCH=50000
 VALI_ITEMS_PER_EPOCH=10000
 ACCUMULATE_GRAD_BATCHES=1
-BATCH_SIZE=100
+BATCH_SIZE=1000
 TRAIN_BATCHES_PER_EPOCH=$(python -c "print($TRAIN_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 VALI_BATCHES_PER_EPOCH=$(python -c "print($VALI_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 echo "TRAIN_ITEMS_PER_EPOCH = $TRAIN_ITEMS_PER_EPOCH"
@@ -77,16 +77,18 @@ fi
 echo "${PREV_CHECKPOINT_ARGS[@]}"
 
 
-LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+ulimit -n 1000000
+
+LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 16
+    num_workers            : 0
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
     time_steps             : 1
     time_sampling          : uniform
-    #time_kernel            : '[0.0s,]'
+    #time_kernel           : '[0.0s,]'
     window_resolution     : 1.0
     input_resolution      : 1.0
     output_resolution     : 1.0
@@ -97,17 +99,17 @@ data:
     max_items_per_epoch    : $TRAIN_ITEMS_PER_EPOCH
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
-    temporal_dropout_rate  : 0.5
-    channel_dropout_rate   : 0.5
-    modality_dropout_rate  : 0.5
+    temporal_dropout_rate  : 0.0
+    channel_dropout_rate   : 0.0
+    modality_dropout_rate  : 0.0
     temporal_dropout       : 0.0
-    channel_dropout        : 0.05
-    modality_dropout       : 0.05
+    channel_dropout        : 0.0
+    modality_dropout       : 0.0
     mask_low_quality       : False
     mask_samecolor_method  : None
     observable_threshold   : 0.0
     quality_threshold      : 0.0
-    weight_dilate          : 5
+    weight_dilate          : 0
     dist_weights           : False
     use_centered_positives : True
     use_grid_positives     : False
