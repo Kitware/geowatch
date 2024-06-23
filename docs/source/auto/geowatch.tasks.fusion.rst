@@ -22,6 +22,8 @@ Submodules
    geowatch.tasks.fusion.evaluate
    geowatch.tasks.fusion.fit
    geowatch.tasks.fusion.fit_lightning
+   geowatch.tasks.fusion.fit_registery
+   geowatch.tasks.fusion.helper_scripts
    geowatch.tasks.fusion.predict
    geowatch.tasks.fusion.production
    geowatch.tasks.fusion.utils

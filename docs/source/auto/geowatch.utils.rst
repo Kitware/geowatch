@@ -20,6 +20,7 @@ Submodules
    geowatch.utils.ijson_ext
    geowatch.utils.kwcoco_extensions
    geowatch.utils.process_context
+   geowatch.utils.remedian
    geowatch.utils.result_analysis
    geowatch.utils.reverse_hashid
    geowatch.utils.simple_dvc
@@ -28,6 +29,7 @@ Submodules
    geowatch.utils.util_codes
    geowatch.utils.util_data
    geowatch.utils.util_dotdict
+   geowatch.utils.util_exception
    geowatch.utils.util_framework
    geowatch.utils.util_fsspec
    geowatch.utils.util_gdal
@@ -39,6 +41,7 @@ Submodules
    geowatch.utils.util_kwarray
    geowatch.utils.util_kwimage
    geowatch.utils.util_kwplot
+   geowatch.utils.util_kwutil
    geowatch.utils.util_logging
    geowatch.utils.util_nesting
    geowatch.utils.util_netharn
@@ -48,10 +51,12 @@ Submodules
    geowatch.utils.util_raster
    geowatch.utils.util_regex
    geowatch.utils.util_resolution
+   geowatch.utils.util_retry
    geowatch.utils.util_rgdc
    geowatch.utils.util_s3
    geowatch.utils.util_stringalgo
    geowatch.utils.util_torchmetrics
+   geowatch.utils.util_units
 
 Module contents
 ---------------

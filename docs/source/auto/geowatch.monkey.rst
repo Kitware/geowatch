@@ -10,9 +10,11 @@ Submodules
    geowatch.monkey._monkey_fbeta
    geowatch.monkey.monkey_albumentations
    geowatch.monkey.monkey_kwcoco
+   geowatch.monkey.monkey_kwutil
    geowatch.monkey.monkey_lightning
    geowatch.monkey.monkey_numpy
    geowatch.monkey.monkey_pil
+   geowatch.monkey.monkey_scriptconfig
    geowatch.monkey.monkey_tensorflow
    geowatch.monkey.monkey_torch
    geowatch.monkey.monkey_torchmetrics

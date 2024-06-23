@@ -12,6 +12,7 @@ Submodules
    geowatch.tasks.fusion.datamodules.temporal_sampling.exceptions
    geowatch.tasks.fusion.datamodules.temporal_sampling.plots
    geowatch.tasks.fusion.datamodules.temporal_sampling.sampler
+   geowatch.tasks.fusion.datamodules.temporal_sampling.time_kernel
    geowatch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar
    geowatch.tasks.fusion.datamodules.temporal_sampling.utils
 

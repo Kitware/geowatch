@@ -16,6 +16,7 @@ Subpackages
    geowatch.tasks.landcover
    geowatch.tasks.mae
    geowatch.tasks.metrics
+   geowatch.tasks.poly_from_point
    geowatch.tasks.rutgers_material_change_detection
    geowatch.tasks.rutgers_material_seg
    geowatch.tasks.sam

@@ -7,6 +7,8 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
+   geowatch.cli.experimental
+   geowatch.cli.queue_cli
    geowatch.cli.smartflow
    geowatch.cli.special
 
@@ -20,6 +22,7 @@ Submodules
    geowatch.cli.animate_visualizations
    geowatch.cli.baseline_framework_ingress
    geowatch.cli.cluster_sites
+   geowatch.cli.coco_add_ignore_buffer
    geowatch.cli.coco_add_watch_fields
    geowatch.cli.coco_align
    geowatch.cli.coco_average_features
@@ -35,6 +38,7 @@ Submodules
    geowatch.cli.collect_env
    geowatch.cli.concat_kwcoco_videos
    geowatch.cli.crop_sites_to_regions
+   geowatch.cli.draw_region
    geowatch.cli.extend_sc_sites
    geowatch.cli.find_dvc
    geowatch.cli.fit
@@ -44,9 +48,6 @@ Submodules
    geowatch.cli.merge_region_models
    geowatch.cli.mlops_cli
    geowatch.cli.predict
-   geowatch.cli.queue_cli.prepare_splits
-   geowatch.cli.queue_cli.prepare_ta2_dataset
-   geowatch.cli.queue_cli.prepare_teamfeats
    geowatch.cli.pseudolive_consolidate
    geowatch.cli.reproject_annotations
    geowatch.cli.run_fusion_predict

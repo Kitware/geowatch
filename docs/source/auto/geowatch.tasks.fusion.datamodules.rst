@@ -21,6 +21,7 @@ Submodules
    geowatch.tasks.fusion.datamodules.kwcoco_datamodule
    geowatch.tasks.fusion.datamodules.kwcoco_dataset
    geowatch.tasks.fusion.datamodules.kwcoco_video_data
+   geowatch.tasks.fusion.datamodules.network_io
    geowatch.tasks.fusion.datamodules.qa_bands
    geowatch.tasks.fusion.datamodules.smart_mixins
    geowatch.tasks.fusion.datamodules.spacetime_grid_builder

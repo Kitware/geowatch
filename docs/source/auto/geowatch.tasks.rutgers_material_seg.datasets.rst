@@ -19,6 +19,7 @@ Submodules
    geowatch.tasks.rutgers_material_seg.datasets.spacenet
    geowatch.tasks.rutgers_material_seg.datasets.spacenet2
    geowatch.tasks.rutgers_material_seg.datasets.sysucd
+   geowatch.tasks.rutgers_material_seg.datasets.tensor_containers
 
 Module contents
 ---------------
