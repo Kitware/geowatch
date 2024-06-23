@@ -80,7 +80,7 @@ echo "${PREV_CHECKPOINT_ARGS[@]}"
 LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 0
+    num_workers            : 16
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
@@ -119,16 +119,16 @@ model:
     class_path: geowatch.tasks.fusion.methods.torchvision_nets.Resnet50
     init_args:
         heads:
-            - name: class
+            - name: nonlocal_class
               type: mlp
               hidden_channels: []
-              out_channels: 2
+              out_channels: 11
               dropout: 0.1
               norm: batch
               loss:
                   type: focal
                   gamma: 2.0
-              global_weight: 1.0
+              head_weight: 1.0
 optimizer:
     class_path: torch.optim.AdamW
     init_args:

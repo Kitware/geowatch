@@ -17,6 +17,7 @@ def distributed_subitems(items, max_num):
 
     TODO:
         - [ ] Find a better name
+        - [ ] Figure out where this lives
 
     Example:
         >>> from geowatch.utils.util_kwutil import *  # NOQA

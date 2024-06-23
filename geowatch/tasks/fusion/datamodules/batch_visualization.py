@@ -245,6 +245,8 @@ class BatchVisualizationBuilder:
             weight_keys.append('change_weights')
         if builder.requested_tasks['outputs']:
             weight_keys.append('output_weights')
+        if builder.requested_tasks['nonlocal_class']:
+            truth_keys.append('nonlocal_class_ohe')
 
         # Prepare metadata on each frame
         frame_metas = []
@@ -514,9 +516,9 @@ class BatchVisualizationBuilder:
         sample_gsd = builder.item.get('sample_gsd', None)
         if sample_gsd is not None:
             if isinstance(sample_gsd, float):
-                vid_text = vid_text + ' @ {:0.2f} GSD'.format(sample_gsd)
+                vid_text = vid_text + ' @ {:0.2f} mGSD'.format(sample_gsd)
             else:
-                vid_text = vid_text + ' @ {} GSD'.format(sample_gsd)
+                vid_text = vid_text + ' @ {} mGSD'.format(sample_gsd)
 
         vid_header = kwimage.draw_text_on_image(
             {'width': width}, vid_text, org=(width // 2, 3), valign='top',
@@ -688,6 +690,31 @@ class BatchVisualizationBuilder:
         }
 
         # TODO: clean up logic
+
+        key = 'nonlocal_class_probs'
+        overlay_index = 0
+        if item_output and key in item_output and builder.requested_tasks['nonlocal_class']:
+            # SUPER HACKY, really need to improve logic for per-frame
+            # classification labels.
+            from geowatch.utils import util_kwimage
+            true_ohe = frame_meta['frame_item']['nonlocal_class_ohe']
+            classes = builder.classes
+            nonlocal_probs = item_output[key][frame_idx]
+            # raise NotImplementedError
+            # x_shape = chan_rows[overlay_index]['norm_signal'].shape[0:2]
+            # print(f'x_shape = {ub.urepr(x_shape, nl=1)}')
+            # if builder.overlay_on_image:
+            #     norm_signal = chan_rows[overlay_index]['norm_signal']
+            # else:
+            #     norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
+            norm_signal = None
+            pred_canvas = util_kwimage.draw_multiclass_clf_on_image(norm_signal, classes, nonlocal_probs, true_ohe)
+            if builder.rescale:
+                pred_part = kwimage.imresize(pred_canvas, **resizekw).clip(0, 1)
+            vertical_stack.append({
+                'im': pred_canvas,
+                'type': 'data',
+            })
 
         key = 'class_probs'
         overlay_index = 0

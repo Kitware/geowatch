@@ -132,6 +132,7 @@ class FCNResNet50(TorchvisionSegmentationWrapper, WatchModuleMixins):
         super().__init__()
         self.ots_model = self.define_ots_model()
         feat_dim = self.ots_model.backbone.layer4[2].conv3.out_channels
+        self.automatic_optimization = True
         assert feat_dim == 2048, 'hard coded sanity check'
 
         # import kwcoco
@@ -213,10 +214,8 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         >>> # Use one of our fusion.architectures in a test
         >>> heads = ub.codeblock(
         >>>     '''
-        >>>     feat_dim: 2048
-        >>>     tasks:
         >>>         # Mirrors the simple FCNHead in torchvision
-        >>>         - name: class
+        >>>         - name: nonlocal_class
         >>>           type: mlp
         >>>           hidden_channels: [256]
         >>>           out_channels: 4
@@ -225,13 +224,20 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         >>>           loss:
         >>>               type: focal
         >>>               gamma: 2.0
-        >>>           global_weight: 1.0
+        >>>           head_weight: 1.0
         >>>     ''')
         >>> self = Resnet50(
         >>>     heads=heads,
         >>>     classes=classes,
         >>>     dataset_stats=dataset_stats)
         >>> outputs = self.forward_step(batch_items, with_loss=True)
+        >>> canvas = datamodule.draw_batch(batch_items, outputs=outputs)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
+
     """
 
     def __init__(self, heads, classes=None, dataset_stats=None):
@@ -252,91 +258,36 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
 
         assert feat_dim == 2048, 'hard coded sanity check'
         self.heads = heads_module.TaskHeads(heads, feat_dim=feat_dim)
+        self.automatic_optimization = True
 
     def forward(self, batch):
         imdata_bchw = batch['imdata_bchw']
+
+        # Mean/Std Normalize the Input Batch
         imdata_bchw = self.input_norms(imdata_bchw)
+        imdata_bchw.nan_to_num_()
+
+        # Compute backbone features
         feats = self.ots_model(imdata_bchw)
 
-        # Pretend there is a space part
-        # spacetime_features = feats[:, None, None, :]
-        logits = {}
-        if 'class' in self.heads:
-            logits['class'] = self.heads['class'](feats)
-        if 'saliency' in self.heads:
-            logits['saliency'] = self.heads['saliency'](feats)
-
-        resampled_logits = logits  # no resample
-        # Convert logits into probabilities for output
-        # Remove batch index in both cases
-        probs = {}
-        if 'class' in resampled_logits:
-            criterion_encoding = self.heads["class"].criterion.target_encoding
-            _logits = resampled_logits['class'].detach()
-            if criterion_encoding == "onehot":
-                probs['class'] = _logits.sigmoid()
-            elif criterion_encoding == "index":
-                probs['class'] = _logits.softmax(dim=-1)
-            else:
-                raise NotImplementedError
-
-        outputs = {
-            'probs': probs,
-            'logits': logits,
-        }
+        outputs = self.heads(feats)
         return outputs
 
     def forward_step(self, batch_items, with_loss=False, stage='unspecified'):
+        from geowatch.tasks.fusion.datamodules import batch_item as batch_item_mod
+        batch_items = batch_item_mod.UncollatedRGBImageBatch.from_items(batch_items)
+        batch_size = len(batch_items)
+        batch = batch_items.collate()
 
-        from geowatch.tasks.fusion.datamodules.batch_item import RGBImageBatchItem
-        batch_items = [RGBImageBatchItem(item) for item in batch_items]
-        batch = self.collate(batch_items)
-        batch_outputs = self.forward(batch)
+        outputs = self.forward(batch)
 
-        outputs = {}
-        outputs['batch_outputs'] = batch_outputs
         if with_loss:
-            item_loss_parts = {}
-            # Compute criterion loss for each head
-            resampled_logits = batch_outputs['logits']
-            import einops
-            for head_key, head_logits in resampled_logits.items():
-                assert head_key == 'class'
-                head_truth = batch['nonlocal_class_ohe']
-                truth_encoding = 'ohe'
-                head = self.heads[head_key]
-                criterion = head.criterion
-                head_pred_input = einops.rearrange(head_logits, '(b t h w) c -> ' + criterion.logit_shape, t=1, h=1, w=1).contiguous()
+            losses = self.heads.compute_loss(outputs, batch)
+            outputs.update(losses)
+            total_loss = losses['loss']
+            self.log(f'{stage}_loss', total_loss, prog_bar=True, batch_size=batch_size)
 
-                if criterion.target_encoding == 'index':
-                    head_true_idxs = head_truth.long()
-                    head_true_input = einops.rearrange(head_true_idxs, '(b t h w) -> ' + criterion.target_shape, t=1, h=1, w=1).contiguous()
-                elif criterion.target_encoding == 'onehot':
-                    # Note: 1HE is much easier to work with
-                    if truth_encoding == 'index':
-                        import kwarray
-                        head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
-                    elif truth_encoding == 'ohe':
-                        head_true_ohe = head_truth
-                    else:
-                        raise KeyError(truth_encoding)
-                    head_true_input = einops.rearrange(head_true_ohe, '(b t h w) c -> ' + criterion.target_shape, t=1, h=1, w=1).contiguous()
-                else:
-                    raise KeyError(criterion.target_encoding)
-
-                unreduced_head_loss = criterion(head_pred_input, head_true_input)
-                # full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
-                # Weighted reduction
-                # EPS_F32 = 1.1920929e-07
-                # weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
-                weighted_head_loss = unreduced_head_loss
-                global_head_weight = 1
-                head_loss = global_head_weight * weighted_head_loss
-                item_loss_parts[head_key] = head_loss
-
-            total_loss = sum(t.sum() for t in item_loss_parts.values())
-            outputs['loss'] = total_loss
-            # outputs['item_losses'] = item_losses
+        outputs = batch_item_mod.CollatedNetworkOutputs(outputs)
         return outputs
 
     def define_ots_model(self):
@@ -345,3 +296,29 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         # Hack off the head
         ots_model.fc = Identity()
         return ots_model
+
+    # These train / vali / test specific methods should be moved to a mixin
+
+    def training_step(self, batch, batch_idx=None):
+
+        if not self.automatic_optimization:
+            # Do we have to do this ourselves?
+            # https://lightning.ai/docs/pytorch/stable/common/optimization.html
+            opt = self.optimizers()
+            opt.zero_grad()
+
+        outputs = self.forward_step(batch, with_loss=True, stage='train')
+
+        if not self.automatic_optimization:
+            loss = outputs['loss']
+            self.manual_backwards(loss)
+
+        return outputs
+
+    def validation_step(self, batch, batch_idx=None):
+        outputs = self.forward_step(batch, with_loss=True, stage='val')
+        return outputs
+
+    def test_step(self, batch, batch_idx=None):
+        outputs = self.forward_step(batch, with_loss=True, stage='test')
+        return outputs

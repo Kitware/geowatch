@@ -86,6 +86,7 @@ class SmartTrainer(pl.Trainer):
             if self.add_to_registery:
                 self._add_to_registery()
             self._write_inspect_helper_scripts()
+            self._handle_restart_details()
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
@@ -110,6 +111,21 @@ class SmartTrainer(pl.Trainer):
         registery.append(
             path=dpath,
         )
+
+    def _handle_restart_details(self):
+        """
+        Handle chores when restarting from a previous checkpoint.
+        """
+        if self.ckpt_path:
+            print('Detected that you are restarting from a previous checkpoint')
+            ckpt_path = ub.Path(self.ckpt_path)
+            assert ckpt_path.parent.name == 'checkpoints'
+            old_event_fpaths = list(ckpt_path.parent.parent.glob('events.out.tfevents.*'))
+            if len(old_event_fpaths):
+                print('Copying tensorboard events to new training directory directory')
+                for old_fpath in old_event_fpaths:
+                    new_fpath = self.log_dpath / old_fpath.name
+                    old_fpath.copy(new_fpath)
 
     def _write_inspect_helper_scripts(self):
         """

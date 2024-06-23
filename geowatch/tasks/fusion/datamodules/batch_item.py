@@ -5,6 +5,11 @@ This is currently a work in progress, and the goal is to abstract the format of
 the items produced by the datalaoder to make them ammenable for use with both
 our heterogeneous networks as well as more standard networks that require data
 be more regular.
+
+
+This has a lot in common with prior work in:
+
+    ~/code/netharn/netharn/data/data_containers.py
 """
 import kwarray
 import ubelt as ub
@@ -38,6 +43,9 @@ class BatchItem(dict):
 
     def __nice__(self):
         return ''
+
+    def asdict(self):
+        return dict(self)
 
     def draw(self, **kwargs):
         raise NotImplementedError
@@ -322,7 +330,6 @@ class RGBImageBatchItem(HomogeneousBatchItem):
         >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 1, 1))
         >>> kwplot.show_if_requested()
     """
-
     def __nice__(self):
         return f'num_frames={self.num_frames}, sensorchans={self.sensorchan_histogram}'
 
@@ -362,13 +369,7 @@ class RGBImageBatchItem(HomogeneousBatchItem):
         """
         cls = RGBImageBatchItem
         """
-        from geowatch.tasks.fusion.datamodules import kwcoco_dataset
-        import geowatch
-        coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=1)
-        dataset = kwcoco_dataset.KWCocoVideoDataset(
-            coco_dset, time_dims=1, window_dims=(300, 300),
-            channels='r|g|b')
-        dataset.disable_augmenter = True
+        dataset = _demo_dataset()
         if index is None:
             index = dataset.sample_grid['targets'][dataset.sample_grid['positives_indexes'][0]]
         item = dataset[index]
@@ -380,10 +381,201 @@ class RGBImageBatchItem(HomogeneousBatchItem):
         assert len(mode_keys) == 1
         # mode_key = mode_keys[0]
         # mode_val = modes[mode_key]
-
         # new_item = ub.udict(item) - {'frames'}
         # new_frame = ub.udict(frame) - {'modes'}
         # new_frame['channels'] = mode_key
         # new_frame['imdata_chw'] = mode_val
         # new_item.update(new_frame)
         return self
+
+
+@ub.memoize
+def _demo_dataset():
+    """
+    Cached dataset for more efficient testing
+    """
+    from geowatch.tasks.fusion.datamodules import kwcoco_dataset
+    import geowatch
+    coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=1)
+    dataset = kwcoco_dataset.KWCocoVideoDataset(
+        coco_dset, time_dims=1, window_dims=(300, 300),
+        channels='r|g|b')
+
+    dataset.requested_tasks['nonlocal_class'] = True
+    dataset.disable_augmenter = True
+    return dataset
+
+
+# ----------------------------------
+# Non-collated Batch Item Containers
+# ----------------------------------
+
+
+class UncollatedBatch(list):
+    """
+    A generic list of batch items, which may or may not be collatable.
+    """
+
+
+class HeterogeneousBatch(UncollatedBatch):
+    """
+    A HeterogeneousBatch a ``List[HeterogeneousBatchItem]``.
+    """
+
+
+class UncollatedRGBImageBatch(UncollatedBatch):
+    """
+    A list of collatable RGBImageBatchItem
+    """
+
+    @classmethod
+    def demo(cls, num_items=3):
+        """
+        """
+        self = cls.from_items(RGBImageBatchItem.demo(_) for _ in range(num_items))
+        return self
+
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, list):
+            self = cls.from_items(data)
+        else:
+            raise NotImplementedError
+        return self
+
+    @classmethod
+    def from_items(cls, data):
+        self = cls(RGBImageBatchItem(item) for item in data)
+        return self
+
+    def collate(self):
+        """
+        Returns:
+            CollatedRGBImageBatch
+
+        Example:
+            >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+            >>> self = UncollatedRGBImageBatch.demo()
+            >>> batch = self.collate()
+        """
+        import torch
+        imdatas = [batch_item.imdata_chw for batch_item in self]
+        imdata_bchw = torch.stack(imdatas)
+
+        batch = CollatedRGBImageBatch()
+        batch['imdata_bchw'] = imdata_bchw
+
+        try:
+            nonlocal_class_ohes = [batch_item.nonlocal_class_ohe for batch_item in self]
+        except KeyError:
+            ...
+        else:
+            nonlocal_class_ohe = torch.stack(nonlocal_class_ohes)
+            batch['nonlocal_class_ohe'] = nonlocal_class_ohe
+
+        return batch
+
+
+# ------------------------------
+# Collated Batch Item Containers
+# ------------------------------
+
+
+class CollatedBatch(dict):
+
+    def asdict(self):
+        return dict(self)
+
+
+class CollatedRGBImageBatch(CollatedBatch):
+    ...
+
+
+# ---------------
+# Network Outputs
+# ---------------
+# The concept of a network input needs to be mirrored by a network output.
+
+
+class NetworkOutputs(dict):
+    """
+    Network outputs should ALWAYS be a dictionary, this is the most flexible
+    way to encode networks such that they can be extended later.
+    """
+
+    def _debug_shape(self):
+        from geowatch.utils.util_netharn import _debug_inbatch_shapes
+        _debug_inbatch_shapes(self)
+
+
+# ------------------------------------
+# Collated Network Output Containers
+# ------------------------------------
+
+class UncollatedNetworkOutputs(NetworkOutputs):
+    ...
+
+
+# ------------------------------------
+# Uncollated Network Output Containers
+# ------------------------------------
+
+class CollatedNetworkOutputs(NetworkOutputs):
+    """
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> B, H, W, C = 2, 3, 3, 11
+        >>> logits = {
+        >>>     'nonlocal_class': (torch.rand(B, C) - 0.5) * 10,
+        >>>     'segmentation_class': (torch.rand(B, T, W, H, C) - 0.5) * 10,
+        >>>     'nonlocal_saliency': (torch.rand(B, 1) - 0.5) * 10,
+        >>>     'segmentation_saliency': (torch.rand(B, T, W, H, 1) - 0.5) * 10,
+        >>> }
+        >>> self = CollatedNetworkOutputs(
+        >>>     logits=logits,
+        >>>     probs={k + '_probs': v.sigmoid() for k, v in logits.items()},
+        >>>     loss_parts={},
+        >>>     loss=10,
+        >>> )
+        >>> new = self.decollate()
+        >>> self._debug_shape()
+        >>> new._debug_shape()
+    """
+
+    def decollate(self):
+        """
+        Convert back into a per-item structure for easier analysis / drawing.
+        """
+        new = UncollatedNetworkOutputs()
+        new['loss'] = self.get('loss', None)
+        new['item_probs'] = decollate(self['probs'])
+        return new
+
+
+def decollate(collated):
+    """
+    Breakup a collated batch in a standardized way.
+    Returns a list of items for each batch item with a structure that matches
+    the collated batch, but without the leading batch dimension in each value.
+
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> B, H, W, C = 5, 2, 3, 7
+        >>> collated = {
+        >>>     'segmentation_class': torch.rand(B, H, W, C),
+        >>>     'nonlocal_class': torch.rand(B, C),
+        >>> }
+        >>> uncollated = decollate(collated)
+        >>> assert len(uncollated) == B
+        >>> assert (uncollated[0]['nonlocal_class'] == collated['nonlocal_class'][0]).all()
+    """
+    import ubelt as ub
+    # TODO: make more efficient?
+    walker = ub.IndexableWalker(collated)
+    uncollated_dict = ub.AutoDict()
+    uncollated_walker = ub.IndexableWalker(uncollated_dict)
+    for path, batch_val in walker:
+        for bx, item_val in enumerate(batch_val):
+            uncollated_walker[[bx] + path] = item_val
+    uncollated = list(uncollated_dict.to_dict().values())
+    return uncollated

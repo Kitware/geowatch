@@ -1843,3 +1843,73 @@ def _have_gdal():
         return False
     else:
         return True
+
+
+def draw_multiclass_clf_on_image(im, classes, probs=None, true_ohe=None, top_k=3, border=1):
+    """
+    Draws multiclass classification label on an image.
+
+    Works best with image chips sized between 200x200 and 500x500
+
+    Args:
+        im (ndarray): the image
+        classes (Sequence[str] | kwcoco.CategoryTree): list of class names
+        true_ohe (int): true class indicator vector
+        probs (ndarray): predicted class probs for each class
+
+    Ignore:
+        from geowatch.utils.util_kwimage import *  # NOQA
+        im = None
+        classes = ['dog', 'cat', 'beagle', 'boxer', 'tabby', 'ragdoll', 'gooddog', 'baddog']
+        probs = [0.8, 0.3, 0.2, 0.8, 0.2, 0.2, 0.1, 0.9]
+        true_ohe = [1, 0, 1, 0, 0, 0, 1, 0]
+        border = 1
+        canvas = draw_multiclass_clf_on_image(im, classes, probs, true_ohe)
+
+        import kwplot
+        kwplot.autompl()
+        kwplot.imshow(canvas)
+    """
+    import kwimage
+    import kwarray
+
+    if true_ohe is not None:
+        true_ohe = kwarray.ArrayAPI.numpy(true_ohe)
+        true_idxs = np.where(true_ohe)[0]
+
+    lines = []
+
+    toshow_class_idxs = []
+    if probs is not None:
+        probs = kwarray.ArrayAPI.numpy(probs)
+        top_pred_idxs = probs.argsort()[::-1][:top_k]
+        missing_true_idxs = sorted(set(true_idxs) - set(top_pred_idxs))
+        toshow_class_idxs.extend(top_pred_idxs)
+        toshow_class_idxs.extend(missing_true_idxs)
+
+    for cidx in toshow_class_idxs:
+        class_name = classes[cidx]
+        pred_score = probs[cidx]
+        is_true = true_ohe[cidx]
+        if is_true:
+            label = (f't:{class_name}@{pred_score:.2f}: {is_true}')
+        else:
+            label = (f'p:{class_name}@{pred_score:.2f}: {is_true}')
+        lines.append(label)
+    text = '\n'.join(lines)
+
+    fontkw = {
+        'fontScale': 1.0,
+        'thickness': 2
+    }
+    # color = 'dodgerblue' if pcx == tcx else 'orangered'
+    if im is not None:
+        im_ = kwimage.atleast_3channels(im)
+        # w, h = im.shape[0:2][::-1]
+    else:
+        im_ = None
+
+    org2 = np.array((2, 5))
+    canvas = kwimage.draw_text_on_image(im_, text, org=org2, color='kitware_green',
+                                        valign='top', border=border, **fontkw)
+    return canvas
