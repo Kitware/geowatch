@@ -778,6 +778,8 @@ class TruthMixin:
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+        else:
+            time_weights = 1
 
         truth_info = {
             'task_tid_to_cnames': task_tid_to_cnames,
@@ -1199,6 +1201,8 @@ class GetItemMixin(TruthMixin):
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+        else:
+            time_weights = 1
         meta_info = {
             'time_weights': time_weights,
         }
@@ -1706,7 +1710,8 @@ class GetItemMixin(TruthMixin):
         if coco_video is None:
             domain = None
         else:
-            domain = coco_video.get('domain', coco_video.get('name', None))
+            # domain = coco_video.get('domain', coco_video.get('name', None))
+            domain = coco_video.get('domain', None)
 
         # After all channels are sampled, apply final invalid mask.
         for stream, sample in sample_streams.items():
@@ -2836,7 +2841,7 @@ class PreprocessMixin:
             ('with_intensity', with_intensity),
             ('with_class', with_class),
             ('prenormalizers', self.prenormalizers),
-            ('depends_version', 21),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 22),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2931,7 +2936,7 @@ class PreprocessMixin:
         # Track moving average of each fused channel stream
         norm_stats = ub.ddict(lambda: kwarray.RunningStats(nan_policy='omit'))
 
-        classes = self.classes
+        classes = self.predictable_classes
         num_classes = len(classes)
         bins = np.arange(num_classes + 1)
         total_freq = np.zeros(num_classes, dtype=np.int64)

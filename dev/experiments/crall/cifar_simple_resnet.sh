@@ -111,12 +111,15 @@ data:
     quality_threshold      : 0.0
     weight_dilate          : 0
     dist_weights           : False
+    upweight_centers       : False
+    downweight_nan_regions : False
     use_centered_positives : True
     use_grid_positives     : False
     use_grid_negatives     : False
-    normalize_inputs       : 80960
+    normalize_inputs       : 50000
     balance_options        : sequential_without_replacement
     balance_areas          : false
+
 model:
     class_path: geowatch.tasks.fusion.methods.torchvision_nets.Resnet50
     init_args:

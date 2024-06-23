@@ -12,9 +12,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * Fix box head visualizations
+* Fix dataset issue when `upweight_centers`=False
+* Fix issue in computing class stats when due to predictable classes.
 
 ### Changed
 * Better training restart invocation docs
+* The kwcoco dataset no longer uses video names as proxys for domains.
 
 ### Removed
 * The old "watch" module is no longer packaged in the pypi install. The
