@@ -24,7 +24,7 @@ from geowatch.tasks.tracking.utils import (
     gpd_compute_scores)
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

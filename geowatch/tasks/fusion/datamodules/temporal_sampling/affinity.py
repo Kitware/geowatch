@@ -12,7 +12,7 @@ from .utils import guess_missing_unixtimes
 from .utils import coerce_time_kernel
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

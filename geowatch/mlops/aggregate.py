@@ -64,7 +64,7 @@ from typing import Dict, Any
 from scriptconfig import DataConfig, Value
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

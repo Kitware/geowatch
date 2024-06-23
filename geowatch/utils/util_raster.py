@@ -26,7 +26,7 @@ from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

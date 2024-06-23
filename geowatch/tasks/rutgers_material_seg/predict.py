@@ -45,7 +45,7 @@ from geowatch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset impo
 import torch.nn.functional as F
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

@@ -162,7 +162,7 @@ from .exceptions import TimeSampleError
 
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

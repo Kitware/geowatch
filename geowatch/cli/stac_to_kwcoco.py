@@ -84,7 +84,7 @@ import scriptconfig as scfg
 from os.path import basename, dirname, join
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

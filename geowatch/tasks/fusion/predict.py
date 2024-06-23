@@ -42,7 +42,7 @@ import scriptconfig as scfg
 monkey_torchmetrics.fix_torchmetrics_compatability()
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

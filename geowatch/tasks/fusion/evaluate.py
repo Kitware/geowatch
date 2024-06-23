@@ -37,7 +37,7 @@ from kwutil import util_parallel
 from geowatch import heuristics
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

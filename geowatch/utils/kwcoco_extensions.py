@@ -20,7 +20,7 @@ from geowatch import exceptions
 # import geowatch.gis
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

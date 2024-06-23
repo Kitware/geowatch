@@ -182,7 +182,7 @@ import warnings
 DEBUG = 1
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

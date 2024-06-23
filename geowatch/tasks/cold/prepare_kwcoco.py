@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     from ubelt import identity as profile
 

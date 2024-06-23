@@ -31,7 +31,7 @@ Configurable = Optional[Dict[str, Any]]
 
 
 try:
-    from xdev import profile  # NOQA
+    from line_profiler import profile  # NOQA
 except ImportError:
     profile = ub.identity
 

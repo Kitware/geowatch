@@ -28,7 +28,7 @@ import scriptconfig as scfg
 import math
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 
