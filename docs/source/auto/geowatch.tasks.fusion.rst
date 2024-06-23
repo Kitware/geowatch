@@ -17,7 +17,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.tasks.fusion.__main__
    geowatch.tasks.fusion.coco_stitcher
    geowatch.tasks.fusion.evaluate
    geowatch.tasks.fusion.fit
@@ -35,4 +34,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

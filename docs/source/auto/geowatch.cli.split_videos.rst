@@ -5,4 +5,3 @@ geowatch.cli.split\_videos module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

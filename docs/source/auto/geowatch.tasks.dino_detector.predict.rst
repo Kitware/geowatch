@@ -5,4 +5,3 @@ geowatch.tasks.dino\_detector.predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

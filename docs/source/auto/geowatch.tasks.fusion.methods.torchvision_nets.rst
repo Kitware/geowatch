@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.torchvision\_nets module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

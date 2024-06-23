@@ -5,4 +5,3 @@ geowatch.cli.experimental.unpack\_model module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

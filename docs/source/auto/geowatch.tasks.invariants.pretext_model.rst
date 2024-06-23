@@ -5,4 +5,3 @@ geowatch.tasks.invariants.pretext\_model module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

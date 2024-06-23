@@ -14,9 +14,9 @@ grouped together. For each band-group I use gdal-warp to crop to the region,
 which creates a set of temporary files, and then finally gdalmerge is used to
 combine those different crops into a single image.
 
-The main corner case in the above process is when one image has "r|g|b" but
-another image has "r|g|b|yellow", there is no logic to split those channels out
-at the moment.
+The main corner case in the above process is when one image has ``r|g|b`` but
+another image has ``r|g|b|yellow``, there is no logic to split those channels
+out at the moment.
 
 
 The following is an end-to-end example works on public data
@@ -133,7 +133,7 @@ CommandLine:
 
 
 
-Notes:
+Note:
     # Example invocation to create the full drop1 aligned dataset
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc

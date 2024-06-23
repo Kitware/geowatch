@@ -5,4 +5,3 @@ geowatch.utils.ijson\_ext module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

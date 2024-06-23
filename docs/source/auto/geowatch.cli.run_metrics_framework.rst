@@ -5,4 +5,3 @@ geowatch.cli.run\_metrics\_framework module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

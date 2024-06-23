@@ -5,4 +5,3 @@ geowatch.cli.coco\_align module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

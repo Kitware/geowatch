@@ -5,4 +5,3 @@ geowatch.cli.coco\_update\_geotiff\_metadata module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

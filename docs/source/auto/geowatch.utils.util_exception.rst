@@ -5,4 +5,3 @@ geowatch.utils.util\_exception module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

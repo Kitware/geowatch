@@ -5,4 +5,3 @@ geowatch.demo.stac\_demo module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

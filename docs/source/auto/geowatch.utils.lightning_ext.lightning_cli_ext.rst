@@ -5,4 +5,3 @@ geowatch.utils.lightning\_ext.lightning\_cli\_ext module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

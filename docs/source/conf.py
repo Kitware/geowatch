@@ -1,4 +1,4 @@
-"""
+r"""
 Notes:
     Based on template code in:
         ~/code/xcookie/xcookie/builders/docs.py
@@ -17,7 +17,27 @@ Notes:
     # need to edit the conf.py
 
     cd ~/code/geowatch/docs
-    sphinx-apidoc --private --separate -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch
+    # sphinx-apidoc --private --separate -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch
+
+    rm -rf ~/code/geowatch/docs/source/auto/*
+    sphinx-apidoc --separate --force \
+        --output-dir ~/code/geowatch/docs/source/auto \
+        ~/code/geowatch/geowatch
+
+    # Could not get some files to work with exclusions, so manually remove them
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*tasks*change_detection*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*tasks*rutgers_material_seg*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*tasks*rutgers_material_seg_v2*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*tasks*rutgers_material_change_detection*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*tasks*super_res*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*invariants.utils*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*landcover.utils*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*invariants.data*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*uky_temporal_prediction.models*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*uky_temporal_prediction.utils*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*uky_temporal_prediction.drop0_datasets*
+    rm -rf ~/code/geowatch/docs/source/auto/geowatch*utils*_jsonargparse_ext_*
+
 
     # Note: the module should importable before running this
     # (e.g. install it in developer mode or munge the PYTHONPATH)
@@ -192,6 +212,7 @@ autosummary_mock_imports = [
     'geowatch.tasks.fusion.datamodules.temporal_sampling.affinity_sampling',
     'geowatch.tasks.depth_pcd.model',
     'geowatch.tasks.cold.export_change_map',
+    'pycold',
 ]
 
 autodoc_member_order = 'bysource'
@@ -986,13 +1007,6 @@ def postprocess_hyperlinks(app, doctree, docname):
                         node.attributes['refuri'] = refuri.replace('.rst', '.html')
                 else:
                     raise AssertionError
-
-
-def fix_rst_todo_section(lines):
-    new_lines = []
-    for line in lines:
-        ...
-    ...
 
 
 def setup(app):

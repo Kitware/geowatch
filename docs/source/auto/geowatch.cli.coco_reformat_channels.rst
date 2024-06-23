@@ -5,4 +5,3 @@ geowatch.cli.coco\_reformat\_channels module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

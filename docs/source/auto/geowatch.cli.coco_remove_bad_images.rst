@@ -5,4 +5,3 @@ geowatch.cli.coco\_remove\_bad\_images module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

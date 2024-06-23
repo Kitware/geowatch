@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.kwcoco\_video\_data module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

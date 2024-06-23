@@ -5,4 +5,3 @@ geowatch.cli.experimental.recommend\_size\_adjustments module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

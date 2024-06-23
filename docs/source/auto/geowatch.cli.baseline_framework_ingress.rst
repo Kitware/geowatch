@@ -5,4 +5,3 @@ geowatch.cli.baseline\_framework\_ingress module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

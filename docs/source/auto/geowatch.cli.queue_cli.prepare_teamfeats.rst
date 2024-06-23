@@ -5,4 +5,3 @@ geowatch.cli.queue\_cli.prepare\_teamfeats module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

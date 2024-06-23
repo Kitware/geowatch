@@ -5,4 +5,3 @@ geowatch.cli.experimental.fixup\_predict\_kwcoco\_metadata module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

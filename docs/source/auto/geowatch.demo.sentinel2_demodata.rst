@@ -5,4 +5,3 @@ geowatch.demo.sentinel2\_demodata module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.cli.fix\_region\_models module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

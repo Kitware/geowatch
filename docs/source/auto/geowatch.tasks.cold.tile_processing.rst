@@ -5,4 +5,3 @@ geowatch.tasks.cold.tile\_processing module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.channelwise\_transformer module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

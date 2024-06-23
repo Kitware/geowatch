@@ -5,4 +5,3 @@ geowatch.tasks.metrics.viz\_sc\_results module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.utils.ext\_monai module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

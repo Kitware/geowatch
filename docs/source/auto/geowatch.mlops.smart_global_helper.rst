@@ -5,4 +5,3 @@ geowatch.mlops.smart\_global\_helper module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

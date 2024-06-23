@@ -5,4 +5,3 @@ geowatch.tasks.poly\_from\_point.predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

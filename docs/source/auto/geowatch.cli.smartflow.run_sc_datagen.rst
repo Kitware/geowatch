@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_sc\_datagen module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

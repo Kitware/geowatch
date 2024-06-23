@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.loss module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

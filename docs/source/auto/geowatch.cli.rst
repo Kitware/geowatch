@@ -18,7 +18,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.cli.__main__
    geowatch.cli.animate_visualizations
    geowatch.cli.baseline_framework_ingress
    geowatch.cli.cluster_sites
@@ -69,4 +68,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

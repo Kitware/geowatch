@@ -5,4 +5,3 @@ geowatch.tasks.cold.export\_cold\_result\_kwcoco module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

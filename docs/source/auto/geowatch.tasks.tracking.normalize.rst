@@ -5,4 +5,3 @@ geowatch.tasks.tracking.normalize module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

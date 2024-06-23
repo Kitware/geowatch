@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.object\_head module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

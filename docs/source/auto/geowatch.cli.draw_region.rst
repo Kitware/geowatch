@@ -5,4 +5,3 @@ geowatch.cli.draw\_region module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

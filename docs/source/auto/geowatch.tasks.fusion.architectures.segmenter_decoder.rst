@@ -5,4 +5,3 @@ geowatch.tasks.fusion.architectures.segmenter\_decoder module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.tasks.sam.predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

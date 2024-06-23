@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.qa\_bands module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

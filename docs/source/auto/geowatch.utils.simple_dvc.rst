@@ -5,4 +5,3 @@ geowatch.utils.simple\_dvc module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

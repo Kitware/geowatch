@@ -15,10 +15,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22
-   geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_22_and_lt_4_24
-   geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_24_and_lt_4_xx
-   geowatch.utils.lightning_ext._jsonargparse_ext_ge_4_xx_and_lt_4_21
    geowatch.utils.lightning_ext.argparse_ext
    geowatch.utils.lightning_ext.demo
    geowatch.utils.lightning_ext.lightning_cli_ext
@@ -35,4 +31,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

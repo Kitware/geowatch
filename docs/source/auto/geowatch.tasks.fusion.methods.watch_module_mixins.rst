@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.watch\_module\_mixins module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

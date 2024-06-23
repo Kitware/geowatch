@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_iarpa\_metrics module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

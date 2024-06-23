@@ -5,4 +5,3 @@ geowatch.cli.cluster\_sites module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.gis.digital\_globe module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

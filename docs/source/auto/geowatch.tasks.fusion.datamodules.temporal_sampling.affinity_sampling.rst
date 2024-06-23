@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.temporal\_sampling.affinity\_sampling module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

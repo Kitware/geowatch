@@ -5,4 +5,3 @@ geowatch.tasks.invariants.fit\_segment module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

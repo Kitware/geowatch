@@ -5,4 +5,3 @@ geowatch.demo.smart\_kwcoco\_demodata module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

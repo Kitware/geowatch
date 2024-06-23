@@ -5,4 +5,3 @@ geowatch.cli.coco\_add\_ignore\_buffer module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

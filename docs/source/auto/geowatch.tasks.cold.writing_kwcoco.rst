@@ -5,4 +5,3 @@ geowatch.tasks.cold.writing\_kwcoco module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

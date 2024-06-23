@@ -5,4 +5,3 @@ geowatch.tasks.depth\_pcd.model\_test module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

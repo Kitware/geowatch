@@ -7,7 +7,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.monkey._monkey_fbeta
    geowatch.monkey.monkey_albumentations
    geowatch.monkey.monkey_kwcoco
    geowatch.monkey.monkey_kwutil
@@ -26,4 +25,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

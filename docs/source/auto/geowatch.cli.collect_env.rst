@@ -5,4 +5,3 @@ geowatch.cli.collect\_env module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

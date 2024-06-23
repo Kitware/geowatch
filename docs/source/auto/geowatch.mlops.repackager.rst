@@ -5,4 +5,3 @@ geowatch.mlops.repackager module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

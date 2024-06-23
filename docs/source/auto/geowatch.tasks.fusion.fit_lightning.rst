@@ -5,4 +5,3 @@ geowatch.tasks.fusion.fit\_lightning module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.utils.util\_s3 module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

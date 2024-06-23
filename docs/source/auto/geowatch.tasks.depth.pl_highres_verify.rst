@@ -5,4 +5,3 @@ geowatch.tasks.depth.pl\_highres\_verify module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

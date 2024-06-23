@@ -5,4 +5,3 @@ geowatch.tasks.fusion.methods.heterogeneous module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

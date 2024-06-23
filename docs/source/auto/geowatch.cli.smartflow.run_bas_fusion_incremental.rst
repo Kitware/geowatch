@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_bas\_fusion\_incremental module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

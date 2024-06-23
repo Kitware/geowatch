@@ -712,7 +712,7 @@ class InputNorm(torch.nn.Module):
     If the mean and std arguments are unspecified, this layer becomes a noop.
 
     References:
-        https://towardsdatascience.com/why-data-should-be-normalized-before-training-a-neural-network-c626b7f66c7d
+        .. [WhyNormalize] https://towardsdatascience.com/why-data-should-be-normalized-before-training-a-neural-network-c626b7f66c7d
 
     Example:
         >>> self = InputNorm(mean=50.0, std=29.0)
@@ -724,6 +724,7 @@ class InputNorm(torch.nn.Module):
         >>> partial1 = InputNorm(mean=50)(inputs)
         >>> partial2 = InputNorm(std=29)(inputs)
 
+    Ignore:
         import torch
 
         model = torch.nn.Sequential(*[
@@ -1122,11 +1123,12 @@ class Identity(torch.nn.Sequential):
 
 class Conv0d(torch.nn.Linear):
     """
-    self = Conv0d(2, 3, 1, standardize_weights=True)
-    print('self = {!r}'.format(self))
-    x = torch.rand(1, 2)
-    y = self.forward(x)
-    print('y = {!r}'.format(y))
+    Ignore:
+        self = Conv0d(2, 3, 1, standardize_weights=True)
+        print('self = {!r}'.format(self))
+        x = torch.rand(1, 2)
+        y = self.forward(x)
+        print('y = {!r}'.format(y))
     """
     def __init__(self, in_channels, out_channels, kernel_size=1, stride=1,
                  padding=0, dilation=1, groups=1, bias=True,
@@ -1163,11 +1165,12 @@ class Conv0d(torch.nn.Linear):
 
 class Conv1d(torch.nn.Conv1d):
     """
-    self = Conv1d(2, 3, 1, standardize_weights=True)
-    print('self = {!r}'.format(self))
-    x = torch.rand(1, 2, 1)
-    y = self.forward(x)
-    print('y = {!r}'.format(y))
+    Ignore:
+        self = Conv1d(2, 3, 1, standardize_weights=True)
+        print('self = {!r}'.format(self))
+        x = torch.rand(1, 2, 1)
+        y = self.forward(x)
+        print('y = {!r}'.format(y))
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True,
@@ -1195,11 +1198,12 @@ class Conv1d(torch.nn.Conv1d):
 
 class Conv2d(torch.nn.Conv2d):
     """
-    self = Conv2d(2, 3, 1, standardize_weights=True)
-    print('self = {!r}'.format(self))
-    x = torch.rand(1, 2, 3, 3)
-    y = self.forward(x)
-    print('y = {!r}'.format(y))
+    Ignore:
+        self = Conv2d(2, 3, 1, standardize_weights=True)
+        print('self = {!r}'.format(self))
+        x = torch.rand(1, 2, 3, 3)
+        y = self.forward(x)
+        print('y = {!r}'.format(y))
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True,
@@ -1227,11 +1231,12 @@ class Conv2d(torch.nn.Conv2d):
 
 class Conv3d(torch.nn.Conv3d):
     """
-    self = Conv3d(2, 3, 1, standardize_weights=True)
-    print('self = {!r}'.format(self))
-    x = torch.rand(1, 2, 1, 1, 1)
-    y = self.forward(x)
-    print('y = {!r}'.format(y))
+    Ignore:
+        self = Conv3d(2, 3, 1, standardize_weights=True)
+        print('self = {!r}'.format(self))
+        x = torch.rand(1, 2, 1, 1, 1)
+        y = self.forward(x)
+        print('y = {!r}'.format(y))
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True,
@@ -1274,19 +1279,20 @@ def weight_standardization_nd(dim, weight, eps):
     """
     Note: input channels must be greater than 1!
 
-    weight = torch.rand(3, 2, 1, 1)
-    dim = 2
-    eps = 1e-5
-    weight_normed = weight_standardization_nd(dim, weight, eps)
-    print('weight = {!r}'.format(weight))
-    print('weight_normed = {!r}'.format(weight_normed))
+    Ignore:
+        weight = torch.rand(3, 2, 1, 1)
+        dim = 2
+        eps = 1e-5
+        weight_normed = weight_standardization_nd(dim, weight, eps)
+        print('weight = {!r}'.format(weight))
+        print('weight_normed = {!r}'.format(weight_normed))
 
-    weight = torch.rand(1, 2)
-    dim = 0
-    eps = 1e-5
-    weight_normed = weight_standardization_nd(dim, weight, eps)
-    print('weight = {!r}'.format(weight))
-    print('weight_normed = {!r}'.format(weight_normed))
+        weight = torch.rand(1, 2)
+        dim = 0
+        eps = 1e-5
+        weight_normed = weight_standardization_nd(dim, weight, eps)
+        print('weight = {!r}'.format(weight))
+        print('weight_normed = {!r}'.format(weight_normed))
     """
     # Note: In 2D Weight dimensions are [C_out, C_in, H, W]
     mean_dims = tuple(list(range(1, dim + 2)))
@@ -1546,14 +1552,12 @@ def beta_mish(input, beta=1.5):
 
 
 class Mish_Function(torch.autograd.Function):
-
     """
     Applies the mish function element-wise:
-    .. math::
+
+    Math:
         mish(x) = x * tanh(softplus(x)) = x * tanh(ln(1 + e^{x}))
-    Plot:
-    .. figure::  _static/mish.png
-        :align:   center
+
     Shape:
         - Input: (N, *) where * means, any number of additional
           dimensions

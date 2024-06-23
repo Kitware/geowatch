@@ -5,4 +5,3 @@ geowatch.cli.coco\_visualize\_videos module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

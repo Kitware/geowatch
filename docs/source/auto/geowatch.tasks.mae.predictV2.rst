@@ -5,4 +5,3 @@ geowatch.tasks.mae.predictV2 module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

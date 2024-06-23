@@ -5,4 +5,3 @@ geowatch.cli.reproject\_annotations module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

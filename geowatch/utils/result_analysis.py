@@ -119,18 +119,18 @@ References:
 
 
 Look into:
-    https://scikit-optimize.github.io/stable/
-    https://wandb.ai/site/articles/find-the-most-important-hyperparameters-in-seconds
 
-    https://docs.ray.io/en/latest/tune/index.html
+    * https://scikit-optimize.github.io/stable/
 
-    ray.tune
+    * https://wandb.ai/site/articles/find-the-most-important-hyperparameters-in-seconds
+
+    * https://docs.ray.io/en/latest/tune/index.html
+
+    * ray.tune
 
 Requires:
     pip install ray
     pip install openskill
-
-
 """
 import itertools as it
 import math
