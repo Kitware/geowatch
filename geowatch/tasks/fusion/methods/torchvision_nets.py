@@ -1,7 +1,7 @@
 
 """
 Example:
-    from geowatch.tasks.fusion.datamodules.batch_item import RGBImageBatchItem
+    from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
     item0 = RGBImageBatchItem.demo(index=0)
     item1 = RGBImageBatchItem.demo(index=1)
     batch_items = [item0, item1]
@@ -86,7 +86,7 @@ class EfficientNetB7(TorchvisionClassificationWrapper):
 class FCNResNet50(TorchvisionSegmentationWrapper, WatchModuleMixins):
     """
     Ignore:
-        from geowatch.tasks.fusion.datamodules.batch_item import RGBImageBatchItem
+        from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
         item1 = RGBImageBatchItem.demo()
         item2 = RGBImageBatchItem.demo()
         batch_items = [item1, item2]
@@ -274,8 +274,8 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         return outputs
 
     def forward_step(self, batch_items, with_loss=False, stage='unspecified'):
-        from geowatch.tasks.fusion.datamodules import batch_item as batch_item_mod
-        batch_items = batch_item_mod.UncollatedRGBImageBatch.from_items(batch_items)
+        from geowatch.tasks.fusion.datamodules import network_io
+        batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
         batch_size = len(batch_items)
         batch = batch_items.collate()
 
@@ -287,7 +287,7 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
             total_loss = losses['loss']
             self.log(f'{stage}_loss', total_loss, prog_bar=True, batch_size=batch_size)
 
-        outputs = batch_item_mod.CollatedNetworkOutputs(outputs)
+        outputs = network_io.CollatedNetworkOutputs(outputs)
         return outputs
 
     def define_ots_model(self):

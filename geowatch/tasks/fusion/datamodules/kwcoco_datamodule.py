@@ -709,8 +709,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # FIXME: HACK JUST TO MAKE CIFAR VISUALIZE,
             # TODO: NEED TO BETTER CHANGE THE TYPE OF THE OUTPUTS AT THE
             # LIGHTNING LEVEL
-            from geowatch.tasks.fusion.datamodules import batch_item as batch_item_mod
-            outputs = batch_item_mod.CollatedNetworkOutputs(outputs)
+            from geowatch.tasks.fusion.datamodules import network_io
+            outputs = network_io.CollatedNetworkOutputs(outputs)
 
         DEBUG_INCOMING_DATA = 1
         if DEBUG_INCOMING_DATA:

@@ -18,11 +18,11 @@ inspect_kwcoco_files(){
     #geowatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 }
 #inspect_kwcoco_files
-EXPERIMENT_NAME="cifar10_simple_resnet"
+EXPERIMENT_NAME="cifar10_simple_resnet_v2"
 
 CHANNELS="auto"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=5e-3
+TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 PERTERB_SCALE=$(python -c "print($TARGET_LR * 0.003)")
 DEVICES=$(python -c "if 1:

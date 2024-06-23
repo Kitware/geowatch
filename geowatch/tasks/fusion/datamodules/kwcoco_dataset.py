@@ -144,7 +144,7 @@ from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 
 try:
     import line_profiler

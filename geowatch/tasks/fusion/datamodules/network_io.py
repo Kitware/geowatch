@@ -66,7 +66,7 @@ class HeterogeneousBatchItem(BatchItem):
     dictionary interface.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
         >>> self = HeterogeneousBatchItem.demo()
         >>> print(self)
         >>> print(ub.urepr(self.summarize(), nl=2))
@@ -194,7 +194,7 @@ class HeterogeneousBatchItem(BatchItem):
             dict : a summary of the item
 
         Example:
-            >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
             >>> self = HeterogeneousBatchItem.demo()
             >>> item_summary = self.summarize(stats=0)
             >>> print(f'item_summary = {ub.urepr(item_summary, nl=-2)}')
@@ -282,7 +282,7 @@ class HomogeneousBatchItem(HeterogeneousBatchItem):
     off the shelf networks.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
         >>> self = HomogeneousBatchItem.demo()
         >>> print(self)
         >>> print(ub.urepr(self.summarize(), nl=2))
@@ -319,7 +319,7 @@ class RGBImageBatchItem(HomogeneousBatchItem):
     Only allows a single RGB image as the input.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
         >>> self = RGBImageBatchItem.demo()
         >>> print(self)
         >>> print(ub.urepr(self.summarize(), nl=2))
@@ -454,7 +454,7 @@ class UncollatedRGBImageBatch(UncollatedBatch):
             CollatedRGBImageBatch
 
         Example:
-            >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+            >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
             >>> self = UncollatedRGBImageBatch.demo()
             >>> batch = self.collate()
         """
@@ -523,13 +523,14 @@ class UncollatedNetworkOutputs(NetworkOutputs):
 class CollatedNetworkOutputs(NetworkOutputs):
     """
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
         >>> B, H, W, C = 2, 3, 3, 11
+        >>> import torch
         >>> logits = {
         >>>     'nonlocal_class': (torch.rand(B, C) - 0.5) * 10,
-        >>>     'segmentation_class': (torch.rand(B, T, W, H, C) - 0.5) * 10,
+        >>>     'segmentation_class': (torch.rand(B, W, H, C) - 0.5) * 10,
         >>>     'nonlocal_saliency': (torch.rand(B, 1) - 0.5) * 10,
-        >>>     'segmentation_saliency': (torch.rand(B, T, W, H, 1) - 0.5) * 10,
+        >>>     'segmentation_saliency': (torch.rand(B, W, H, 1) - 0.5) * 10,
         >>> }
         >>> self = CollatedNetworkOutputs(
         >>>     logits=logits,
@@ -559,7 +560,8 @@ def decollate(collated):
     the collated batch, but without the leading batch dimension in each value.
 
     Example:
-        >>> from geowatch.tasks.fusion.datamodules.batch_item import *  # NOQA
+        >>> from geowatch.tasks.fusion.datamodules.network_io import *  # NOQA
+        >>> import torch
         >>> B, H, W, C = 5, 2, 3, 7
         >>> collated = {
         >>>     'segmentation_class': torch.rand(B, H, W, C),

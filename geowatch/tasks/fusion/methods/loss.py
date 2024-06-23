@@ -43,7 +43,7 @@ def coerce_criterion(loss_code, weights, ohem_ratio=None, focal_gamma=2.0,
         if spatial_dims == 'legacy':
             spatial_dims = 't h w'
         criterion.logit_shape = f'(b {spatial_dims}) c'
-        criterion.target_shape = f'(b {spatial_dims} w)'
+        criterion.target_shape = f'(b {spatial_dims})'
 
     elif loss_code == 'bce':
         criterion = torch.nn.BCELoss(

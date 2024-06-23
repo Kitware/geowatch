@@ -1632,42 +1632,6 @@ class EfficientDet(nn.Module):
         >>> classes = ['class_{:0d}'.format(i) for i in range(81)]
         >>> channels = ChannelSpec.coerce('rgb')
         >>> self = EfficientDet(classes=classes, channels='rgb')
-        >>> #batch = _demo_batch(bsize=3, channels=channels, classes=classes, h=512, w=512)
-        >>> #outputs = self.forward(batch)
-        >>> #loss = sum(outputs['loss_parts'].values())
-        >>> #loss.backward()
-
-        # Test ignore class
-        classes = ['a', 'b', 'c', 'ignore']
-        channels = ChannelSpec.coerce('rgb')
-        self = EfficientDet(classes=classes, channels=channels, n_scales=5)
-        batch = _demo_batch(bsize=3, channels=channels, classes=classes, h=512, w=512)
-        outputs = self.forward(batch)
-        loss = sum(outputs['loss_parts'].values())
-        loss.backward()
-
-
-        # Test empty truth case
-        from bioharn.models.efficientdet import *  # NOQA
-        from bioharn.models.mm_models import _demo_batch
-        self = EfficientDet(classes=3, channels='rgb')
-        classes = ['class_{:0d}'.format(i) for i in range(81)]
-        channels = ChannelSpec.coerce('rgb')
-        batch = _demo_batch(bsize=[0, 0], channels=channels)
-        outputs = self.forward(batch)
-        loss = sum(outputs['loss_parts'].values())
-        loss.backward()
-
-    Ignore:
-        >>> harn = setup_harn(bsize=2, datasets='special:shapes256',
-        >>>     arch='efficientdet', init='noop', xpu=0, channels='rgb',
-        >>>     workers=0, normalize_inputs=False, sampler_backend=None)
-        >>> harn.initialize()
-
-        >>> self = harn.raw_model
-        >>> batch = harn._demo_batch(tag='vali')
-        >>> outputs = self.forward(batch)
-        >>> batch_dets = self.coder.decode(outputs)
     """
 
     __BUILTIN_CRITERION__ = True
