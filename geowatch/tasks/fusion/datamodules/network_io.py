@@ -488,7 +488,11 @@ class CollatedBatch(dict):
 
 
 class CollatedRGBImageBatch(CollatedBatch):
-    ...
+
+    def to(self, device):
+        for k, v in self.items():
+            self[k] = v.to(device)
+        return self
 
 
 # ---------------

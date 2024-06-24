@@ -46,12 +46,12 @@ echo "DDP_WORKAROUND = $DDP_WORKAROUND"
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 
 
-MAX_STEPS=6000
-MAX_EPOCHS=120
+MAX_STEPS=60000
+MAX_EPOCHS=3
 TRAIN_ITEMS_PER_EPOCH=50000
 VALI_ITEMS_PER_EPOCH=10000
 ACCUMULATE_GRAD_BATCHES=1
-BATCH_SIZE=1000
+BATCH_SIZE=100
 TRAIN_BATCHES_PER_EPOCH=$(python -c "print($TRAIN_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 VALI_BATCHES_PER_EPOCH=$(python -c "print($VALI_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 echo "TRAIN_ITEMS_PER_EPOCH = $TRAIN_ITEMS_PER_EPOCH"
@@ -66,6 +66,8 @@ python -m geowatch.cli.experimental.recommend_size_adjustments \
     --TRAIN_ITEMS_PER_EPOCH="$TRAIN_ITEMS_PER_EPOCH"
 
 
+rm -rf "$DEFAULT_ROOT_DIR"
+
 # Find the most recent checkpoint (TODO add utility for this)
 PREV_CHECKPOINT_TEXT=$(python -m geowatch.cli.experimental.find_recent_checkpoint --default_root_dir="$DEFAULT_ROOT_DIR")
 echo "PREV_CHECKPOINT_TEXT = $PREV_CHECKPOINT_TEXT"
@@ -79,10 +81,12 @@ echo "${PREV_CHECKPOINT_ARGS[@]}"
 
 ulimit -n 1000000
 
-LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+
+DDP_WORKAROUND=1
+LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 0
+    num_workers            : 32
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
@@ -154,12 +158,16 @@ trainer:
     strategy             : $STRATEGY
     limit_train_batches  : $TRAIN_BATCHES_PER_EPOCH
     limit_val_batches    : $VALI_BATCHES_PER_EPOCH
+    #limit_train_batches  : 5
+    #limit_val_batches    : 3
     log_every_n_steps    : 1
     check_val_every_n_epoch: 1
     enable_checkpointing: true
     enable_model_summary: true
     num_sanity_val_steps : 0
+    #profiler: advanced
     max_epochs: $MAX_EPOCHS
+    #max_epochs: 1
     callbacks:
         - class_path: pytorch_lightning.callbacks.ModelCheckpoint
           init_args:
@@ -174,4 +182,6 @@ torch_globals:
 
 initializer:
     init: noop
-" "${PREV_CHECKPOINT_ARGS[@]}"
+"
+
+#"${PREV_CHECKPOINT_ARGS[@]}"

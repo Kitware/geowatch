@@ -901,8 +901,9 @@ class TruthMixin:
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
 
-        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
-        frame_box = frame_box.to_shapely()
+        if wants_boxes or wants_saliency or wants_class_sseg:
+            frame_box = kwimage.Box.from_dsize(space_shape[::-1])
+            frame_box = frame_box.to_shapely()
 
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
@@ -1043,7 +1044,6 @@ class TruthMixin:
 
         if wants_class_sseg:
             ### Build single frame CLASS target labels and weights
-
             task_target_ohe['class'] = np.zeros((self.num_predictable_classes,) + space_shape, dtype=np.uint8)
             task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
             task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
@@ -1364,9 +1364,9 @@ class GetItemMixin(TruthMixin):
         space_shape = frame_target_shape
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
-        if self.config.upweight_centers:
+        if self.config['upweight_centers']:
             space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.config.min_spacetime_weight)
+            space_weights = np.maximum(space_weights, self.config['min_spacetime_weight'])
             spacetime_weights = space_weights * time_weights[time_idx]
         else:
             spacetime_weights = 1
@@ -1517,6 +1517,7 @@ class GetItemMixin(TruthMixin):
             raise FailedSample('no target')
         return target
 
+    @profile
     def _resolve_target(self, target):
         """
         Creates a copy of the target with modified information expected by the
@@ -1561,6 +1562,11 @@ class GetItemMixin(TruthMixin):
             target_ = self._augment_spacetime_target(target_)
         return target_, video, resolution_info
 
+    @ub.memoize_method
+    def _cached_sample_sensorchan_matching_sensor(self, sensor_coarse):
+        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+        return matching_sensorchan
+
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
                           gid_to_isbad, gid_to_sample):
@@ -1571,7 +1577,8 @@ class GetItemMixin(TruthMixin):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', '*')
-        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+
+        matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
 
         def _ensure_list(x):
@@ -2024,7 +2031,10 @@ class GetItemMixin(TruthMixin):
             for key in truth_keys:
                 data = frame_item.get(key, None)
                 if data is not None:
-                    frame_item[key] = kwarray.ArrayAPI.tensor(data)
+                    try:
+                        frame_item[key] = kwarray.ArrayAPI.tensor(data)
+                    except TypeError:
+                        frame_item[key] = torch.tensor(data)
 
         positional_tensors = self._populate_positional_information(frame_items)
 

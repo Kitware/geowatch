@@ -1069,7 +1069,14 @@ def colorize_weights(weights):
         >>> kwplot.plt.ion()
         >>> kwplot.imshow(canvas)
     """
-    canvas = kwimage.atleast_3channels(weights.copy())
+    # import xdev
+    # with xdev.embed_on_exception_context:
+    try:
+        canvas = kwimage.atleast_3channels(weights.copy())
+    except ValueError:
+        # probably an integer?
+        canvas = np.full((1, 1, 3), fill_value=weights)
+
     is_gt_one = weights > 1.0
     if np.any(is_gt_one):
         import matplotlib as mpl

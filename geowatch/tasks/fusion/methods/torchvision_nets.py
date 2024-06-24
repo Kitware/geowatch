@@ -24,8 +24,16 @@ from geowatch.tasks.fusion.methods import heads as heads_module
 from geowatch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from geowatch.utils.util_netharn import InputNorm, Identity
 import ubelt as ub  # NOQA
+from geowatch.tasks.fusion.datamodules import network_io
+from typing import Iterator  # NOQA
 # from geowatch.tasks.fusion.methods.loss import coerce_criterion
 # from geowatch.tasks.fusion.methods.heads import TaskHeads
+
+
+try:
+    from line_profiler import profile
+except Exception:
+    profile = ub.identity
 
 
 class TorchvisionWrapper(pl.LightningModule):
@@ -273,12 +281,16 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         outputs = self.heads(feats)
         return outputs
 
-    def forward_step(self, batch_items, with_loss=False, stage='unspecified'):
-        from geowatch.tasks.fusion.datamodules import network_io
-        batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
-        batch_size = len(batch_items)
-        batch = batch_items.collate()
+    def forward_step(self, batch, with_loss=False, stage='unspecified'):
 
+        if stage == 'train':
+            if not self.automatic_optimization:
+                # Do we have to do this ourselves?
+                # https://lightning.ai/docs/pytorch/stable/common/optimization.html
+                opt = self.optimizers()
+                opt.zero_grad()
+
+        batch_size = len(batch['imdata_bchw'])
         outputs = self.forward(batch)
 
         if with_loss:
@@ -288,6 +300,11 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
             self.log(f'{stage}_loss', total_loss, prog_bar=True, batch_size=batch_size)
 
         outputs = network_io.CollatedNetworkOutputs(outputs)
+
+        if stage == 'train':
+            if not self.automatic_optimization:
+                loss = outputs['loss']
+                self.manual_backwards(loss)
         return outputs
 
     def define_ots_model(self):
@@ -297,28 +314,61 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
         ots_model.fc = Identity()
         return ots_model
 
+    def _to_collated(self, batch_items):
+        from geowatch.tasks.fusion.datamodules import network_io
+        self._cpu_batch_items = batch_items
+        batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
+        batch = batch_items.collate()
+        batch = batch.to(self.device)
+        return batch
+
+    def _grab_batch_from_dataloader(self, dataloader_iter):
+        raw_item = next(dataloader_iter)
+        batch_items = raw_item
+        return self._to_collated(batch_items)
+
     # These train / vali / test specific methods should be moved to a mixin
 
-    def training_step(self, batch, batch_idx=None):
+    # def training_step(self, dataloader_iter: Iterator) -> None:
+    #     self._DataLoaderIterDataFetcher_training_step(dataloader_iter)
 
-        if not self.automatic_optimization:
-            # Do we have to do this ourselves?
-            # https://lightning.ai/docs/pytorch/stable/common/optimization.html
-            opt = self.optimizers()
-            opt.zero_grad()
+    # def training_step(self, batch, batch_idx=None):
+    #     return self._PrefetchDataFetcher_training_step(batch, batch_idx)
 
+    # def _DataLoaderIterDataFetcher_training_step(self, dataloader_iter) -> None:
+    #     # it is the user responsibility to fetch and move the batch to the right device.
+    #     # batch, batch_idx, dataloader_idx
+    #     self._PrefetchDataFetcher_training_step(batch)
+
+    # def training_step(self, batch):
+    def training_step(self, dataloader_iter: Iterator) -> None:
+        # self._grab_batch_from_dataloader()
+        batch = self._to_collated(next(dataloader_iter))
         outputs = self.forward_step(batch, with_loss=True, stage='train')
-
-        if not self.automatic_optimization:
-            loss = outputs['loss']
-            self.manual_backwards(loss)
-
         return outputs
 
-    def validation_step(self, batch, batch_idx=None):
-        outputs = self.forward_step(batch, with_loss=True, stage='val')
-        return outputs
+    # # def validation_step(self, batch, batch_idx=None):
+    # def validation_step(self, dataloader_iter: Iterator) -> None:
+    #     batch = self._to_collated(next(dataloader_iter))
+    #     outputs = self.forward_step(batch, with_loss=True, stage='val')
+    #     return outputs
 
-    def test_step(self, batch, batch_idx=None):
-        outputs = self.forward_step(batch, with_loss=True, stage='test')
-        return outputs
+    # # def test_step(self, batch, batch_idx=None):
+    # def test_step(self, dataloader_iter: Iterator) -> None:
+    #     batch = self._to_collated(next(dataloader_iter))
+    #     outputs = self.forward_step(batch, with_loss=True, stage='test')
+    #     return outputs
+
+    # @profile
+    # def on_before_batch_transfer(self, batch_items, dataloader_idx):
+    #     from geowatch.tasks.fusion.datamodules import network_io
+    #     self._cpu_batch_items = batch_items
+    #     batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
+    #     batch = batch_items.collate()
+    #     return batch
+
+    # def on_after_batch_transfer(batch, dataloader_idx):
+    #     ...
+
+    # def transfer_batch_to_device(batch, device, dataloader_idx):
+    #     ...
