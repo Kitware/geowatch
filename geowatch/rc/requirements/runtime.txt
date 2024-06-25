@@ -208,7 +208,7 @@ kwplot>=0.4.14
 seaborn>=0.11.1
 
 # GIS
-geopandas>=0.10.2
+geopandas>=0.10.2,<1.0.0
 utm>=0.7.0
 rgd_imagery_client>=0.2.7
 rgd_client>=0.2.7
