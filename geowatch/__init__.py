@@ -302,7 +302,6 @@ monkey_scriptconfig.patch_0_7_14()
 
 
 if 1:
-    # Disable
     from geowatch.monkey import monkey_numpy  # NOQA
     # monkey_numpy.patch_numpy_dtypes()
     monkey_numpy.patch_numpy_2x()

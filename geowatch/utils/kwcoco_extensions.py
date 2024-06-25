@@ -1130,7 +1130,7 @@ def coco_populate_geo_video_stats(coco_dset, video_id, target_gsd='max-resolutio
                 kwplot.autompl()
                 wld_map_gdf = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
                 ax = wld_map_gdf.plot()
-                wld_region_gdf.to_crs('crs84').plot(ax=ax, color='red')
+                wld_region_gdf.to_crs('OGC:CRS84').plot(ax=ax, color='red')
                 wld_region_gdf.plot(ax=ax, color='red')
 
             video['valid_region'] = valid_region
@@ -2760,7 +2760,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
     # annot_crs = 'epsg:4326'
     from geowatch.utils import util_gis
     annot_crs = util_gis.get_crs84()
-    # annot_crs = 'crs84'
+    # annot_crs = 'OGC:CRS84'
     if merge:
         gid_to_rois = {}
         for gid, aids in coco_dset.index.gid_to_aids.items():

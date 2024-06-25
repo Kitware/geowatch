@@ -26,6 +26,10 @@ from jsonargparse import set_loader, set_dumper
 
 from kwutil import util_environ
 
+from geowatch.monkey import monkey_numpy  # NOQA
+# monkey_numpy.patch_numpy_dtypes()
+monkey_numpy.patch_numpy_2x()
+
 
 # FIXME: we should be able to use our callbacks when ddp is enabled.
 # Not sure why we get a freeze.

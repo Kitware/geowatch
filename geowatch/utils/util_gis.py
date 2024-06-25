@@ -11,9 +11,10 @@ def plot_geo_background():
     import kwplot
     import geopandas as gpd
     kwplot.autompl()
+    # Broken in geopandas 1.x
     wld_map_gdf = gpd.read_file(
         gpd.datasets.get_path('naturalearth_lowres')
-    ).to_crs('crs84')
+    ).to_crs('OGC:CRS84')
     ax = wld_map_gdf.plot()
     return ax
 
@@ -278,7 +279,7 @@ def load_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         >>> kwplot.autompl()
         >>> wld_map_gdf = gpd.read_file(
         >>>     gpd.datasets.get_path('naturalearth_lowres')
-        >>> ).to_crs('crs84')
+        >>> ).to_crs('OGC:CRS84')
         >>> ax = wld_map_gdf.plot()
         >>> region_df.plot(ax=ax, edgecolor='orange', alpha=0.8)
         >>> # https://gis.stackexchange.com/questions/372564/userwarning-when-trying-to-get-centroid-from-a-polygon-geopandas
@@ -338,7 +339,7 @@ def get_crs84():
         >>> get_crs84()
     """
     from pyproj import CRS
-    crs84 = CRS.from_user_input('crs84')
+    crs84 = CRS.from_user_input('OGC:CRS84')
     return crs84
 
 
@@ -403,7 +404,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
         >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
         >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
         >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
-        >>> ]}, crs='crs84')
+        >>> ]}, crs='OGC:CRS84')
         >>> gdf_utm = project_gdf_to_local_utm(gdf_crs84)
         >>> assert gdf_utm.crs.name == 'WGS 84 / UTM zone 31N'
 
@@ -418,7 +419,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
         >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
         >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
         >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
-        >>> ]}, crs='crs84')
+        >>> ]}, crs='OGC:CRS84')
         >>> import pytest
         >>> with pytest.raises(ValueError):
         >>>     gdf_utm = project_gdf_to_local_utm(gdf_crs84)
@@ -433,7 +434,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
         >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
         >>>     kwimage.Polygon.random(rng=rng).scale(2).translate((-1, -1)).scale(0.001, about='centroid').scale((180, 90)).to_shapely()
         >>>     for _ in range(5)
-        >>> ]}, crs='crs84')
+        >>> ]}, crs='OGC:CRS84')
         >>> # Mode 1 uses a tolerance test instead
         >>> gdf_utm = project_gdf_to_local_utm(gdf_crs84, mode=1, tolerance=float('inf'))
         >>> import pytest
@@ -464,7 +465,7 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
     #     >>>          [ -73.77200379967688, 42.864783745778894]]]
     #     >>> })
     #     >>> gdf_crs84 = gpd.GeoDataFrame({
-    #     >>>     'geometry': [poly.to_shapely()]}, crs='crs84')
+    #     >>>     'geometry': [poly.to_shapely()]}, crs='OGC:CRS84')
     """
     # if gdf_crs84.crs.name != 'WGS 84 (CRS84)':
     #     raise AssertionError('expected CRS-84 input')
@@ -658,7 +659,7 @@ def _demo_convert_latlon_to_utm():
     utm_code = utm_epsg_from_latlon(lat, lon)
 
     import geopandas as gpd
-    gdf_crs84 = gpd.GeoDataFrame({'geometry': [wld_poly_sh]}, crs='crs84')
+    gdf_crs84 = gpd.GeoDataFrame({'geometry': [wld_poly_sh]}, crs='OGC:CRS84')
     gdf_utm = gdf_crs84.to_crs(utm_code)
     utm_poly_sh = gdf_utm.iloc[0]['geometry']
 
@@ -733,7 +734,7 @@ def find_local_meter_epsg_crs(geom_crs84):
     """
 
     import geopandas as gpd
-    utm_crs = gpd.array.from_shapely([geom_crs84], 'crs84').estimate_utm_crs()
+    utm_crs = gpd.array.from_shapely([geom_crs84], 'OGC:CRS84').estimate_utm_crs()
     epsg_zone = utm_crs.to_epsg()
 
     return epsg_zone

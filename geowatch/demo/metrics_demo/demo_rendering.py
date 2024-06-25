@@ -60,7 +60,7 @@ def render_toy_georeferenced_image(img_dpath, renderable, rng=None):
         >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> import geopandas as gpd
         >>> gdf = gpd.GeoDataFrame(geometry=[region_poly_wld.to_shapely(),
-        >>>                                  site_poly_wld.to_shapely()], crs='crs84')
+        >>>                                  site_poly_wld.to_shapely()], crs='OGC:CRS84')
         >>> import kwplot
         >>> kwplot.autompl()
         >>> imdata = kwimage.imread(fpath)
@@ -77,7 +77,7 @@ def render_toy_georeferenced_image(img_dpath, renderable, rng=None):
         >>>     import rasterio
         >>>     from rasterio import plot  # NOQA
         >>>     f = rasterio.open(fpath)
-        >>>     with rasterio.open(fpath, crs='crs84') as f:
+        >>>     with rasterio.open(fpath, crs='OGC:CRS84') as f:
         >>>         rasterio.plot.show(f, ax=ax, alpha=0.8)
         >>>         dst_crs = str(f.crs).lower()
         >>>     site_poly_wld.draw(edgecolor='black', fill=0)
