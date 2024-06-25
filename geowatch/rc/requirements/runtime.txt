@@ -120,7 +120,7 @@ mgrs>=1.3.7     ; python_version < '3.9'  and python_version >= '3.8'    # Pytho
 # Numeric
 kwarray>=0.6.19
 xarray>=0.17.0
-filterpy>=1.4.5
+#filterpy>=1.4.5
 einops>=0.6.0
 dask[array]>=2023.8.1
 
@@ -191,7 +191,7 @@ lark_cython >= 0.0.15
 # Imaging
 distinctipy>=1.2.1
 kwimage>=0.10.0
-kwcoco>=0.8.1
+kwcoco>=0.8.2
 delayed_image>=0.3.1
 
 # Try 1.3.1?

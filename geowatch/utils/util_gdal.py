@@ -22,7 +22,11 @@ import kwimage
 import os
 import ubelt as ub
 import subprocess
-import functools
+
+try:
+    from functools import cache
+except ImportError:
+    from ubelt import memoize as cache
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -61,7 +65,7 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 # ]
 
 
-@functools.cache
+@cache
 def import_gdal():
     from osgeo import gdal
     if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
@@ -69,7 +73,7 @@ def import_gdal():
     return gdal
 
 
-@functools.cache
+@cache
 def import_osr():
     from osgeo import osr
     if not getattr(osr, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
