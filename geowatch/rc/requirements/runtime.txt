@@ -212,7 +212,8 @@ geopandas>=0.10.2,<1.0.0
 utm>=0.7.0
 rgd_imagery_client>=0.2.7
 rgd_client>=0.2.7
-geojson>=3.0.1
+geojson>=3.1.0     ; python_version < '4.0'  and python_version >= '3.12'   # Python 3.12+
+geojson>=3.0.1     ; python_version < '3.12' and python_version >= '3.8'    # Python 3.11-
 
 # Machine learning
 

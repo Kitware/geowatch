@@ -20,4 +20,4 @@ def patch_numpy_2x():
     if np.lib.NumpyVersion(np.__version__) >= '2.0.0b1':
         np.string_ = np.bytes_
         np.unicode_ = np.str_
-        # np.Inf = np.inf
+        np.Inf = np.inf
