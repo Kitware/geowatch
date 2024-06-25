@@ -5,4 +5,3 @@ geowatch.tasks.invariants.late\_fusion.pretext\_model\_late\_fusion module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -133,7 +133,7 @@ def main(cmdline=False, **kwargs):
                 'src': new_fpath,
             })
 
-        tmp_fpath = ub.Path(dset.fpath).augment(suffix='.movtmp')
+        tmp_fpath = ub.Path(dset.fpath).augment(tail='.movtmp')
         dset.dump(tmp_fpath, newlines=True)
 
         # Point of no return
@@ -159,10 +159,10 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 
     # Write to a temporary sidecar so we dont clobber anything until
     # we know the entire operation worked
-    new_fpath = fpath.augment(suffix='.modtmp')
+    new_fpath = fpath.augment(tail='.modtmp')
 
     # Might be able to do this with a gdal command instead
-    ma_imdata = kwimage.imread(fpath, nodata='ma')
+    ma_imdata = kwimage.imread(fpath, nodata_method='ma')
     imdata = ma_imdata.data
     mask = ma_imdata.mask
     new_obj = obj.copy()
@@ -226,12 +226,13 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 
     kwimage.imwrite(new_fpath, new_imdata, backend='gdal',
                     compress='DEFLATE', blocksize=128,
-                    nodata=quantize_nan)
+                    nodata_value=quantize_nan)
 
     return fpath, new_fpath, new_obj
 
 
 def schedule_quantization():
+    # TODO: can remove this code, or move it to a "dev" or "scripts" dir.
     # Temporary job
     import geowatch
     dvc_dpath = ub.Path(str(geowatch.find_dvc_dpath()) + '-hdd')

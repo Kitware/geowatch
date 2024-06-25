@@ -5,4 +5,3 @@ geowatch.tasks.cold.predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

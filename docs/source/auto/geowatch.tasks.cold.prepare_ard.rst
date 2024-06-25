@@ -5,4 +5,3 @@ geowatch.tasks.cold.prepare\_ard module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

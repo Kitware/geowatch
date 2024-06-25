@@ -5,4 +5,3 @@ geowatch.geoannots.geococo\_objects module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

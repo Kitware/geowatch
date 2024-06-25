@@ -77,7 +77,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
 
 def custom_lint(mode : str = DEFAULT_MODE, dpath : str = DEFAULT_DPATH, index=None, interact=None):
     """
-    Runs our custom "watch" linting rules on a specific directory and
+    Runs our custom "geowatch" linting rules on a specific directory and
     optionally "fixes" them.
 
     Args:
@@ -96,7 +96,7 @@ def custom_lint(mode : str = DEFAULT_MODE, dpath : str = DEFAULT_DPATH, index=No
             if given only does one error at a time for autopep8
 
     Ignore:
-        dpath = ub.expandpath('~/code/watch/watch')
+        dpath = ub.expandpath('~/code/geowatch/geowatch')
     """
     d = dpath  # no walrus on the CI :(=
     dpaths = [d] if isinstance(d, str) else d
@@ -331,49 +331,49 @@ def our_code_checks(dpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/dev/lint.py --help
+        python ~/code/geowatch/dev/lint.py --help
 
-        cd $HOME/code/watch
+        cd $HOME/code/geowatch
 
         # List ALL the errors
-        python ~/code/watch/dev/lint.py watch --mode=lint
+        python ~/code/geowatch/dev/lint.py geowatch --mode=lint
 
         # List the fixable errors
-        python ~/code/watch/dev/lint.py watch --mode=show
+        python ~/code/geowatch/dev/lint.py geowatch --mode=show
 
         # Show the diff that fixes the fixable errors
-        python ~/code/watch/dev/lint.py watch --mode=diff | colordiff
+        python ~/code/geowatch/dev/lint.py geowatch --mode=diff | colordiff
 
         # Apply the fixable diffs
-        python ~/code/watch/dev/lint.py watch --mode=apply
+        python ~/code/geowatch/dev/lint.py geowatch --mode=apply
 
         # First one should show nothing, but second might still show stuff
-        python ~/code/watch/dev/lint.py watch --mode=show
-        python ~/code/watch/dev/lint.py watch --mode=lint
+        python ~/code/geowatch/dev/lint.py geowatch --mode=show
+        python ~/code/geowatch/dev/lint.py geowatch --mode=lint
 
-        python ~/code/watch/dev/lint.py [watch,atk]
+        python ~/code/geowatch/dev/lint.py [geowatch,atk]
 
         # WORKFLOW
-        python ~/code/watch/dev/lint.py watch atk --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch atk --mode=diff --interact
 
-        python ~/code/watch/dev/lint.py watch --mode=diff --interact
-        python ~/code/watch/dev/lint.py atk --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py atk --mode=diff --interact
 
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_change_detection --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/configs --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/datasets --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/experiments --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/models --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/scripts --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/utils --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/*.py --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/ --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/tasks/ --mode=diff --interact
-        python ~/code/watch/dev/lint.py watch/ --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_change_detection --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/configs --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/datasets --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/experiments --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/models --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/scripts --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/utils --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/*.py --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/rutgers_material_seg/ --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/tasks/ --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py geowatch/ --mode=diff --interact
 
-        python ~/code/watch/dev/lint.py atk --mode=diff --interact
+        python ~/code/geowatch/dev/lint.py atk --mode=diff --interact
 
-        python ~/code/watch/dev/lint.py ~/code/watch/watch/tasks/rutgers_material_change_detection/utils/utils.py --mode=diff
+        python ~/code/geowatch/dev/lint.py ~/code/geowatch/geowatch/tasks/rutgers_material_change_detection/utils/utils.py --mode=diff
     """
     import fire
     import sys

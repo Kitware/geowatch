@@ -5,4 +5,3 @@ geowatch.mlops.aggregate\_plots module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

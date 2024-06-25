@@ -5,4 +5,3 @@ geowatch.monkey.monkey\_numpy module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

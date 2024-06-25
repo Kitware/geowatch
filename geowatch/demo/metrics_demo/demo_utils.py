@@ -374,5 +374,6 @@ def get_crs84():
         pyproj.crs.crs.CRS
     """
     from pyproj import CRS
-    crs84 = CRS.from_user_input('crs84')
+    crs84 = CRS.from_user_input('OGC:CRS84')
+    # crs84 = CRS.from_user_input('crs84')
     return crs84

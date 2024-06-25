@@ -5,4 +5,3 @@ geowatch.utils.lightning\_ext.callbacks.auto\_resumer module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

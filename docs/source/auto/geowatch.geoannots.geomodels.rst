@@ -5,4 +5,3 @@ geowatch.geoannots.geomodels module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

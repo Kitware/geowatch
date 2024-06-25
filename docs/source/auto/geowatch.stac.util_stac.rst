@@ -5,4 +5,3 @@ geowatch.stac.util\_stac module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

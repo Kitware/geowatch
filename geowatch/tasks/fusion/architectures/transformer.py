@@ -1020,6 +1020,14 @@ def _build_global_configs():
         m=[('mode',)],
     )
 
+    # Names are inspired by:
+    # pico
+    # nano
+    # small
+    # medium
+    # large
+    # But they really dont line up with the intuitions
+
     _encoder_size_basis = {
         'p1': dict(n_layers=1, embedding_size=64, n_heads=4),
         'p2': dict(n_layers=2, embedding_size=64, n_heads=4),
@@ -1029,11 +1037,13 @@ def _build_global_configs():
         'p4': dict(n_layers=4, embedding_size=128, n_heads=4),
 
         'p8': dict(n_layers=8, embedding_size=128, n_heads=4),
+        'b8': dict(n_layers=8, embedding_size=384, n_heads=4),
+        'm8': dict(n_layers=8, embedding_size=512, n_heads=4),
+
         'p16': dict(n_layers=16, embedding_size=128, n_heads=4),
         'p24': dict(n_layers=24, embedding_size=128, n_heads=4),
         'p32': dict(n_layers=32, embedding_size=128, n_heads=4),
 
-        'b8': dict(n_layers=8, embedding_size=384, n_heads=4),
         'n12': dict(n_layers=12, embedding_size=128, n_heads=4),
         't12': dict(n_layers=12, embedding_size=192, n_heads=4),
         't24': dict(n_layers=24, embedding_size=192, n_heads=4),

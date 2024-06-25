@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_psuedolive\_copy\_previous module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

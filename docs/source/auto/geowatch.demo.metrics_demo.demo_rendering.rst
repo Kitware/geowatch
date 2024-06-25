@@ -5,4 +5,3 @@ geowatch.demo.metrics\_demo.demo\_rendering module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -4,7 +4,27 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.18.0 - Unreleased
+## Version 0.18.1 - Unreleased
+
+### Added
+* Trainer now remembers the initial weights if requested.
+* Option to `KWCocoVideoDatasetConfig` `(balance_options=sequential_without_replacement)` to iterate sequentially through the dataset without replacement.
+
+### Fixed
+* Fix box head visualizations
+* Fix dataset issue when `upweight_centers`=False
+* Fix issue in computing class stats when due to predictable classes.
+
+### Changed
+* Better training restart invocation docs
+* The kwcoco dataset no longer uses video names as proxys for domains.
+
+### Removed
+* The old "watch" module is no longer packaged in the pypi install. The
+  "geowatch" module now must be used. The mirror module will be removed from
+  the repo in the next minor version increment.
+
+## Version 0.18.0 - Released 2024-06-18
 
 ### Added
 * New CLI tool: `coco_add_ignore_buffer`, for adding an uncertainty region around each annotation.

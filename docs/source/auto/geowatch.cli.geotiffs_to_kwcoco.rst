@@ -5,4 +5,3 @@ geowatch.cli.geotiffs\_to\_kwcoco module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

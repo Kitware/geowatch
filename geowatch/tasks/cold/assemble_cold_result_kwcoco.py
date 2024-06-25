@@ -29,7 +29,7 @@ import logging
 import gc
 import shutil
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     from ubelt import identity as profile
 

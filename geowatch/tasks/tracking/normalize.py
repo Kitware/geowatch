@@ -9,7 +9,7 @@ from geowatch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
 from geowatch.tasks.tracking.abstract_classes import TrackFunction
 from geowatch.tasks.tracking.utils import check_only_bg
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

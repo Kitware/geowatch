@@ -5,4 +5,3 @@ geowatch.cli.smartflow\_egress module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

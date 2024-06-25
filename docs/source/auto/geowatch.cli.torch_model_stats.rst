@@ -5,4 +5,3 @@ geowatch.cli.torch\_model\_stats module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

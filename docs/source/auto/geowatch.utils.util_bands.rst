@@ -5,4 +5,3 @@ geowatch.utils.util\_bands module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

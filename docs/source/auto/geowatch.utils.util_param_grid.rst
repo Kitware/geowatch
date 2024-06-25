@@ -5,4 +5,3 @@ geowatch.utils.util\_param\_grid module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

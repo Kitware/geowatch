@@ -358,7 +358,9 @@ def main():
     parser.add_class_arguments(MyClass, nested_key='my_class', fail_untyped=False, sub_configs=True)
     parser.add_argument('--foo', default='bar')
     parser.add_argument('-b', '--baz', '--buzz', default='bar')
+    print('Parse Args')
     config = parser.parse_args()
+    print('Instantiate Classes')
     instances = parser.instantiate_classes(config)
     print(f'{instances.my_class.__dict__=}')
 

@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_upload\_to\_rgd module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

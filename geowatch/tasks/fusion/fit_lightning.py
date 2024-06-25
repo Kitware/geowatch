@@ -1,5 +1,15 @@
-# Import models for the CLI registry
+"""
+Main entrypoint for a fusion fit job.
+
+For unit tests see:
+    ../../../tests/test_lightning_cli_fit.py
+
+For tutorials see:
+    ../../../docs/source/manual/tutorial/tutorial1_rgb_network.sh
+"""
+# TODO: lets avoid the import * here.
 from geowatch.tasks.fusion.methods import *  # NOQA
+
 from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 from geowatch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
 from geowatch.utils.lightning_ext.lightning_cli_ext import LightningArgumentParser
@@ -15,6 +25,10 @@ from jsonargparse import set_loader, set_dumper
 # from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 from kwutil import util_environ
+
+from geowatch.monkey import monkey_numpy  # NOQA
+# monkey_numpy.patch_numpy_dtypes()
+monkey_numpy.patch_numpy_2x()
 
 
 # FIXME: we should be able to use our callbacks when ddp is enabled.
@@ -44,13 +58,39 @@ class SmartTrainer(pl.Trainer):
     the training loop. (so annoying that we can't reorder callbacks)
     """
 
+    def __init__(self, *args, add_to_registery=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.add_to_registery = add_to_registery
+
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
+        self._on_before_run()
+
+        super()._run_stage(*args, **kwargs)
+
+    @property
+    def log_dpath(self):
+        """
+        Get path to the the log directory if it exists.
+        """
+        if self.logger is None:
+            raise Exception('cannot get a log_dpath when no logger exists')
+        if self.logger.log_dir is None:
+            raise Exception('cannot get a log_dpath when logger.log_dir is None')
+        return ub.Path(self.logger.log_dir)
+
+    def _on_before_run(self):
+        """
+        Our custom "callback"
+        """
         print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
-            self._add_to_registery()
+            # TODO: add condition so tests do not add to the registery
+            if self.add_to_registery:
+                self._add_to_registery()
             self._write_inspect_helper_scripts()
+            self._handle_restart_details()
 
         if hasattr(self.datamodule, '_notify_about_tasks'):
             # Not sure if this is the best place, but we want datamodule to be
@@ -58,11 +98,15 @@ class SmartTrainer(pl.Trainer):
             # We currently infer this from information in the model.
             self.datamodule._notify_about_tasks(model=self.model)
 
-        super()._run_stage(*args, **kwargs)
-
     def _add_to_registery(self):
         """
         Register this training run with the registery.
+        This allows the user to lookup recent via:
+
+        .. code:: bash
+
+            python -m geowatch.tasks.fusion.fit_registery peek
+
         """
         from geowatch.tasks.fusion.fit_registery import FitRegistery
         registery = FitRegistery()
@@ -72,6 +116,21 @@ class SmartTrainer(pl.Trainer):
             path=dpath,
         )
 
+    def _handle_restart_details(self):
+        """
+        Handle chores when restarting from a previous checkpoint.
+        """
+        if self.ckpt_path:
+            print('Detected that you are restarting from a previous checkpoint')
+            ckpt_path = ub.Path(self.ckpt_path)
+            assert ckpt_path.parent.name == 'checkpoints'
+            old_event_fpaths = list(ckpt_path.parent.parent.glob('events.out.tfevents.*'))
+            if len(old_event_fpaths):
+                print('Copying tensorboard events to new training directory directory')
+                for old_fpath in old_event_fpaths:
+                    new_fpath = self.log_dpath / old_fpath.name
+                    old_fpath.copy(new_fpath)
+
     def _write_inspect_helper_scripts(self):
         """
         Write helper scripts to the main training log dir that the user can run
@@ -80,7 +139,7 @@ class SmartTrainer(pl.Trainer):
         of the main train script.
         """
         import rich
-        dpath = ub.Path(self.logger.log_dir)
+        dpath = self.log_dpath
         rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
         from geowatch.tasks.fusion import helper_scripts
 
@@ -104,6 +163,8 @@ class SmartTrainer(pl.Trainer):
             from geowatch.utils.util_chmod import new_chmod
             for key, script in scripts.items():
                 fpath = script['fpath']
+                # Can use new ubelt
+                # ub.Path(fpath).chmod('u+x')
                 new_chmod(fpath, 'u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
@@ -162,14 +223,20 @@ class WeightInitializer(pl.callbacks.Callback):
             be a proper subgraph in both models.  See torch-libertor's partial
             weight initializtion for more details.
 
+        remember_initial_state (bool):
+            If True saves the initial state in a "analysis_checkpoints" folder.
+            Defaults to True.
+
         verbose (int):
             if 1 prints some info. If 3 prints the explicit association found.
             if 0, prints nothing.
     """
 
-    def __init__(self, init='noop', association='embedding', verbose=1):
+    def __init__(self, init='noop', association='embedding',
+                 remember_initial_state=True, verbose=1):
         self.init = init
         self.association = association
+        self.remember_initial_state = remember_initial_state
         self.verbose = verbose
         self._did_once = False
 
@@ -178,8 +245,11 @@ class WeightInitializer(pl.callbacks.Callback):
             # Only weight initialize once, on whatever stage happens first.
             return
         self._did_once = True
-        if self.verbose:
+
+        _verbose = self.verbose and trainer.global_rank == 0
+        if _verbose:
             print('🏋 Initializing weights')
+
         if self.init == 'noop':
             ...
         else:
@@ -205,7 +275,7 @@ class WeightInitializer(pl.callbacks.Callback):
 
             initializer.association = self.association
             info = initializer.forward(model)  # NOQA
-            if self.verbose >= 3:
+            if _verbose >= 3:
                 if info:
                     mapping = info.get('mapping', None)
                     unset = info.get('self_unset', None)
@@ -214,13 +284,32 @@ class WeightInitializer(pl.callbacks.Callback):
                     print(f'unused={unused}')
                     print(f'unset={unset}')
 
-            if self.verbose:
+            if _verbose:
                 print('🏋 - Finalize weight initialization')
             updated = model.state_dict() | to_preserve
             model.load_state_dict(updated)
 
+        if self.remember_initial_state and trainer.global_rank == 0:
+            import torch
+            # Remember what the initial state was.  Save this to a directory
+            # where we will store checkpoints useful for analysis, but might
+            # not be relevant for finding the best model.
+            print('Saving initial weights to disk')
+            analysis_checkpoint_dpath = (trainer.log_dpath / 'analysis_checkpoints')
+            analysis_checkpoint_dpath.ensuredir()
+            initial_state_fpath = analysis_checkpoint_dpath / 'initial_state.ckpt'
+            if initial_state_fpath.exists():
+                raise FileExistsError('Initial state already exists. This should not happen.')
+            initial_state = pl_module.state_dict()
+            torch.save(initial_state, initial_state_fpath)
+
 
 class SmartLightningCLI(LightningCLI_Extension):
+    """
+    Our extension of LightningCLI class that adds custom arguments and
+    functionality to the CLI. See :func:`add_arguments_to_parser` for more
+    details.
+    """
 
     @staticmethod
     def configure_optimizers(
@@ -228,6 +317,8 @@ class SmartLightningCLI(LightningCLI_Extension):
     ) -> Any:
         """Override to customize the :meth:`~pytorch_lightning.core.module.LightningModule.configure_optimizers`
         method.
+
+        TODO: why is this overloaded?
 
         Args:
             lightning_module: A reference to the model.
@@ -253,6 +344,11 @@ class SmartLightningCLI(LightningCLI_Extension):
         return [optimizer], [lr_scheduler]
 
     def add_arguments_to_parser(self, parser: LightningArgumentParser):
+        """
+        1. Adds custom extensions like "initializer" and "torch_globals"
+        2. Adds the packager callback (not sure why this is having a problem when used as a real callback)
+        3. Helps the dataset / model notify each other about relevant settings.
+        """
 
         # TODO: separate final_package dir and fpath for more configuration
         # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
@@ -357,6 +453,17 @@ def _data_value_getter(key):
 
 def make_cli(config=None):
     """
+    Main entrypoint that creates the CLI and works around issues when config is
+    passed as a parameter rather than via ``sys.argv`` itself.
+
+    Args:
+        config (None | Dict):
+            if specified disables sys.argv usage and executes a training run
+            with the specified config.
+
+    Returns:
+        SmartLightningCLI
+
     Note:
         Currently, creating the CLI will invoke it. We could modify this
         function to have the option to not invoke by specifying ``run=False``
@@ -478,6 +585,8 @@ def make_cli(config=None):
 
 def main(config=None):
     """
+    Thin wrapper around :func:`make_cli`.
+
     Args:
         config (None | Dict):
             if specified disables sys.argv usage and executes a training run
@@ -485,6 +594,48 @@ def main(config=None):
 
     CommandLine:
         xdoctest -m geowatch.tasks.fusion.fit_lightning main:0
+
+    Example:
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> disable_lightning_hardware_warnings()
+        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
+        >>> config = {
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes2-frames9-gsize32',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
+        >>>     'fit.data.chip_dims': 32,
+        >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
+        >>>     'fit.trainer.max_steps': 2,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>> }
+        >>> cli = main(config=config)
+
+    Example:
+        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> disable_lightning_hardware_warnings()
+        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
+        >>> config = {
+        >>>     # 'model': 'geowatch.tasks.fusion.methods.MultimodalTransformer',
+        >>>     #'model': 'geowatch.tasks.fusion.methods.UNetBaseline',
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model.class_path': 'geowatch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
+        >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
+        >>>     'fit.optimizer.init_args.lr': 1e-3,
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes2-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes1-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.chip_dims': 64,
+        >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
+        >>>     'fit.trainer.max_steps': 2,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>> }
+        >>> main(config=config)
 
     Ignore:
         ...
@@ -536,47 +687,6 @@ def main(config=None):
         cli = main(config=config)
 
 
-    Example:
-        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
-        >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
-        >>> config = {
-        >>>     'subcommand': 'fit',
-        >>>     'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
-        >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes2-frames9-gsize32',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
-        >>>     'fit.data.chip_dims': 32,
-        >>>     'fit.trainer.accelerator': 'cpu',
-        >>>     'fit.trainer.devices': 1,
-        >>>     'fit.trainer.max_steps': 2,
-        >>>     'fit.trainer.num_sanity_val_steps': 0,
-        >>> }
-        >>> cli = main(config=config)
-
-    Example:
-        >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
-        >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('geowatch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
-        >>> config = {
-        >>>     # 'model': 'geowatch.tasks.fusion.methods.MultimodalTransformer',
-        >>>     #'model': 'geowatch.tasks.fusion.methods.UNetBaseline',
-        >>>     'subcommand': 'fit',
-        >>>     'fit.model.class_path': 'geowatch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
-        >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
-        >>>     'fit.optimizer.init_args.lr': 1e-3,
-        >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes2-gsize64-frames9-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes1-gsize64-frames9-speed0.5-multispectral',
-        >>>     'fit.data.chip_dims': 64,
-        >>>     'fit.trainer.accelerator': 'cpu',
-        >>>     'fit.trainer.devices': 1,
-        >>>     'fit.trainer.max_steps': 2,
-        >>>     'fit.trainer.num_sanity_val_steps': 0,
-        >>> }
-        >>> main(config=config)
     """
     cli = make_cli(config)
     return cli

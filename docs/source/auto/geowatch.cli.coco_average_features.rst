@@ -5,4 +5,3 @@ geowatch.cli.coco\_average\_features module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

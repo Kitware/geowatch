@@ -437,6 +437,7 @@ class SpacetimeGridBuilder:
                                       video_ids=video_ids)
 
 
+@profile
 def _build_grid(builder):
     dset = builder.dset
     time_dims = builder.time_dims
@@ -668,9 +669,19 @@ def _build_grid(builder):
             'vidid_to_meta': vidid_to_meta,
         }
         cacher.save(sample_grid)
-    vidid_to_meta = sample_grid['vidid_to_meta']
-    from kwutil.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~TRUNCATED...', tail='\n...~')))
+
+    SHOW_INFO = 1
+    if SHOW_INFO:
+        # Using urepr is quite slow here for large number of targets
+        # reduce to a subset of video ids to reduce the time this takes
+        from kwutil.slugify_ext import smart_truncate
+        from geowatch.utils.util_kwutil import distributed_subitems
+        vidid_to_meta = sample_grid['vidid_to_meta']
+        subvidid_to_meta = distributed_subitems(vidid_to_meta, 6)
+        _text = ub.urepr(subvidid_to_meta, nl=-1)
+        # _text = repr(subvidid_to_meta)
+        _trunc_text = smart_truncate(_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')
+        print(f'vidid_to_meta = {_trunc_text}')
     return sample_grid
 
 

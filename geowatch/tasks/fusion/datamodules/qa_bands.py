@@ -408,7 +408,11 @@ def unpack_bit_positions(val, itemsize=None):
         neg_position = (itemsize * 8) - 1
         # special logic for negatives to get twos compliment repr
         max_val = 1 << neg_position
-        val_ = max_val + val
+        try:
+            val_ = max_val + val
+        except OverflowError:
+            # numpy 2.x
+            val_ = max_val + int(val)
     else:
         val_ = val
     binary_string = '{:b}'.format(val_)[::-1]

@@ -123,6 +123,7 @@ import os
 import pandas as pd
 import scriptconfig as scfg
 import torch
+import rich
 import ubelt as ub
 import warnings
 
@@ -143,7 +144,7 @@ from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from geowatch.tasks.fusion.datamodules.batch_item import HeterogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 
 try:
     import line_profiler
@@ -777,6 +778,8 @@ class TruthMixin:
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+        else:
+            time_weights = 1
 
         truth_info = {
             'task_tid_to_cnames': task_tid_to_cnames,
@@ -872,11 +875,19 @@ class TruthMixin:
         ann_weights = dets.data['weights']
         ann_boxes   = dets.data['boxes']
 
+        missing_poly_flags = [poly is None for poly in ann_polys]
+        if any(missing_poly_flags):
+            missing_idxs = np.where(missing_poly_flags)[0]
+            _box_polys = ann_boxes[missing_idxs].to_polygons()
+            for idx, _poly in zip(missing_idxs, _box_polys):
+                ann_polys.data[idx] = _poly
+
         # Associate weights with polygons
         for poly, weight in zip(ann_polys, ann_weights):
             if weight is None:
                 weight = 1.0
-            poly.meta['weight'] = weight
+            if poly is not None:
+                poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
@@ -890,8 +901,9 @@ class TruthMixin:
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
 
-        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
-        frame_box = frame_box.to_shapely()
+        if wants_boxes or wants_saliency or wants_class_sseg:
+            frame_box = kwimage.Box.from_dsize(space_shape[::-1])
+            frame_box = frame_box.to_shapely()
 
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
@@ -1032,7 +1044,6 @@ class TruthMixin:
 
         if wants_class_sseg:
             ### Build single frame CLASS target labels and weights
-
             task_target_ohe['class'] = np.zeros((self.num_predictable_classes,) + space_shape, dtype=np.uint8)
             task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
             task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
@@ -1058,6 +1069,8 @@ class TruthMixin:
                     class_sseg_groups['background'].append(poly)
                 elif new_class_catname in self.undistinguished_classes.intersection(self.predictable_classes):
                     class_sseg_groups['undistinguished'].append(poly)
+
+            balance_areas = self.config['balance_areas']
 
             if balance_areas:
                 big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
@@ -1188,6 +1201,8 @@ class GetItemMixin(TruthMixin):
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+        else:
+            time_weights = 1
         meta_info = {
             'time_weights': time_weights,
         }
@@ -1349,9 +1364,9 @@ class GetItemMixin(TruthMixin):
         space_shape = frame_target_shape
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
-        if self.config.upweight_centers:
+        if self.config['upweight_centers']:
             space_weights = _space_weights(space_shape)
-            space_weights = np.maximum(space_weights, self.config.min_spacetime_weight)
+            space_weights = np.maximum(space_weights, self.config['min_spacetime_weight'])
             spacetime_weights = space_weights * time_weights[time_idx]
         else:
             spacetime_weights = 1
@@ -1480,12 +1495,17 @@ class GetItemMixin(TruthMixin):
                 # In test-mode the index directly determines the grid location.
                 resolved_index = requested_index
             else:
-                # In non-test-mode we discard the user index and randomly
-                # sample a grid location to achive balanced sampling.
-                try:
-                    resolved_index = self.balanced_sampler.sample()
-                except Exception as ex:
-                    raise FailedSample(f'Failed to sample grid location: {ex=}')
+                if self.balanced_sampler is None:
+                    # If we don't construct a balancer, then do the normal
+                    # sequential sampling.
+                    resolved_index = requested_index
+                else:
+                    # In non-test-mode we discard the user index and randomly
+                    # sample a grid location to achive balanced sampling.
+                    try:
+                        resolved_index = self.balanced_sampler.sample()
+                    except Exception as ex:
+                        raise FailedSample(f'Failed to sample grid location: {ex=}')
             target = self.sample_grid['targets'][resolved_index]
 
         target = target.copy()
@@ -1497,10 +1517,14 @@ class GetItemMixin(TruthMixin):
             raise FailedSample('no target')
         return target
 
-    def _prepare_target(self, target):
+    @profile
+    def _resolve_target(self, target):
         """
         Creates a copy of the target with modified information expected by the
-        getitem method.
+        getitem method. This applies any sampling augmentation if enabled.  It
+        also handles enriching the target with configuration level information
+        if needed. There are other places in the code that do that, and it may
+        be better if those are moved here.
         """
         sampler = self.sampler
         coco_dset = self.sampler.dset
@@ -1524,7 +1548,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.imgs[gid]
 
         vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
+        # video = coco_dset.index.videos[vidid]
         resolution_info = self._resolve_resolution(target_, video)
 
         # Resolve per-target parameters
@@ -1536,7 +1560,12 @@ class GetItemMixin(TruthMixin):
 
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
-        return target_, resolution_info
+        return target_, video, resolution_info
+
+    @ub.memoize_method
+    def _cached_sample_sensorchan_matching_sensor(self, sensor_coarse):
+        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+        return matching_sensorchan
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,
@@ -1548,7 +1577,8 @@ class GetItemMixin(TruthMixin):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', '*')
-        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+
+        matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
 
         def _ensure_list(x):
@@ -1622,6 +1652,12 @@ class GetItemMixin(TruthMixin):
             tr_frame['padkw' ] = {'constant_values': np.nan}
             tr_frame['nodata' ] = 'float'
             tr_frame['dtype'] = np.float32
+
+            if stream.spec == 'unknown-chan':
+                # Hack: unknown channels mean that the kwcoco didnt specify
+                # them. Thus we should assume there are homogeneous.
+                tr_frame.pop('channels', None)
+
             # FIXME: each kwcoco asset should be able to control its own
             # interpolation as a function of its role.
             sample = sampler.load_sample(
@@ -1681,7 +1717,8 @@ class GetItemMixin(TruthMixin):
         if coco_video is None:
             domain = None
         else:
-            domain = coco_video.get('domain', coco_video.get('name', None))
+            # domain = coco_video.get('domain', coco_video.get('name', None))
+            domain = coco_video.get('domain', None)
 
         # After all channels are sampled, apply final invalid mask.
         for stream, sample in sample_streams.items():
@@ -1807,7 +1844,7 @@ class GetItemMixin(TruthMixin):
 
         # Handle details about the sampling target
         # Fill in details that might be missing. Does not modify the input.
-        target_, resolution_info = self._prepare_target(target)
+        target_, video, resolution_info = self._resolve_target(target)
 
         vidspace_box = resolution_info['vidspace_box']
         try:
@@ -1820,6 +1857,7 @@ class GetItemMixin(TruthMixin):
             msg = f'Unknown sample error: ex = {ub.urepr(ex, nl=1)}'
             print(msg)
             warnings.warn(msg)
+            raise
             raise FailedSample(msg)
 
         num_frames = len(final_gids)
@@ -1993,7 +2031,10 @@ class GetItemMixin(TruthMixin):
             for key in truth_keys:
                 data = frame_item.get(key, None)
                 if data is not None:
-                    frame_item[key] = kwarray.ArrayAPI.tensor(data)
+                    try:
+                        frame_item[key] = kwarray.ArrayAPI.tensor(data)
+                    except TypeError:
+                        frame_item[key] = torch.tensor(data)
 
         positional_tensors = self._populate_positional_information(frame_items)
 
@@ -2020,8 +2061,6 @@ class GetItemMixin(TruthMixin):
         # just a single classification prediction over the entire sequence.
         LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
         vidid = target_['video_id']
-        vidid = target_['video_id']
-        video = self.sampler.dset.index.videos[vidid]
         item = {
             'producer_mode': self.mode,
             'producer_rank': LOCAL_RANK,
@@ -2663,6 +2702,10 @@ class BalanceMixin:
         # Balance options are specified as an ordered list of the properties we
         # want to balance over, which can contain optional information about
         # how to do balancing.
+        if self.config.balance_options == 'sequential_without_replacement':
+            self.balanced_sampler = None
+            return
+
         if self.config.balance_options == 'scott':
             # Hard coded special mapping for scott
             balance_options = kwutil.Yaml.coerce(
@@ -2808,7 +2851,7 @@ class PreprocessMixin:
             ('with_intensity', with_intensity),
             ('with_class', with_class),
             ('prenormalizers', self.prenormalizers),
-            ('depends_version', 21),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 22),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2903,7 +2946,7 @@ class PreprocessMixin:
         # Track moving average of each fused channel stream
         norm_stats = ub.ddict(lambda: kwarray.RunningStats(nan_policy='omit'))
 
-        classes = self.classes
+        classes = self.predictable_classes
         num_classes = len(classes)
         bins = np.arange(num_classes + 1)
         total_freq = np.zeros(num_classes, dtype=np.int64)
@@ -3221,8 +3264,8 @@ class MiscMixin:
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
             rng = kwarray.ensure_rng(rng=seed)
-            self.balanced_sampler.rng = rng
-        ...
+            if self.balanced_sampler is not None:
+                self.balanced_sampler.rng = rng
 
     @property
     def coco_dset(self):
@@ -3435,6 +3478,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         >>> kwplot.show_if_requested()
     """
 
+    @profile
     def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):
         """
         Args:
@@ -3472,7 +3516,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         config['chip_dims'] = window_dims
 
         self.config = config
-        import rich
         rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
         # TODO: remove this line. Reduce the number of top-level attributes and
         # maintain initialization variables in the config object itself.
@@ -3674,11 +3717,11 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         if autobuild:
             self._init()
 
+    @profile
     def _init(self):
         """
         The expensive part of initialization.
         """
-        import os
         config = self.config
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
         common_grid_kw = dict(
@@ -3716,7 +3759,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         )
         mode = self.mode
         if mode == 'custom':
-            new_sample_grid = None
+            sample_grid = None
             self.length = 1
         elif mode == 'test':
             # FIXME: something is wrong with the cache when using an sqlview.
@@ -3734,24 +3777,25 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 dset=self.sampler.dset, **grid_kw
             )
-            new_sample_grid = builder.build()
-            self.length = len(new_sample_grid['targets'])
+            sample_grid = builder.build()
+            self.length = len(sample_grid['targets'])
         else:
             grid_kw.update(annot_helper_kws)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 self.sampler.dset, **grid_kw
             )
-            new_sample_grid = builder.build()
+            sample_grid = builder.build()
 
-            if 1:
-                self._init_balance(new_sample_grid)
-
-            self.length = len(self.balanced_sampler)
+            self._init_balance(sample_grid)
+            if self.balanced_sampler is None:
+                self.length = len(sample_grid['targets'])
+            else:
+                self.length = len(self.balanced_sampler)
 
             if config['max_epoch_length'] is not None:
                 self.length = min(self.length, config['max_epoch_length'])
 
-        self.sample_grid = new_sample_grid
+        self.sample_grid = sample_grid
 
         self.prenormalizers = None
 

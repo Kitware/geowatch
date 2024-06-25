@@ -5,4 +5,3 @@ geowatch.tasks.cold.export\_change\_map module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

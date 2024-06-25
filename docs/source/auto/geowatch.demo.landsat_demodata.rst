@@ -5,4 +5,3 @@ geowatch.demo.landsat\_demodata module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

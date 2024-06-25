@@ -1,4 +1,9 @@
 """
+The Tracking Module For Extracting Polygons from Heatmaps
+"""
+
+
+__autogen__ = """
 mkinit geowatch.tasks.tracking --lazy --noattrs -w
 EAGER_IMPORT_MODULES=geowatch python -c "from geowatch.tasks import tracking"
 """

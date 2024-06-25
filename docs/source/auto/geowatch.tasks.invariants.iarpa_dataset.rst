@@ -5,4 +5,3 @@ geowatch.tasks.invariants.iarpa\_dataset module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

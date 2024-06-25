@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Iterable, Optional, Dict
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

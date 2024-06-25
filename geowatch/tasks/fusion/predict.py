@@ -42,7 +42,7 @@ import scriptconfig as scfg
 monkey_torchmetrics.fix_torchmetrics_compatability()
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 
@@ -562,7 +562,8 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
 
     UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
-        # unpackage model hack
+        # unpackage model hack, this only works if we know the model that will
+        # be loaded a-priori
         from geowatch.tasks.fusion import methods
         unpackged_method = methods.MultimodalTransformer(**model.hparams)
         unpackged_method.load_state_dict(model.state_dict())

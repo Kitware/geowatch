@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.temporal\_sampling.time\_kernel\_grammar modul
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.mlops.confusor\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

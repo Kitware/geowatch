@@ -24,7 +24,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.__main__
    geowatch.exceptions
    geowatch.heuristics
 
@@ -35,4 +34,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

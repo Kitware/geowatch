@@ -5,4 +5,3 @@ geowatch.cli.animate\_visualizations module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

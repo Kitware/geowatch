@@ -5,4 +5,3 @@ geowatch.tasks.fusion.architectures.wu\_mae module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.tasks.fusion.predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

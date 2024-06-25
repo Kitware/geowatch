@@ -5,4 +5,3 @@ geowatch.tasks.fusion.coco\_stitcher module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

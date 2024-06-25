@@ -299,10 +299,11 @@ def _highlight_tp(y, **kwargs):
 
 def _add_colored_linesegments(x, y, phase, units, **kwargs):
     """
-    x = dfm['date']
-    y = dfm['yval']
-    phase = dfm['phase']
-    units = dfm['yval']
+    Ignore:
+        x = dfm['date']
+        y = dfm['yval']
+        phase = dfm['phase']
+        units = dfm['yval']
     """
     # need args instead of kwargs because of grid.map() weirdness
     plt = kwplot.autoplt()

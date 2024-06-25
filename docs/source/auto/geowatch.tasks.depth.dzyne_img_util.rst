@@ -5,4 +5,3 @@ geowatch.tasks.depth.dzyne\_img\_util module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

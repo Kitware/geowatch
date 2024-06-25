@@ -5,4 +5,3 @@ geowatch.cli.concat\_kwcoco\_videos module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

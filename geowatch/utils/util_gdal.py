@@ -22,7 +22,11 @@ import kwimage
 import os
 import ubelt as ub
 import subprocess
-import functools
+
+try:
+    from functools import cache
+except ImportError:
+    from ubelt import memoize as cache
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -61,7 +65,7 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 # ]
 
 
-@functools.cache
+@cache
 def import_gdal():
     from osgeo import gdal
     if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
@@ -69,7 +73,7 @@ def import_gdal():
     return gdal
 
 
-@functools.cache
+@cache
 def import_osr():
     from osgeo import osr
     if not getattr(osr, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
@@ -131,13 +135,13 @@ def _demo_geoimg_with_nodata():
     imdata[-100:] = nodata
     imdata[0:200:, -200:-180] = nodata
 
-    kwimage.imwrite(geo_fpath, imdata, backend='gdal', nodata=-9999, crs=crs, transform=transform)
+    kwimage.imwrite(geo_fpath, imdata, backend='gdal', nodata_value=-9999, crs=crs, transform=transform)
     return geo_fpath
 
 
 # TODO: simplified API for gdalwarp and gdal_translate
 # def gdal_single_crop(in_fpath, out_fpath, space_box=None, local_epsg=4326,
-#                      box_epsg=4326, nodata=None, rpcs=None, blocksize=256,
+#                      box_epsg=4326, nodata_value=None, rpcs=None, blocksize=256,
 #                      compress='DEFLATE', as_vrt=False,
 #                      use_te_geoidgrid=False, dem_fpath=None, tries=1,
 #                      verbose=0):

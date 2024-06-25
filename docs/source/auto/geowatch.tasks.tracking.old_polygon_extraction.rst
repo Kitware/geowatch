@@ -5,4 +5,3 @@ geowatch.tasks.tracking.old\_polygon\_extraction module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

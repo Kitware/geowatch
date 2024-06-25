@@ -111,7 +111,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.18.0'
+__version__ = '0.18.1'
 
 
 # ../dev/maintain/generate_authors.py
@@ -273,7 +273,7 @@ def _execute_ordered_preimports():
         return
 
     if WATCH_PREIMPORT == 'auto':
-        if _is_running_a_fast_cli_tool():
+        if RUNNING_FAST_CLI_TOOL:
             watch_preimport = None
         else:
             # This is the "known" best order for importing
@@ -290,6 +290,8 @@ def _execute_ordered_preimports():
             _import_troublesome_module(modname)
 
 
+RUNNING_FAST_CLI_TOOL = _is_running_a_fast_cli_tool()
+
 _handle_hidden_commands()
 _execute_ordered_preimports()
 
@@ -299,10 +301,10 @@ from geowatch.monkey import monkey_scriptconfig   # NOQA
 monkey_scriptconfig.patch_0_7_14()
 
 
-if 0:
-    # Disable
+if 1:
     from geowatch.monkey import monkey_numpy  # NOQA
-    monkey_numpy.patch_numpy_dtypes()
+    # monkey_numpy.patch_numpy_dtypes()
+    monkey_numpy.patch_numpy_2x()
 
 
 if 'hard-to-inspect-key' in vars():

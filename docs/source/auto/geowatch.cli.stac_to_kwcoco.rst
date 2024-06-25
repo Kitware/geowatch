@@ -5,4 +5,3 @@ geowatch.cli.stac\_to\_kwcoco module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

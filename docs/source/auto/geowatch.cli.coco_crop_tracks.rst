@@ -5,4 +5,3 @@ geowatch.cli.coco\_crop\_tracks module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

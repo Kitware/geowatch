@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.spacetime\_grid\_builder module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

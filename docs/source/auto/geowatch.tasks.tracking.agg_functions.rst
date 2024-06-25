@@ -5,4 +5,3 @@ geowatch.tasks.tracking.agg\_functions module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

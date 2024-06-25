@@ -5,4 +5,3 @@ geowatch.gis.sensors.sentinel2 module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.cli.crop\_sites\_to\_regions module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

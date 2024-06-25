@@ -1,7 +1,9 @@
 from geowatch.monkey import monkey_lightning
 from geowatch.monkey import monkey_tensorflow
+from geowatch.monkey import monkey_numpy
 monkey_tensorflow.disable_tensorflow_warnings()
 monkey_lightning.disable_lightning_hardware_warnings()
+monkey_numpy.patch_numpy_2x()
 
 
 def test_save_channelwise_plain():

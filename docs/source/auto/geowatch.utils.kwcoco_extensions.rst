@@ -5,4 +5,3 @@ geowatch.utils.kwcoco\_extensions module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

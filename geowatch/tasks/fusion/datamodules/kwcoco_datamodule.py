@@ -496,6 +496,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             assert requested_tasks is None
             if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+            elif hasattr(model, 'heads'):
+                # Experimental new style of notification
+                requested_tasks = {}
+                requested_tasks['saliency'] = False
+                requested_tasks['class'] = False
+                requested_tasks['change'] = False
+                requested_tasks['boxes'] = False
+                requested_tasks['nonlocal_class'] = False
+                requested_tasks.update({k: True for k in model.heads.keys()})
+                # TODO: handle per-head predictable classes.
+
             if hasattr(model, 'predictable_classes'):
                 predictable_classes = model.predictable_classes
             else:
@@ -693,7 +704,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # assume collation is disabled
         batch_items = batch
-        # batch_items = [ex for ex in batch if (ex is not None)]
+
+        if dataset.requested_tasks['nonlocal_class']:
+            # FIXME: HACK JUST TO MAKE CIFAR VISUALIZE,
+            # TODO: NEED TO BETTER CHANGE THE TYPE OF THE OUTPUTS AT THE
+            # LIGHTNING LEVEL
+            from geowatch.tasks.fusion.datamodules import network_io
+            outputs = network_io.CollatedNetworkOutputs(outputs)
 
         DEBUG_INCOMING_DATA = 1
         if DEBUG_INCOMING_DATA:
@@ -704,7 +721,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if item is None:
                     stats['num_None_batch_items'] += 1
 
-        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs', 'box']
+        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs', 'nonlocal_class_probs', 'box']
 
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
@@ -721,29 +738,44 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if outputs is not None:
                 # Extract outputs only for this specific batch item.
-                item_output = ub.AutoDict()
-                for head_key in KNOWN_HEADS:
-                    if head_key in outputs:
-                        item_output[head_key] = []
-                        head_outputs = outputs[head_key]
-                        head_item_output = head_outputs[item_idx]
-                        if head_item_output is not None:
-                            if head_key == 'box':
-                                # Handle box head separately.
-                                # TODO: Should the network handle this conversion?
-                                box_ltrb = head_item_output['box_ltrb'].data.cpu().numpy()
-                                box_probs = head_item_output['box_probs'].data.cpu().numpy()
-                                for frame_box_ltrb, frame_box_probs in zip(box_ltrb, box_probs):
-                                    item_output[head_key].append({
-                                        'box_ltrb': frame_box_ltrb,
-                                        'box_probs': frame_box_probs
-                                    })
+                if hasattr(outputs, 'decollate'):
+                    # print('experimental')
+                    # Experimental new logic
+                    # decollated_outputs = outputs.decollate()
+                    # item_output = decollated_outputs['item_probs']
+                    item_output = {}
+                    # hack, because decollate is not playing nice
+                    _nonlocal_probs = outputs['probs']['nonlocal_class_probs'][item_idx]
+                    if _nonlocal_probs.ndim == 1:
+                        # Add in a fake time dimension
+                        _nonlocal_probs = [_nonlocal_probs]
+                    item_output['nonlocal_class_probs'] = _nonlocal_probs
+                    # print(f'_nonlocal_probs={_nonlocal_probs}')
+                else:
+                    # Original logic for multimodal transformer
+                    item_output = ub.AutoDict()
+                    for head_key in KNOWN_HEADS:
+                        if head_key in outputs:
+                            item_output[head_key] = []
+                            head_outputs = outputs[head_key]
+                            head_item_output = head_outputs[item_idx]
+                            if head_item_output is not None:
+                                if head_key == 'box':
+                                    # Handle box head separately.
+                                    # TODO: Should the network handle this conversion?
+                                    box_ltrb = head_item_output['box_ltrb'].data.cpu().numpy()
+                                    box_probs = head_item_output['box_probs'].data.cpu().numpy()
+                                    for frame_box_ltrb, frame_box_probs in zip(box_ltrb, box_probs):
+                                        item_output[head_key].append({
+                                            'box_ltrb': frame_box_ltrb,
+                                            'box_probs': frame_box_probs
+                                        })
+                                else:
+                                    # Handle original heatmap case
+                                    for frame_out in head_item_output:
+                                        item_output[head_key].append(frame_out.data.cpu().numpy())
                             else:
-                                # Handle original heatmap case
-                                for frame_out in head_item_output:
-                                    item_output[head_key].append(frame_out.data.cpu().numpy())
-                        else:
-                            item_output[head_key].append(None)
+                                item_output[head_key].append(None)
             else:
                 item_output = {}
 

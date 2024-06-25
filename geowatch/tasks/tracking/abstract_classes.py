@@ -1,7 +1,7 @@
 import ubelt as ub
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except Exception:
     profile = ub.identity
 

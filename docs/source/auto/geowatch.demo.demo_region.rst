@@ -5,4 +5,3 @@ geowatch.demo.demo\_region module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

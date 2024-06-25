@@ -5,4 +5,3 @@ geowatch.tasks.uky\_temporal\_prediction.fit module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

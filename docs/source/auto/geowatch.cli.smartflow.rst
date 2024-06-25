@@ -9,9 +9,11 @@ Submodules
 
    geowatch.cli.smartflow.run_bas_datagen
    geowatch.cli.smartflow.run_bas_fusion
+   geowatch.cli.smartflow.run_bas_fusion_incremental
    geowatch.cli.smartflow.run_dino_sv
    geowatch.cli.smartflow.run_dzyne_parallel_site_vali
    geowatch.cli.smartflow.run_fixups
+   geowatch.cli.smartflow.run_iarpa_metrics
    geowatch.cli.smartflow.run_pseudolive_consolidate
    geowatch.cli.smartflow.run_psuedolive_copy_previous
    geowatch.cli.smartflow.run_sc_datagen
@@ -31,4 +33,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

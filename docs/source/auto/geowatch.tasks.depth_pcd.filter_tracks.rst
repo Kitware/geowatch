@@ -5,4 +5,3 @@ geowatch.tasks.depth\_pcd.filter\_tracks module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

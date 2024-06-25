@@ -5,4 +5,3 @@ geowatch.tasks.depth.demo\_transform module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

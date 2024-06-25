@@ -5,4 +5,3 @@ geowatch.cli.geojson\_site\_stats module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

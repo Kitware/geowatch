@@ -5,4 +5,3 @@ geowatch.cli.validate\_annotation\_schemas module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

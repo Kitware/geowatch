@@ -5,4 +5,3 @@ geowatch.cli.pseudolive\_consolidate module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -7,7 +7,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   geowatch.mlops.__main__
    geowatch.mlops.aggregate
    geowatch.mlops.aggregate_loader
    geowatch.mlops.aggregate_plots
@@ -27,4 +26,3 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

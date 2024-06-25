@@ -5,4 +5,3 @@ geowatch.utils.result\_analysis module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.tasks.cold.transfer\_features module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

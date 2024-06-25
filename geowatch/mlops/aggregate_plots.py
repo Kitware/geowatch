@@ -7,7 +7,7 @@ Used by ./aggregate.py
 import ubelt as ub
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

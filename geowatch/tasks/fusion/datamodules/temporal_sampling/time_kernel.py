@@ -1,6 +1,17 @@
 """
 Defines :class:`TimeKernel`.
 
+Note:
+    Kernel may not be the best name for this, which is a highly overloaded
+    term. The name was chosen based on the use of a statistical kernels or
+    convolutional kernels used in image processing
+    [WikiKernelImageProcessing]_.  It has nothing to do with kernel methods in
+    optimization or null space in linear algebra.
+
+    It is really an ideal time distribution that will be used as a template.
+
+References:
+    .. [WikiKernelImageProcessing] https://en.wikipedia.org/wiki/Kernel_(image_processing)
 """
 import numpy as np
 

@@ -5,4 +5,3 @@ geowatch.cli.special.finish\_install module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

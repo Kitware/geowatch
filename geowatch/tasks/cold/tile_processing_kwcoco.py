@@ -36,7 +36,7 @@ from pycold.ob_analyst import ObjectAnalystHPC
 from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     from ubelt import identity as profile
 

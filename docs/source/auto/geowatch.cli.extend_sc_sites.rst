@@ -5,4 +5,3 @@ geowatch.cli.extend\_sc\_sites module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

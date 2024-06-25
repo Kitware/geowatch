@@ -1,3 +1,6 @@
+Baseline 2023-06-22 Joint AC/SC Truth
+-------------------------------------
+
 The following is an SC baseline that uses the ground truth to pre-crop regions. Please see the docs in baseline_joint_bas_sc_2023-06-22.rst for more comments on the general process.
 
 

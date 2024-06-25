@@ -5,4 +5,3 @@ geowatch.utils.lightning\_ext.callbacks.state\_logger module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

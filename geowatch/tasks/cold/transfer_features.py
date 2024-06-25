@@ -20,7 +20,7 @@ from kwutil import util_time
 import scriptconfig as scfg
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

@@ -5,4 +5,3 @@ geowatch.mlops.pipeline\_nodes module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

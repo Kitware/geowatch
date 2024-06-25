@@ -5,4 +5,3 @@ geowatch.tasks.fusion.architectures.transformer module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

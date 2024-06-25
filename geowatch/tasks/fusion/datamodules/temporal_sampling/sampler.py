@@ -75,8 +75,7 @@ Example:
     >>>     affinity_type='hardish3', time_span='1y', update_rule='',
     >>> )
     >>> idxs = self.sample()
-    >>> print(f'idxs={idxs}')
-    idxs=[0, 0]
+    >>> assert idxs == [0, 0]
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
@@ -162,7 +161,7 @@ from .exceptions import TimeSampleError
 
 
 try:
-    from xdev import profile
+    from line_profiler import profile
 except ImportError:
     profile = ub.identity
 

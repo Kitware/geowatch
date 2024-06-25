@@ -5,4 +5,3 @@ geowatch.cli.smartflow.run\_teamfeat\_cold module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -2,6 +2,9 @@
 Our data might look like this, a sequence of frames where the frames can contain
 heterogeneous data:
 
+
+.. code::
+
     [
         {
             'frame_index': 0,
@@ -251,15 +254,12 @@ class MultimodalTransformerConfig(scfg.DataConfig):
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     """
-    CommandLine:
-        xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
-
     TODO:
         - [ ] Change name MultimodalTransformer -> FusionModel
         - [ ] Move parent module methods -> models
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/geowatch/tasks/fusion/methods/channelwise_transformer.py MultimodalTransformer
+        xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
 
     Example:
         >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
@@ -342,7 +342,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.hparams.update(**_cfgdict)
 
         input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
-
         input_norms = None
         if input_stats is not None:
             input_norms = RobustModuleDict()
@@ -472,8 +471,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
-        # import xdev
-        # with xdev.embed_on_exception_context:
         for k in sorted(sensor_modes):
             if isinstance(k, str):
                 if k == '*':
@@ -485,6 +482,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
+            if mode_code.spec == 'unknown-chan':
+                # hack: special case for unknown channels
+                # dont trust channel numel, see if we can lookup
+                # the number of channels from dataset stats.
+                in_chan = self.input_norms[s][c].mean.shape[0]
+
             if s not in self.sensor_channel_tokenizers:
                 self.sensor_channel_tokenizers[s] = RobustModuleDict()
 
@@ -1304,6 +1307,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
     def forward_item(self, item, with_loss=False):
         """
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.forward_item:1
+
         Example:
             >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
@@ -1318,6 +1324,27 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> print(_debug_inbatch_shapes(item))
             >>> print('outputs')
             >>> print(_debug_inbatch_shapes(outputs))
+
+        Example:
+            >>> # Box head
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels,
+            >>>     decouple_resolution=False, global_box_weight=1)
+            >>> batch = self.demo_batch(width=64, height=64, num_timesteps=3)
+            >>> item = batch[0]
+            >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
+            >>> print(_debug_inbatch_shapes(batch))
+            >>> result1 = self.forward_step(batch, with_loss=True)
+            >>> assert len(result1['box'])
+            >>> assert 'box_ltrb' in result1['box'][0]
+            >>> assert len(result1['box'][0]['box_ltrb'].shape) == 3
+            >>> print(_debug_inbatch_shapes(result1))
+            >>> # Check we can go backward
+            >>> result1['loss'].backward()
 
         Example:
             >>> # Decoupled resolutions
@@ -1581,33 +1608,38 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
                 criterion_encoding = self.criterions["class"].target_encoding
-                logits = resampled_logits['class'].detach()
+                _logits = resampled_logits['class'].detach()
                 if criterion_encoding == "onehot":
-                    probs['class'] = logits.sigmoid()[0]
+                    probs['class'] = _logits.sigmoid()[0]
                 elif criterion_encoding == "index":
-                    probs['class'] = logits.softmax(dim=-1)[0]
+                    probs['class'] = _logits.softmax(dim=-1)[0]
                 else:
                     raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
             if 'box' in resampled_logits:
                 perframe_output_dims = [frame['output_dims'] for frame in item['frames']]
-                perframe_norm_boxes = kwimage.Boxes(resampled_logits['box'][0].detach(), 'cxywh').to_ltrb()
+
+                _raw_cxywh, _raw_scores = resampled_logits['box']
+                # Hack because we know we did boxes with only 2 classes
+                _raw_binary_scores = _raw_scores[:, :, 0].detach()
+                perframe_norm_boxes = kwimage.Boxes(_raw_cxywh.detach(), 'cxywh').to_ltrb()
                 # Rescale each box from predicted 0-1 coords to the size of the
                 # input frames.
-                perframe_boxes = []
+                perframe_ltrb_list = []
                 for norm_boxes, dims in zip(perframe_norm_boxes, perframe_output_dims):
                     boxes = norm_boxes.scale(dims)
                     # uncomment if we want to clip boxes
                     # boxes = boxes.clip(0, 0, dims[1], dims[0])
-                    perframe_boxes.append(boxes[None, ...])
+                    perframe_ltrb_list.append(boxes.data[None, ...])
                 # Create final Tx100x4 tensor of boxes
                 # todo perhaps we don't concat and just return a list
                 # to make it more clear that these are per-frame boxes:w
-                perframe_boxes = kwimage.Boxes.concatenate(perframe_boxes, axis=0)
+                perframe_ltrb = torch.concat(perframe_ltrb_list, dim=0)
+                perframe_boxes = kwimage.Boxes(perframe_ltrb, 'ltrb')
                 probs['box'] = {
                     'box_ltrb': perframe_boxes.to_ltrb().data,
-                    'box_probs': resampled_logits['box'][1][..., 1].detach().sigmoid()
+                    'box_probs': _raw_binary_scores.sigmoid()
                 }
         else:
             # NOTE: decoupled resolution lacks support here and may be removed.
@@ -1666,7 +1698,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         if with_loss:
             item_loss_parts, item_truths = self._build_item_loss_parts(
                 item, resampled_logits)
-
         else:
             item_loss_parts = None
             item_truths = None
@@ -1743,7 +1774,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         frame_sensor_chan_tokens = einops.rearrange(x2, '1 hs ws f -> hs ws f')
         return frame_sensor_chan_tokens, space_shape
 
-    def _head_loss_heatmaps(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+    def _head_loss_heatmaps(self, head_key, head_logits, head_truth, head_weights, truth_encoding):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
@@ -1762,12 +1793,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_weights_input = head_weights_input[:, 0]
         elif criterion.target_encoding == 'onehot':
             # Note: 1HE is much easier to work with
-            if head_encoding == 'index':
+            if truth_encoding == 'index':
                 head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
-            elif head_encoding == 'ohe':
+            elif truth_encoding == 'ohe':
                 head_true_ohe = head_truth
             else:
-                raise KeyError(head_encoding)
+                raise KeyError(truth_encoding)
             head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
         else:
             raise KeyError(criterion.target_encoding)
@@ -1782,7 +1813,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         return head_loss
 
-    def _head_loss_boxes(self, head_key, head_logits, head_truth, head_weights, head_encoding):
+    def _head_loss_boxes(self, head_key, head_logits, head_truth, head_weights, truth_encoding):
         final_loss = 0
         for i in range(len(head_truth)):
             out_boxes = kwimage.Boxes(head_logits[i: i + 1], 'ltrb')
@@ -2142,7 +2173,6 @@ def perterb_params(optimizer, std):
         θ[i, t] = λ * θ[i, t - 1] + p[t]
 
         where p[t] ∼ N (0, (σ ** 2)) and 0 < λ < 1.
-
 
     References:
         .. [ShrinkAndPerterb] https://arxiv.org/pdf/1910.08475.pdf

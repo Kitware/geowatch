@@ -5,4 +5,3 @@ geowatch.tasks.landcover.model\_info module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

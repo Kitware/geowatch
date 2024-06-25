@@ -5,4 +5,3 @@ geowatch.gis.geotiff module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -343,6 +343,7 @@ class FitRegisteryCLI(scfg.ModalCLI):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/geowatch/geowatch/tasks/fusion/fit_registery.py peek
+        CommandLine:
+            python -m geowatch.tasks.fusion.fit_registery peek
     """
     FitRegisteryCLI.main()

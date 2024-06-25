@@ -5,4 +5,3 @@ geowatch.tasks.uky\_temporal\_prediction.time\_sort\_module module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

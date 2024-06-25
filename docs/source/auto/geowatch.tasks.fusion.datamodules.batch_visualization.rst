@@ -5,4 +5,3 @@ geowatch.tasks.fusion.datamodules.batch\_visualization module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

@@ -5,4 +5,3 @@ geowatch.utils.util\_torchmetrics module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

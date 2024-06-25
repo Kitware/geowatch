@@ -5,4 +5,3 @@ geowatch.cli.coco\_combine\_features module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

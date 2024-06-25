@@ -5,4 +5,3 @@ geowatch.tasks.fusion.architectures.unet\_blur module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

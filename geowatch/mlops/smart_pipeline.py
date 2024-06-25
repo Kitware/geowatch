@@ -109,7 +109,7 @@ from geowatch.mlops.pipeline_nodes import ProcessNode
 
 
 try:
-    from xdev import profile  # NOQA
+    from line_profiler import profile  # NOQA
 except ImportError:
     profile = ub.identity
 
@@ -1457,5 +1457,5 @@ def dzyne_sv_only_pipeline():
     return nodes
 
 
-# from xdev import profile  # NOQA
+# from line_profiler import profile  # NOQA
 # profile.add_module()

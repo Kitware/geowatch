@@ -5,4 +5,3 @@ geowatch.tasks.landcover.detector module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

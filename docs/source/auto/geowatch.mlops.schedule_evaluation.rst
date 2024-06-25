@@ -5,4 +5,3 @@ geowatch.mlops.schedule\_evaluation module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

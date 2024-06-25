@@ -5,4 +5,3 @@ geowatch.utils.lightning\_ext.old\_parser\_devices module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:

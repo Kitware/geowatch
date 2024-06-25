@@ -5,4 +5,3 @@ geowatch.cli.run\_fusion\_predict module
    :members:
    :undoc-members:
    :show-inheritance:
-   :private-members:
