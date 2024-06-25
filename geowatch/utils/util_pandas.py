@@ -928,6 +928,7 @@ def pandas_fixed_groupby(df, by=None, **kwargs):
         >>> assert sorted(old3.keys())[0] == 'Falcon'
         >>> # This is the case that is fixed.
         >>> assert sorted(new2.keys())[0] == ('Falcon',)
+        >>> import numpy as np
         >>> if np.lib.NumpyVersion(pd.__version__) < '2.0.0':
         >>>     assert sorted(old2.keys())[0] == 'Falcon'
     """

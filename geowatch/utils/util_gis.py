@@ -47,15 +47,18 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc', predicate='intersect
     Example:
         >>> from geowatch.utils.util_gis import *  # NOQA
         >>> import geopandas as gpd
-        >>> gpd.GeoDataFrame()
-        >>> gdf1 = gpd.read_file(
-        >>>     gpd.datasets.get_path('naturalearth_lowres')
-        >>> )
-        >>> gdf2 = gpd.read_file(
-        >>>     gpd.datasets.get_path('naturalearth_cities')
-        >>> )
-        >>> gdf1 = gdf1.set_index('name')
-        >>> gdf2 = gdf2.set_index('name')
+        >>> import geodatasets
+        >>> geodatasets.get_path('GeoDa AirBnB')
+        >>> gdf1 = gpd.read_file(geodatasets.get_path('GeoDa milwaukee1'))
+        >>> gdf2 = gpd.read_file(geodatasets.get_path('GeoDa milwaukee2'))
+        >>> #gdf1 = gpd.read_file(
+        >>> #    gpd.datasets.get_path('naturalearth_lowres')
+        >>> #)
+        >>> #gdf2 = gpd.read_file(
+        >>> #    gpd.datasets.get_path('naturalearth_cities')
+        >>> #)
+        >>> #gdf1 = gdf1.set_index('name')
+        >>> #gdf2 = gdf2.set_index('name')
         >>> idx_mapping = geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc')
         >>> id_mapping = geopandas_pairwise_overlaps(gdf1, gdf2, locator='loc')
 
