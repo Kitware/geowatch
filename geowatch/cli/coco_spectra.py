@@ -800,7 +800,7 @@ def _weighted_auto_bins(data, xvar, weightvar):
         # limited variance, so we return a len dependent bw estimator
         bw_est = sturges_bw
 
-    from numpy.lib.histograms import _get_outer_edges, _unsigned_subtract
+    # from numpy.lib.histograms import _get_outer_edges, _unsigned_subtract
     first_edge, last_edge = _get_outer_edges(values, None)
     if bw_est:
         n_equal_bins = int(np.ceil(_unsigned_subtract(last_edge, first_edge) / bw_est))
@@ -812,6 +812,70 @@ def _weighted_auto_bins(data, xvar, weightvar):
     # Take the minimum of this and the number of actual bins
     n_equal_bins = min(n_equal_bins, len(values))
     return n_equal_bins
+
+
+def _get_outer_edges(a, range):
+    """
+    Determine the outer bin edges to use, from either the data or the range
+    argument
+
+    Note: vendored from numpy.lib._histograms_impl
+    """
+    import numpy as np
+    if range is not None:
+        first_edge, last_edge = range
+        if first_edge > last_edge:
+            raise ValueError(
+                'max must be larger than min in range parameter.')
+        if not (np.isfinite(first_edge) and np.isfinite(last_edge)):
+            raise ValueError(
+                "supplied range of [{}, {}] is not finite".format(first_edge, last_edge))
+    elif a.size == 0:
+        # handle empty arrays. Can't determine range, so use 0-1.
+        first_edge, last_edge = 0, 1
+    else:
+        first_edge, last_edge = a.min(), a.max()
+        if not (np.isfinite(first_edge) and np.isfinite(last_edge)):
+            raise ValueError(
+                "autodetected range of [{}, {}] is not finite".format(first_edge, last_edge))
+
+    # expand empty range to avoid divide by zero
+    if first_edge == last_edge:
+        first_edge = first_edge - 0.5
+        last_edge = last_edge + 0.5
+
+    return first_edge, last_edge
+
+
+def _unsigned_subtract(a, b):
+    """
+    Subtract two values where a >= b, and produce an unsigned result
+
+    This is needed when finding the difference between the upper and lower
+    bound of an int16 histogram
+
+    Note: vendored from numpy.lib._histograms_impl
+    """
+    import numpy as np
+    # coerce to a single type
+    signed_to_unsigned = {
+        np.byte: np.ubyte,
+        np.short: np.ushort,
+        np.intc: np.uintc,
+        np.int_: np.uint,
+        np.longlong: np.ulonglong
+    }
+    dt = np.result_type(a, b)
+    try:
+        unsigned_dt = signed_to_unsigned[dt.type]
+    except KeyError:
+        return np.subtract(a, b, dtype=dt)
+    else:
+        # we know the inputs are integers, and we are deliberately casting
+        # signed to unsigned.  The input may be negative python integers so
+        # ensure we pass in arrays with the initial dtype (related to NEP 50).
+        return np.subtract(np.asarray(a, dtype=dt), np.asarray(b, dtype=dt),
+                           casting='unsafe', dtype=unsigned_dt)
 
 
 @profile
