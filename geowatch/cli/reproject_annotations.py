@@ -1585,6 +1585,7 @@ def keyframe_interpolate(image_times, key_infos):
     dtype_view = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
     arr_view = arr.view(dtype_view)
     _, uidx, uinv = np.unique(arr_view, return_inverse=True, return_index=True)
+    uinv = uinv.ravel()  # for numpy 2.x (https://github.com/numpy/numpy/issues/26738)
     row_groupids = uidx[uinv]
     unique_rowxs, groupxs = kwarray.group_indices(row_groupids)
     ### --- </opaque group logic>

@@ -153,7 +153,7 @@ Example:
         'type': 'observation',
         'observation_date': '2011-05-28',
         'source': 'demosat-220110528T132754',
-        'sensor_name': 'demosat-2',
+        'sensor_name': ...'demosat-2'...,
         'current_phase': 'No Activity',
         'is_occluded': 'False',
         'is_site_boundary': 'True',

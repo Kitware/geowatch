@@ -586,7 +586,7 @@ def number_of_parameters(model, trainable=True):
     Example:
         >>> from geowatch.utils.util_netharn import *  # NOQA
         >>> model = torch.nn.Conv1d(2, 3, 5)
-        >>> number_of_parameters(model)
+        >>> print(number_of_parameters(model))
         33
     """
     if trainable:

@@ -67,11 +67,14 @@ def farthest_from_previous(start, stop):
     References:
         .. [CSSE_167943] https://cs.stackexchange.com/questions/167943/is-this-knapsack-variant-named-studied-online-algorithm-for-farthest-from-pr
 
+    CommandLine:
+        xdoctest -m geowatch.utils.util_kwutil farthest_from_previous
+
     Example:
         >>> from geowatch.utils.util_kwutil import *  # NOQA
         >>> total = 10
         >>> start, stop = 0, 10
-        >>> gen = farthest_fromart, stop)
+        >>> gen = farthest_from_previous(start, stop)
         >>> result = list(gen)
         >>> assert set(result) == set(range(start, stop))
         >>> print(result)
