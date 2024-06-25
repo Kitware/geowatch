@@ -290,13 +290,6 @@ def main(cmdline=False, **kwargs):
         site_geojson_fpaths, workers=io_workers,
         desc='load geojson site-models')
 
-    import pathlib
-    fpath = pathlib.Path('foo.json')
-    fpath.write_text('{"type": "FeatureCollection", "features": []}')
-    gpd.read_file(fpath)
-    import ubelt as ub
-
-
     if USE_LISTS:
         sites = list(sites)
 
@@ -319,8 +312,6 @@ def main(cmdline=False, **kwargs):
         new_region_fpath = new_region_dpath / old_region_fpath.name
 
         # Not sure why this insists on bytes. I dont think it was before
-        import xdev
-        xdev.embed()
         with safer.open(new_region_fpath, temp_file=not ub.WIN32, mode='w') as file:
             cropped_region_json = cropped_region.to_json(na='drop', indent=2, drop_id=True)
             file.write(cropped_region_json)
