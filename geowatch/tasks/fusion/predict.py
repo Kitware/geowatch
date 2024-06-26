@@ -112,6 +112,7 @@ class PredictConfig(DataModuleConfigMixin):
     with_change = scfg.Value('auto', help=None)
     with_class = scfg.Value('auto', help=None)
     with_saliency = scfg.Value('auto', help=None)
+    with_hidden_layers = scfg.Value(False, help='Experimental feature only implemented for certain multimodal models')
 
     draw_batches = scfg.Value(False, isflag=True, help=ub.paragraph(
         '''
@@ -181,6 +182,12 @@ class PredictConfig(DataModuleConfigMixin):
         This probably isn't generally useful and should be refactored later.
         '''))
 
+    hidden_layers_chan_code = scfg.Value('hidden_layers', help=ub.paragraph(
+        '''
+        Quick and dirty param to modify the channel name of hidden_layers output.
+        This probably isn't generally useful and should be refactored later.
+        '''))
+
     downweight_edges = scfg.Value(True, help=ub.paragraph(
         '''
         if True, spatial edges are downweighted in stitching in addition to
@@ -193,6 +200,46 @@ class PredictConfig(DataModuleConfigMixin):
         we use this as the directory for the memmap.  If True, a temp directory
         is used.
         '''))
+
+
+# --------------Add hidden layer hook to model----------------
+
+def _register_hidden_layer_hook(model):
+    # TODO: generalize to other models
+    # Specific to UNetR model
+    # These are at half of the output image resolution.
+
+    model._activation_cache = {}
+    model._activation_cache['hidden'] = []
+
+    # print("info on model", dir(model))
+
+    # print("Enumerate over model.children()\n")
+    # for i, layer in enumerate(model.children()):
+    #     print(f"Layer {i}: {layer}")
+
+    # Not sure this is the correct code
+
+    # Hack to grab the inputs to one of the heads
+    # This will let us grab pre-formated spacetime features
+    # out of the multimodal model.
+    available_decoders = (ub.oset(['saliency', 'class', 'change']) & model.heads.keys())
+    chosen_head_key = available_decoders[0]
+    layer_of_interest = model.heads[chosen_head_key].hidden.hidden0.conv
+
+    def record_hidden_activation(layer, inputs, output):
+        assert len(inputs) == 1
+        input_features = inputs[0]
+        activation = input_features.detach()
+        model._activation_cache['hidden'].append(activation)
+        #print(f"Hidden Layer Extracted! Shape is {activation.shape}")
+
+    # See `/docs/source/manual/tutorial/fusion_model_layer_info.sh`
+    # for an example structure of the model
+    layer_of_interest._forward_hooks.clear()
+    layer_of_interest.register_forward_hook(record_hidden_activation)
+
+# ----------------------------------------------------------
 
 
 def build_stitching_managers(config, model, result_dataset, writer_queue=None):
@@ -307,6 +354,28 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
             **stitcher_common_kw,
         )
         stitch_managers[task_name].head_keep_idxs = head_keep_idxs
+
+    if config['with_hidden_layers']:
+        # hack: the model should tell us what the shape of its head is
+        task_name = 'hidden_layers'
+
+        num_hidden = 128  # TODO update to implicitly pull the correct number
+        hidden_layers_code = config.hidden_layers_chan_code
+        chan_code = f"{hidden_layers_code}:{num_hidden}"
+
+        _register_hidden_layer_hook(model)
+
+        stitch_managers[task_name] = CocoStitchingManager(
+            result_dataset,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
+            num_bands=num_hidden,
+            **stitcher_common_kw,
+        )
+        stitch_managers[task_name].head_keep_idxs = slice(None)
+
+    print(f"Initialized stitching managers: {stitch_managers.keys()}")
+    # raise SystemExit("Exiting program")
     return stitch_managers
 
 
@@ -617,6 +686,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         'saliency_probs': 'saliency',
         'class_probs': 'class',
         'change_probs': 'change',
+        'hidden_layers_probs': 'hidden_layers',
     }
 
     _debug_grid(test_dataloader)
@@ -690,6 +760,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         prog = pman.progiter(batch_iter, desc='fusion predict')
         _batch_iter = iter(prog)
         if 0:
+            pman.stopall()
             item = test_dataloader.dataset[0]
 
             orig_batch = next(_batch_iter)
@@ -795,7 +866,14 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                                                classes=model.classes)
                 kwimage.imwrite(fpath, canvas)
 
+            # TODO: it should be the job of the model to pass us relevant
+            # features.
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+
+            if hasattr(model, '_activation_cache'):
+                # hack the activations such that they appear like an output
+                outputs['hidden_layers'] = model._activation_cache['hidden']
+                model._activation_cache['hidden'] = []
 
             if got_outputs is None:
                 got_outputs = list(outputs.keys())
@@ -805,13 +883,14 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                 print('writable_outputs = {!r}'.format(writable_outputs))
 
             # For each item in the batch, process the results
+
             for head_key in writable_outputs:
                 head_probs = outputs[head_key]
                 head_stitcher = stitch_managers[head_key]
                 chan_keep_idxs = head_stitcher.head_keep_idxs
 
                 # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
-                # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
+                # ALL FRAMES EXCEPT THE FIRST IN MULTIPLE PLACES.
                 if head_key == 'change':
                     predicted_frame_slice = slice(1, None)
                 else:
@@ -862,8 +941,21 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                             image_id_to_output_space_slices[gid].append(output_space_slice)
 
                         output_weights = frame_info.get('output_weights', None)
+                        if head_key == 'hidden_layers':
+                            # hardcode knowing features are 1/8 down sample of the image
+                            featspace_from_outspace = kwimage.Affine.scale(1 / 8)
+                            featspace_output_box = kwimage.Box.from_slice(output_space_slice).warp(featspace_from_outspace)
+                            featspace_image_box = kwimage.Box.from_dsize(output_image_dsize).warp(featspace_from_outspace)
+                            featspace_from_vid = featspace_from_outspace @ kwimage.Affine.scale(scale_outspace_from_vid)
+                            feature_weights = kwimage.warp_affine(output_weights.numpy(), featspace_from_outspace, dsize='auto')
 
+                            # Hack outspace now represents feature space
+                            output_space_slice = featspace_output_box.quantize().to_slice()
+                            output_image_dsize = featspace_image_box.quantize().dsize
+                            scale_outspace_from_vid = featspace_from_vid.decompose()['scale']
+                            output_weights = torch.from_numpy(feature_weights)
                         try:
+
                             head_stitcher.accumulate_image(
                                 gid, output_space_slice, probs,
                                 asset_dsize=output_image_dsize,
@@ -895,6 +987,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
 
         # Prediction is completed, finalize all remaining images.
         for _head_key, head_stitcher in stitch_managers.items():
+            print(f"Finalizing stitcher for {_head_key}")
             for gid in head_stitcher.managed_image_ids():
                 head_stitcher.submit_finalize_image(gid)
         writer_queue.wait_until_finished()
@@ -1066,6 +1159,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'num_workers': 0,
         >>>     'devices': devices,
         >>>     'draw_batches': 1,
+        >>>     'with_hidden_layers': True,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
