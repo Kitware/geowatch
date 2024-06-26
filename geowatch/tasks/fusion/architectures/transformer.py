@@ -804,6 +804,7 @@ class DeiTEncoder(nn.Module):
 
     Example:
         >>> # xdoctest: +REQUIRES(module:timm)
+        >>> # xdoctest: +SKIP('can cause network issues on CI')
         >>> from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7

@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Ability to change cold feature frequency
+* Ability to output hidden features from the multimodal transformer in fusion.predict.
 
 
 ## Version 0.18.1 - Released 2024-06-25

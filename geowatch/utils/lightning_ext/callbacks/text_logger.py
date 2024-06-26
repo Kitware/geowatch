@@ -12,6 +12,9 @@ class TextLogger(pl.callbacks.Callback):
     """
     Writes logging information to text files.
 
+    CommandLine:
+        xdoctest -m geowatch.utils.lightning_ext.callbacks.text_logger TextLogger
+
     Example:
         >>> #
         >>> from geowatch.utils.lightning_ext.callbacks.text_logger import *  # NOQA
