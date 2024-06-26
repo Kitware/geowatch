@@ -32,6 +32,8 @@ import pytz
 from datetime import datetime as datetime_cls
 import gc
 import kwcoco
+from kwutil import util_time
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,6 +76,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     combine = scfg.Value(False, help='for temporal combined mode, Default is True')
     exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
+    cold_time_span = scfg.Value('1 year', type=str, help='Temporal period for extracting cold features, default is "1year", another option is "6months"')
 
 
 @profile
@@ -120,27 +123,18 @@ def export_cold_main(cmdline=1, **kwargs):
     timestamp = config_in['timestamp']
     exclude_first = config_in['exclude_first']
     sensors = config_in['sensors']
+    cold_time_span = config_in['cold_time_span']
+    cold_time_span = util_time.timedelta.coerce(cold_time_span)
 
     if combine:
         combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     else:
         combined_coco_fpath = None
 
-    # assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
-    # TODO: MPI mode
-    # if config_in['rank'] == 'MPI':
-    #     ## MPI mode
-    #     raise NotImplementedError('todo')
-    #     MPI = 'TODO'
-    #     comm = MPI.COMM_WORLD
-    #     rank = comm.Get_rank()
-    #     n_cores = comm.Get_size()
-    # else:
-    #     rank = config_in['rank']
-    #     n_cores = config_in['n_cores']
-
     # define variables
-    config = read_json_metadata(stack_path)
+    log_fpath = reccg_path / 'log.json'
+    with open(log_fpath, "r") as f:
+        config = json.load(f)
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -151,9 +145,6 @@ def export_cold_main(cmdline=1, **kwargs):
 
     cold_param = json.loads((reccg_path / 'log.json').read_text())
     method = cold_param['algorithm']
-
-    # coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
-    # band_names = [0, 1, 2, 3, 4, 5]
 
     if coefs is not None:
         try:
@@ -185,10 +176,6 @@ def export_cold_main(cmdline=1, **kwargs):
                    ('rmse', np.float32, 7),
                    ('magnitude', np.float32, 7)])
 
-    # if coefs is not None:
-    #     assert all(elem in coef_names for elem in coefs)
-    #     assert all(elem in band_names for elem in coefs_bands)
-
     out_path = reccg_path / 'cold_feature'
     tmp_path = reccg_path / 'cold_feature' / 'tmp'
 
@@ -198,120 +185,89 @@ def export_cold_main(cmdline=1, **kwargs):
         out_path.ensuredir()
         tmp_path.ensuredir()
 
-    # MPI mode
-    # trans = comm.bcast(trans, root=0)
-    # proj = comm.bcast(proj, root=0)
-    # cols = comm.bcast(cols, root=0)
-    # rows = comm.bcast(rows, root=0)
-    # config = comm.bcast(config, root=0)
-
     # Get ordinal list from sample block_folder
     block_folder = stack_path / 'block_x1_y1'
     meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
-    # sort image files by ordinal dates
-    img_dates = []
-    img_names = []
-    img_dates_L8 = []
-    img_names_L8 = []
-    img_dates_S2 = []
-    img_names_S2 = []
+    # Create dictionaries to store ordinal dates and image names for each sensor
+    sensors = list(sensors.split(","))
+    ordinal_dates = {s: [] for s in sensors}
+    img_names = {s: [] for s in sensors}
 
-    # read metadata and
+    # Read metadata and populate dictionaries
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
         ordinal_date = meta_config['ordinal_date']
         img_name = meta_config['image_name'] + '.npy'
-        img_dates.append(ordinal_date)
-        img_names.append(img_name)
-    for meta in meta_files:
-        meta_config = json.loads((block_folder / meta).read_text())
-        if '_L8_' in meta_config['image_name']:
-            ordinal_date_L8 = meta_config['ordinal_date']
-            img_name_L8 = meta_config['image_name'] + '.npy'
-            img_dates_L8.append(ordinal_date_L8)
-            img_names_L8.append(img_name_L8)
-        elif '_S2_' in meta_config['image_name']:
-            ordinal_date_S2 = meta_config['ordinal_date']
-            img_name_S2 = meta_config['image_name'] + '.npy'
-            img_dates_S2.append(ordinal_date_S2)
-            img_names_S2.append(img_name_S2)
+        for sensor in sensors:
+            if meta_config["sensor"] == sensor:
+                ordinal_dates[sensor].append(ordinal_date)
+                img_names[sensor].append(img_name)
+                break
 
     if year_lowbound is None:
-        year_low_ordinal = min(img_dates)
+        year_low_ordinal = min(min(ordinal_dates[sensor]) for sensor in sensors)
         year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
     else:
         year_low_ordinal = pd.Timestamp.toordinal(
             datetime_mod.datetime(int(year_lowbound), 1, 1))
 
     if year_highbound is None:
-        year_high_ordinal = max(img_dates)
+        year_high_ordinal = max(max(ordinal_dates[sensor]) for sensor in sensors)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
     else:
         year_high_ordinal = pd.Timestamp.toordinal(
             datetime_mod.datetime(int(year_highbound + 1), 1, 1))
 
-    img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                       zip(img_dates, img_names)))
-    img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                       zip(img_dates, img_names)))
-    img_dates = sorted(img_dates)
-    img_names = sorted(img_names)
-    if 'L8' in sensors:
-        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                                 zip(img_dates_L8, img_names_L8)))
-        img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                                 zip(img_dates_L8, img_names_L8)))
-        img_dates_L8 = sorted(img_dates_L8)
-        img_names_L8 = sorted(img_names_L8)
-    if 'S2' in sensors:
-        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                                 zip(img_dates_S2, img_names_S2)))
-        img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                                 zip(img_dates_S2, img_names_S2)))
-        img_dates_S2 = sorted(img_dates_S2)
-        img_names_S2 = sorted(img_names_S2)
+    # Filter and sort img_dates and img_names based on the year bounds
+    filtered_img_dates = {}
+    filtered_img_names = {}
+    for sensor in sensors:
+        filtered_img_dates[sensor] = []
+        filtered_img_names[sensor] = []
+
+    for sensor in sensors:
+        for date, name in zip(ordinal_dates[sensor], img_names[sensor]):
+            if year_low_ordinal <= date < year_high_ordinal:
+                filtered_img_dates[sensor].append(date)
+                filtered_img_names[sensor].append(name)
+        # Sort filtered img_dates
+        filtered_img_dates[sensor] = sorted(filtered_img_dates[sensor])
+        filtered_img_names[sensor] = sorted(filtered_img_names[sensor])
 
     if timestamp:
+        img_dates = [date for sensor_dates in filtered_img_dates.values() for date in sensor_dates]
         ordinal_day_list = img_dates
-    if not timestamp:
-        first_ordinal_dates_L8 = []
-        first_img_names_L8 = []
-        first_ordinal_dates_S2 = []
-        first_img_names_S2 = []
-        last_year_L8 = None
-        last_year_S2 = None
-        if 'L8' in sensors:
-            for ordinal_day_L8, img_name_L8 in zip(img_dates_L8, img_names_L8):
-                year_L8 = pd.Timestamp.fromordinal(ordinal_day_L8).year
-                if year_L8 != last_year_L8:
-                    # print("L8", img_name_L8)
-                    first_ordinal_dates_L8.append(ordinal_day_L8)
-                    first_img_names_L8.append(img_name_L8)
-                    last_year_L8 = year_L8
-        if 'S2' in sensors:
-            for ordinal_day_S2, img_name_S2 in zip(img_dates_S2, img_names_S2):
-                year_S2 = pd.Timestamp.fromordinal(ordinal_day_S2).year
-                if year_S2 != last_year_S2:
-                    # print("S2", img_name_S2)
-                    first_ordinal_dates_S2.append(ordinal_day_S2)
-                    first_img_names_S2.append(img_name_S2)
-                    last_year_S2 = year_S2
+    else:
+        # TODO: planetscope might be different temporal resolution of COLD features...
+        for sensor in sensors:
+            year_group = {}
+            img_name_group = {}
+            ordinal_dates[sensor] = []
+            # img_names[sensor] = []
+            for ordinal_day, img_name in zip(filtered_img_dates[sensor], filtered_img_names[sensor]):
+                year = pd.Timestamp.fromordinal(ordinal_day).year
+                if year not in year_group:
+                    year_group[year] = []
+                    img_name_group[year] = []
+                year_group[year].append(ordinal_day)
+                img_name_group[year].append(img_name)
+            for year in sorted(year_group.keys()):
+                year_group_by_year = year_group[year]
+                # Determine the number of subdivisions
+                num_subdivisions = int(365 / cold_time_span.days)
+                # Select the first index from each subdivision
+                for i in range(num_subdivisions):
+                    # Calculate the start and end indices for the subdivision
+                    start_idx = i * int(len(year_group_by_year) / num_subdivisions)
+                    if start_idx < len(year_group_by_year):
+                        ordinal_dates[sensor].append(year_group_by_year[start_idx])
+                        # img_names[sensor].append(img_name_group[year][start_idx])
         if exclude_first:
-            if 'L8' in sensors and 'S2' in sensors:
-                ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:]
-            elif 'L8' in sensors and 'S2' not in sensors:
-                ordinal_day_list = first_ordinal_dates_L8[1:]
-            elif 'S2' in sensors and 'L8' not in sensors:
-                ordinal_day_list = first_ordinal_dates_S2[1:]
+            ordinal_day_list = [date for _, dates in ordinal_dates.items() for date in dates[1:]]
         else:
-            if 'L8' in sensors and 'S2' in sensors:
-                ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
-            elif 'L8' in sensors and 'S2' not in sensors:
-                ordinal_day_list = first_ordinal_dates_L8
-            elif 'S2' in sensors and 'L8' not in sensors:
-                ordinal_day_list = first_ordinal_dates_S2
-        ordinal_day_list.sort()
+            ordinal_day_list = [date for _, dates in ordinal_dates.items() for date in dates]
+
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
 
@@ -421,8 +377,6 @@ def export_cold_main(cmdline=1, **kwargs):
                 outfile = tmp_path / \
                     f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
                 np.save(outfile, results_block_coefs[:, :, :, day])
-    # MPI mode (wait for all processes)
-    # comm.Barrier()
 
     gc.collect()
 

@@ -18,76 +18,16 @@ SeeAlso:
 
 CommandLine:
 
-    ##############
-    ### SMALL TEST
-    ##############
-
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-
-    mkdir -p $DATA_DVC_DPATH/Drop6-SMALL
-    kwcoco subset \
-        --src "$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --dst "$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
-        --select_images '(.sensor_coarse == "L8")'
-
-    # Pull out a small selection of images just so we can test.
-    python -c "if 1:
-        import ubelt as ub
-        import kwcoco
-        dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
-        from kwutil import util_time
-        images = dset.images()
-        dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
-        flags = [d.year < 2017 for d in dates]
-        chosen = images.compress(flags)
-        sub = dset.subset(chosen)
-        sub.fpath = dset.fpath
-        sub.dump()
-    "
-
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m geowatch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
-        --sensors='L8' \
-        --resolution=30GSD \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
-        --adj_cloud=False \
-        --method='COLD' \
-        --prob=0.99 \
-        --conse=6 \
-        --cm_interval=60 \
-        --year_lowbound=None \
-        --year_highbound=None \
-        --coefs=cv \
-        --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=False \
-        --workermode='process' \
-        --workers=16
-
-    kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json \
-        --dst="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
-        --old_prefix="KR_R001" --new_prefix="../KR_R001"
-
-    geowatch visualize \
-        "$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_cv|green_COLD_cv|blue_COLD_cv)" \
-        --exclude_sensors="S2" \
-        --smart=True --skip_aggressive=True
-
     ###################################################################################
     ### FULL REGION TEST: COLD FEATURES WITH HIGH TEMPORAL RESOLUTION (HTR) + L8/S2 ###
     ###################################################################################
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase3_expt --hardware="auto")
     python -m geowatch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop7/_pycold_L8S2_HTR" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly_KR_R001_cold-L8S2-HTR.kwcoco.zip" \
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/_pycold_Drop8" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly_KR_R001_cold-biyearly.kwcoco.zip" \
         --sensors='L8,S2' \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --prob=0.99 \
@@ -95,6 +35,7 @@ CommandLine:
         --coefs_bands=0,1,2,3,4,5 \
         --combine=False \
         --resolution='10GSD' \
+        --cold_time_span='6months' \
         --workermode='process' \
         --workers=8
 
@@ -102,20 +43,20 @@ CommandLine:
     ### FULL REGION TEST: TRANSFER COLD FEATURE FROM RAW TO COMBINED INPUT
     ######################################################################
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase3_expt --hardware="auto")
     python -m geowatch.tasks.cold.transfer_features \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
-        --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop8-ARA/KR_R001/imgonly_KR_R001_cold-biyearly.kwcoco.zip" \
+        --combine_fpath="$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imgonly-KR_R001.kwcoco.zip" \
+        --new_coco_fpath="$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
 
-    kwcoco stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
-    geowatch stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
-    kwcoco validate "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+    kwcoco stats "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
+    geowatch stats "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
+    kwcoco validate "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip"
 
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase3_data --hardware="auto")
     geowatch visualize \
-        "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip" \
+        "$DATA_DVC_DPATH/Drop8-Median10GSD-V1/imganns-KR_R001-cold-biyearly.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \
         --smart=True
@@ -156,9 +97,10 @@ CommandLine:
 """
 import scriptconfig as scfg
 import ubelt as ub
-import json
+# import json
 import logging
 import os
+# import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -209,11 +151,13 @@ class ColdPredictConfig(scfg.DataConfig):
     coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     combine = scfg.Value(False, help='for temporal combined mode, Default is False')
+    cold_time_span = scfg.Value('1year', type=str, help='temporal period for extracting cold features, default is "1year", another option is "6months"')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     workers = scfg.Value(16, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
+    # region_id = scfg.Value(None, help='region id for the input kwcoco file')
 
 
 @profile
@@ -284,9 +228,9 @@ def cold_predict_main(cmdline=1, **kwargs):
     adj_cloud = config['adj_cloud']
     method = config['method']
     workers = util_parallel.coerce_num_workers(config['workers'])
-
     use_subprogress = workers == 0 or config['workermode'] != 'process'
-
+    # FIXME: not robust, is there a better way to get region_id?
+    region_id = config['coco_fpath'].split('/')[-2]
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
 
@@ -299,31 +243,10 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Step 1: Prepare')
 
-        metadata = None
-        if (out_dpath / 'stacked').exists():
-            for region in os.listdir(out_dpath / 'stacked'):
-                if region in str(config['coco_fpath']):
-                    if os.path.exists(out_dpath / 'reccg' / region):
-                        logger.info('Skipping step 1 because the stacked image already exists...')
-                        for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
-                            for file in files:
-                                if file.endswith(".json"):
-                                    json_path = os.path.join(root, file)
-
-                                    with open(json_path, "r") as f:
-                                        metadata = json.load(f)
-                                break
-
-        if metadata is None:
-            meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
+        prepare_kwcoco.prepare_kwcoco_main(
                 cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                 adj_cloud=adj_cloud, method=method, workers=workers,
-                resolution=config.resolution,
-            )
-
-            with open(meta_fpath, "r") as f:
-                metadata = json.load(f)
-
+                resolution=config.resolution)
         main_prog.step()
 
         # =========
@@ -332,16 +255,15 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 2: Process')
         logger.info('Starting COLD tile-processing...')
         tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
-        tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        tile_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
+        tile_log_fpath = out_dpath / 'reccg' / region_id / 'log.json'
         tile_kwargs['method'] = method
         tile_kwargs['prob'] = config['prob']
         tile_kwargs['conse'] = config['conse']
         tile_kwargs['cm_interval'] = config['cm_interval']
         if use_subprogress:
             tile_kwargs['pman'] = pman
-
-        tile_log_fpath = out_dpath / 'reccg' / metadata['region_id'] / 'log.json'
 
         if os.path.exists(tile_log_fpath):
             logger.info('Skipping step 2 because COLD processing already finished...')
@@ -364,8 +286,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 3: Export')
         logger.info('Writting tmp file of COLD output...')
         export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
-        export_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        export_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        export_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        export_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
         export_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
@@ -375,6 +297,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['timestamp'] = config['timestamp']
         export_kwargs['exclude_first'] = config['exclude_first']
         export_kwargs['sensors'] = sensors
+        export_kwargs['cold_time_span'] = config['cold_time_span']
         if use_subprogress:
             export_kwargs['pman'] = pman
 
@@ -396,8 +319,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 4: Assemble')
         logger.info('Writting geotiff of COLD output...')
         assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()
-        assemble_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        assemble_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        assemble_kwargs['stack_path'] = out_dpath / 'stacked' / region_id
+        assemble_kwargs['reccg_path'] = out_dpath / 'reccg' / region_id
         assemble_kwargs['coco_fpath'] = coco_fpath
         assemble_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
@@ -411,7 +334,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['exclude_first'] = config['exclude_first']
         assemble_kwargs['resolution'] = config.resolution
         assemble_kwargs['sensors'] = sensors
-
+        assemble_kwargs['cold_time_span'] = config['cold_time_span']
         if True:
             assemble_kwargs['pman'] = pman
         assemble_cold_result_kwcoco.assemble_main(
@@ -425,18 +348,18 @@ def cold_predict_main(cmdline=1, **kwargs):
         # main_prog.step()
 
 
-@profile
-def read_json_metadata(folder_path):
-    stacked_path = folder_path / 'stacked'
-    for root, dirs, files in os.walk(stacked_path):
-        for file in files:
-            if file.endswith(".json"):
-                json_path = os.path.join(root, file)
+# @profile
+# def read_json_metadata(folder_path):
+#     stacked_path = folder_path / 'stacked'
+#     for root, dirs, files in os.walk(stacked_path):
+#         for file in files:
+#             if file.endswith(".json"):
+#                 json_path = os.path.join(root, file)
 
-                with open(json_path, "r") as f:
-                    metadata = json.load(f)
-                    return metadata
-    return None
+#                 with open(json_path, "r") as f:
+#                     metadata = json.load(f)
+#                     return metadata
+#     return None
 
 
 if __name__ == '__main__':

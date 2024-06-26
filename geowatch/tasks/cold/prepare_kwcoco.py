@@ -77,7 +77,8 @@ class PrepareKwcocoConfig(scfg.DataConfig):
         HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI,
         tir, QA
         '''))
-    resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
+    resolution = scfg.Value('30GSD', help='if specified then L8 and S2 data is processed at this resolution')
+    resolution_PD = scfg.Value('3GSD', help='if specified then PD data is processed at this resolution')
     workers = scfg.Value(0, help='number of parallel workers')
 
 
@@ -95,6 +96,13 @@ SENSOR_TO_INFO['L8'] = {
 SENSOR_TO_INFO['S2'] = {
     'sensor_name': 'Sentinel-2',
     'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
+    'quality_channels': 'quality',
+    'quality_interpretation': 'FMASK'
+}
+
+SENSOR_TO_INFO['PD'] = {
+    'sensor_name': 'Planetscope',
+    'intensity_channels': 'blue|green|red|nir',
     'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
 }
@@ -157,9 +165,18 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
     method = config['method']
     out_dir = dpath / 'stacked'
     workers = config['workers']
+
+    # TODO: add resolution for PD data?
     resolution = config.resolution
-    meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method,
-                              pman, workers, resolution)
+    resolution_PD = config.resolution_PD
+    sensors = list(sensors.split(","))
+    if 'PD' in sensors:
+        sensors.remove('PD')
+        meta_fpath = stack_kwcoco_PD(coco_fpath, out_dir, 'PD', adj_cloud, method,
+                                     pman, workers, resolution_PD)
+    if sensors:
+        meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method,
+                                  pman, workers, resolution)
     return meta_fpath
 
 
@@ -339,8 +356,6 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
     # Get all images ids sorted in temporal order per video
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
-    # For now, it supports only L8
-    # flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
     flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
     all_images = all_images.compress(flags)
 
@@ -349,7 +364,67 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
 
     image_id_iter = iter(all_images)
 
-    # For now, it supports only L8
+    jobs = ub.JobPool(mode='process', max_workers=workers)
+    if pman is not None:
+        image_id_iter = pman.progiter(image_id_iter, desc='submit prepare jobs', transient=True)
+    for image_id in image_id_iter:
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
+        coco_image = coco_image.detach()
+        # Transform the image data into the desired block structure.
+        jobs.submit(process_one_coco_image,
+                    coco_image, out_dir, adj_cloud, method, resolution)
+
+    job_iter = jobs.as_completed()
+    if pman is not None:
+        job_iter = pman.progiter(job_iter, desc='collect prepare jobs')
+
+    for job in job_iter:
+        meta_fpath = job.result()
+
+    return meta_fpath
+
+
+def stack_kwcoco_PD(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
+                    workers=0, resolution=None):
+    """
+    Args:
+        coco_fpath (str | PathLike | CocoDataset):
+            the kwcoco dataset to convert
+
+        out_dir (str | PathLike): path to write the data
+
+    Returns:
+        List[Dict]: a list of dictionary result objects
+
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> # TODO: readd this doctest
+        >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
+        >>> setup_logging()
+        >>> coco_dset = geowatch.coerce_kwcoco('geowatch-msi')
+        >>> coco_fpath = coco_dset.fpath
+        >>> #coco_fpath = grab_demo_kwcoco_dataset()
+        >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
+        >>> out_dir = dpath / 'stacked'
+        >>> results = stack_kwcoco(coco_fpath, out_dir)
+    """
+    # TODO: configure
+    out_dir = ub.Path(out_dir)
+
+    # Load the kwcoco dataset
+    dset = kwcoco.CocoDataset.coerce(coco_fpath)
+
+    # Get all images ids sorted in temporal order per video
+    all_images = dset.images(list(ub.flatten(dset.videos().images)))
+
+    flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+    all_images = all_images.compress(flags)
+
+    if len(all_images) == 0:
+        raise Exception('No images!')
+
+    image_id_iter = iter(all_images)
+
     jobs = ub.JobPool(mode='process', max_workers=workers)
     if pman is not None:
         image_id_iter = pman.progiter(image_id_iter, desc='submit prepare jobs', transient=True)
@@ -575,7 +650,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
         'n_block_x': n_block_x,
         'n_block_y': n_block_y,
         'adj_cloud': adj_cloud,
-        'method': method
+        'method': method,
+        'sensor': sensor,
     }
 
     if is_partition:
