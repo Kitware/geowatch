@@ -518,6 +518,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
+
         print(f'datamodule notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks

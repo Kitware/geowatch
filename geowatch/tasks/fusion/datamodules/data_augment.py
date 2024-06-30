@@ -3,8 +3,16 @@ Data augmentation utilities
 """
 import kwimage
 import ubelt as ub
+import numpy as np
 
 from geowatch.tasks.fusion.datamodules import data_utils
+
+
+try:
+    import line_profiler
+    profile = line_profiler.profile
+except Exception:
+    profile = ub.identity
 
 
 class SpacetimeAugmentMixin:
@@ -74,18 +82,22 @@ class SpacetimeAugmentMixin:
         sample_grid['targets'] = expanded_targets
         self.length = len(expanded_targets)
 
+    @profile
     def _augment_target_time(self, target_):
         """
         Jitters the time sample in a target
         """
         vidid = target_['video_id']
-        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
         valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
-        new_idxs = time_sampler.sample(target_['main_idx'])
-        new_gids = list(ub.take(valid_gids, new_idxs))
-        target_['gids'] = new_gids
+        if len(valid_gids) > 1:
+            # optimization: dont time augment when there is only 1 frame
+            time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+            new_idxs = time_sampler.sample(target_['main_idx'])
+            new_gids = list(ub.take(valid_gids, new_idxs))
+            target_['gids'] = new_gids
         return target_
 
+    @profile
     def _augment_spacetime_target(self, target_):
         """
         Given a target dictionary, shift around the space and time slice
@@ -141,16 +153,55 @@ class SpacetimeAugmentMixin:
                 # hack: this prevents us from assuming there is a target in the
                 # window, but it lets us get the benefit of chip_overlap=0.5 while
                 # still having it at 0 for faster epochs.
-                aff = kwimage.Affine.coerce(offset=(
-                    rng.randint(-w // 2.7, w // 2.7),
-                    rng.randint(-h // 2.7, h // 2.7)))
-                space_box = space_box.warp(aff).quantize()
+
+                rand_w = rng.randint(-w // 2.7, w // 2.7)
+                rand_h = rng.randint(-h // 2.7, h // 2.7)
+                if 0:
+                    """
+                    Benchmark:
+                        # Shows that it is about 5x better to use regular translate
+                        # over an affine warp, with inplace being even better.
+                        import kwimage
+                        import kwarray
+                        box = kwimage.Box.random()
+                        import timerit
+                        ti = timerit.Timerit(100, bestof=10, verbose=2)
+                        rng = kwarray.ensure_rng()
+
+                        w = box.width.ravel()[0]
+                        h = box.height.ravel()[0]
+
+                        rand_w = rng.randint(-w // 2.7, w // 2.7)
+                        rand_h = rng.randint(-h // 2.7, h // 2.7)
+                        aff = kwimage.Affine.coerce(offset=(rand_w, rand_h))
+
+                        for timer in ti.reset('affine translate'):
+                            with timer:
+                                box.warp(aff)
+
+                        for timer in ti.reset('direct translate'):
+                            with timer:
+                                box.translate((rand_w, rand_h))
+
+                        for timer in ti.reset('direct translate'):
+                            with timer:
+                                box.translate((rand_w, rand_h), inplace=True)
+                    """
+                    aff = kwimage.Affine.coerce(offset=(rand_w, rand_h))
+                    space_box = space_box.warp(aff)
+                else:
+                    # Faster than the above code
+                    space_box = space_box.translate((rand_w, rand_h), inplace=True)
+
+                space_box = space_box.quantize(inplace=True)
                 # Keep the original box size
-                space_box = space_box.resize(width=w, height=h)
+                space_box = space_box.resize(width=w, height=h, inplace=0)
 
                 # prevent shifting the target off the edge of the video
-                snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
-                space_box = data_utils._boxes_snap_to_edges(space_box, snap_target)
+                snap_target = kwimage.Boxes(np.array(
+                    [[0, 0, vid_width, vid_height]]), 'ltrb')
+                space_box = data_utils._boxes_snap_to_edges(
+                    space_box, snap_target, inplace=True)
 
                 target_['space_slice'] = space_box.astype(int).to_slices()[0]
 

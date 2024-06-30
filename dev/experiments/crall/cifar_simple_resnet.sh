@@ -96,10 +96,10 @@ ulimit -n 1000000
 
 
 DDP_WORKAROUND=1
-LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 32
+    num_workers            : 0
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
@@ -134,8 +134,12 @@ data:
     use_grid_positives     : False
     use_grid_negatives     : False
     normalize_inputs       : 50000
-    balance_options        : sequential_without_replacement
+
+    augment_time_resample_rate : 0
+    augment_space_shift_rate : 0
     balance_areas          : false
+    reduce_item_size       : true
+    balance_options        : sequential_without_replacement
 
 model:
     class_path: geowatch.tasks.fusion.methods.torchvision_nets.Resnet50

@@ -162,6 +162,7 @@ WEIGHT_GROUP = 'weighting'
 NORM_GROUP = 'normalization'
 AUGMENTATION_GROUP = 'augmentation'
 SELECTION_GROUP = 'selection'
+MISC_GROUP = 'misc'
 
 
 BACKWARDS_COMPAT_NEG_TO_POS = True
@@ -634,6 +635,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         same sequence of data regardless of split indexes.
         '''))
 
+    ##############
+    # MISC OPTIONS
+    ##############
+    reduce_item_size = scfg.Value(False, group=MISC_GROUP, help=ub.paragraph(
+        '''
+        Introduced as a CIFAR optimization to prevent generated items from
+        containing more information than is necessary. In the future this will
+        likely be restructured so items are produced with the minimal amount of
+        information by default, and there must be a request to grab the
+        enriched variant.
+        '''))
+
     def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
@@ -651,6 +664,9 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             if isinstance(arg, int):
                 arg = [arg, arg]
             self['chip_dims'] = arg
+
+        if self['mask_samecolor_method'] == 'None':
+            self['mask_samecolor_method'] = None
 
         if self['fixed_resolution'] not in {None, 'None', 'none', 'null'}:
             self['window_space_scale'] = self['fixed_resolution']
@@ -766,18 +782,18 @@ class TruthMixin:
             task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
-        if self.config.upweight_centers or self.config.upweight_time is not None:
-            if self.config.upweight_time is None:
+        if self.config['upweight_centers'] or self.config['upweight_time'] is not None:
+            if self.config['upweight_time'] is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.config.upweight_time
+                upweight_time = self.config['upweight_time']
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config['min_spacetime_weight'])
         else:
             time_weights = 1
 
@@ -839,7 +855,7 @@ class TruthMixin:
                 # to do this earlier.
                 annot_input_dsize = frame_dets.meta['input_dims'][::-1]
                 dets_scale = output_dsize / annot_input_dsize
-                dets = frame_dets.scale(dets_scale)
+                dets = frame_dets.scale(dets_scale, inplace=True)
         else:
             if output_is_native:
                 raise NotImplementedError(
@@ -849,10 +865,10 @@ class TruthMixin:
             else:
                 # Simple case where input/output scales are constant
                 dets_scale = common_output_scale / common_input_scale
-                dets = frame_dets.scale(dets_scale)
+                dets = frame_dets.scale(dets_scale, inplace=True)
 
         # Create truth masks
-        if self.config.default_class_behavior == 'background':
+        if self.config['default_class_behavior'] == 'background':
             default_class_index = self.bg_idx
         else:
             default_class_index = self.ignore_index
@@ -875,27 +891,8 @@ class TruthMixin:
         ann_weights = dets.data['weights']
         ann_boxes   = dets.data['boxes']
 
-        missing_poly_flags = [poly is None for poly in ann_polys]
-        if any(missing_poly_flags):
-            missing_idxs = np.where(missing_poly_flags)[0]
-            _box_polys = ann_boxes[missing_idxs].to_polygons()
-            for idx, _poly in zip(missing_idxs, _box_polys):
-                ann_polys.data[idx] = _poly
-
-        # Associate weights with polygons
-        for poly, weight in zip(ann_polys, ann_weights):
-            if weight is None:
-                weight = 1.0
-            if poly is not None:
-                poly.meta['weight'] = weight
-
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
-
-        self.requested_tasks['saliency'] = 0
-        self.requested_tasks['class'] = 0
-        self.requested_tasks['change'] = 0
-        self.requested_tasks['boxes'] = 0
 
         wants_saliency = self.requested_tasks['saliency']
         wants_class = self.requested_tasks['class']
@@ -905,6 +902,21 @@ class TruthMixin:
 
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
+
+        if wants_saliency_sseg or wants_class_sseg:
+            missing_poly_flags = [poly is None for poly in ann_polys]
+            if any(missing_poly_flags):
+                missing_idxs = np.where(missing_poly_flags)[0]
+                _box_polys = ann_boxes[missing_idxs].to_polygons()
+                for idx, _poly in zip(missing_idxs, _box_polys):
+                    ann_polys.data[idx] = _poly
+
+            # Associate weights with polygons
+            for poly, weight in zip(ann_polys, ann_weights):
+                if weight is None:
+                    weight = 1.0
+                if poly is not None:
+                    poly.meta['weight'] = weight
 
         if wants_boxes or wants_saliency or wants_class_sseg:
             frame_box = kwimage.Box.from_dsize(space_shape[::-1])
@@ -1042,7 +1054,7 @@ class TruthMixin:
                 #poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
                 poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
 
-            if not self.config.absolute_weighting:
+            if not self.config['absolute_weighting']:
                 max_weight = task_target_weight['saliency'].max()
                 if max_weight > 0:
                     task_target_weight['saliency'] /= max_weight
@@ -1133,12 +1145,12 @@ class TruthMixin:
                     weight_mask = dist_weight + (1 - poly_mask)
                     task_target_weight['class'] = task_target_weight['class'] * weight_mask
 
-            if not self.config.absolute_weighting:
+            if not self.config['absolute_weighting']:
                 max_weight = task_target_weight['class'].max()
                 if max_weight > 0:
                     task_target_weight['class'] /= max_weight
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config['min_spacetime_weight'])
         generic_frame_weight = self._build_generic_frame_weights(output_dsize,
                                                                  mode_to_invalid_mask,
                                                                  meta_info,
@@ -1146,13 +1158,13 @@ class TruthMixin:
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-        if self.config.ignore_dilate > 0:
+        if self.config['ignore_dilate'] > 0:
             for k, v in task_target_ignore.items():
-                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.config.ignore_dilate)
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.config['ignore_dilate'])
 
-        if self.config.weight_dilate > 0:
+        if self.config['weight_dilate'] > 0:
             for k, v in task_target_weight.items():
-                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.config.weight_dilate)
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.config['weight_dilate'])
 
         frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
@@ -1194,18 +1206,18 @@ class GetItemMixin(TruthMixin):
     """
 
     def _prepare_meta_info(self, num_frames):
-        if self.config.upweight_centers or self.config.upweight_time is not None:
-            if self.config.upweight_time is None:
+        if self.config['upweight_centers'] or self.config['upweight_time'] is not None:
+            if self.config['upweight_time'] is None:
                 upweight_time = 0.5
             else:
-                upweight_time = self.config.upweight_time
+                upweight_time = self.config['upweight_time']
 
             # Learn more from the center of the space-time patch
             time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, self.config.min_spacetime_weight)
+            time_weights = np.maximum(time_weights, self.config['min_spacetime_weight'])
         else:
             time_weights = 1
         meta_info = {
@@ -1269,13 +1281,11 @@ class GetItemMixin(TruthMixin):
                 max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
                 # Compute the scale factor for this frame wrt video space
                 scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
-                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
+                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize(inplace=True)
             else:
                 frame_outspace_box = common_outspace_box
 
-            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
-            scale_outspace_from_vid = output_dsize / vidspace_dsize
-            output_dims = output_dsize[::-1]  # the size we want to predict
+            output_dsize = frame_outspace_box.dsize
 
             dt_captured = img.get('date_captured', None)
             if dt_captured:
@@ -1285,11 +1295,6 @@ class GetItemMixin(TruthMixin):
                 timestamp = np.nan
 
             sensor = img.get('sensor_coarse', '*')
-
-            # The size of the larger image this output is expected to be
-            # embedded in.
-            outimg_dsize = video_dsize * scale_outspace_from_vid
-            outimg_box = kwimage.Box.from_dsize(outimg_dsize).quantize()
 
             frame_item = {
                 'gid': gid,
@@ -1306,18 +1311,28 @@ class GetItemMixin(TruthMixin):
                 'change_weights': None,
                 'class_weights': None,
                 'saliency_weights': None,
-                # Could group these into head and input/head specific dictionaries?
-                # info for how to construct the output.
-                'change_output_dims': None if time_idx == 0 else output_dims,
-                'class_output_dims': output_dims,
-                'saliency_output_dims': output_dims,
-                #
-                'output_dims': output_dims,
-                'output_space_slice': frame_outspace_box.to_slice(),
-                'output_image_dsize': outimg_box.dsize,
-                'scale_outspace_from_vid': scale_outspace_from_vid,
-                'ann_aids': None,
             }
+
+            if not self.config['reduce_item_size']:
+                scale_outspace_from_vid = output_dsize / vidspace_dsize
+                output_dims = output_dsize[::-1]  # the size we want to predict
+                # The size of the larger image this output is expected to be
+                # embedded in.
+                outimg_dsize = video_dsize * scale_outspace_from_vid
+                outimg_box = kwimage.Box.from_dsize(outimg_dsize).quantize(inplace=True)
+                frame_item.update({
+                    # Could group these into head and input/head specific dictionaries?
+                    # info for how to construct the output.
+                    'change_output_dims': None if time_idx == 0 else output_dims,
+                    'class_output_dims': output_dims,
+                    'saliency_output_dims': output_dims,
+                    #
+                    'output_dims': output_dims,
+                    'output_space_slice': frame_outspace_box.to_slice(),
+                    'output_image_dsize': outimg_box.dsize,
+                    'scale_outspace_from_vid': scale_outspace_from_vid,
+                    'ann_aids': None,
+                })
 
             if not self.inference_only:
                 # Build single-frame truth
@@ -1368,7 +1383,7 @@ class GetItemMixin(TruthMixin):
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.config.min_spacetime_weight)
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.config['min_spacetime_weight'])
         if self.config['upweight_centers']:
             space_weights = _space_weights(space_shape)
             space_weights = np.maximum(space_weights, self.config['min_spacetime_weight'])
@@ -1639,13 +1654,13 @@ class GetItemMixin(TruthMixin):
             force_bad = 'Missing requested channels'
 
         modality_streams = sensor_channels.streams()
-        if target_['allow_augment']:
+        if target_['allow_augment'] and self.config['modality_dropout_rate']:
             # Augment by dropping out modalities, but always keep at least one.
-            if self.config.modality_dropout_rate > self.augment_rng.rand():
-                if self.config.modality_dropout:
+            if self.config['modality_dropout_rate'] > self.augment_rng.rand():
+                if self.config['modality_dropout']:
                     keep_score = self.augment_rng.rand(len(modality_streams))
                     keep_idxs = util_kwarray.argsort_threshold(
-                        keep_score, self.config.modality_dropout, num_top=1)
+                        keep_score, self.config['modality_dropout'], num_top=1)
                     modality_streams = list(ub.take(modality_streams, keep_idxs))
 
         # Sample information from each stream (each stream is a separate mode)
@@ -1702,13 +1717,14 @@ class GetItemMixin(TruthMixin):
                     if stop_on_bad_image:
                         break
 
-            if target_['allow_augment'] and self.config.channel_dropout:
-                if self.config.channel_dropout_rate > self.augment_rng.rand():
+            if target_['allow_augment'] and self.config['channel_dropout']:
+                if self.config['channel_dropout_rate'] > self.augment_rng.rand():
                     num_bands = sample['im'].shape[3]
                     if num_bands > 1:
                         keep_score = self.augment_rng.rand(num_bands)
                         keep_idxs = util_kwarray.argsort_threshold(
-                            keep_score, self.config.channel_dropout, num_top=1)
+                            keep_score, self.config['channel_dropout'],
+                            num_top=1)
                         drop_flags = ~kwarray.boolmask(keep_idxs, num_bands)
                         if np.any(drop_flags):
                             sample['im'][:, :, :, drop_flags] = np.nan
@@ -1886,7 +1902,7 @@ class GetItemMixin(TruthMixin):
         # if self.config['prenormalize_inputs'] is not None:
         #     raise NotImplementedError
 
-        if self.config.normalize_perframe:
+        if self.config['normalize_perframe']:
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
@@ -1906,7 +1922,7 @@ class GetItemMixin(TruthMixin):
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
 
-        if self.config.normalize_peritem is not None and self.config.normalize_peritem is not False:
+        if self.config['normalize_peritem'] is not None and self.config['normalize_peritem'] is not False:
             # Gather items that need normalization
             needs_norm = ub.ddict(list)
             for frame_item in frame_items:
@@ -1914,7 +1930,7 @@ class GetItemMixin(TruthMixin):
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
-                    common_key = mode_chan.intersection(self.config.normalize_peritem)
+                    common_key = mode_chan.intersection(self.config['normalize_peritem'])
                     if common_key:
                         parent_data = frame_modes[mode_key]
                         for chan_name, chan_sl in mode_chan.component_indices(axis=0).items():
@@ -2041,12 +2057,9 @@ class GetItemMixin(TruthMixin):
                     except TypeError:
                         frame_item[key] = torch.tensor(data)
 
-        positional_tensors = self._populate_positional_information(frame_items)
-
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
-
         relevant_target_keys = {
             'gids', 'space_slice', 'video_id', 'fliprot_params',
             'main_idx', 'scale', 'main_skip_reason', 'allow_augment'
@@ -2064,85 +2077,63 @@ class GetItemMixin(TruthMixin):
         # sequence should be. The requested output sequence could be disjoint
         # from the input sequence. It could also be aligned, or perhaps it is
         # just a single classification prediction over the entire sequence.
-        LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
         vidid = target_['video_id']
         item = {
-            'producer_mode': self.mode,
-            'producer_rank': LOCAL_RANK,
-            'requested_index': target.get('requested_index', None),
-            'resolved_index': target.get('resolved_index', None),
             'frames': frame_items,
-            # '_new_inputs': ...,
-            # '_new_outputs': ...,
-            'positional_tensors': positional_tensors,
-            'video_id': vidid,
-            'video_name': video['name'],
-            'domain': video.get('domain', video.get('name', None)),
-            'input_gsd': resolved_input_scale.get('gsd', None),
-            'output_gsd': resolved_output_scale.get('gsd', None),
-
-            # TODO: rename 'target' to resolved_target
-            'target': resolved_target_subset,
-            'requested_target': requested_target_subset,
         }
 
-        if True:
+        if not self.config['reduce_item_size']:
+            LOCAL_RANK = os.environ.get('LOCAL_RANK', '-1')
+            item.update({
+                'producer_mode': self.mode,
+                'producer_rank': LOCAL_RANK,
+                'requested_index': target.get('requested_index', None),
+                'resolved_index': target.get('resolved_index', None),
+                # '_new_inputs': ...,
+                # '_new_outputs': ...,
+                'video_id': vidid,
+                'video_name': video['name'],
+                'domain': video.get('domain', video.get('name', None)),
+                'input_gsd': resolved_input_scale.get('gsd', None),
+                'output_gsd': resolved_output_scale.get('gsd', None),
+
+                # TODO: rename 'target' to resolved_target
+                'target': resolved_target_subset,
+                'requested_target': requested_target_subset,
+            })
+            # Probably not the job of the dataset to produce positional
+            # encodings
+            positional_tensors = self._populate_positional_information(frame_items)
+            item['positional_tensors'] = positional_tensors
             # Abstract away details of the dictionary structure by wrapping in
             # a helper class.
             item['predictable_classes'] = self.predictable_classes
             item['requested_tasks'] = self.requested_tasks
 
-            # REDUCE_ITEMSIZE = 0
-            from kwutil import util_environ
-            REDUCE_ITEMSIZE = util_environ.envflag('REDUCE_ITEMSIZE', 0)
-            if REDUCE_ITEMSIZE:
-                item.pop('target')
-                item.pop('requested_target')
-                item.pop('output_gsd')
-                item.pop('input_gsd')
-                item.pop('domain')
-                item.pop('video_name')
-                item.pop('video_id')
-                item.pop('positional_tensors')
-                item.pop('resolved_index')
-                item.pop('requested_index')
-                item.pop('producer_rank')
-                item.pop('producer_mode')
-                item.pop('predictable_classes')
-                item.pop('requested_tasks')
-                nonessential_frame_keys = [
-                    'gid',
-                    'date_captured',
-                    'timestamp',
-                    'time_index',
-                    'sensor',
+            nonessential_frame_keys = [
+                'gid',
+                'date_captured',
+                'timestamp',
+                'time_index',
+                'sensor',
 
-                    # 'modes',
-                    # 'change',
-                    # 'class_idxs_ignore_index',
-                    # 'class_idxs',
-                    # 'class_ohe',
-                    # 'saliency',
-                    # 'change_weights',
-                    # 'class_weights',
-                    # 'saliency_weights',
+                # Could group these into head and input/head specific dictionaries?
+                # info for how to construct the output.
+                'change_output_dims',
+                'class_output_dims',
+                'saliency_output_dims',
+                #
+                'output_dims',
+                'output_space_slice',
+                'output_image_dsize',
+                'scale_outspace_from_vid',
+                'ann_aids',
+            ]
+            for frame in item['frames']:
+                for k in nonessential_frame_keys:
+                    frame.pop(k, None)
 
-                    # Could group these into head and input/head specific dictionaries?
-                    # info for how to construct the output.
-                    'change_output_dims',
-                    'class_output_dims',
-                    'saliency_output_dims',
-                    #
-                    'output_dims',
-                    'output_space_slice',
-                    'output_image_dsize',
-                    'scale_outspace_from_vid',
-                    'ann_aids',
-                ]
-                for frame in item['frames']:
-                    for k in nonessential_frame_keys:
-                        frame.pop(k, None)
-
+        if True:
             item = HeterogeneousBatchItem(item)
 
         return item
@@ -2233,6 +2224,7 @@ class GetItemMixin(TruthMixin):
 
         return final_gids, gid_to_sample
 
+    @profile
     def _resolve_resolution(self, target_, video):
         # Compute scale if we are doing that
         # This should live somewhere else, but lets just get it hooked up
@@ -2278,7 +2270,7 @@ class GetItemMixin(TruthMixin):
             # Compute where this output chip should live in its output space canvas.
             common_output_scale = resolved_output_scale['scale']
             common_outspace_box = vidspace_box.scale(common_output_scale)
-            common_outspace_box = common_outspace_box.quantize()
+            common_outspace_box = common_outspace_box.quantize(inplace=True)
 
         # fixme: giant tuple returns are error prone
         resolution_info = {
@@ -2759,11 +2751,11 @@ class BalanceMixin:
         # Balance options are specified as an ordered list of the properties we
         # want to balance over, which can contain optional information about
         # how to do balancing.
-        if self.config.balance_options == 'sequential_without_replacement':
+        if self.config['balance_options'] == 'sequential_without_replacement':
             self.balanced_sampler = None
             return
 
-        if self.config.balance_options == 'scott':
+        if self.config['balance_options'] == 'scott':
             # Hard coded special mapping for scott
             balance_options = kwutil.Yaml.coerce(
                 '''
@@ -2782,7 +2774,7 @@ class BalanceMixin:
                 ''')
             balance_options = kwutil.Yaml.coerce(balance_options)
         else:
-            balance_options = kwutil.Yaml.coerce(self.config.balance_options)
+            balance_options = kwutil.Yaml.coerce(self.config['balance_options'])
 
         if balance_options is None:
             balance_options = []
@@ -2810,12 +2802,12 @@ class BalanceMixin:
         # Initialize an instance of BalancedSampleTree
         # rng = self.rng
         rng = kwarray.ensure_rng(rng=None)
-        if has_multilabel_attributes and self.config.num_balance_trees > 1:
+        if has_multilabel_attributes and self.config['num_balance_trees'] > 1:
             # If we are going to subdivide on multi-label attributes we want to
             # use a forest instead of tree.
             print('Constructing balance forest 🌲🌳🌲🌳')
             balanced_sampler = data_utils.BalancedSampleForest(
-                sample_grid, rng=rng, n_trees=self.config.num_balance_trees)
+                sample_grid, rng=rng, n_trees=self.config['num_balance_trees'])
         else:
             print('Constructing balance tree 🌲')
             balanced_sampler = data_utils.BalancedSampleTree(
@@ -3343,7 +3335,7 @@ class MiscMixin:
             for class_name in self.predictable_classes
         }
 
-        if self.config.default_class_behavior == 'background':
+        if self.config['default_class_behavior'] == 'background':
             # Ensure that predictable classes updates bg_idx (which is a hacky
             # construct that should be removed)
             predictable_bg_classes = set(self.background_classes) & set(self.predictable_classes)
@@ -3373,7 +3365,7 @@ class MiscMixin:
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
-        print(f'dataset notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
+        print(f'dataset notified: requested_tasks={requested_tasks}, predictable_classes={predictable_classes}')
         if requested_tasks is not None:
             self.requested_tasks.update(requested_tasks)
 

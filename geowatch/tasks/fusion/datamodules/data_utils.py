@@ -20,6 +20,7 @@ except Exception:
     profile = ub.identity
 
 
+@profile
 def resolve_scale_request(request=None, data_gsd=None):
     """
     Helper for handling user and machine specified spatial scale requests
@@ -314,7 +315,7 @@ def _string_to_hashvec(key):
     return key_tensor
 
 
-def _boxes_snap_to_edges(given_box, snap_target):
+def _boxes_snap_to_edges(given_box, snap_target, inplace=False):
     """
     Ignore:
         >>> from geowatch.tasks.fusion.datamodules.data_utils import *  # NOQA
@@ -342,7 +343,7 @@ def _boxes_snap_to_edges(given_box, snap_target):
     xoffset = (xoffset1 + xoffset2).ravel()[0]
     yoffset = (yoffset1 + yoffset2).ravel()[0]
 
-    adjusted_box = given_box.translate((xoffset, yoffset))
+    adjusted_box = given_box.translate((xoffset, yoffset), inplace=inplace)
     return adjusted_box
 
 
