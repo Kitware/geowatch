@@ -340,10 +340,10 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
     #     # batch, batch_idx, dataloader_idx
     #     self._PrefetchDataFetcher_training_step(batch)
 
-    # def training_step(self, batch):
-    def training_step(self, dataloader_iter: Iterator) -> None:
+    # def training_step(self, dataloader_iter: Iterator) -> None:
         # self._grab_batch_from_dataloader()
-        batch = self._to_collated(next(dataloader_iter))
+        # batch = self._to_collated(next(dataloader_iter))
+    def training_step(self, batch):
         outputs = self.forward_step(batch, with_loss=True, stage='train')
         return outputs
 
@@ -359,13 +359,13 @@ class Resnet50(TorchvisionClassificationWrapper, WatchModuleMixins):
     #     outputs = self.forward_step(batch, with_loss=True, stage='test')
     #     return outputs
 
-    # @profile
-    # def on_before_batch_transfer(self, batch_items, dataloader_idx):
-    #     from geowatch.tasks.fusion.datamodules import network_io
-    #     self._cpu_batch_items = batch_items
-    #     batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
-    #     batch = batch_items.collate()
-    #     return batch
+    @profile
+    def on_before_batch_transfer(self, batch_items, dataloader_idx):
+        from geowatch.tasks.fusion.datamodules import network_io
+        self._cpu_batch_items = batch_items
+        batch_items = network_io.UncollatedRGBImageBatch.from_items(batch_items)
+        batch = batch_items.collate()
+        return batch
 
     # def on_after_batch_transfer(batch, dataloader_idx):
     #     ...

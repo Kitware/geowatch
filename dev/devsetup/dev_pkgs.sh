@@ -31,6 +31,7 @@ kwimage
 kwplot
 kwcoco
 kwutil
+kwgis
 ndsampler
 simple_dvc
 )

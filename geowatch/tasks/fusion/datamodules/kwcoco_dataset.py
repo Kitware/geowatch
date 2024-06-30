@@ -892,6 +892,11 @@ class TruthMixin:
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
 
+        self.requested_tasks['saliency'] = 0
+        self.requested_tasks['class'] = 0
+        self.requested_tasks['change'] = 0
+        self.requested_tasks['boxes'] = 0
+
         wants_saliency = self.requested_tasks['saliency']
         wants_class = self.requested_tasks['class']
         wants_change = self.requested_tasks['change']
@@ -2086,6 +2091,58 @@ class GetItemMixin(TruthMixin):
             # a helper class.
             item['predictable_classes'] = self.predictable_classes
             item['requested_tasks'] = self.requested_tasks
+
+            # REDUCE_ITEMSIZE = 0
+            from kwutil import util_environ
+            REDUCE_ITEMSIZE = util_environ.envflag('REDUCE_ITEMSIZE', 0)
+            if REDUCE_ITEMSIZE:
+                item.pop('target')
+                item.pop('requested_target')
+                item.pop('output_gsd')
+                item.pop('input_gsd')
+                item.pop('domain')
+                item.pop('video_name')
+                item.pop('video_id')
+                item.pop('positional_tensors')
+                item.pop('resolved_index')
+                item.pop('requested_index')
+                item.pop('producer_rank')
+                item.pop('producer_mode')
+                item.pop('predictable_classes')
+                item.pop('requested_tasks')
+                nonessential_frame_keys = [
+                    'gid',
+                    'date_captured',
+                    'timestamp',
+                    'time_index',
+                    'sensor',
+
+                    # 'modes',
+                    # 'change',
+                    # 'class_idxs_ignore_index',
+                    # 'class_idxs',
+                    # 'class_ohe',
+                    # 'saliency',
+                    # 'change_weights',
+                    # 'class_weights',
+                    # 'saliency_weights',
+
+                    # Could group these into head and input/head specific dictionaries?
+                    # info for how to construct the output.
+                    'change_output_dims',
+                    'class_output_dims',
+                    'saliency_output_dims',
+                    #
+                    'output_dims',
+                    'output_space_slice',
+                    'output_image_dsize',
+                    'scale_outspace_from_vid',
+                    'ann_aids',
+                ]
+                for frame in item['frames']:
+                    for k in nonessential_frame_keys:
+                        frame.pop(k, None)
+
             item = HeterogeneousBatchItem(item)
 
         return item
@@ -2773,6 +2830,7 @@ class BalanceMixin:
                                            default_weight=default_weight)
 
         from kwutil import util_environ
+        # TODO: make this a config option
         REPORT_BALANCE = util_environ.envflag('REPORT_BALANCE', 0)
         if REPORT_BALANCE:
             # Reporting for debugging
@@ -3061,7 +3119,7 @@ class PreprocessMixin:
                 input_stats2 = {}
                 for mode, stats in old_input_stats.items():
                     sensor, channels = mode
-                    sensorchan = kwcoco.SensorChanSpec.coerce(sensor + ':' + channels)
+                    sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:{channels}')
                     key = sensorchan.concise().spec
                     inner_stats = {}
                     for statname, arr in stats.items():
@@ -3094,9 +3152,9 @@ class PreprocessMixin:
 
         def update_intensity_estimates(item):
             # Update pixel-level intensity histogram
-            domain = item['domain']
+            domain = item.get('domain', None)
             for frame_item in item['frames']:
-                sensor_code = frame_item['sensor']
+                sensor_code = frame_item.get('sensor', None)
                 modes = frame_item['modes']
 
                 for mode_code, mode_val in modes.items():
@@ -3114,11 +3172,11 @@ class PreprocessMixin:
 
         def update_stats(item, total_freq):
             if with_vidid:
-                vidid = item['video_id']
+                vidid = item.get('video_id', None)
                 video_id_histogram[vidid] += 1
 
             for frame_item in item['frames']:
-                image_id_histogram[frame_item['gid']] += 1
+                image_id_histogram[frame_item.get('gid', None)] += 1
                 if with_class:
                     # Update pixel-level class histogram
                     # TODO: prefer class-ohe if available
@@ -3620,7 +3678,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                             chan_isect = chans & cand_chan_group
                             if chan_isect.spec == chans.spec:
                                 valid_chan_cands.append(valid_chan_cands)
-                                expanded_input_sensorchan_streams.append(cand_sensor + ':' + chans.spec)
+                                expanded_input_sensorchan_streams.append(f'{cand_sensor}:{chans.spec}')
                                 break
                 else:
                     expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
