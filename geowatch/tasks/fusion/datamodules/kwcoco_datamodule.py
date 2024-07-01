@@ -278,7 +278,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_dataset_config['use_centered_positives'] = False
 
         self.test_dataset_config = self.train_dataset_config.copy()
-        self.test_dataset_config['test_with_annot_info'] = self.config.test_with_annot_info
+        self.test_dataset_config['test_with_annot_info'] = self.config['test_with_annot_info']
 
         self.num_workers = util_parallel.coerce_num_workers(cfgdict['num_workers'])
         self.dataset_stats = None

@@ -144,7 +144,7 @@ class SpacetimeAugmentMixin:
             vid_height = video['height']
 
             # Spatial augmentation:
-            if rng.rand() < augment_space_shift_rate:
+            if augment_space_shift_rate and rng.rand() < augment_space_shift_rate:
                 space_box = kwimage.Boxes.from_slice(
                     target_['space_slice'], clip=False,
                     endpoint=True)
@@ -205,17 +205,18 @@ class SpacetimeAugmentMixin:
 
                 target_['space_slice'] = space_box.astype(int).to_slices()[0]
 
-            # Temporal augmentation
-            if rng.rand() < augment_time_resample_rate:
-                self._augment_target_time(target_)
+            gids = target_['gids']
+            if len(gids) > 1:
 
-            # Temporal dropout
-            temporal_dropout_rate = self.config.temporal_dropout_rate
-            frame_dropout_thresh = self.config.temporal_dropout
-            do_temporal_dropout = rng.rand() < temporal_dropout_rate
-            if do_temporal_dropout and frame_dropout_thresh > 0:
-                gids = target_['gids']
-                if len(gids) > 1:
+                # Temporal augmentation
+                if augment_time_resample_rate and rng.rand() < augment_time_resample_rate:
+                    self._augment_target_time(target_)
+
+                # Temporal dropout
+                temporal_dropout_rate = self.config['temporal_dropout_rate']
+                frame_dropout_thresh = self.config['temporal_dropout']
+                do_temporal_dropout = rng.rand() < temporal_dropout_rate
+                if do_temporal_dropout and frame_dropout_thresh > 0:
                     main_gid = target_['main_gid']
                     main_frame_idx = gids.index(main_gid)
                     keep_score = rng.rand(len(gids))

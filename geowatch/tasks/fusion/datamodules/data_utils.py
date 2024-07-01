@@ -20,6 +20,7 @@ except Exception:
     profile = ub.identity
 
 
+@ub.memoize
 @profile
 def resolve_scale_request(request=None, data_gsd=None):
     """

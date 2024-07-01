@@ -16,8 +16,8 @@ DVC_EXPT_DPATH=$HOME/data/dvc-repos/cifar10
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 DATASET_CODE=cifar10
-CIFAR_ROOT=/mnt/tmpfs/
-#CIFAR_ROOT=$HOME/.cache/kwcoco/data
+#CIFAR_ROOT=/mnt/tmpfs/
+CIFAR_ROOT=$HOME/.cache/kwcoco/data
 
 TRAIN_FPATH=$CIFAR_ROOT/cifar10-train/cifar10-train.kwcoco.json
 VALI_FPATH=$CIFAR_ROOT/cifar10-test/cifar10-test.kwcoco.json
@@ -60,7 +60,7 @@ echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 
 
 MAX_STEPS=60000
-MAX_EPOCHS=1
+MAX_EPOCHS=3
 TRAIN_ITEMS_PER_EPOCH=50000
 VALI_ITEMS_PER_EPOCH=10000
 ACCUMULATE_GRAD_BATCHES=1
@@ -96,14 +96,14 @@ ulimit -n 1000000
 
 
 DDP_WORKAROUND=1
-LINE_PROFILE=1 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
+LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 0
+    num_workers            : 2
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
-    time_steps             : 1
+    time_steps             : 0
     time_sampling          : uniform
     #time_kernel           : '[0.0s,]'
     window_resolution     : 1.0

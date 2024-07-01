@@ -837,6 +837,17 @@ class TruthMixin:
         task_tid_to_cnames = truth_info['task_tid_to_cnames']
         gid_to_dets = truth_info['gid_to_dets']
 
+        wants_saliency = self.requested_tasks['saliency']
+        wants_class = self.requested_tasks['class']
+        wants_change = self.requested_tasks['change']
+        wants_boxes = self.requested_tasks['boxes']
+        wants_nonlocal_class = self.requested_tasks['nonlocal_class']
+
+        wants_class_sseg = wants_class or wants_change
+        wants_saliency_sseg = wants_saliency
+        wants_any_sseg = wants_saliency_sseg or wants_class_sseg
+        wants_any_localization = wants_boxes or wants_any_sseg
+
         input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
         output_is_native = (isinstance(common_output_scale, str) and common_output_scale == 'native')
 
@@ -844,28 +855,31 @@ class TruthMixin:
         if frame_dets is None:
             raise AssertionError('frame_dets = {!r}'.format(frame_dets))
 
-        # As of ndsampler >= 0.7.1 the dets are sampled in the input space
-        if input_is_native:
-            if output_is_native:
-                # Both scales are native, use detections as-is.
-                dets = frame_dets.copy()
+        if wants_any_localization:
+            # As of ndsampler >= 0.7.1 the dets are sampled in the input space
+            if input_is_native:
+                if output_is_native:
+                    # Both scales are native, use detections as-is.
+                    dets = frame_dets.copy()
+                else:
+                    # Input scale is native, but output scale is given,
+                    # Need to resize. We enriched the dets with metadata
+                    # to do this earlier.
+                    annot_input_dsize = frame_dets.meta['input_dims'][::-1]
+                    dets_scale = output_dsize / annot_input_dsize
+                    dets = frame_dets.scale(dets_scale, inplace=True)
             else:
-                # Input scale is native, but output scale is given,
-                # Need to resize. We enriched the dets with metadata
-                # to do this earlier.
-                annot_input_dsize = frame_dets.meta['input_dims'][::-1]
-                dets_scale = output_dsize / annot_input_dsize
-                dets = frame_dets.scale(dets_scale, inplace=True)
+                if output_is_native:
+                    raise NotImplementedError(
+                        'input scale is constant and output scale is native. '
+                        'no logic for this case yet.'
+                    )
+                else:
+                    # Simple case where input/output scales are constant
+                    dets_scale = common_output_scale / common_input_scale
+                    dets = frame_dets.scale(dets_scale, inplace=True)
         else:
-            if output_is_native:
-                raise NotImplementedError(
-                    'input scale is constant and output scale is native. '
-                    'no logic for this case yet.'
-                )
-            else:
-                # Simple case where input/output scales are constant
-                dets_scale = common_output_scale / common_input_scale
-                dets = frame_dets.scale(dets_scale, inplace=True)
+            dets = frame_dets
 
         # Create truth masks
         if self.config['default_class_behavior'] == 'background':
@@ -875,8 +889,10 @@ class TruthMixin:
 
         frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
-        frame_cidxs = np.full(space_shape, dtype=np.int32,
-                              fill_value=default_class_index)
+
+        if wants_class_sseg:
+            frame_cidxs = np.full(space_shape, dtype=np.int32,
+                                  fill_value=default_class_index)
 
         # A "Salient" class is anything that is a foreground class
         task_target_ohe = {}
@@ -884,26 +900,15 @@ class TruthMixin:
         task_target_weight = {}
 
         # Rasterize frame targets into semantic segmentation masks
-        ann_polys   = dets.data['segmentations'].to_polygon_list()
         ann_aids    = dets.data['aids']
         ann_cids    = dets.data['cids']
         ann_tids    = dets.data['tids']
         ann_weights = dets.data['weights']
         ann_boxes   = dets.data['boxes']
 
-        # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
-        # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
+        if wants_any_sseg:
+            ann_polys = dets.data['segmentations'].to_polygon_list()
 
-        wants_saliency = self.requested_tasks['saliency']
-        wants_class = self.requested_tasks['class']
-        wants_change = self.requested_tasks['change']
-        wants_boxes = self.requested_tasks['boxes']
-        wants_nonlocal_class = self.requested_tasks['nonlocal_class']
-
-        wants_class_sseg = wants_class or wants_change
-        wants_saliency_sseg = wants_saliency
-
-        if wants_saliency_sseg or wants_class_sseg:
             missing_poly_flags = [poly is None for poly in ann_polys]
             if any(missing_poly_flags):
                 missing_idxs = np.where(missing_poly_flags)[0]
@@ -918,11 +923,9 @@ class TruthMixin:
                 if poly is not None:
                     poly.meta['weight'] = weight
 
-        if wants_boxes or wants_saliency or wants_class_sseg:
+        if wants_any_localization:
             frame_box = kwimage.Box.from_dsize(space_shape[::-1])
             frame_box = frame_box.to_shapely()
-
-        # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
         if wants_nonlocal_class:
             # Create an indicator vector that just says if the category appears
@@ -1150,7 +1153,6 @@ class TruthMixin:
                 if max_weight > 0:
                     task_target_weight['class'] /= max_weight
 
-        # frame_poly_weights = np.maximum(frame_poly_weights, self.config['min_spacetime_weight'])
         generic_frame_weight = self._build_generic_frame_weights(output_dsize,
                                                                  mode_to_invalid_mask,
                                                                  meta_info,
@@ -1286,6 +1288,7 @@ class GetItemMixin(TruthMixin):
                 frame_outspace_box = common_outspace_box
 
             output_dsize = frame_outspace_box.dsize
+            # output_dsize = np.array(output_dsize)
 
             dt_captured = img.get('date_captured', None)
             if dt_captured:
@@ -1314,7 +1317,7 @@ class GetItemMixin(TruthMixin):
             }
 
             if not self.config['reduce_item_size']:
-                scale_outspace_from_vid = output_dsize / vidspace_dsize
+                scale_outspace_from_vid = output_dsize / np.array(vidspace_dsize)
                 output_dims = output_dsize[::-1]  # the size we want to predict
                 # The size of the larger image this output is expected to be
                 # embedded in.
@@ -1360,7 +1363,7 @@ class GetItemMixin(TruthMixin):
             frame_items.append(frame_item)
         return frame_items
 
-    @profile
+    # @profile
     def _build_generic_frame_weights(self, output_dsize, mode_to_invalid_mask, meta_info, time_idx):
         """
         Ignore:
@@ -1378,13 +1381,12 @@ class GetItemMixin(TruthMixin):
             >>> time_idx = 0
             >>> generic_frame_weight = self._build_generic_frame_weights(output_dsize, mode_to_invalid_mask, meta_info, time_idx)
         """
-        time_weights = meta_info['time_weights']
-
-        frame_target_shape = output_dsize[::-1]
-        space_shape = frame_target_shape
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.config['min_spacetime_weight'])
         if self.config['upweight_centers']:
+            time_weights = meta_info['time_weights']
+            frame_target_shape = output_dsize[::-1]
+            space_shape = frame_target_shape
             space_weights = _space_weights(space_shape)
             space_weights = np.maximum(space_weights, self.config['min_spacetime_weight'])
             spacetime_weights = space_weights * time_weights[time_idx]
@@ -2110,6 +2112,7 @@ class GetItemMixin(TruthMixin):
             item['predictable_classes'] = self.predictable_classes
             item['requested_tasks'] = self.requested_tasks
 
+        if self.config['reduce_item_size']:
             nonessential_frame_keys = [
                 'gid',
                 'date_captured',
@@ -2200,7 +2203,7 @@ class GetItemMixin(TruthMixin):
                 num_images_wanted, with_annots, gid_to_sample, vidspace_box,
                 vidname, max_tries)
 
-        good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+        good_gids = {gid for gid, flag in gid_to_isbad.items() if not flag}
         if len(good_gids) == 0:
             raise FailedSample(ub.paragraph(
                 f'''
@@ -2209,14 +2212,12 @@ class GetItemMixin(TruthMixin):
                 gid_to_isbad={gid_to_isbad}
                 '''))
 
-        final_gids = ub.oset(video_gids) & good_gids
         force_bad_frames = target_.get('force_bad_frames', 0)
         if force_bad_frames:
-            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
-            print('gid_to_isbad = {}'.format(ub.urepr(gid_to_isbad, nl=1)))
-        final_gids = list(final_gids)
+            final_gids = [g for g in video_gids if g in gid_to_isbad]
+        else:
+            final_gids = [g for g in video_gids if g in good_gids]
 
-        # coco_dset.images(final_gids).lookup('date_captured')
         target_['gids'] = final_gids
 
         if main_skip_reason:
@@ -2247,9 +2248,22 @@ class GetItemMixin(TruthMixin):
         target_['scale'] = common_input_scale
 
         # Put the target slice in video space.
-        vidspace_box = kwimage.Box.from_slice(target_['space_slice'],
-                                              clip=False, wrap=False)
-        vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
+        OPTIMIZE = 0
+        if OPTIMIZE:
+            # Need to have kwimage 0.10.1 to enable this
+            sl_y, sl_x = target_['space_slice']
+            y1 = sl_y.start
+            y2 = sl_y.stop
+            x1 = sl_x.start
+            x2 = sl_x.stop
+            vidspace_ltrb = np.array([[x1, y1, x2, y2]])
+            _boxes = kwimage.Boxes(vidspace_ltrb, 'ltrb', canonical=True)
+            vidspace_box = kwimage.Box(_boxes)
+            vidspace_dsize = (x2 - x1, y2 - y1)
+        else:
+            vidspace_box = kwimage.Box.from_slice(target_['space_slice'],
+                                                  clip=False, wrap=False)
+            vidspace_dsize = vidspace_box.dsize
 
         # Size of the video the target is embedded in.
         video_dsize = np.array([video['width'], video['height']])
@@ -2269,8 +2283,14 @@ class GetItemMixin(TruthMixin):
         else:
             # Compute where this output chip should live in its output space canvas.
             common_output_scale = resolved_output_scale['scale']
-            common_outspace_box = vidspace_box.scale(common_output_scale)
-            common_outspace_box = common_outspace_box.quantize(inplace=True)
+            if OPTIMIZE:
+                sx = sy = common_output_scale
+                common_outspace_ltrb = vidspace_ltrb * np.array([[sx, sy, sx, sy]])
+                _boxes = kwimage.Boxes(common_outspace_ltrb, 'ltrb', canonical=True)
+                common_outspace_box = kwimage.Box(_boxes)
+            else:
+                common_outspace_box = vidspace_box.scale(common_output_scale)
+                common_outspace_box = common_outspace_box.quantize(inplace=True)
 
         # fixme: giant tuple returns are error prone
         resolution_info = {
@@ -3569,7 +3589,13 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
         # TODO: remove this line. Reduce the number of top-level attributes and
         # maintain initialization variables in the config object itself.
-        self.__dict__.update(self.config.to_dict())
+        _cfgdict = self.config.to_dict()
+        self.__dict__.update(_cfgdict)
+
+        # Make config a normal dictionary to reduce attribute lookup overhead
+        #
+        self.config = _cfgdict
+
         self.sampler = sampler
 
         # Add extra categories if we need to and construct a new classes object
@@ -3823,7 +3849,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     keepbound=True,
                     use_annot_info=False,
                 ))
-            grid_kw['dynamic_fixed_resolution'] = config.dynamic_fixed_resolution
+            grid_kw['dynamic_fixed_resolution'] = config['dynamic_fixed_resolution']
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 dset=self.sampler.dset, **grid_kw
             )
@@ -3894,6 +3920,22 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 prenormalizers = stats['modality_input_stats']
 
             self.prenormalizers = prenormalizers
+
+        if False:
+            # # HACK TO PUT ALL DATA INTO MEMORY
+            # for gid in ub.ProgIter(self.sampler.dset.images(), desc='prepopulate imdata'):
+            #     coco_img = self.sampler.dset.coco_image(gid)
+            #     img = coco_img.img
+            #     imdata = coco_img.imdelay().finalize()
+            #     img['imdata'] = imdata
+            # HACK TO PUT ALL DATA INTO MEMORY
+            bundle_dpath = ub.Path(self.sampler.dset.bundle_dpath)
+            for gid in ub.ProgIter(self.sampler.dset.images(), desc='prepopulate imdata'):
+                coco_img = self.sampler.dset.coco_image(gid)
+                img = coco_img.img
+                imdata = kwimage.imread(bundle_dpath / coco_img.img['file_name'])
+                # imdata = coco_img.imdelay().finalize()
+                img['imdata'] = imdata
 
     def __len__(self):
         return self.length
