@@ -361,7 +361,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.coco_datasets[_key] = _coco_output
             return _coco_output
 
-        if stage == 'fit' or stage is None:
+        if stage in {'fit', 'train'} or stage is None:
             train_coco_dset = _read_kwcoco_split('train')
             self.coco_datasets['train'] = train_coco_dset
 

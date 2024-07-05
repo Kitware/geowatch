@@ -611,6 +611,7 @@ def main(config=None):
         >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>>     'fit.trainer.add_to_registery': 0,
         >>> }
         >>> cli = main(config=config)
 
@@ -634,6 +635,7 @@ def main(config=None):
         >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>>     'fit.trainer.add_to_registery': 0,
         >>> }
         >>> main(config=config)
 
