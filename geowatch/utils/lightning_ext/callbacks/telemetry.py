@@ -94,11 +94,11 @@ class LightningTelemetry(pl.callbacks.Callback):
         self._dump(trainer)
 
     # Causes ddp hang
-    # def on_train_epoch_end(self, trainer, logs=None):
-    #     if trainer.global_rank != 0:
-    #         return
-    #     print('Training is complete, dumping telemetry')
-    #     self._dump(trainer)
+    def on_train_epoch_end(self, trainer, logs=None):
+        if trainer.global_rank != 0:
+            return
+        print('Epoch finished, dumping telemetry')
+        self._dump(trainer)
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         if trainer.global_rank != 0:
