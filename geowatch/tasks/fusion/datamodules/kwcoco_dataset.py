@@ -141,6 +141,7 @@ from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
 from geowatch.tasks.fusion import utils
 from geowatch.tasks.fusion.datamodules import data_utils
+from geowatch.tasks.fusion.datamodules import balanced_sampling
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
@@ -2826,11 +2827,11 @@ class BalanceMixin:
             # If we are going to subdivide on multi-label attributes we want to
             # use a forest instead of tree.
             print('Constructing balance forest 🌲🌳🌲🌳')
-            balanced_sampler = data_utils.BalancedSampleForest(
+            balanced_sampler = balanced_sampling.BalancedSampleForest(
                 sample_grid, rng=rng, n_trees=self.config['num_balance_trees'])
         else:
             print('Constructing balance tree 🌲')
-            balanced_sampler = data_utils.BalancedSampleTree(
+            balanced_sampler = balanced_sampling.BalancedSampleTree(
                 sample_grid, rng=rng)
 
         for balance_option in balance_options:
