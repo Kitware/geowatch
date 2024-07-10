@@ -54,7 +54,6 @@ The following table provides links to relevant resources for the SMART WATCH pro
 
 .. _KHQ Demo Slides: https://docs.google.com/presentation/d/1HKH_sGJX4wH60j8t4iDrZN8nH71jGX1vbCXFRIDVI7c/
 
-
 Purpose & Features
 ------------------
 
@@ -319,6 +318,27 @@ There are other GIS and segmentation focused torch packages out there:
   Contains standardized models with flexible model configuration.
   We use some the mmlabs models, but their library doesn't have the data
   flexibility (e.g. large image support) that kwcoco provides.
+
+
+Published Research
+------------------
+
+* IGARSS 2024: `Slides <IGARSS 2024 Slides_>`__, `Conference Page <https://2024.ieeeigarss.org/view_paper.php?PaperNum=5431>`_, `Paper (ArXiV) <IGARSS 2024 ArXiV Paper_>`__.
+
+.. .. FIXME: desci nodes link is not working
+.. .. , `Paper (DeSci) <IGARSS 2024 DeSci Paper_>`__
+
+* WACV 2024: `Open Access Paper <WACV 2024 Paper_>`__.
+
+.. _IGARSS 2024 Slides: https://docs.google.com/presentation/d/1DVcXlIUEt95rT9y6IB5UqUxoL99bubDwB-qd-F81pOU/edit#slide=id.g2e7e44f7987_0_7985
+
+.. _WACV 2024 Paper: https://openaccess.thecvf.com/content/WACV2024/html/Greenwell_WATCH_Wide-Area_Terrestrial_Change_Hypercube_WACV_2024_paper.html
+
+.. _IGARSS 2024 ArXiV Paper: https://arxiv.org/abs/2407.06337
+
+.. _IGARSS 2024 DeSci Paper: https://nodes.desci.com/node/Bcb-oq85_EzGTZvwAHo8Xj9FmbHujHEqJLW3e8ljlq4
+
+.. .. https://nodes.desci.com/node/Bcb-oq85_EzGTZvwAHo8Xj9FmbHujHEqJLW3e8ljlq4/root/WATCH__IGAARS_2024_.pdf
 
 
 Acknowledgement
