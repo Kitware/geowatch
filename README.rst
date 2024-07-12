@@ -323,10 +323,7 @@ There are other GIS and segmentation focused torch packages out there:
 Published Research
 ------------------
 
-* IGARSS 2024: `Slides <IGARSS 2024 Slides_>`__, `Conference Page <https://2024.ieeeigarss.org/view_paper.php?PaperNum=5431>`_, `Paper (ArXiV) <IGARSS 2024 ArXiV Paper_>`__.
-
-.. .. FIXME: desci nodes link is not working
-.. .. , `Paper (DeSci) <IGARSS 2024 DeSci Paper_>`__
+* IGARSS 2024: `Slides <IGARSS 2024 Slides_>`__, `Conference Page <https://2024.ieeeigarss.org/view_paper.php?PaperNum=5431>`_, `Paper (ArXiV) <IGARSS 2024 ArXiV Paper_>`__, `Paper (DeSci) <IGARSS 2024 DeSci Paper_>`__
 
 * WACV 2024: `Open Access Paper <WACV 2024 Paper_>`__.
 
@@ -337,8 +334,6 @@ Published Research
 .. _IGARSS 2024 ArXiV Paper: https://arxiv.org/abs/2407.06337
 
 .. _IGARSS 2024 DeSci Paper: https://nodes.desci.com/node/Bcb-oq85_EzGTZvwAHo8Xj9FmbHujHEqJLW3e8ljlq4
-
-.. .. https://nodes.desci.com/node/Bcb-oq85_EzGTZvwAHo8Xj9FmbHujHEqJLW3e8ljlq4/root/WATCH__IGAARS_2024_.pdf
 
 
 Acknowledgement
