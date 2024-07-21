@@ -25,7 +25,6 @@ Submodules
    geowatch.utils.reverse_hashid
    geowatch.utils.simple_dvc
    geowatch.utils.util_bands
-   geowatch.utils.util_chmod
    geowatch.utils.util_codes
    geowatch.utils.util_data
    geowatch.utils.util_dotdict
