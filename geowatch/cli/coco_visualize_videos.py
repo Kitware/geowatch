@@ -287,7 +287,8 @@ def main(cmdline=True, **kwargs):
 
     if config['max_workers'] is not None:
         ub.schedule_deprecation(
-            'geowatch', 'max_workers', 'argument to coco_visualize_videos',
+            modname='geowatch', name='max_workers', type='argument to coco_visualize_videos',
+            migration='use workers instead',
             deprecate='now', error='later', remove='later')
         max_workers = util_parallel.coerce_num_workers(config['max_workers'])
     else:
@@ -1026,7 +1027,7 @@ def _write_ann_visualizations2(coco_dset,
                 space=space, resolution=resolution)
         warp_viz_from_space = kwimage.Affine.scale(factor)
 
-    delayed = coco_img.imdelay(space=space, resolution=resolution,
+    delayed = coco_img.imdelay(space=space, resolution=resolution, channels=channels,
                                **finalize_opts)
 
     warp_vid_from_img = coco_img.warp_vid_from_img
