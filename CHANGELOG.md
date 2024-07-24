@@ -14,6 +14,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Moved balanced samplers to their own module.
 
+### Fixed
+* Added missing top level functions to ArrayAPI
+
 
 ## Version 0.18.1 - Released 2024-06-25
 
