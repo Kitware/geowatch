@@ -71,22 +71,27 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
             raise
 
     if select_videos is not None:
-        try:
-            import jq
-        except Exception:
-            print('The jq library is required to run a generic image query')
-            raise
 
-        try:
-            query_text = ".videos[] | select({}) | .id".format(select_videos)
-            query = jq.compile(query_text)
-            selected_vidids = query.input(coco_dset.dataset).all()
-            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
-                                               for vidid in selected_vidids))
-            valid_gids &= vid_selected_gids
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
-            raise
+        if isinstance(select_videos, list):
+            # Interpret as video_ids
+            ...
+        else:
+            try:
+                import jq
+            except Exception:
+                print('The jq library is required to run a generic image query')
+                raise
+
+            try:
+                query_text = ".videos[] | select({}) | .id".format(select_videos)
+                query = jq.compile(query_text)
+                selected_vidids = query.input(coco_dset.dataset).all()
+                vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
+                                                   for vidid in selected_vidids))
+                valid_gids &= vid_selected_gids
+            except Exception:
+                print('JQ Query Failed: {}'.format(query_text))
+                raise
 
     valid_gids = sorted(valid_gids)
     return valid_gids

@@ -690,6 +690,7 @@ def plot_intensity_histograms(full_df, config, ax=None):
     print(f'unique_sensors={unique_sensors}')
     if ax is None:
         fig = kwplot.figure(fnum=1, doclf=True)
+        fig.clf()
         print('fig = {!r}'.format(fig))
         pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
         print('pnum_ = {!r}'.format(pnum_))
@@ -706,9 +707,7 @@ def plot_intensity_histograms(full_df, config, ax=None):
             weightvar = hist_data_kw['weights']
             hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, xvar, weightvar)
 
-        print(f'ax={ax}')
-        if ax is None:
-            ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
+        ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
 
         # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
         # ub.find_duplicates(z)
