@@ -349,7 +349,7 @@ class ParamPlotter:
             macro_fig_final.finalize(fig, f'overview-boxplot-{roi_attr}-vs-{main_metric}.png')
 
         except Exception as ex:
-            rich.print(f'[yellow] warning, unable to plot overview-boxplot-region-vs-{main_metric}.png ex={ex}')
+            rich.print(f'[red] warning, unable to plot overview-boxplot-region-vs-{main_metric}.png ex={ex}')
         else:
             rich.print(f'[green] made overview boxplot overview-boxplot-region-vs-{main_metric}.png')
 
@@ -664,12 +664,12 @@ class ParamPlotter:
 
         if len(param_histogram) < min_variations:
             msg = f'skip plot for param_name={param_name} due to min_variations'
-            rich.print(f'[yellow] {msg}')
+            rich.print(f'[red] {msg}')
             raise SkipPlot(msg)
 
         if len(param_histogram) > max_variations:
             msg = f'skip plot for param_name={param_name} due to max_variations'
-            rich.print(f'[yellow] {msg}')
+            rich.print(f'[red] {msg}')
             raise SkipPlot(msg)
 
         if 1:

@@ -635,6 +635,7 @@ class AggregatorAnalysisMixin:
         import pandas as pd
         import numpy as np
         from geowatch.utils import util_pandas
+        print(f'agg.primary_metric_cols={agg.primary_metric_cols}')
 
         if isinstance(per_group, float) and math.isinf(per_group):
             per_group = None
@@ -1382,6 +1383,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
                 #     agg.metrics, _display_metrics_suffixes)
                 agg.display_metric_cols = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+            print(f'agg.primary_metric_cols={agg.primary_metric_cols}')
+            print(f'agg.display_metric_cols={agg.display_metric_cols}')
 
         _model_suffixes = ['package_fpath']
         _testdset_suffixes = ['test_dataset', 'crop_src_fpath']
