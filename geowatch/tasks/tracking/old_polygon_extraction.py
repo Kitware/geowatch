@@ -1,4 +1,9 @@
 """
+Note: even though this is called old-polygon-extraction, it was never
+fully refactored out of the critical path. Due to funding cuts we arent
+investing effort in changing this. A refactor is needed, but for now that will
+just have to add to our our technical dept.
+
 The original heatmap -> polygon extraction code.
 """
 import ubelt as ub
@@ -293,7 +298,7 @@ def _gids_polys(sub_dset, video_id, **kwargs):
 
     images = sub_dset.images(gids)
     image_dates = [util_time.coerce_datetime(d)
-                   for d in images.lookup('date_captured')]
+                   for d in images.lookup('date_captured', None)]
     # image_years = [d.year for d in image_dates]
 
     channels_list = config.key

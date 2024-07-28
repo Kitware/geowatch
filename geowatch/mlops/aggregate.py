@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 r"""
 Loads results from an evaluation, aggregates them, and reports text or visual
 results.
@@ -135,17 +136,24 @@ class AggregateLoader(DataConfig):
         import pandas as pd
         input_targets = util_path.coerce_patterned_paths(config.target)
         eval_type_to_tables = ub.ddict(list)
+
+        print('Coerce aggregators for pipeline:')
+        from geowatch.mlops import pipeline_nodes
+        dag = pipeline_nodes.coerce_pipeline(config.pipeline)
+        dag.print_graphs()
+
         print(f'Found {len(input_targets)} input targets')
         for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
             if target.is_dir():
                 # Assume Pipeline Output dir
                 root_dpath = target
-                pipeline = config.pipeline
+                dag.configure(config=None, root_dpath=root_dpath)
+
                 eval_nodes = config.eval_nodes
                 io_workers = config.io_workers
                 cache_resolved_results = config.cache_resolved_results
                 eval_type_to_results = build_tables(
-                    root_dpath, pipeline, io_workers, eval_nodes,
+                    root_dpath, dag, io_workers, eval_nodes,
                     cache_resolved_results=cache_resolved_results)
                 for type, results in eval_type_to_results.items():
                     # print('GOT RESULTS')
@@ -168,7 +176,8 @@ class AggregateLoader(DataConfig):
             # print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
-                             display_metric_cols=config.display_metric_cols)
+                             display_metric_cols=config.display_metric_cols,
+                             dag=dag)
             agg.build()
             # print('agg.TABLE')
             # print(agg.table['resolved_params.sc_poly.smoothing'])
@@ -1146,7 +1155,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def __init__(agg, table, output_dpath=None,
                  type=None,
                  primary_metric_cols='auto',
-                 display_metric_cols='auto'):
+                 display_metric_cols='auto',
+                 dag=None):
         """
         Args:
             table (pandas.DataFrame):
@@ -1170,6 +1180,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 if "auto", then the "type" must be known by the global helpers.
                 Otherwise list the metric columns in the order they should be
                 displayed (after the primary metrics).
+
+            dag (geowatch.mlops.Pipeline):
+                The pipeline that the evaluation table corresponds to.
+                Only needed if introspection if necessary.
+                If all "auto" params are specified, this should not be needed.
         """
         agg.output_dpath = output_dpath
 
@@ -1179,6 +1194,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         agg.table = table
         agg.type = type
+        agg.dag = dag
         agg.subtables = None
         agg.config = {
             'display_metric_cols': display_metric_cols,
@@ -1352,7 +1368,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         metrics_prefix = f'metrics.{agg.type}'
         # params_prefix = f'params.{agg.type}'
         if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            try:
+                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            except Exception:
+                node = agg.dag.nodes[agg.type]
+                _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
 
             if agg.primary_metric_cols == 'auto':
                 # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
@@ -1525,7 +1545,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def compress(agg, flags):
         new_table = agg.table[flags].copy()
         new_agg = Aggregator(new_table, type=agg.type,
-                             output_dpath=agg.output_dpath, **agg.config)
+                             dag=agg.dag, output_dpath=agg.output_dpath,
+                             **agg.config)
         new_agg.build()
         return new_agg
 
@@ -1557,6 +1578,17 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     @property
     def resolved_params(self):
         return self.subtables['resolved_params']
+
+    @property
+    def default_vantage_points(self):
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
+        try:
+            if self.dag is not None:
+                node = self.dag.nodes[self.type]
+                vantage_points = node.default_vantage_points
+        except Exception:
+            vantage_points = SMART_HELPER.default_vantage_points(self.type)
+        return vantage_points
 
     def build_effective_params(self):
         """

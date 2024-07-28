@@ -304,7 +304,9 @@ def main(cmdline=True, **kwargs):
     if channels == 'auto':
         from delayed_image import FusedChannelSpec
         auto_channels = [
+            FusedChannelSpec.coerce('r|g|b'),
             FusedChannelSpec.coerce('red|green|blue'),
+            FusedChannelSpec.coerce('ir'),
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
             FusedChannelSpec.coerce('ac_salient'),
@@ -781,7 +783,7 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
 
         if request_grouped_bands == 'default':
             # Use false color for special groups
-            request_grouped_bands = ['red|green|blue', 'r|g|b']
+            request_grouped_bands = ['red|green|blue', 'r|g|b', 'ir']
 
         for cand in request_grouped_bands:
             cand = kwcoco.FusedChannelSpec.coerce(cand)

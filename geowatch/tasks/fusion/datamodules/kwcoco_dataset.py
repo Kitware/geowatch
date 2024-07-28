@@ -3171,6 +3171,9 @@ class PreprocessMixin:
                 modes = frame_item['modes']
 
                 for mode_code, mode_val in modes.items():
+                    # FIXME: we need to avoid using any custom class
+                    # in dataset stats because it might be pickled.
+                    # We should use raw python and numpy / torch types only.
                     modality = Modality(sensor_code, mode_code, domain)
 
                     sensor_mode_hist[(sensor_code, mode_code)] += 1

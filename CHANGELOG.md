@@ -11,6 +11,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Ability to output hidden features from the multimodal transformer in fusion.predict.
 
 
+### Added
+* Add the concept of a `"primary_out_key"` to mlops ProcessNode
+* A ProcessNode can now specify a `load_result` function to utilize mlops 
+
 ### Changed
 * Moved balanced samplers to their own module.
 

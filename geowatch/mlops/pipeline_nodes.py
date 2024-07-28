@@ -833,6 +833,7 @@ class ProcessNode(Node):
         >>>     },
         >>>     in_paths={'src'},
         >>>     out_paths={'dst': 'there.txt'},
+        >>>     primary_out_key='dst',
         >>>     perf_params={'num_workers'},
         >>>     group_dname='predictions',
         >>>     #node_dname='proc1/{proc1_algo_id}/{proc1_id}',
@@ -847,6 +848,7 @@ class ProcessNode(Node):
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
         >>> print('self.final = {}'.format(ub.urepr(self.final, nl=2)))
         >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
+        >>> print('self.primary_out_key = {}'.format(ub.urepr(self.primary_out_key, nl=2)))
 
     Example:
         >>> # How to use a ProcessNode to handle an arbitrary process call
@@ -924,6 +926,8 @@ class ProcessNode(Node):
     # Should be specified as templates
     out_paths : Collection = None
 
+    primary_out_key : str = None
+
     def __init__(self,
                  *,  # TODO: allow positional arguments after we find a good order
                  name=None,
@@ -938,6 +942,7 @@ class ProcessNode(Node):
                  config=None,
                  node_dpath=None,  # overwrites configured node dapth
                  group_dpath=None,  # overwrites configured node dapth
+                 primary_out_key=None,
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
                  _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
@@ -980,6 +985,7 @@ class ProcessNode(Node):
             'out_paths': {},
             'perf_params': {},
             'algo_params': {},
+            'primary_out_key': None,
         }
         _classvar_init(self, args, fallbacks)
         super().__init__(args['name'])
@@ -1903,3 +1909,96 @@ def demo_pipeline_run():
 
 # Backwards compat
 PipelineDAG = Pipeline
+
+
+def coerce_pipeline(pipeline):
+    """
+    Attempts to resolve a concise expression (typically from the command line) into a pre-defined pipeline.
+
+    Args:
+        pipeline (str): a pre-registered name, or evaluatable code to construct a pipeline.
+
+    Returns:
+        Pipeline
+    """
+    EXPERIMENTAL_CUSTOM_PIPELINES = True
+    if isinstance(pipeline, str):
+        try:
+            """
+            If this is going to be a real mlops framework, then we need to abstract the
+            pipeline. The user needs to define what the steps are, but then they need to
+            explicitly connect them. We can't make the assumptions we are currently using.
+            """
+            from geowatch.mlops import smart_pipeline
+            dag = smart_pipeline.make_smart_pipeline(pipeline)
+        except Exception:
+            if EXPERIMENTAL_CUSTOM_PIPELINES:
+                # New experimental pipelines
+                dag = _experimental_resolve_pipeline(pipeline)
+            else:
+                raise
+    else:
+        if isinstance(pipeline, Pipeline):
+            return pipeline
+        else:
+            raise TypeError('Unknown coerce technique for {type(pipeline)} with value {pipeline}')
+    return dag
+
+
+def _experimental_resolve_pipeline(pipeline):
+    """
+    Users need to be able to build and specify their own pipelines here
+    (similar to how kwiver pipelines work). This is initial support.
+
+    Ignore:
+        pipeline = 'user_module.pipelines.custom_pipeline_func()'
+        pipeline = 'geowatch.mlops.smart_pipeline.make_smart_pipeline("bas")'
+        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        _experimental_resolve_pipeline(pipeline)
+    """
+    # Case: given in the format `{module_name}.{attribute_expression}`
+    # Note the attribute_expression allows arbitrary code execution
+    print('Resolving user-specified pipeline')
+    if '.' in pipeline:
+        # Find which part is the module and which is the member
+        parts = pipeline.split('.')
+        found = None
+        for idx in reversed(range(1, len(parts) + 1)):
+            candidate = '.'.join(parts[:idx])
+            try:
+                modpath = _coerce_modpath(candidate)
+            except ValueError:
+                ...
+            else:
+                lhs = candidate
+                rhs = '.'.join(parts[idx:])
+                module = ub.import_module_from_path(modpath)
+                found = (module, modpath, lhs, rhs)
+                print(f'found = {ub.urepr(found, nl=1)}')
+                break
+        if found is None:
+            raise ValueError('unable to resolve pipeline')
+        else:
+            # This initial specification allows arbitrary code execution.
+            # We should define a hardened variant which does not require this.
+            (module, modpath, lhs, rhs) = found
+            limited_namespace = {'pipeline_module': module}
+            statement = f'pipeline_module.{rhs}'
+            dag = eval(statement, limited_namespace)
+            return dag
+    else:
+        raise ValueError(pipeline)
+
+
+def _coerce_modpath(modpath_or_name):
+    import types
+    import os
+    if isinstance(modpath_or_name, types.ModuleType):
+        raise TypeError('Expected a static module but got a dynamic one')
+    modpath = ub.modname_to_modpath(modpath_or_name)
+    if modpath is None:
+        if os.path.exists(modpath_or_name):
+            modpath = modpath_or_name
+        else:
+            raise ValueError('Cannot find module={}'.format(modpath_or_name))
+    return modpath

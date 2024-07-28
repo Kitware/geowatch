@@ -86,8 +86,24 @@ class DataModuleConfigMixin(scfg.DataConfig):
 
 
 class PredictConfig(DataModuleConfigMixin):
-    """
+    r"""
     Prediction script for the fusion task
+
+    Example
+    -------
+
+    python -m geowatch.tasks.fusion.predict \
+        --write_probs=True \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/package.pt \
+        --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
+        --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
+        --num_workers=5 \
+        --devices=0, \
+        --batch_size=1
+
     """
     # config_file = scfg.Value(None, alias=['config'], help='config file path')
     # write_out_config_file_to_this_path = scfg.Value(None, alias=['dump'], help=ub.paragraph(

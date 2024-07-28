@@ -167,12 +167,11 @@ class ParamPlotter:
     Working on cleaning this up
     """
     def __init__(plotter, agg, vantage_points=None):
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
         plotter.agg = agg
 
         # We will conduct analysis under serveral different vantage points
         if vantage_points is None:
-            vantage_points = SMART_HELPER.default_vantage_points(agg.type)
+            vantage_points = agg.default_vantage_points
 
         vantage_points = [Vantage(**vantage) for vantage in vantage_points]
 
@@ -206,6 +205,7 @@ class ParamPlotter:
         import rich
         from geowatch.utils import util_kwplot
         agg = plotter.agg
+        rich.print('[green] ### Plot Resources')
         resource_summary_df = agg.resource_summary_table()
         rich.print(resource_summary_df.to_string())
         resource_summary_df
@@ -226,10 +226,10 @@ class ParamPlotter:
         import rich
         pman = ProgressManager()
 
+        rich.print('[green]### Plot Overviews')
         rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
         with pman:
             for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage overviews'):
-                print('Plot vantage overview: ' + vantage['name'])
                 plotter.plot_vantage_per_region_overview(vantage)
 
                 if plotter.macro_table is not None:
@@ -242,10 +242,10 @@ class ParamPlotter:
         import rich
         pman = ProgressManager()
 
+        rich.print('[green] ### Plot Params')
         rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
         with pman:
             for vantage in pman.progiter(plotter.vantage_points, desc='plotting vantage params'):
-                print('Plot vantage params: ' + vantage['name'])
                 plotter.plot_vantage_params(vantage, pman=pman)
         rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
 
@@ -270,6 +270,9 @@ class ParamPlotter:
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
         kwplot.close_figures()
+
+        rich.print('[white]### Plot Vantage Region Overview:')
+        rich.print(f'[white] * {vantage}')
 
         agg = plotter.agg
         single_table = plotter.single_table
@@ -353,6 +356,7 @@ class ParamPlotter:
         roi_legend = roi_to_color.make_legend_img(dpi=300)
         roi_legend_fpath = (plotter.plot_dpath / 'roi_legend.png')
         kwimage.imwrite(roi_legend_fpath, roi_legend)
+        rich.print('[green] made roi_legend.png')
 
     def plot_vantage_macro_overview(plotter, vantage):
         """
@@ -370,7 +374,12 @@ class ParamPlotter:
         import kwplot
         import kwimage
         import numpy as np
+        import rich
         from geowatch.mlops.smart_global_helper import SMART_HELPER
+
+        rich.print('[white]### Plot Vantage Macro Overview:')
+        rich.print(f'[white] * {vantage}')
+
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
         kwplot.close_figures()
@@ -429,6 +438,7 @@ class ParamPlotter:
         ax.set_yscale(yscale)
         plotter.modifier.relabel(ax, ticks=False)
         roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
+        rich.print('[green] made overview-macro_results-{name}.png')
 
     def plot_vantage_params(plotter, vantage, pman=None):
         """
@@ -463,7 +473,8 @@ class ParamPlotter:
         import kwplot
         import rich
         from geowatch.utils import util_pandas
-        rich.print(f'[white]### Plot Vantage Params: {vantage}')
+        rich.print('[white]### Plot Vantage Params:')
+        rich.print(f'[white] * {vantage}')
 
         plt = kwplot.autoplt()  # NOQA
         kwplot.autosns()
@@ -543,7 +554,6 @@ class ParamPlotter:
             owns_pman = 1
         try:
             for rank, param_name in enumerate(pman.progiter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
-                ...
                 try:
                     plotter._plot_single_vantage_param(rank, macro_table,
                                                        param_name, vantage,
@@ -575,6 +585,8 @@ class ParamPlotter:
         import numpy as np
         import seaborn as sns
 
+        rich.print(f'param_name = {ub.urepr(param_name, nl=1)}')
+
         param_group_dpath = plotter.macro_plot_dpath / 'params'
         param_to_palette = plotter.param_to_palette
         vantage_dpath = ((plotter.macro_plot_dpath / 'vantage' / vantage['name']).ensuredir()).resolve()
@@ -604,29 +616,61 @@ class ParamPlotter:
             macro_table = macro_table.sort_values(param_name)
         except Exception as ex:
             rich.print(f'[yellow] warning, unable to sort values by {param_name} ex={ex}')
-            ...
 
         # Number of samples we have for each value of this parameter
-        param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
-        param_histogram_ = {}
-        for k, v in param_histogram.items():
-            k = str(k)
-            if k in param_histogram_:
-                param_histogram_[k] += v
+        raw_param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
+        orig_unique_params = ub.udict()
+        param_histogram = ub.udict()
+        for k, v in raw_param_histogram.items():
+            str_key = str(k)
+            if str_key in param_histogram:
+                param_histogram[str_key] += v
+                orig_unique_params[str_key].append(k)
             else:
-                param_histogram_[k] = v
-        param_histogram = param_histogram_
+                orig_unique_params[str_key] = [k]
+                param_histogram[str_key] = v
 
         sub_macro_table = macro_table
+        num_macro_rows = len(macro_table)
 
-        min_variations = plotter.plot_config.get('min_variations', 1)
-        if min_variations > 1 and not (params_of_interest is not None and param_name in params_of_interest):
-            ignore_params = [k for k, v in param_histogram.items() if v < min_variations]
+        min_variations = plotter.plot_config.get('min_variations', 1)  # if less than this number of groups, skip the plot
+        max_variations = plotter.plot_config.get('max_variations', float('inf'))  # if less than this number of groups, skip the plot
+        min_support = plotter.plot_config.get('min_support', 1)  # minimum amount of values in a group, otherwise remove that group
+
+        explicitly_requested = (params_of_interest is not None and param_name in params_of_interest)
+
+        if min_support > 1 and not explicitly_requested:
+            ignore_params = [k for k, v in param_histogram.items() if v < min_support]
             param_histogram = ub.udict(param_histogram) - set(ignore_params)
             row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
             sub_macro_table = macro_table[~row_is_ignored]
-            if len(param_histogram) == 1:
-                raise SkipPlot
+
+        num_filtered_rows = num_macro_rows - len(sub_macro_table)
+        n_support_stats = kwarray.stats_dict(list(param_histogram.values()), quantile=False, median=True)
+        unique_val_types = list(map(type, ub.flatten(orig_unique_params.take(param_histogram))))
+        value_type_hist = ub.dict_hist(unique_val_types)
+        column_dtype = str(sub_macro_table[param_name].dtype)
+        param_summary = {
+            'param_name': param_name,
+            'num_rows': len(sub_macro_table),
+            'num_filtered_rows': num_filtered_rows,
+            # Does this need a better name? It is showing the distribution of
+            # support for the different groupings.
+            'n_support_stats': n_support_stats,
+            'column_dtype': column_dtype,
+            'value_type_hist': value_type_hist,
+        }
+        rich.print(f'param_summary = {ub.urepr(param_summary, nl=2)}')
+
+        if len(param_histogram) < min_variations:
+            msg = f'skip plot for param_name={param_name} due to min_variations'
+            rich.print(f'[yellow] {msg}')
+            raise SkipPlot(msg)
+
+        if len(param_histogram) > max_variations:
+            msg = f'skip plot for param_name={param_name} due to max_variations'
+            rich.print(f'[yellow] {msg}')
+            raise SkipPlot(msg)
 
         if 1:
             # HACK: probably want to build palettes outside of this function
@@ -699,6 +743,7 @@ class ParamPlotter:
 
         param_fpath = param_dpath_flat / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
         finalize_figure.finalize(fig, param_fpath)
+        rich.print(f'[green] wrote {param_fpath.name}')
         drawn_rows.append({
             'type': 'vantage_metric_plot',
             'plot_type': 'scatter_legend',
@@ -710,8 +755,8 @@ class ParamPlotter:
         force_regen = True
 
         # Scatter legend (doesnt care about the vantage)
+        param_fpath = param_dpath_flat / f'{param_prefix}_PLT03_scatter_onlylegend.png'
         try:
-            param_fpath = param_dpath_flat / f'{param_prefix}_PLT03_scatter_onlylegend.png'
             if not param_fpath.exists() or force_regen:
                 legend_ax = util_kwplot.extract_legend(ax)
                 freq_mapper_scatter.relabel(legend_ax, ticks=False)
@@ -723,14 +768,16 @@ class ParamPlotter:
                     'prefix': param_prefix,
                 })
         except RuntimeError:
-            ...
+            rich.print(f'[red] failed to write {param_fpath.name}')
         else:
+            rich.print(f'[green] wrote {param_fpath.name}')
             legend = ax.get_legend()
             if legend is not None:
                 legend.remove()
         # Scatter without legend
         param_fpath = param_dpath_flat / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
         finalize_figure.finalize(fig, param_fpath)
+        rich.print(f'[green] wrote {param_fpath.name}')
         drawn_rows.append({
             'type': 'vantage_metric_plot',
             'plot_type': 'scatter_nolegend',
@@ -764,6 +811,7 @@ class ParamPlotter:
                 modifier.relabel(ax, ticks=False)
                 modifier.relabel_xticks(ax)
                 finalize_figure.finalize(fig, param_fpath)
+                rich.print(f'[green] wrote {param_fpath.name}')
                 drawn_rows.append({
                     'plot_type': 'box',
                     'type': 'main_metric_plot',
@@ -792,6 +840,7 @@ class ParamPlotter:
             param_title = 'Key: ' + modifier._modify_text(param_name)
             lut_style = param_code_lut.style.set_caption(param_title)
             util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
+            rich.print(f'[green] wrote {param_fpath.name}')
             drawn_rows.append({
                 'type': 'main_param_legend',
                 'param_fpath': param_fpath,
