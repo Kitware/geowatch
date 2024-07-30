@@ -82,6 +82,13 @@ sudo chmod o-rwx $MOUNT_DPATH
 # Set file access control lists (ACL) so new directories and files are group read/write by default
 # https://unix.stackexchange.com/questions/12842/make-all-new-files-in-a-directory-accessible-to-a-group
 # Note: not all filesystems support ACL
+#
+# Install setfacl
+sudo apt install acl
+#
+# Check the filesystem to ensure it is compatible with ACL
+df "$MOUNT_DPATH" --output=source,fstype
+#
 sudo setfacl -d -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
 sudo setfacl -m "group:${MOUNT_GROUP}:rwx" "$MOUNT_DPATH"
 
