@@ -284,8 +284,15 @@ def main(cmdline=True, **kwargs):
                 intensity_hist = {k: v for k, v in intensity_hist.items()
                                   if k >= valid_min and k <= valid_max}
                 accum.update(intensity_hist, sensor, band_name)
+
+            # Need to truncate repr...
+            # should probably try to use geowatch.utils.util_kwutil.distributed_subitems
+            # to reduce urepr overhead
+            from kwutil.slugify_ext import smart_truncate
+            seen_props_text = ub.urepr(seen_props, nl=1)
+            seen_props_text = smart_truncate(seen_props_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')
             pman.update_info(
-                ('seen_props = {}'.format(ub.urepr(seen_props, nl=1)))
+                ('seen_props = {}'.format(seen_props_text))
             )
 
         full_df = accum.finalize()

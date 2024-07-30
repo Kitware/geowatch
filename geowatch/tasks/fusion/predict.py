@@ -1420,8 +1420,8 @@ class Predictor:
                 norm_layer = model.input_norms[sensor][channels]
                 new_mean = new_mean.reshape_as(norm_layer.mean)
                 new_std = new_std.reshape_as(norm_layer.std)
-                print(f' * "{sensor}:{channels}" - {norm_layer.mean.data.view(-1)} -> {new_mean.view(-1)}'.replace(chr(10), ' '))
-                print(f' * "{sensor}:{channels}" - {norm_layer.std.data.view(-1)} -> {new_std.view(-1)}'.replace(chr(10), ' '))
+                print(f' * "{sensor}:{channels}".mean - {norm_layer.mean.data.view(-1)} -> {new_mean.view(-1)}'.replace(chr(10), ' '))
+                print(f' * "{sensor}:{channels}".std  - {norm_layer.std.data.view(-1)} -> {new_std.view(-1)}'.replace(chr(10), ' '))
                 norm_layer.mean.data[:] = new_mean
                 norm_layer.std.data[:] = new_std
 
