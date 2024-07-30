@@ -54,11 +54,11 @@ class CocoSpectraConfig(scfg.DataConfig):
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
-        'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics'),
-
         'valid_range': scfg.Value(None, help='Only include values within this range; specified as <min_val>:<max_val> e.g. (0:10000)'),
 
         'title': scfg.Value(None, help='Provide a title for the histogram figure'),
+
+        'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics', group='subset'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -82,7 +82,7 @@ class CocoSpectraConfig(scfg.DataConfig):
                 where myattr is either val1 or val4.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group='subset'),
 
         'select_videos': scfg.Value(
             None, help=ub.paragraph(
@@ -99,7 +99,7 @@ class CocoSpectraConfig(scfg.DataConfig):
                 Only applicable for dataset that contain videos.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group='subset'),
 
 
         # Histogram modifiers

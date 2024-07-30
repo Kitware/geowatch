@@ -217,6 +217,15 @@ class PredictConfig(DataModuleConfigMixin):
         is used.
         '''))
 
+    override_meanstd = scfg.Value(None, type=str, help=ub.paragraph(
+        '''
+        EXPERIMENTAL.
+        YAML text specifying a list that associates an early fused sensor and
+        channel to its mean and std. E.g.
+        `[{'sensor': '*', 'channels': 'red|green|blue', 'mean': [10., 13., 64.],
+        'std': [3.1, 2.7, 9.5]}]`
+        '''))
+
 
 # --------------Add hidden layer hook to model----------------
 
@@ -1394,6 +1403,27 @@ class Predictor:
 
         model.eval()
         model.freeze()
+
+        if config['override_meanstd']:
+            # Hack the network to set a new meanstd. This currently makes
+            # assumptions about the network architecture.
+            from kwutil.util_yaml import Yaml
+            override_meanstd = Yaml.coerce(config['override_meanstd'])
+            assert isinstance(override_meanstd, list)
+
+            print('User requested mean/std overwrite')
+            for item in override_meanstd:
+                sensor = item['sensor']
+                channels = item['channels']
+                new_mean = torch.from_numpy(np.array(item['mean']))
+                new_std = torch.from_numpy(np.array(item['std']))
+                norm_layer = model.input_norms[sensor][channels]
+                new_mean = new_mean.reshape_as(norm_layer.mean)
+                new_std = new_std.reshape_as(norm_layer.std)
+                print(f' * "{sensor}:{channels}" - {norm_layer.mean.data.view(-1)} -> {new_mean.view(-1)}'.replace(chr(10), ' '))
+                print(f' * "{sensor}:{channels}" - {norm_layer.std.data.view(-1)} -> {new_std.view(-1)}'.replace(chr(10), ' '))
+                norm_layer.mean.data[:] = new_mean
+                norm_layer.std.data[:] = new_std
 
         # Lookup the parameters used to fit the model (these should be stored in
         # the model, if they are not, then the model packaging needs to be

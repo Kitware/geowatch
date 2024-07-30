@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Add the concept of a `"primary_out_key"` to mlops ProcessNode
 * A ProcessNode can now specify a `load_result` function to utilize mlops 
+* Add `override_meanstd` to fusion.predict
 
 ### Changed
 * Moved balanced samplers to their own module.
