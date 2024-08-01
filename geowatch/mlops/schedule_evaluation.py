@@ -326,7 +326,7 @@ def schedule_evaluation(config):
             param_arg['submatrices'] = submatrices
 
     # Load the requested pipeline
-    dag = pipeline_nodes.resolve_pipeline(pipeline)
+    dag = pipeline_nodes.coerce_pipeline(pipeline)
     dag.print_graphs(smart_colors=1)
     dag.inspect_configurables()
 
