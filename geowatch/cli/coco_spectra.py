@@ -408,7 +408,7 @@ def sensor_stats_tables(full_df):
 
     sensor_chan_stats = pd.DataFrame(single_rows)
     sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
-    print(sensor_chan_stats)
+    print(sensor_chan_stats.to_string())
 
     print('compare channels between sensors')
     pairwise_rows = []
