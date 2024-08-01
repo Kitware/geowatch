@@ -289,3 +289,12 @@ Terms you may want to learn more about after getting the basics are::
     * PEP
 
 The official glossary is: https://docs.python.org/3/glossary.html
+
+
+Python Package Structure / Importing
+------------------------------------
+
+I've written a stackoverflow answer that contains good information about python
+packaging and how to handle importing external files.
+
+https://stackoverflow.com/questions/74976153/what-is-the-best-practice-for-imports-when-developing-a-python-package/74976641#74976641

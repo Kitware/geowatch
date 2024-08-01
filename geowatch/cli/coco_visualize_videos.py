@@ -1027,7 +1027,9 @@ def _write_ann_visualizations2(coco_dset,
                 space=space, resolution=resolution)
         warp_viz_from_space = kwimage.Affine.scale(factor)
 
-    delayed = coco_img.imdelay(space=space, resolution=resolution, channels=channels,
+    delayed = coco_img.imdelay(space=space, resolution=resolution,
+                               # This fix doesn't actually work correctly
+                               # channels=channels,
                                **finalize_opts)
 
     warp_vid_from_img = coco_img.warp_vid_from_img

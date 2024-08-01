@@ -81,7 +81,7 @@ def unpack_model(package_fpath, dst_dpath=None):
         >>>         class_head_hidden=0)
         >>>     # Save the model (TODO: need to save datamodule as well)
         >>>     model.save_package(package_fpath)
-        >>> results = unpack_model(unpack_model)
+        >>> results = unpack_model(package_fpath)
         >>> # Test repackage
         >>> from geowatch.mlops.repackager import repackage_single_checkpoint
         >>> repackage_single_checkpoint
@@ -151,7 +151,10 @@ def extract_package_contents(package_fpath):
 
     HACK_REMOVE_PROBLEMATIC_INFO = 1
     if HACK_REMOVE_PROBLEMATIC_INFO:
-        raw_module.hparams['dataset_stats'].pop('modality_input_stats', None)
+        try:
+            raw_module.hparams['dataset_stats'].pop('modality_input_stats', None)
+        except AttributeError:
+            ...
 
     # Construct a checkpoint the repackager will accept.
     checkpoint = {}
