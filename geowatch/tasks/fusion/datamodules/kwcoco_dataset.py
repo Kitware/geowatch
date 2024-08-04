@@ -438,7 +438,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         needs to be enough data within a frame for the normalization to be
         effective.
         '''))
-    normalize_peritem = scfg.Value(None, type=str, group=NORM_GROUP, help=ub.paragraph(
+    normalize_peritem = scfg.Value(None, group=NORM_GROUP, help=ub.paragraph(
         '''
         Applies a pre-normalization across all frames in an item.  This
         preserves relative temporal variations. Can be specified as a
@@ -2911,7 +2911,8 @@ class PreprocessMixin:
 
         TODO:
             - [ ] Does this dataset have access to the workdir?
-            - [ ] Cacher needs to depend on config of this dataset
+            - [ ] Cacher needs to depend on any part of the config of this
+                  dataset that could impact the pixel intensity distribution.
         """
         # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
         depends = ub.odict([
@@ -2925,7 +2926,7 @@ class PreprocessMixin:
             ('depends_version', 22),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
-            depends['normalize_peritem'] = self.config['normalize_peritem']
+            depends['normalize_peritem'] = self.config['normalize_peritem'].concise().spec
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         dataset_stats = cacher.tryload()
