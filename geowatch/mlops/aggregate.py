@@ -233,6 +233,18 @@ class AggregateEvluationConfig(AggregateLoader):
         '''
     ))
 
+    custom_query = Value(None, type=str, help=ub.paragraph(
+        '''
+        This is raw Python code executed after a query which can be used to
+        create complex filters not directly supported by other arguments.
+        The code must define a name "new_eval_type_to_aggregator", which should
+        be a filtered version of eval_type_to_aggregator.
+        Ideally we can determine common cases and codify them without this
+        arbitrary code execution. Use only if necessary.
+        This is highly experimental and may be removed.
+        '''
+    ))
+
     embed = Value(False, isflag=True, help='if True, embed into IPython. Prefer snapshot over embed.')
 
     snapshot = Value(False, isflag=True, help='if True, make a snapshot suitable for IPython or a notebook. (requires xdev)')
@@ -302,6 +314,35 @@ def main(cmdline=True, **kwargs):
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
 
+    if config.query:
+        print('Running query')
+        new_eval_type_to_aggregator = {}
+        for key, agg in eval_type_to_aggregator.items():
+            new_agg = agg.filterto(query=config.query)
+            new_eval_type_to_aggregator[key] = new_agg
+            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        eval_type_to_aggregator = new_eval_type_to_aggregator
+
+    if config.custom_query:
+        vars_ = dict(globals()) | dict(locals())
+        code = ub.codeblock(config.custom_query)
+        print('Executing custom query')
+        print(ub.highlight_code(code, backend='rich'))
+        res = exec(code, vars_)
+        new_eval_type_to_aggregator = vars_['new_eval_type_to_aggregator']
+        print(f'new_eval_type_to_aggregator={new_eval_type_to_aggregator}')
+        # new_eval_type_to_aggregator = {}
+        # for key, agg in eval_type_to_aggregator.items():
+        #     chosen_idxs = []
+        #     for group_id, group in agg.table.groupby('resolved_params.heatmap_pred_fit.trainer.default_root_dir'):
+        #         group['metrics.heatmap_eval.salient_AP'].argsort()
+        #         keep_idxs = group['metrics.heatmap_eval.salient_AP'].sort_values()[-5:].index
+        #         chosen_idxs.extend(keep_idxs)
+        #     new_agg = agg.filterto(index=chosen_idxs)
+        #     rich.print(f'Special filter {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        #     new_eval_type_to_aggregator[key] = new_agg
+        eval_type_to_aggregator = new_eval_type_to_aggregator
+
     if config.embed or config.snapshot:
         # Sneaky way around linting filters, but also a more concise than
         # try/except, and perhaps we can generalize to people's favorite
@@ -325,15 +366,6 @@ def main(cmdline=True, **kwargs):
                 embed_module.embed()
             else:
                 raise AssertionError('unreachable')
-
-    if config.query:
-        print('Running query')
-        new_eval_type_to_aggregator = {}
-        for key, agg in eval_type_to_aggregator.items():
-            new_agg = agg.filterto(query=config.query)
-            new_eval_type_to_aggregator[key] = new_agg
-            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
-        eval_type_to_aggregator = new_eval_type_to_aggregator
 
     for eval_type, agg in eval_type_to_aggregator.items():
         print(f'agg={agg}')

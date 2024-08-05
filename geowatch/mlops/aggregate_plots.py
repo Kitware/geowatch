@@ -217,6 +217,11 @@ class ParamPlotter:
         util_kwplot.dataframe_table(table_style, table_fpath, title=table_title)
         rich.print(f'Dpath: [link={plotter.plot_dpath}]{plotter.plot_dpath}[/link]')
 
+        table_tex_fpath = plotter.plot_dpath / f'{table_title}.tex'
+        tex = table.to_latex(index=False)
+        tex = '\\begin{table*}[t]\n' + tex.rstrip('\n') + '\n\\end{table*}'
+        table_tex_fpath.write_text(tex)
+
     def plot_overviews(plotter):
         """
         Draw the overview for each vantage point.
@@ -432,8 +437,14 @@ class ParamPlotter:
                                   highlight='delivered_params', ax=ax,
                                   color='group', size=300,
                                   val_to_color=val_to_color)
-        ax.set_title(f'Results (n={len(macro_table)})\n'
-                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+
+        from geowatch.utils.util_kwplot import TitleBuilder
+        title_builder = TitleBuilder()
+        title_builder.add_part(f'Results (n={len(macro_table)})')
+        if [r for r in rois if r]:
+            title_builder.ensure_newline()
+            title_builder.add_part(f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+        ax.set_title(title_builder.finalize())
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
         plotter.modifier.relabel(ax, ticks=False)
@@ -686,13 +697,16 @@ class ParamPlotter:
         if s is not None:
             scatterkw['s'] = s
 
-        header_lines = [
-            f'Results (n={len(sub_macro_table)})',
-            f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
-        ]
+        from geowatch.utils.util_kwplot import TitleBuilder
+        title_builder = TitleBuilder()
+        title_builder.add_part(f'Results (n={len(sub_macro_table)})')
+        if [r for r in rois if r]:
+            title_builder.ensure_newline()
+            title_builder.add_part(f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
         if anova_rank_p is not None:
-            header_lines.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
-        header_text = '\n'.join(header_lines)
+            title_builder.ensure_newline()
+            title_builder.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        header_text = title_builder.finalize()
 
         param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
 
