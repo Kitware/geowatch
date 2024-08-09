@@ -156,11 +156,7 @@ class AggregateLoader(DataConfig):
                     root_dpath, dag, io_workers, eval_nodes,
                     cache_resolved_results=cache_resolved_results)
                 for type, results in eval_type_to_results.items():
-                    # print('GOT RESULTS')
-                    # print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
                     table = pd.concat(list(results.values()), axis=1)
-                    # print('TABLE')
-                    # print(table['resolved_params.sc_poly.smoothing'])
                     eval_type_to_tables[type].append(table)
             if target.is_file():
                 # Assume CSV file
@@ -172,15 +168,11 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
-            # print('TABLE2')
-            # print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
                              display_metric_cols=config.display_metric_cols,
                              dag=dag)
             agg.build()
-            # print('agg.TABLE')
-            # print(agg.table['resolved_params.sc_poly.smoothing'])
             eval_type_to_aggregator[type] = agg
         return eval_type_to_aggregator
 
@@ -1749,9 +1741,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         hashid_to_params = {}
         # import xdev
         # with xdev.embed_on_exception_context:
-        import xdev
-        xdev.embed()
-        for param_vals, group in effective_params.groupby(param_cols, dropna=False):
+        if len(param_cols) > 0:
+            param_groups = effective_params.groupby(param_cols, dropna=False)
+        else:
+            # fallback case, something is probably wrong if we are here
+            param_groups = {None: effective_params}.items()
+
+        for param_vals, group in param_groups:
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             is_group_included = is_param_included.loc[group.index]
@@ -1762,7 +1758,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             # itself.
             unique_params = group.iloc[0][param_cols]
 
-            for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
+            if len(param_cols) > 0:
+                param_subgroups = is_group_included.groupby(param_cols, dropna=False)
+            else:
+                # fallback case, something is probably wrong if we are here
+                param_subgroups = {tuple(): is_group_included}.items()
+
+            for param_flags, subgroup in param_subgroups:
                 # valid_param_cols = list(ub.compress(param_cols, param_flags))
                 # valid_param_vals = list(ub.compress(param_vals, param_flags))
                 # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
