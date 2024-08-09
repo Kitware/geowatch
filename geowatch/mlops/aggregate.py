@@ -1717,7 +1717,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, list) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
@@ -1749,6 +1749,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         hashid_to_params = {}
         # import xdev
         # with xdev.embed_on_exception_context:
+        import xdev
+        xdev.embed()
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row

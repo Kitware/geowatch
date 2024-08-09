@@ -1042,6 +1042,8 @@ class ProcessNode(Node):
             config = {}
         config = _fixup_config_serializability(config)
         self.enabled = config.pop('enabled', enabled)
+        # Special case for process specific slurm options
+        self.__slurm_options__ = config.pop('__slurm_options__', '{}')
         self.config = ub.udict(config)
 
         if isinstance(self.in_paths, dict):
