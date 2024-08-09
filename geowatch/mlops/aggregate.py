@@ -828,7 +828,7 @@ class AggregatorAnalysisMixin:
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
             only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
 
-            if only_one_top_item:
+            if only_one_top_item and len(region_id_to_summary):
                 # In this case there is only a single top result per-region, so
                 # we can show them all in the same table rather than having on
                 # table per-region.
