@@ -203,3 +203,44 @@ initializer:
 "
 
 #"${PREV_CHECKPOINT_ARGS[@]}"
+
+
+
+python -m geowatch.tasks.fusion fit --config "
+data:
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_kernel            : [-1year, 0.0year, +1year]
+    fixed_resolution       : 10GSD
+    normalize_perframe     : true
+    channels               : 'red|green|blue|nir'
+    use_centered_positives : True
+    use_grid_positives     : False
+    use_grid_negatives     : True
+    balance_options :
+        - attribute: region
+        - attribute: contains_annotation
+          weights:
+              False: 0.5
+              True: 0.5
+        - attribute: phases
+          default_weight: 0.1
+          weights:
+              'No Activity': 0.05
+              'Site Preparation': 0.8
+              'Active Construction': 0.1
+              'Post Construction': 0.05
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p16
+optimizer:
+    class_path: torch.optim.SGD
+    init_args:
+        lr           : 1e-4
+initializer:
+    init: path/to/partial_pretrained_state.py
+"
+
+

@@ -4,6 +4,7 @@ import os
 import math
 import ubelt as ub
 import kwimage
+import warnings
 
 millnames = ['', ' K', ' M', ' B', ' T']
 
@@ -64,7 +65,6 @@ def load_model_from_package(package_path):
     try:
         imp = package.PackageImporter(package_path)
     except (RuntimeError, ImportError):
-        import warnings
         warnings.warn(
             f'Failed to import package {package_path} with normal machanism. '
             'Falling back to hacked mechanim')
@@ -86,7 +86,16 @@ def load_model_from_package(package_path):
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
-    model = imp.load_pickle(module_name, arch_name, map_location=_map_location)
+    try:
+        model = imp.load_pickle(module_name, arch_name, map_location=_map_location)
+    except ModuleNotFoundError:
+        import sys
+        # hack for loading older models
+        if 'watch' in sys.modules:
+            raise AssertionError('Cannot hack the watch module, it already exist!')
+        sys.modules['watch'] = sys.modules['geowatch']
+        model = imp.load_pickle(module_name, arch_name, map_location=_map_location)
+        warnings.warn('WARNING: loading old model. The "watch" module is now overwritten to be "geowatch"')
 
     if 0:
         imp.file_structure()['package_header']

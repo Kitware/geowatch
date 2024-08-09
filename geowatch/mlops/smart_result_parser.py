@@ -17,7 +17,7 @@ from kwutil import util_time
 from kwutil import util_pattern
 
 
-@ub.memoize
+# Do we need to memoize this?
 def parse_json_header(fpath):
     """
     Ideally the information we need is in the first few bytes of the json file
@@ -52,6 +52,8 @@ def parse_json_header(fpath):
         info_section_iter = ijson_ext.items(file, prefix='info')
         info_section = next(info_section_iter)
     return info_section
+
+parse_json_header_cached = ub.memoize(parse_json_header)
 
 
 def trace_json_lineage(fpath):
@@ -522,7 +524,7 @@ def find_info_items(info, query_type, query_name=None):
                 yield item
 
 
-@ub.memoize
+# @ub.memoize
 def _load_json(fpath):
     # memo hack for development
     with open(fpath, 'r') as file:
