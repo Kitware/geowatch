@@ -918,51 +918,54 @@ class AggregatorAnalysisMixin:
             table.loc[top_locs, 'rank'] = np.arange(len(top_locs))
             table = table.sort_values('rank')
 
-            model_col = agg.model_cols[0]
+            if len(agg.model_cols) == 0:
+                print('No model columns are availble')
+            else:
+                model_col = agg.model_cols[0]
 
-            # HACK: we want to group models that came from the same training
-            # run so we report a more diverse set of models. We typically group
-            # models together in a folder, but this is not robust, so we Only
-            # do this grouping if the parent folder has a special name
+                # HACK: we want to group models that came from the same training
+                # run so we report a more diverse set of models. We typically group
+                # models together in a folder, but this is not robust, so we Only
+                # do this grouping if the parent folder has a special name
 
-            # import xdev
-            # with xdev.embed_on_exception_context:
-            model_paths = [
-                ub.Path(p)
-                if not pd.isnull(p) else None
-                for p in table[model_col].tolist()]
-            hacked_groups = [
-                p if p is not None and p.parent.name.startswith('Drop') else p
-                for p in model_paths]
-            table['_hackgroup'] = hacked_groups
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                model_paths = [
+                    ub.Path(p)
+                    if not pd.isnull(p) else None
+                    for p in table[model_col].tolist()]
+                hacked_groups = [
+                    p if p is not None and p.parent.name.startswith('Drop') else p
+                    for p in model_paths]
+                table['_hackgroup'] = hacked_groups
 
-            chosen_locs = []
-            for expt, group in table.groupby('_hackgroup'):
-                # group[model_col].tolist()
-                # flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
-                # group = group[flags]
-                group = group.sort_values('rank')
-                chosen_locs.extend(group.index[0:per_group])
-            chosen_locs = table.loc[chosen_locs, 'rank'].sort_values().index
+                chosen_locs = []
+                for expt, group in table.groupby('_hackgroup'):
+                    # group[model_col].tolist()
+                    # flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
+                    # group = group[flags]
+                    group = group.sort_values('rank')
+                    chosen_locs.extend(group.index[0:per_group])
+                chosen_locs = table.loc[chosen_locs, 'rank'].sort_values().index
 
-            top_k = 40
-            chosen_locs = chosen_locs[:top_k]
-            chosen_table = table.loc[chosen_locs]
+                top_k = 40
+                chosen_locs = chosen_locs[:top_k]
+                chosen_table = table.loc[chosen_locs]
 
-            print('Model shortlist (lower rank is a better scoring model):')
-            for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
-                model_fpath = chosen_row[model_col]
-                param_hashid = chosen_row['param_hashid']
-                rank = chosen_row['rank']
-                rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
-                print(Yaml.dumps([model_fpath]).strip())
+                print('Model shortlist (lower rank is a better scoring model):')
+                for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
+                    model_fpath = chosen_row[model_col]
+                    param_hashid = chosen_row['param_hashid']
+                    rank = chosen_row['rank']
+                    rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
+                    print(Yaml.dumps([model_fpath]).strip())
 
-            # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-            # known_models = Yaml.coerce(all_models_fpath)
-            # set(known_models).issuperset(set(chosen_models))
-            # if 0:
-            #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
-            # new_models_fpath.write_text(shortlist_text)
+                # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+                # known_models = Yaml.coerce(all_models_fpath)
+                # set(known_models).issuperset(set(chosen_models))
+                # if 0:
+                #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
+                # new_models_fpath.write_text(shortlist_text)
 
         report = TopResultsReport(region_id_to_summary, top_param_lut)
         return report
