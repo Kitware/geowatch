@@ -1045,6 +1045,7 @@ class ProcessNode(Node):
         # Special case for process specific slurm options
         self.__slurm_options__ = config.pop('__slurm_options__', '{}')
         self.config = ub.udict(config)
+        print(f'self.config={self.config}')
 
         if isinstance(self.in_paths, dict):
             # In the case where the in paths is a dictionary, we can

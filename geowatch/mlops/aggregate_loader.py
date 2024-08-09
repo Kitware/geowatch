@@ -170,7 +170,12 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
         # Read the requested config
         job_config_fpath = node_dpath / 'job_config.json'
         if job_config_fpath.exists():
-            _requested_params = json.loads(job_config_fpath.read_text())
+            job_config_text = job_config_fpath.read_text()
+            try:
+                _requested_params = json.loads(job_config_text)
+            except Exception:
+                print(f'Failed to parse json job config {job_config_fpath}')
+                raise
         else:
             _requested_params = {}
 

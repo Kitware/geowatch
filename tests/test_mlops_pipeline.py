@@ -42,9 +42,9 @@ def test_slurm_options():
     from geowatch.mlops.pipeline_nodes import Pipeline
 
     # A simple pipeline where we don't need to manage reconfiguration.
-    node1 = ProcessNode(name='node1', executable='node1', out_paths={'key1': 'path1'}, node_dpath='.')
-    node2 = ProcessNode(name='node2', executable='node2', out_paths={'key2': 'path2'}, node_dpath='.')
-    node3 = ProcessNode(name='node3', executable='node3', out_paths={'key3': 'path3'}, node_dpath='.')
+    node1 = ProcessNode(name='node1', executable='node1.exe', out_paths={'key1': 'path1'}, node_dpath='.')
+    node2 = ProcessNode(name='node2', executable='node2.exe', out_paths={'key2': 'path2'}, node_dpath='.')
+    node3 = ProcessNode(name='node3', executable='node3.exe', out_paths={'key3': 'path3'}, node_dpath='.')
 
     combine_node = ProcessNode(name='combine', executable='combine', in_paths={'varpaths'})
 
@@ -61,14 +61,26 @@ def test_slurm_options():
     dag = Pipeline(dag_nodes)
     dag.print_graphs()
     dag.configure(config={
-        'node2.__slurm_option__': 'foo',
+        'node2.__slurm_options__': 'foo',
         'node2.some_key': 'some_value',
     })
-    queue = dag.submit_jobs()['queue']
+
+    import cmd_queue
+    cmd_queue.Queue
+    queue = cmd_queue.Queue.create(backend='slurm')
+    dag.submit_jobs(queue=queue)
     print_kwargs = {
         'with_status': 0,
         'style': "colors",
         'with_locks': 0,
-        'exclude_tags': ['boilerplate'],
+        # 'exclude_tags': ['boilerplate'],
     }
     queue.print_commands(**print_kwargs)
+
+    text = queue.finalize_text()
+    print(text)
+
+    new_order = queue.order_jobs()
+    for job in new_order:
+        print(job.__dict__)
+    job = new_order[0]
