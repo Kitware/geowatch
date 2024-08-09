@@ -189,10 +189,16 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
                 region_ids = None
                 for k in candidate_keys:
                     region_ids = flat[k]
-                assert region_ids is not None
-                import re
-                region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
-                region_ids = ','.join(list(region_pat.findall(region_ids)))
+                if region_ids is None:
+                    print(ub.paragraph(
+                        '''
+                        Warning: no region ids available, some assumptions may
+                        be violated.
+                        '''))
+                else:
+                    import re
+                    region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
+                    region_ids = ','.join(list(region_pat.findall(region_ids)))
 
             resolved_params_keys = list(flat.query_keys('resolved_params'))
             metrics_keys = list(flat.query_keys('metrics'))
