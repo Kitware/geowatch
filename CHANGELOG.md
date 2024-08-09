@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * normalize_peritem can now be specified as True on the command line without casting to a string.
 * normalize_peritem no longer breaks computing cached dataset stats
 * Added workaround to load 
+* Handle better printf escapes in mlops for job config and invoke 
 
 
 ## Version 0.18.1 - Released 2024-06-25

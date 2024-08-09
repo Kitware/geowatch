@@ -462,9 +462,13 @@ class Pipeline:
                     invoke_command = node._raw_command()
                     invoke_lines.append(invoke_command)
                     invoke_text = '\n'.join(invoke_lines)
+
+                    escaped_invoke_text = bash_printf_literal_string(invoke_text)
+                    # escaped_invoke_text = shlex.quote(invoke_text)
+
                     command = '\n'.join([
                         f'mkdir -p {invoke_fpath.parent} && \\',
-                        f'printf {shlex.quote(invoke_text)} \\',
+                        f'printf {escaped_invoke_text} \\',
                         f"> {invoke_fpath}",
                     ])
                     before_node_commands.append(command)
@@ -475,15 +479,16 @@ class Pipeline:
                     # execute this node.
                     job_config_fpath = node.final_node_dpath / 'job_config.json'
                     json_text = json.dumps(depends_config)
+                    escaped_json_text = bash_printf_literal_string(json_text)
                     if _has_jq():
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' | jq . > {job_config_fpath}",
+                            f"printf {escaped_json_text} | jq . > {job_config_fpath}",
                         ])
                     else:
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' > {job_config_fpath}",
+                            f"printf {escaped_json_text} > {job_config_fpath}",
                         ])
                     before_node_commands.append(command)
 
@@ -507,6 +512,35 @@ class Pipeline:
         return summary
 
     make_queue = submit_jobs
+
+
+def bash_printf_literal_string(text, escape_newlines=True):
+    r"""
+    Not only do we need to make a bash literal string we
+    need to make sure that it is interpreted as literal by
+    printf.
+
+    Example:
+        json_text = '{"step1.param1": "- this: \\"is text 100% representing\\"\\n  some: \\"yaml config\\"\\n  omg: \\"single \' quote\\"\\n  eek: \'double \\" quote\'"}'
+        json.loads(json_text)
+        import shlex
+        text = json_text
+        literal_bash_json_text = bash_printf_literal_string(json_text)
+        print(json_text)
+        print(literal_bash_json_text)
+        command = f"printf {literal_bash_json_text} | jq"
+        print(command)
+        ub.cmd(command, verbose=3, shell=True)
+    """
+    s = text
+    s = s.replace('\\', '\\\\')
+    s = s.replace("'", "'\"'\"'")
+    s = s.replace('%', '%%')
+    if escape_newlines:
+        s = s.replace('\n', '\\n')
+    s = s.replace('\t', '\\t')
+    inside_text = s
+    return f"'{inside_text}'"
 
 
 def glob_templated_path(template):
@@ -1957,12 +1991,21 @@ def _experimental_resolve_pipeline(pipeline):
         pipeline = 'user_module.pipelines.custom_pipeline_func()'
         pipeline = 'geowatch.mlops.smart_pipeline.make_smart_pipeline("bas")'
         pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        pipeline = '/home/joncrall/code/geowatch/geowatch/mlops/smart_pipeline.py::make_smart_pipeline("bas")'
         _experimental_resolve_pipeline(pipeline)
     """
     # Case: given in the format `{module_name}.{attribute_expression}`
     # Note the attribute_expression allows arbitrary code execution
     print('Resolving user-specified pipeline')
-    if '.' in pipeline:
+    if '::' in pipeline:
+        fpath, code = pipeline.split('::', 1)
+        module = ub.import_module_from_path(fpath)
+        limited_namespace = {'pipeline_module': module}
+        statement = f'pipeline_module.{code}'
+        dag = eval(statement, limited_namespace)
+        return dag
+    elif '.' in pipeline:
         # Find which part is the module and which is the member
         parts = pipeline.split('.')
         found = None

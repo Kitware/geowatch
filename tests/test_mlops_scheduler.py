@@ -120,3 +120,120 @@ def test_joint_bas_sc_pipline_schedule1():
     assert bas_poly_job is not None
     assert bas_poly_eval_job is not None
     assert "--boundary_region 'None'" not in bas_poly_job.command
+
+
+def test_simple_but_real_custom_pipeline():
+    from geowatch.mlops import schedule_evaluation
+    import ubelt as ub
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/test_real_pipeline').ensuredir()
+
+    script_fpath = dpath / 'script.py'
+    pipeline_fpath = dpath / 'test_pipeline_definition.py'
+
+    script_text = ub.codeblock(
+        '''
+        #!/usr/bin/env python3
+        import scriptconfig as scfg
+        import ubelt as ub
+        import json
+
+
+        class ScriptCLI(scfg.DataConfig):
+            src = 'input.json'
+            dst = 'output.json'
+            param1 = None
+            param2 = None
+            param3 = None
+
+            @classmethod
+            def main(cls, cmdline=1, **kwargs):
+                import rich
+                from rich.markup import escape
+                config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+                rich.print('config = ' + escape(ub.urepr(config, nl=1)))
+                src_fpath = ub.Path(config.src)
+                dst_fpath = ub.Path(config.dst)
+                src_text = src_fpath.read_text()
+                src_data = json.loads(src_text)
+                dst_data = {'size': len(src_text), 'nest': src_data}
+                dst_fpath.parent.ensuredir()
+                dst_fpath.write_text(json.dumps(dst_data))
+
+        __cli__ = ScriptCLI
+
+        if __name__ == '__main__':
+            __cli__.main()
+        ''')
+    # Test the code compiles and write it to disk
+    compile(script_text, mode='exec', filename='<test-compile>')
+    script_fpath.write_text(script_text)
+
+    pipeline_text = ub.codeblock(
+        '''
+        from geowatch.mlops.pipeline_nodes import ProcessNode
+        from geowatch.mlops.pipeline_nodes import PipelineDAG
+
+        class Step1(ProcessNode):
+            name = 'step1'
+            executable = 'python ''' + str(script_fpath) + ''''
+            in_paths = {
+                'src',
+            }
+            out_paths = {
+                'dst': 'step1_output.json',
+            }
+
+            def load_result(self, node_dpath):
+                from geowatch.mlops.aggregate_loader import new_process_context_parser
+                from geowatch.utils import util_dotdict
+                fpath = node_dpath / self.out_paths[self.primary_out_key]
+                data = json.loads(fpath.read_text())
+                nest_resolved = {}
+                nest_resolved['size'] = data['size']
+                flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
+                flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
+                return flat_resolved
+
+        def build_pipeline():
+            nodes = {}
+            nodes['step1'] = Step1()
+            dag = PipelineDAG(nodes)
+            dag.build_nx_graphs()
+            return dag
+        ''')
+
+    # Test that the code compiles
+    compile(pipeline_text, mode='exec', filename='<test-compile>')
+    pipeline_fpath.write_text(pipeline_text)
+
+    input_fpath = dpath / 'input.json'
+    input_fpath.write_text('{"type": "orig_input"}')
+
+    root_dpath = (dpath / 'runs').delete().ensuredir()
+    config = schedule_evaluation.ScheduleEvaluationConfig(**{
+        'run': 0,
+        'root_dpath': root_dpath,
+        'backend': 'tmux',
+        'enable_links': False,
+        'params': ub.codeblock(
+            f'''
+            pipeline: {pipeline_fpath}::build_pipeline()
+            matrix:
+                step1.src:
+                    - {input_fpath}
+                step1.param1: |
+                    - this: "is text 100% representing"
+                      some: "yaml config"
+                      omg: "single ' quote"
+                      eek: 'double " quote'
+            '''
+        )
+    })
+
+    print('Dry run first')
+    config['run'] = 0
+    dag, queue = schedule_evaluation.schedule_evaluation(config)
+
+    print('Real run second')
+    config['run'] = 1
+    dag, queue = schedule_evaluation.schedule_evaluation(config)

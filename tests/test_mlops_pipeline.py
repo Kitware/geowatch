@@ -60,6 +60,8 @@ def test_slurm_options():
     ]
     dag = Pipeline(dag_nodes)
     dag.print_graphs()
+
+    # TODO: ensure slurm options are respected in the job itself
     dag.configure(config={
         'node2.__slurm_options__': 'foo',
         'node2.some_key': 'some_value',
