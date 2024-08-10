@@ -122,13 +122,10 @@ def test_joint_bas_sc_pipline_schedule1():
     assert "--boundary_region 'None'" not in bas_poly_job.command
 
 
-def test_simple_but_real_custom_pipeline():
-    from geowatch.mlops import schedule_evaluation
+def demodata_pipeline(dpath):
     import ubelt as ub
-    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/test_real_pipeline').ensuredir()
-
     script_fpath = dpath / 'script.py'
-    pipeline_fpath = dpath / 'test_pipeline_definition.py'
+    pipeline_fpath = dpath / '_simple_demo_pipeline_v001.py'
 
     script_text = ub.codeblock(
         '''
@@ -184,14 +181,15 @@ def test_simple_but_real_custom_pipeline():
             }
 
             def load_result(self, node_dpath):
+                import json
                 from geowatch.mlops.aggregate_loader import new_process_context_parser
                 from geowatch.utils import util_dotdict
                 fpath = node_dpath / self.out_paths[self.primary_out_key]
                 data = json.loads(fpath.read_text())
                 nest_resolved = {}
-                nest_resolved['size'] = data['size']
+                nest_resolved['metrics.size'] = data['size']
                 flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
-                flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
+                flat_resolved = flat_resolved.insert_prefix(self.name, index=1)
                 return flat_resolved
 
         def build_pipeline():
@@ -205,6 +203,26 @@ def test_simple_but_real_custom_pipeline():
     # Test that the code compiles
     compile(pipeline_text, mode='exec', filename='<test-compile>')
     pipeline_fpath.write_text(pipeline_text)
+    return pipeline_fpath
+
+
+def test_simple_but_real_custom_pipeline():
+    """
+    Ignore:
+        python ~/code/geowatch/tests/test_mlops_scheduler.py test_simple_but_real_custom_pipeline
+
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/geowatch/tests'))
+        from test_mlops_scheduler import *  # NOQA
+        test_simple_but_real_custom_pipeline()
+    """
+    from geowatch.mlops import schedule_evaluation
+    from geowatch.mlops import aggregate
+    import ubelt as ub
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/test_real_pipeline').ensuredir()
+
+    pipeline_fpath = demodata_pipeline(dpath)
 
     input_fpath = dpath / 'input.json'
     input_fpath.write_text('{"type": "orig_input"}')
@@ -213,8 +231,7 @@ def test_simple_but_real_custom_pipeline():
     config = schedule_evaluation.ScheduleEvaluationConfig(**{
         'run': 0,
         'root_dpath': root_dpath,
-        'backend': 'tmux',
-        'enable_links': False,
+        'backend': 'serial',
         'params': ub.codeblock(
             f'''
             pipeline: {pipeline_fpath}::build_pipeline()
@@ -237,3 +254,31 @@ def test_simple_but_real_custom_pipeline():
     print('Real run second')
     config['run'] = 1
     dag, queue = schedule_evaluation.schedule_evaluation(config)
+
+    # Test that all job config files are readable
+    import json
+    for job_config_fpath in dag.root_dpath.glob('flat/step1/*/job_config.json'):
+        config = json.loads(job_config_fpath.read_text())
+
+    # Can we test that this is well formatted?
+    for invoke_fpath in dag.root_dpath.glob('flat/step1/*/invoke.sh'):
+        command = invoke_fpath.read_text()
+        command
+
+    agg_config = aggregate.AggregateEvluationConfig(
+        target=root_dpath,
+        pipeline=f'{pipeline_fpath}::build_pipeline()',
+        output_dpath=(root_dpath / 'aggregate'),
+        io_workers=0,
+        eval_nodes=['step1'],
+    )
+    eval_type_to_aggregator = aggregate.run_aggregate(agg_config)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/geowatch/tests/test_mlops_scheduler.py
+    """
+    import xdoctest
+    xdoctest.doctest_module(__file__)

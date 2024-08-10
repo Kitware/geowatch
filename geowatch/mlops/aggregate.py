@@ -287,12 +287,15 @@ def main(cmdline=True, **kwargs):
         cmdline = 0
         main(cmdline=cmdline, **kwargs)
     """
-
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
-    from kwutil.util_yaml import Yaml
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    run_aggregate(config)
 
+
+def run_aggregate(config):
+    import rich
+    from kwutil.util_yaml import Yaml
     eval_type_to_aggregator = config.coerce_aggregators()
     orig_eval_type_to_aggregator = eval_type_to_aggregator  # NOQA
 
@@ -422,6 +425,7 @@ def main(cmdline=True, **kwargs):
                     # for region_id, group in subagg.index.groupby('region_id'):
                     #     group_agg = subagg.filterto(index=group.index)
                     #     # confusor_analysis.main(cmdline=0, )
+    return eval_type_to_aggregator
 
 
 class TopResultsReport:
@@ -685,7 +689,11 @@ class AggregatorAnalysisMixin:
             # Rank reference region param_hashids of the primary metrics
             metric_cols = group.columns.intersection(agg.metrics.columns)
             metric_group = group[metric_cols]
-            top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            try:
+                top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            except Exception:
+                print("FIXME: Something when wrong when sorting the reference region")
+                raise
             top_param_hashids = group.loc[top_locs]['param_hashid']
 
             if verbose > 3:
@@ -1400,19 +1408,26 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
             except Exception:
                 node = agg.dag.nodes[agg.type]
-                _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                if hasattr(node, '_default_metrics'):
+                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                    # should we prevent double prefixes?
+                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                else:
+                    # fallback to something
+                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                    _primary_metrics = _display_metrics[0:1]
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = _primary_metrics
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = _display_metrics
 
-            if agg.primary_metric_cols == 'auto':
-                # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                #     agg.metrics, _primary_metrics_suffixes)
-                agg.primary_metric_cols = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-            if agg.display_metric_cols == 'auto':
-                # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                #     agg.metrics, _display_metrics_suffixes)
-                agg.display_metric_cols = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
             print(f'agg.primary_metric_cols={agg.primary_metric_cols}')
             print(f'agg.display_metric_cols={agg.display_metric_cols}')
 
+        # FIXME: HARD CODED from SMART
+        # TODO: add mechanism where nodes can tag their parameters with these
+        # categories like isa model suffix or isa test dataset.
         _model_suffixes = ['package_fpath']
         _testdset_suffixes = ['test_dataset', 'crop_src_fpath']
 
@@ -1447,6 +1462,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
+        # FIXME; region-id is a SMART thing, needs to be generalized
         for region_id, idx_group in agg.index.groupby('region_id'):
             agg.region_to_tables[region_id] = agg.table.loc[idx_group.index]
         agg.macro_compatible = agg.find_macro_comparable()

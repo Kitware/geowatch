@@ -327,7 +327,7 @@ class Pipeline:
         files and symlinks to node output paths.
         """
         import cmd_queue
-        import shlex
+        # import shlex
         import json
         import networkx as nx
 
@@ -1026,6 +1026,10 @@ class ProcessNode(Node):
 
         self._configured_cache = {}
 
+        if self.primary_out_key is None:
+            if len(self.out_paths) == 1:
+                self.primary_out_key = ub.peek(self.out_paths)
+
         if self.group_dname is None:
             self.group_dname = '.'
 
@@ -1079,7 +1083,6 @@ class ProcessNode(Node):
         # Special case for process specific slurm options
         self.__slurm_options__ = config.pop('__slurm_options__', '{}')
         self.config = ub.udict(config)
-        print(f'self.config={self.config}')
 
         if isinstance(self.in_paths, dict):
             # In the case where the in paths is a dictionary, we can
