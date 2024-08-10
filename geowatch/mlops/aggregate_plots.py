@@ -189,8 +189,14 @@ class ParamPlotter:
         plot_config = plotter.plot_config
         plotter.plot_dpath.ensuredir()
 
-        if plot_config.get('plot_resources', 1):
-            plotter.plot_resources()
+        flag = plot_config.get('plot_resources', 'try')
+        if flag:
+            try:
+                plotter.plot_resources()
+            except Exception as ex:
+                print(f'Error plotting resources ex={ex}')
+                if flag != 'try':
+                    raise
 
         if plot_config.get('plot_overviews', 1):
             plotter.plot_overviews()
@@ -491,36 +497,38 @@ class ParamPlotter:
         kwplot.autosns()
         kwplot.close_figures()
 
-        macro_table = plotter.macro_table
+        import xdev
+        with xdev.embed_on_exception_context:
+            macro_table = plotter.macro_table
 
-        main_metric = vantage['metric1']
-        main_objective = vantage['objective1']
-        metric_objectives = {main_metric: main_objective}
+            main_metric = vantage['metric1']
+            main_objective = vantage['objective1']
+            metric_objectives = {main_metric: main_objective}
 
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
-        blocklist = SMART_HELPER.VIZ_BLOCKLIST
+            from geowatch.mlops.smart_global_helper import SMART_HELPER
+            blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
-        resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
-        resolved_params['param_hashid'] = macro_table['param_hashid']
-        valid_cols = resolved_params.columns.difference(blocklist)
-        resolved_params = resolved_params[valid_cols]
+            resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
+            resolved_params['param_hashid'] = macro_table['param_hashid']
+            valid_cols = resolved_params.columns.difference(blocklist)
+            resolved_params = resolved_params[valid_cols]
 
-        from kwutil.util_yaml import Yaml
-        params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
+            from kwutil.util_yaml import Yaml
+            params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
 
-        if params_of_interest is not None:
-            chosen_params = params_of_interest
-            params_of_interest = set(params_of_interest)
-            valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
-            missing = sorted(set(params_of_interest) - set(valid_params_of_interest))
-            chosen_params = valid_params_of_interest
-            if missing:
-                rich.print('[yellow]WARNING: unknown params of interest!')
-                rich.print('missing: {}'.format(ub.repr2(missing)))
-                print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
-                suggest_did_you_mean(missing, resolved_params.columns)
-        else:
-            print('params_of_interest is unspecified, automatically choosing')
+            if params_of_interest is not None:
+                chosen_params = params_of_interest
+                params_of_interest = set(params_of_interest)
+                valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
+                missing = sorted(set(params_of_interest) - set(valid_params_of_interest))
+                chosen_params = valid_params_of_interest
+                if missing:
+                    rich.print('[yellow]WARNING: unknown params of interest!')
+                    rich.print('missing: {}'.format(ub.repr2(missing)))
+                    print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
+                    suggest_did_you_mean(missing, resolved_params.columns)
+            else:
+                print('params_of_interest is unspecified, automatically choosing')
 
         # TODO: cleanup logic
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
