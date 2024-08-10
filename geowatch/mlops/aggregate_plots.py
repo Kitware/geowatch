@@ -255,7 +255,7 @@ class ParamPlotter:
 
         rich.print('[green] ### Plot Params')
         if plotter.macro_table is None:
-            rich.print('[red] Cannot plot params plotter.macro_table={plotter.macro_table}')
+            rich.print(f'[red] Cannot plot params plotter.macro_table={plotter.macro_table}')
             return
         rich.print(f'Dpath: [link={plotter.macro_plot_dpath}]{plotter.macro_plot_dpath}[/link]')
         with pman:
