@@ -125,7 +125,7 @@ def test_joint_bas_sc_pipline_schedule1():
 def demodata_pipeline(dpath):
     import ubelt as ub
     script_fpath = dpath / 'script.py'
-    pipeline_fpath = dpath / '_simple_demo_pipeline_v001.py'
+    pipeline_fpath = dpath / '_simple_demo_pipeline_v003.py'
 
     script_text = ub.codeblock(
         '''
@@ -152,7 +152,12 @@ def demodata_pipeline(dpath):
                 dst_fpath = ub.Path(config.dst)
                 src_text = src_fpath.read_text()
                 src_data = json.loads(src_text)
-                dst_data = {'size': len(src_text), 'nest': src_data}
+
+                hidden = int(ub.hash_data([config.param1, config.param2, config.param3], base=10, hasher='sha1'))
+                flags = [c == '1' for c in bin(hidden)[2:]]
+                goodness = sum(flags) / len(flags)
+
+                dst_data = {'size': len(src_text), 'goodness': goodness, 'nest': src_data}
                 dst_fpath.parent.ensuredir()
                 dst_fpath.write_text(json.dumps(dst_data))
 
@@ -188,6 +193,7 @@ def demodata_pipeline(dpath):
                 data = json.loads(fpath.read_text())
                 nest_resolved = {}
                 nest_resolved['metrics.size'] = data['size']
+                nest_resolved['metrics.goodness'] = data['goodness']
                 flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
                 flat_resolved = flat_resolved.insert_prefix(self.name, index=1)
                 return flat_resolved
@@ -215,7 +221,6 @@ def test_simple_but_real_custom_pipeline():
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/geowatch/tests'))
         from test_mlops_scheduler import *  # NOQA
-        test_simple_but_real_custom_pipeline()
     """
     from geowatch.mlops import schedule_evaluation
     from geowatch.mlops import aggregate
@@ -243,6 +248,14 @@ def test_simple_but_real_custom_pipeline():
                       some: "yaml config"
                       omg: "single ' quote"
                       eek: 'double " quote'
+                step1.param2:
+                    - option1
+                    - option2
+                step1.param3:
+                    - 4.5
+                    - 9.2
+                    - 3.14159
+                    - 2.71828
             '''
         )
     })
@@ -273,6 +286,7 @@ def test_simple_but_real_custom_pipeline():
         eval_nodes=['step1'],
     )
     eval_type_to_aggregator = aggregate.run_aggregate(agg_config)
+    agg = eval_type_to_aggregator['step1']
 
 
 if __name__ == '__main__':
