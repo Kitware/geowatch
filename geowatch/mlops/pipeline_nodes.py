@@ -404,9 +404,18 @@ class Pipeline:
                                          if n.enabled]
                     # Submit a primary queue process
                     node_command = node.final_command()
+
+                    extra_submitkw = {}
+                    if 'slurm' in queue.__class__.__name__.lower():
+                        # Set the slurm output file to be in the node directory
+                        # to make debugging somewhat easier.  Need to see if
+                        # there is a cleaner way to do this.
+                        extra_submitkw['output_fpath'] = node.final_node_dpath / f'slurm-output-{node_procid}.log'
+
                     node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
-                                            name=node_procid)
+                                            name=node_procid,
+                                            **extra_submitkw)
                     node_status[node_name] = 'new_submission'
                 else:
                     # Some other config submitted this job, we can skip the

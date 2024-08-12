@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Moved balanced samplers to their own module.
+* MLops now puts slurm output in the node directory
 
 ### Fixed
 * Added missing top level functions to ArrayAPI

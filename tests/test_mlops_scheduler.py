@@ -212,6 +212,58 @@ def demodata_pipeline(dpath):
     return pipeline_fpath
 
 
+def test_simple_slurm_dry_run():
+    """
+    Ignore:
+        python ~/code/geowatch/tests/test_mlops_scheduler.py test_simple_but_real_custom_pipeline
+
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/geowatch/tests'))
+        from test_mlops_scheduler import *  # NOQA
+    """
+    from geowatch.mlops import schedule_evaluation
+    import ubelt as ub
+    dpath = ub.Path.appdir('geowatch/unit_tests/scheduler/test_slurm_dryrun').ensuredir()
+
+    pipeline_fpath = demodata_pipeline(dpath)
+
+    input_fpath = dpath / 'input.json'
+    input_fpath.write_text('{"type": "orig_input"}')
+
+    root_dpath = (dpath / 'runs').delete().ensuredir()
+    config = schedule_evaluation.ScheduleEvaluationConfig(**{
+        'run': 0,
+        'root_dpath': root_dpath,
+        'backend': 'slurm',
+        'params': ub.codeblock(
+            f'''
+            pipeline: {pipeline_fpath}::build_pipeline()
+            matrix:
+                step1.src:
+                    - {input_fpath}
+                step1.param1: |
+                    - this: "is text 100% representing"
+                      some: "yaml config"
+                      omg: "single ' quote"
+                      eek: 'double " quote'
+                step1.param2:
+                    - option1
+                    - option2
+                step1.param3:
+                    - 4.5
+                    - 9.2
+                    - 3.14159
+                    - 2.71828
+            '''
+        )
+    })
+
+    print('Dry run first')
+    config['run'] = 0
+    dag, queue = schedule_evaluation.schedule_evaluation(config)
+
+
 def test_simple_but_real_custom_pipeline():
     """
     Ignore:
