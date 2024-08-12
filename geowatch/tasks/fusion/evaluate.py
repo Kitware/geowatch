@@ -63,6 +63,8 @@ class SegmentationEvalConfig(scfg.DataConfig):
     # options
     draw_curves = scfg.Value('auto', help='flag to draw curves or not')
     draw_heatmaps = scfg.Value('auto', help='flag to draw heatmaps or not')
+    draw_legend = scfg.Value(True)
+    draw_weights = scfg.Value(False)
 
     score_space = scfg.Value('auto', help='can score in image or video space. If auto, chooses video if there are any, otherwise image')
     resolution = scfg.Value(None, help='if specified, override the default resolution to score at')
@@ -603,21 +605,25 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     color01_lut = color_lut / 255.0
     legend_images = []
 
+    draw_legend = config.get('draw_legend', True)
+
     if 'catname_to_prob' in chunk_info[0]:
         # Class Legend
         label_to_color = {
             node: kwimage.Color(data['color']).as01()
             for node, data in full_classes.graph.nodes.items()}
         label_to_color = ub.sorted_keys(label_to_color)
-        legend_img_class = _memo_legend(label_to_color)
-        legend_images.append(legend_img_class)
+        if draw_legend:
+            legend_img_class = _memo_legend(label_to_color)
+            legend_images.append(legend_img_class)
 
     if 'pred_saliency' in chunk_info[0]:
         # Confusion Legend
         label_to_color = ub.dzip(color_labels, color01_lut)
-        legend_img_saliency_cfsn = _memo_legend(label_to_color)
-        legend_img_saliency_cfsn = kwimage.ensure_uint255(legend_img_saliency_cfsn)
-        legend_images.append(legend_img_saliency_cfsn)
+        if draw_legend:
+            legend_img_saliency_cfsn = _memo_legend(label_to_color)
+            legend_img_saliency_cfsn = kwimage.ensure_uint255(legend_img_saliency_cfsn)
+            legend_images.append(legend_img_saliency_cfsn)
 
     if len(legend_images):
         legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
@@ -678,7 +684,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
         vert_parts = [
             header,
         ]
-        DRAW_WEIGHTS = 1
+        DRAW_WEIGHTS = config.get('draw_weights', False)
 
         if 'catname_to_prob' in info:
 
@@ -870,9 +876,10 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 
     plot_canvas = kwimage.stack_images(parts, axis=1, overlap=-10)
 
-    if legend_img is not None:
-        plot_canvas = kwimage.stack_images(
-            [plot_canvas, legend_img], axis=1, overlap=-10)
+    if draw_legend:
+        if legend_img is not None:
+            plot_canvas = kwimage.stack_images(
+                [plot_canvas, legend_img], axis=1, overlap=-10)
 
     header = kwimage.draw_header_text(
         {'width': plot_canvas.shape[1]}, canvas_title)
