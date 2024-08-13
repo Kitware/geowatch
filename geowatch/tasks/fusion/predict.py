@@ -82,7 +82,6 @@ class DataModuleConfigMixin(scfg.DataConfig):
     for key in __INFERABLE_DATAMODULE_KEYS__:
         __DATAMODULE_DEFAULTS__[key] = __default__[key].value
         __default__[key].value = 'auto'
-        ...
 
 
 class PredictConfig(DataModuleConfigMixin):
@@ -103,7 +102,6 @@ class PredictConfig(DataModuleConfigMixin):
         --num_workers=5 \
         --devices=0, \
         --batch_size=1
-
     """
     # config_file = scfg.Value(None, alias=['config'], help='config file path')
     # write_out_config_file_to_this_path = scfg.Value(None, alias=['dump'], help=ub.paragraph(
@@ -227,23 +225,14 @@ class PredictConfig(DataModuleConfigMixin):
         '''))
 
 
-# --------------Add hidden layer hook to model----------------
-
 def _register_hidden_layer_hook(model):
+    """
+    Hack to be able to output hidden layers from the multimodal model.
+    FIXME: generalize to other models when possible.
+    """
     # TODO: generalize to other models
-    # Specific to UNetR model
-    # These are at half of the output image resolution.
-
     model._activation_cache = {}
     model._activation_cache['hidden'] = []
-
-    # print("info on model", dir(model))
-
-    # print("Enumerate over model.children()\n")
-    # for i, layer in enumerate(model.children()):
-    #     print(f"Layer {i}: {layer}")
-
-    # Not sure this is the correct code
 
     # Hack to grab the inputs to one of the heads
     # This will let us grab pre-formated spacetime features
@@ -257,17 +246,20 @@ def _register_hidden_layer_hook(model):
         input_features = inputs[0]
         activation = input_features.detach()
         model._activation_cache['hidden'].append(activation)
-        #print(f"Hidden Layer Extracted! Shape is {activation.shape}")
 
-    # See `/docs/source/manual/tutorial/fusion_model_layer_info.sh`
-    # for an example structure of the model
     layer_of_interest._forward_hooks.clear()
     layer_of_interest.register_forward_hook(record_hidden_activation)
 
-# ----------------------------------------------------------
-
 
 def build_stitching_managers(config, model, result_dataset, writer_queue=None):
+    """
+    For each type of requested raster output, we construct a stitching manager
+    that will help map batches back into the correct location in a larger
+    image.
+
+    Returns:
+        Dict[str, CocoStitchingManager]
+    """
     # could be torch on-device stitching
     stitch_managers = {}
     stitch_device = 'numpy'
@@ -304,12 +296,6 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         chan_code = '|'.join(head_keep_classes)
         task_keep_indices[task_name] = head_keep_idxs
-        if 0:
-            print('task_name = {!r}'.format(task_name))
-            print('head_classes = {!r}'.format(head_classes))
-            print('head_keep_classes = {!r}'.format(head_keep_classes))
-            print('chan_code = {!r}'.format(chan_code))
-            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -337,12 +323,6 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
         chan_code = '|'.join(list(head_keep_classes))
-        if 0:
-            print('task_name = {!r}'.format(task_name))
-            print('head_classes = {!r}'.format(head_classes))
-            print('head_keep_classes = {!r}'.format(head_keep_classes))
-            print('chan_code = {!r}'.format(chan_code))
-            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -364,12 +344,6 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
         chan_code = '|'.join(head_keep_classes)
-        if 0:
-            print('task_name = {!r}'.format(task_name))
-            print('head_classes = {!r}'.format(head_classes))
-            print('head_keep_classes = {!r}'.format(head_keep_classes))
-            print('chan_code = {!r}'.format(chan_code))
-            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -400,21 +374,21 @@ def build_stitching_managers(config, model, result_dataset, writer_queue=None):
         stitch_managers[task_name].head_keep_idxs = slice(None)
 
     print(f"Initialized stitching managers: {stitch_managers.keys()}")
-    # raise SystemExit("Exiting program")
     return stitch_managers
 
 
 def resolve_datamodule(config, model, datamodule_defaults, fit_config):
     """
+    Creates an instance of the datamodule class.
+
+    Note this will also modify the config.
     TODO: refactor / cleanup.
 
     Breakup the sections that handle getting the traintime params, resolving
     the datamodule args, and building the datamodule.
 
     Args:
-        ...
-
-        fit_config (dict):
+        config (dict):
             nested train-time configuration provided by the model
             This should have a "data" key for dataset params.
     """
@@ -546,87 +520,89 @@ def resolve_datamodule(config, model, datamodule_defaults, fit_config):
 
 
 def _debug_grid(test_dataloader):
-    DEBUG_GRID = 0
-    if DEBUG_GRID:
-        # Check to see if the grid will cover all images
-        image_id_to_space_boxes = ub.ddict(list)
-        seen_gids = set()
-        primary_gids = set()
-        seen_video_ids = set()
-        coco_dset = test_dataloader.dataset.sampler.dset
+    """
+    Debug helper that determines if we are are covering the entire dataset we
+    want to predict on.
+    """
+    # Check to see if the grid will cover all images
+    image_id_to_space_boxes = ub.ddict(list)
+    seen_gids = set()
+    primary_gids = set()
+    seen_video_ids = set()
+    coco_dset = test_dataloader.dataset.sampler.dset
 
-        # Can use this to build a visualization of spacetime coverage
-        vid_to_box_to_timesamples = {}
+    # Can use this to build a visualization of spacetime coverage
+    vid_to_box_to_timesamples = {}
 
-        for target in test_dataloader.dataset.new_sample_grid['targets']:
-            video_id = target['video_id']
-            seen_video_ids.add(video_id)
-            # Denote we have seen this vidspace slice in this image.
-            space_slice = target['space_slice']
-            space_box = kwimage.Box.from_slice(space_slice)
-            for gid in target['gids']:
-                image_id_to_space_boxes[gid].append(space_box)
-            primary_gids.add(target['main_gid'])
-            seen_gids.update(target['gids'])
+    for target in test_dataloader.dataset.sample_grid['targets']:
+        video_id = target['video_id']
+        seen_video_ids.add(video_id)
+        # Denote we have seen this vidspace slice in this image.
+        space_slice = target['space_slice']
+        space_box = kwimage.Box.from_slice(space_slice)
+        for gid in target['gids']:
+            image_id_to_space_boxes[gid].append(space_box)
+        primary_gids.add(target['main_gid'])
+        seen_gids.update(target['gids'])
 
-            coco_box = tuple(space_box.to_coco())
-            requested_timestamps = coco_dset.images(target['gids']).lookup('date_captured')
-            requested_timestamps = coco_dset.images(target['gids']).lookup('frame_index')
-            if video_id not in vid_to_box_to_timesamples:
-                vid_to_box_to_timesamples[video_id] = {}
-            if coco_box not in vid_to_box_to_timesamples[video_id]:
-                vid_to_box_to_timesamples[video_id][coco_box] = []
-            vid_to_box_to_timesamples[video_id][coco_box].append(requested_timestamps)
+        coco_box = tuple(space_box.to_coco())
+        requested_timestamps = coco_dset.images(target['gids']).lookup('date_captured')
+        requested_timestamps = coco_dset.images(target['gids']).lookup('frame_index')
+        if video_id not in vid_to_box_to_timesamples:
+            vid_to_box_to_timesamples[video_id] = {}
+        if coco_box not in vid_to_box_to_timesamples[video_id]:
+            vid_to_box_to_timesamples[video_id][coco_box] = []
+        vid_to_box_to_timesamples[video_id][coco_box].append(requested_timestamps)
 
-        VIZ_SPACETIME_COV = 0
-        if VIZ_SPACETIME_COV:
-            import kwplot
-            from geowatch.utils.util_kwplot import time_sample_arcplot
-            for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
-                fig = kwplot.figure(fnum=videoid)
-                ax = fig.gca()
-                ax.cla()
-                yloc = 0
-                ytick_labels = []
-                for box, time_samples in sorted(box_to_timesample.items()):
-                    time_samples = list(map(sorted, time_samples))
-                    time_sample_arcplot(time_samples, yloc, ax=ax)
-                    yloc += 1
-                    ytick_labels.append(box)
-                ax.set_yticks(np.arange(len(ytick_labels)))
-                ax.set_yticklabels(ytick_labels)
-                video = coco_dset.index.videos[videoid]
-                ax.set_title(f'Time Sampling For Video {video["name"]}')
-                ax.set_ylabel('space location')
-                ax.set_xlabel('frame index')
+    VIZ_SPACETIME_COV = 0
+    if VIZ_SPACETIME_COV:
+        import kwplot
+        from geowatch.utils.util_kwplot import time_sample_arcplot
+        for videoid, box_to_timesample in vid_to_box_to_timesamples.items():
+            fig = kwplot.figure(fnum=videoid)
+            ax = fig.gca()
+            ax.cla()
+            yloc = 0
+            ytick_labels = []
+            for box, time_samples in sorted(box_to_timesample.items()):
+                time_samples = list(map(sorted, time_samples))
+                time_sample_arcplot(time_samples, yloc, ax=ax)
+                yloc += 1
+                ytick_labels.append(box)
+            ax.set_yticks(np.arange(len(ytick_labels)))
+            ax.set_yticklabels(ytick_labels)
+            video = coco_dset.index.videos[videoid]
+            ax.set_title(f'Time Sampling For Video {video["name"]}')
+            ax.set_ylabel('space location')
+            ax.set_xlabel('frame index')
 
-        all_video_ids = list(coco_dset.videos())
-        all_gids = list(coco_dset.images())
-        from xdev import set_overlaps
-        img_overlaps = set_overlaps(all_gids, seen_gids, s1='all_gids', s2='seen_gids')
-        print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
+    all_video_ids = list(coco_dset.videos())
+    all_gids = list(coco_dset.images())
+    from xdev import set_overlaps
+    img_overlaps = set_overlaps(all_gids, seen_gids, s1='all_gids', s2='seen_gids')
+    print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
 
-        vid_overlaps = set_overlaps(all_video_ids, seen_video_ids, s1='seen_video_ids', s2='seen_video_ids')
-        print('vid_overlaps = {}'.format(ub.urepr(vid_overlaps, nl=1)))
-        # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
-        # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
+    vid_overlaps = set_overlaps(all_video_ids, seen_video_ids, s1='seen_video_ids', s2='seen_video_ids')
+    print('vid_overlaps = {}'.format(ub.urepr(vid_overlaps, nl=1)))
+    # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
+    # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
 
-        # Check to see how much of each image is covered in video space
-        # import kwimage
-        gid_to_iou = {}
-        print('image_id_to_space_boxes = {}'.format(ub.urepr(image_id_to_space_boxes, nl=2)))
-        for gid, space_boxes in image_id_to_space_boxes.items():
-            vidid = coco_dset.index.imgs[gid]['video_id']
-            video = coco_dset.index.videos[vidid]
-            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
-            boxes = kwimage.Boxes.concatenate(space_boxes)
-            polys = boxes.to_polygons()
-            covered = polys.unary_union().simplify(0.01)
-            iou = covered.iou(video_poly)
-            gid_to_iou[gid] = iou
-        ious = list(gid_to_iou.values())
-        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
-        print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
+    # Check to see how much of each image is covered in video space
+    # import kwimage
+    gid_to_iou = {}
+    print('image_id_to_space_boxes = {}'.format(ub.urepr(image_id_to_space_boxes, nl=2)))
+    for gid, space_boxes in image_id_to_space_boxes.items():
+        vidid = coco_dset.index.imgs[gid]['video_id']
+        video = coco_dset.index.videos[vidid]
+        video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+        boxes = kwimage.Boxes.concatenate(space_boxes)
+        polys = boxes.to_polygons()
+        covered = polys.unary_union().simplify(0.01)
+        iou = covered.iou(video_poly)
+        gid_to_iou[gid] = iou
+    ious = list(gid_to_iou.values())
+    iou_stats = kwarray.stats_dict(ious, n_extreme=True)
+    print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
 
 
 def _jsonify(data):
@@ -646,6 +622,85 @@ def _jsonify(data):
                 walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
                     bad_data._build_hashid())
     return jsonified
+
+
+def _prepare_batch(orig_batch, device, input_norms,
+                   EMERGENCY_INPUT_AGREEMENT_HACK):
+    """
+    Handles moving specific into to the GPU, and
+    """
+    batch_trs = []
+    # Move data onto the prediction device, grab spacetime region info
+    fixed_batch = []
+    for item in orig_batch:
+        if item is None:
+            continue
+        item = item.copy()
+        batch_gids = [frame['gid'] for frame in item['frames']]
+        frame_infos = [ub.udict(f) & {
+            'gid',
+            'output_space_slice',
+            'output_image_dsize',
+            'output_weights',
+            'scale_outspace_from_vid',
+        } for f in item['frames']]
+        batch_trs.append({
+            'space_slice': tuple(item['target']['space_slice']),
+            # 'scale': item['target']['scale'],
+            'scale': item['target'].get('scale', None),
+            'gids': batch_gids,
+            'frame_infos': frame_infos,
+            'fliprot_params': item['target'].get('fliprot_params', None)
+        })
+        position_tensors = item.get('positional_tensors', None)
+        if position_tensors is not None:
+            for k, v in position_tensors.items():
+                position_tensors[k] = v.to(device)
+
+        filtered_frames = []
+        for frame in item['frames']:
+            frame = frame.copy()
+            sensor = frame['sensor']
+            if EMERGENCY_INPUT_AGREEMENT_HACK:
+                try:
+                    known_sensor_modes = input_norms[sensor]
+                except KeyError:
+                    known_sensor_modes = None
+                    continue
+            filtered_modes = {}
+            modes = frame['modes']
+            for key, mode in modes.items():
+                if EMERGENCY_INPUT_AGREEMENT_HACK:
+                    if key not in known_sensor_modes:
+                        continue
+                filtered_modes[key] = mode.to(device)
+            frame['modes'] = filtered_modes
+            filtered_frames.append(frame)
+        item['frames'] = filtered_frames
+        fixed_batch.append(item)
+    return fixed_batch, batch_trs
+
+
+class PeriodicMemoryMonitor:
+    """
+    Helper to print out memory stats at certain time intervals
+    """
+    def __init__(self):
+        self.memory_monitor_timer = ub.Timer().tic()
+        self.memory_monitor_interval_seconds = 60 * 60
+        self.with_memory_units = bool(ub.modname_to_modpath('pint'))
+
+    def check(self):
+        # TODO: encapsulate this in a helper class that runs some
+        # user-specified function if the timer interval has ellapsed.
+        if self.memory_monitor_timer.toc() > self.memory_monitor_interval_seconds:
+            # TODO: monitor memory usage and report if it looks like we
+            # are about to run out of memory, and maybe do something to
+            # handle it.
+            from geowatch.utils import util_hardware
+            mem_info = util_hardware.get_mem_info(with_units=self.with_memory_units)
+            print(f'\n\nmem_info = {ub.urepr(mem_info, nl=1)}\n\n')
+            self.memory_monitor_timer.tic()
 
 
 def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset, device):
@@ -714,7 +769,9 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         'hidden_layers_probs': 'hidden_layers',
     }
 
-    _debug_grid(test_dataloader)
+    DEBUG_GRID = 0
+    if DEBUG_GRID:
+        _debug_grid(test_dataloader)
 
     DEBUG_PRED_SPATIAL_COVERAGE = 0
     if DEBUG_PRED_SPATIAL_COVERAGE:
@@ -770,14 +827,16 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         test_coco_dataset = datamodule.coco_datasets['test']
         proc_context.add_disk_info(test_coco_dataset.fpath)
 
-    memory_monitor_timer = ub.Timer().tic()
-    memory_monitor_interval_seconds = 60 * 60
-    with_memory_units = bool(ub.modname_to_modpath('pint'))
+    memory_monitor = PeriodicMemoryMonitor()
 
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
         EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(model, 'input_norms')
+        if EMERGENCY_INPUT_AGREEMENT_HACK:
+            input_norms = getattr(model, 'input_norms', None)
+        else:
+            input_norms = None
 
         # prog.set_extra(' <will populate stats after first video>')
         # pman.start()
@@ -797,55 +856,11 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
         batch_idx = 0
         for orig_batch in _batch_iter:
             batch_idx += 1
-            batch_trs = []
-            # Move data onto the prediction device, grab spacetime region info
-            fixed_batch = []
-            for item in orig_batch:
-                if item is None:
-                    continue
-                item = item.copy()
-                batch_gids = [frame['gid'] for frame in item['frames']]
-                frame_infos = [ub.udict(f) & {
-                    'gid',
-                    'output_space_slice',
-                    'output_image_dsize',
-                    'output_weights',
-                    'scale_outspace_from_vid',
-                } for f in item['frames']]
-                batch_trs.append({
-                    'space_slice': tuple(item['target']['space_slice']),
-                    # 'scale': item['target']['scale'],
-                    'scale': item['target'].get('scale', None),
-                    'gids': batch_gids,
-                    'frame_infos': frame_infos,
-                    'fliprot_params': item['target'].get('fliprot_params', None)
-                })
-                position_tensors = item.get('positional_tensors', None)
-                if position_tensors is not None:
-                    for k, v in position_tensors.items():
-                        position_tensors[k] = v.to(device)
 
-                filtered_frames = []
-                for frame in item['frames']:
-                    frame = frame.copy()
-                    sensor = frame['sensor']
-                    if EMERGENCY_INPUT_AGREEMENT_HACK:
-                        try:
-                            known_sensor_modes = model.input_norms[sensor]
-                        except KeyError:
-                            known_sensor_modes = None
-                            continue
-                    filtered_modes = {}
-                    modes = frame['modes']
-                    for key, mode in modes.items():
-                        if EMERGENCY_INPUT_AGREEMENT_HACK:
-                            if key not in known_sensor_modes:
-                                continue
-                        filtered_modes[key] = mode.to(device)
-                    frame['modes'] = filtered_modes
-                    filtered_frames.append(frame)
-                item['frames'] = filtered_frames
-                fixed_batch.append(item)
+            # Move data onto the prediction device, grab spacetime region info
+            fixed_batch, batch_trs = _prepare_batch(
+                orig_batch, device, input_norms,
+                EMERGENCY_INPUT_AGREEMENT_HACK)
 
             if len(fixed_batch) == 0:
                 continue
@@ -858,16 +873,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
 
             MONITOR_MEMORY = 1
             if MONITOR_MEMORY:
-                # TODO: encapsulate this in a helper class that runs some
-                # user-specified function if the timer interval has ellapsed.
-                if memory_monitor_timer.toc() > memory_monitor_interval_seconds:
-                    # TODO: monitor memory usage and report if it looks like we
-                    # are about to run out of memory, and maybe do something to
-                    # handle it.
-                    from geowatch.utils import util_hardware
-                    mem_info = util_hardware.get_mem_info(with_units=with_memory_units)
-                    print(f'\n\nmem_info = {ub.urepr(mem_info, nl=1)}\n\n')
-                    memory_monitor_timer.tic()
+                memory_monitor.check()
 
             # Predict on the batch: todo: rename to predict_step
             try:
@@ -908,7 +914,6 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                 print('writable_outputs = {!r}'.format(writable_outputs))
 
             # For each item in the batch, process the results
-
             for head_key in writable_outputs:
                 head_probs = outputs[head_key]
                 head_stitcher = stitch_managers[head_key]
@@ -1332,7 +1337,7 @@ def predict(cmdline=False, **kwargs):
     predictor._load_dataset()
 
     # Execute the pipeline
-    result_dataset = predictor._run()
+    result_dataset = predictor._run_critical_loop()
     return result_dataset
 
 
@@ -1508,7 +1513,7 @@ class Predictor:
 
         self.datamodule = datamodule
 
-    def _run(self):
+    def _run_critical_loop(self):
         datamodule = self.datamodule
         model = self.model
         config = self.config

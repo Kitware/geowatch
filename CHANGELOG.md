@@ -9,9 +9,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Ability to change cold feature frequency
 * Ability to output hidden features from the multimodal transformer in fusion.predict.
-
-
-### Added
 * Add the concept of a `"primary_out_key"` to mlops ProcessNode
 * A ProcessNode can now specify a `load_result` function to utilize mlops 
 * Add `override_meanstd` to fusion.predict
@@ -19,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Moved balanced samplers to their own module.
 * MLops now puts slurm output in the node directory
+* Refactored / cleaned up code in fusion.predict
 
 ### Fixed
 * Added missing top level functions to ArrayAPI
