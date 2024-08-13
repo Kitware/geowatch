@@ -55,13 +55,13 @@ class DataModuleConfigMixin(scfg.DataConfig):
     __default__['batch_size'].value = 1
     __default__['chip_overlap'].value = 0.3
 
-    # Handle hacky overloadable stuff
-    # Set the default of all of thse to be "auto", but remember the original
-    # value in a custom variable
-    # TODO: change name from overloadable to inferrable. The idea is that we
-    # can infer these from the given model.
     __DATAMODULE_DEFAULTS__ = {}
-    __OVERLOADABLE_DATAMODULE_KEYS__ = [
+    # The following parameters are config values that can be inferred from the
+    # given model, but if they are explicltly specified by the user, the
+    # explicit value is used. They will default to the value "auto", if they
+    # are still auto by the time the model resolves, it will fill them in with
+    # whatever value the model was trained with.
+    __INFERABLE_DATAMODULE_KEYS__ = [
         'channels',
         'normalize_peritem',
         'chip_dims',
@@ -79,7 +79,7 @@ class DataModuleConfigMixin(scfg.DataConfig):
         'resample_invalid_frames',
         'set_cover_algo',
     ]
-    for key in __OVERLOADABLE_DATAMODULE_KEYS__:
+    for key in __INFERABLE_DATAMODULE_KEYS__:
         __DATAMODULE_DEFAULTS__[key] = __default__[key].value
         __default__[key].value = 'auto'
         ...

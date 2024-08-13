@@ -663,7 +663,6 @@ class AggregatorAnalysisMixin:
         import pandas as pd
         import numpy as np
         from geowatch.utils import util_pandas
-        print(f'agg.primary_metric_cols={agg.primary_metric_cols}')
 
         if isinstance(per_group, float) and math.isinf(per_group):
             per_group = None
@@ -989,7 +988,8 @@ class AggregatorAnalysisMixin:
             if k.endswith('.duration')
         ]
         for k in duration_cols:
-            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+            new_vals = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+            table[k] = new_vals
 
         resource_summary = []
         for duration_key in duration_cols:
@@ -1421,9 +1421,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                     agg.primary_metric_cols = _primary_metrics
                 if agg.display_metric_cols == 'auto':
                     agg.display_metric_cols = _display_metrics
-
-            print(f'agg.primary_metric_cols={agg.primary_metric_cols}')
-            print(f'agg.display_metric_cols={agg.display_metric_cols}')
 
         # FIXME: HARD CODED from SMART
         # TODO: add mechanism where nodes can tag their parameters with these
@@ -1899,7 +1896,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             for single_rois in rois:
                 agg.build_single_macro_table(single_rois, **kwargs)
         else:
-            print(f'Building a single macro table: {rois}')
+            print(f'Building a single macro table: rois={rois!r}')
             agg.build_single_macro_table(rois, **kwargs)
 
     @profile
@@ -1930,6 +1927,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         macro_key = hash_regions(regions_of_interest)
 
         # Define how to aggregate each column
+        # FIXME: handle in general.
         sum_cols = [c for c in agg.metrics.columns if c.endswith((
             '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
         average_cols = [c for c in agg.metrics.columns if c.endswith((
@@ -1941,6 +1939,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         start_time_cols = DotDictDataFrame.search_columns(agg.table, 'start_timestamp')
         stop_time_cols = DotDictDataFrame.search_columns(agg.table, 'stop_timestamp')
 
+        # FIXME: SMART-specific
         ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
 
         average_cols = agg.metrics.columns.intersection(average_cols)
