@@ -483,9 +483,15 @@ class CocoStitchingManager(object):
 
         # Use a heuristic to see if we can mark any previous image stitchers as
         # "ready".
-        if self.stiching_space == 'video':
-            vidid = img.get('video_id', None)
-
+        vidid = img.get('video_id', None)
+        if self.stiching_space == 'image' or vidid is None:
+            if is_ready == 'auto':
+                is_ready = self._last_imgid is not None and gid != self._last_imgid
+            if is_ready:
+                # Assuming read if the last image has changed
+                # This check needs a rework
+                self._ready_gids.add(self._last_imgid)
+        elif self.stiching_space == 'video':
             if is_ready == 'auto':
                 is_ready = self._last_vidid is not None and vidid != self._last_vidid
 
@@ -504,16 +510,6 @@ class CocoStitchingManager(object):
                 # contain it have been processed. (although that does not
                 # account for dynamic resampling)
                 self._ready_gids.update(ready_gids)
-        elif self.stiching_space == 'image':
-            # Create the stitcher if it does not exist
-            vidid = img.get('video_id', None)
-
-            if is_ready == 'auto':
-                is_ready = self._last_imgid is not None and gid != self._last_imgid
-            if is_ready:
-                # Assuming read if the last image has changed
-                # This check needs a rework
-                self._ready_gids.add(self._last_imgid)
         else:
             raise NotImplementedError(self.stiching_space)
 

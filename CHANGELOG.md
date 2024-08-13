@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * normalize_peritem no longer breaks computing cached dataset stats
 * Added workaround to load 
 * Handle better printf escapes in mlops for job config and invoke 
+* Issue where images only datasets using dummy videos would keep prediction heatmaps in memory indefinitely
 
 
 ## Version 0.18.1 - Released 2024-06-25
