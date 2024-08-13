@@ -161,8 +161,8 @@ def main():
 
                 if 0:
                     # Do quantization or not
-                    from geowatch.tasks.fusion.predict import quantize_float01
-                    quant_recon, quantization = quantize_float01(
+                    from geowatch.tasks.fusion.coco_stitcher import quantize_image
+                    quant_recon, quantization = quantize_image(
                         data, old_min=0, old_max=1)
                     nodata = quantization['nodata']
                     tosave = quant_recon

@@ -33,7 +33,6 @@ from geowatch.tasks.fusion import utils
 from kwutil import util_parallel
 from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.coco_stitcher import CocoStitchingManager
-from geowatch.tasks.fusion.coco_stitcher import quantize_float01  # NOQA
 # APPLY Monkey Patches
 from geowatch.monkey import monkey_torch
 from geowatch.monkey import monkey_torchmetrics
