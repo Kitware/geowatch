@@ -376,7 +376,6 @@ class CocoStitchingManager(object):
         """
         Allocates memory for stitching into an image.
         """
-        from geowatch.utils import util_kwarray
         gid = img['id']
         if self.stiching_space == 'video':
             vidid = img.get('video_id', None)
@@ -397,11 +396,7 @@ class CocoStitchingManager(object):
                     else:
                         raise NotImplementedError
                 asset_dims = (height, width, self.num_bands)
-
-                # sticher_cls = kwarray.Stitcher
-                sticher_cls = util_kwarray.Stitcher
-
-                self.image_stitchers[gid] = sticher_cls(
+                self.image_stitchers[gid] = kwarray.Stitcher(
                     asset_dims, device=self.device, dtype=self.dtype,
                     memmap=self.memmap)
                 self._image_scales[gid] = scale_asset_from_stitchspace
