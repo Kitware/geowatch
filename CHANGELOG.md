@@ -18,6 +18,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * MLops now puts slurm output in the node directory
 * Refactored / cleaned up code in fusion.predict
 
+### Removed
+* Removed several vendored utilities in favor of ones in other packages (`process_context`)
+
 ### Fixed
 * Added missing top level functions to ArrayAPI
 * normalize_peritem can now be specified as True on the command line without casting to a string.
