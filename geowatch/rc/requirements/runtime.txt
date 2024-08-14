@@ -149,7 +149,7 @@ xmltodict>=0.12.0
 Pygments>=2.12.0
 requests>=2.27.1
 fasteners>=0.17.3
-kwutil>=0.3.0
+kwutil>=0.3.2
 kwgis>=0.1.0
 simple_dvc>=0.2.1
 
