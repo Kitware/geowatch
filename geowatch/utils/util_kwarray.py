@@ -2,10 +2,8 @@
 Functions that may eventually be moved to kwarray
 """
 import functools
-import itertools as it
 import math
 import numpy as np
-import os
 import ubelt as ub
 import warnings
 
