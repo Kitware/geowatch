@@ -816,6 +816,10 @@ class AggregatorAnalysisMixin:
                 rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
 
             if show_csv:
+                ub.schedule_deprecation(
+                    'geowatch', 'show_csv', 'param',
+                    migration='This option should not be relied on.',
+                    deprecate='0.18.3', error='1.0.0', remove='1.1.0')
                 varied_keys = list(varied.keys())
                 param_table = pd.DataFrame.from_dict(top_param_lut).T
                 param_table.index.name = 'param_hashid'
@@ -849,7 +853,7 @@ class AggregatorAnalysisMixin:
                 if concise:
                     _justone = _justone.safe_drop(['node'], axis=1)
                     _justone = _justone.safe_drop(['fpath'], axis=1)
-                rich.print(_justone)
+                rich.print(_justone.to_string())
 
                 if not only_one_source_item:
                     # again, not sure why this is different
