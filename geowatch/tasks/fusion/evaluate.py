@@ -29,6 +29,7 @@ from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
 import scriptconfig as scfg
 from shapely.ops import unary_union
+from threading import BoundedSemaphore  # NOQA
 
 from geowatch.utils import kwcoco_extensions
 from geowatch.utils import process_context
@@ -80,8 +81,6 @@ class SegmentationEvalConfig(scfg.DataConfig):
 def main(cmdline=True, **kwargs):
     """
     Entry point: todo: doctest and CLI structure
-
-    todo: ProcessContext to track resource usage
     """
     full_config = SegmentationEvalConfig.cli(
         cmdline=cmdline, data=kwargs, strict=True)
@@ -103,7 +102,8 @@ def main(cmdline=True, **kwargs):
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
-                                      thresh_bins=None, config=None):
+                                      thresh_bins=None, config=None,
+                                      salient_channel='salient'):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
@@ -112,11 +112,35 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
         thresh_bins (int): if specified rounds scores into this many bins
             to make calculating metrics more efficient
+
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.evaluate single_image_segmentation_metrics
+
+    Example:
+        >>> from geowatch.tasks.fusion.evaluate import *  # NOQA
+        >>> from kwcoco.coco_evaluator import CocoEvaluator
+        >>> from kwcoco.demo.perterb import perterb_coco
+        >>> import kwcoco
+        >>> # TODO: kwcoco demodata with easy dummy heatmap channels
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
+        >>> # Score an image against itself
+        >>> true_coco_img = true_coco.images()[0:1].coco_images[0]
+        >>> pred_coco_img = true_coco.images()[0:1].coco_images[0]
+        >>> config = {}
+        >>> true_dets = true_coco_img.annots().detections
+        >>> video1 = true_coco_img.video
+        >>> true_classes = true_coco.object_categories()
+        >>> salient_channel = 'r'  # pretend red is the salient channel
+        >>> thresh_bins = np.linspace(0, 255, 1024)
+        >>> info = single_image_segmentation_metrics(
+        >>>    pred_coco_img, true_coco_img, true_classes, true_dets,
+        >>>    thresh_bins=thresh_bins, config=config, video1=video1, salient_channel=salient_channel)
+
     """
     if config is None:
         config = {}
 
-    viz_thresh = config.get('viz_thresh', None)
+    viz_thresh = config.get('viz_thresh', 'auto')
     score_space = config.get('score_space', 'auto')
     resolution = config.get('resolution', None)
     balance_area = config.get('balance_area', False)
@@ -209,7 +233,8 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         undistinguished_classes)
 
     # Determine if saliency has been predicted
-    salient_class = 'salient'
+    # 'salient'
+    salient_class = salient_channel
     has_saliency = salient_class in pred_coco_img.channels
 
     # Load ground truth annotations
@@ -441,6 +466,18 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             for k, v in ub.dict_isect(salient_summary, {
                 'ap', 'auc', 'max_f1'}).items()
         }
+        try:
+            # Requires kwcoco 0.8.3
+            salient_metrics['realpos_total'] = salient_measures['realpos_total']
+            salient_metrics['realneg_total'] = salient_measures['realneg_total']
+            submeasures = salient_measures['max_f1_submeasures']
+            salient_metrics['salient_max_f1_thresh'] = submeasures['thresh']
+            salient_metrics['salient_max_f1_ppv'] = submeasures['ppv']
+            salient_metrics['salient_max_f1_tpr'] = submeasures['tpr']
+            salient_metrics['salient_max_f1_fpr'] = submeasures['fpr']
+            salient_metrics['salient_max_f1_tnr'] = submeasures['tnr']
+        except Exception:
+            ...
         row.update(salient_metrics)
 
         info.update({
@@ -856,14 +893,14 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     min_gid = min(true_gids)
 
     if max_frame == min_frame:
-        frame_part = f'{min_frame}'
+        frame_part = f'{min_frame:04d}'
     else:
-        frame_part = f'{min_frame}-{max_frame}'
+        frame_part = f'{min_frame:04d}-{max_frame:04d}'
 
     if max_gid == min_gid:
-        gid_part = f'{min_gid}'
+        gid_part = f'{min_gid:04d}'
     else:
-        gid_part = f'{min_gid}-{max_gid}'
+        gid_part = f'{min_gid:04d}-{max_gid:04d}'
     vidname_part = '_'.join(list(unique_vidnames))
     if not vidname_part:
         vidname_part = '_loose_images'
@@ -1061,7 +1098,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     print('n_img_matches = {!r}'.format(n_img_matches))
     rich.print(f'Eval Dpath: [link={eval_dpath}]{eval_dpath}[/link]')
 
-    rows = []
     chunk_size = 5
     num_thresh_bins = config.get('thresh_bins', 32 * 32)
     thresh_bins = np.linspace(0, 1, num_thresh_bins)  # this is more stable using an ndarray
@@ -1081,7 +1117,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
+        eval_dpath = ub.Path(eval_dpath)
+        curve_dpath = (eval_dpath / 'curves').ensuredir()
         pcontext.write_invocation(curve_dpath / 'invocation.sh')
 
     # Objects that will aggregate confusion across multiple images
@@ -1110,15 +1147,13 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Prepare job pools
     print('workers = {!r}'.format(workers))
     print('draw_workers = {!r}'.format(draw_workers))
-
-    metrics_executor = _DelayedBlockingJobQueue(max_unhandled_jobs=workers, mode='process', max_workers=workers)
     # draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
     # metrics_executor = ub.Executor(mode='process', max_workers=workers)
 
     # We want to prevent too many evaluate jobs from piling up results to draw,
     # as it takes longer to draw than it does to score. For this reason, block
     # if the draw queue gets too big.
-
+    metrics_executor = _DelayedBlockingJobQueue(max_unhandled_jobs=workers, mode='process', max_workers=workers)
     draw_executor = MaxQueuePool(mode='process', max_workers=draw_workers, max_queue_size=draw_workers * 4)
 
     prog = ub.ProgIter(total=total_images, desc='submit scoring jobs', adjust=False, freq=1)
@@ -1166,11 +1201,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         gids2 = image_matches['match_gids2']
         gid_pairs = list(zip(gids1, gids2))
         # Might want to vary the order (or shuffle) depending on user input
-        gid_pairs = sorted(gid_pairs, key=lambda x: x[1])
+        gid_pairs = sorted(gid_pairs, key=lambda x: x[0])
 
         # TODO: modify to prevent to many unhandled jobs from building up and
         # causing memory issues. Maybe with kwutil.BlockingJobQueue
-        for gid1, gid2 in zip(gids1, gids2):
+        for gid1, gid2 in gid_pairs:
             pred_coco_img = pred_coco.coco_image(gid1).detach()
             true_coco_img = true_coco.coco_image(gid2).detach()
             true_dets = true_coco.annots(gid=gid1).detections
@@ -1207,6 +1242,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     VERBOSE_DEBUG = 0
 
+    rows = []
     with pman:
         score_prog = pman.progiter(desc="[cyan] Scoring...", total=num_jobs)
         score_prog.start()
@@ -1293,9 +1329,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             draw_executor.shutdown()
 
     df = pd.DataFrame(rows)
+    df_summary = df.describe().T
     print('Per Image Pixel Measures')
     rich.print(df)
-    rich.print(df.describe().T)
+    rich.print(df_summary.to_string())
+
+    if eval_dpath is not None:
+        perimage_table_fpath = eval_dpath / 'perimage_table.json'
+        perimage_summary_fpath = eval_dpath / 'perimage_summary.json'
+        perimage_table_fpath.write_text(df.to_json(orient='table', indent=4))
+        perimage_summary_fpath.write_text(df_summary.to_json(orient='table', indent=4))
 
     # Finalize all of the aggregated measures
     print('Finalize salient measures')
@@ -1491,9 +1534,6 @@ class _DelayedBlockingJobQueue:
         return self.pool.shutdown()
 
 
-from threading import BoundedSemaphore  # NOQA
-
-
 class MaxQueuePool:
     """
     This Class wraps a concurrent.futures.Executor
@@ -1586,6 +1626,24 @@ def _redraw_measures(eval_dpath):
             salient_combo_measures.summary_plot(fnum=1, title=title)
             fig = kwplot.autoplt().gcf()
             fig.savefig(str(curve_dpath / 'summary_redo.png'))
+
+
+def _max_digits(max_num):
+    """
+    Use like this:
+        your_var = 231
+        max_num = 9180
+        num_digits = _max_digits(max_num)
+        f'{your_var:0{num_digits}d}'
+        # or
+        f'{your_var:0{_max_digits(max_num)}d}'
+    """
+    import math
+    if max_num is None:
+        num_digits = 8
+    else:
+        num_digits = int(math.log10(max(max_num, 1))) + 1
+    return num_digits
 
 
 if __name__ == '__main__':

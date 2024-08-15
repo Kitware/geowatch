@@ -988,6 +988,9 @@ class AggregatorAnalysisMixin:
         return report
 
     def resource_summary_table(agg):
+        """
+        Sumarize resource usage of the pipeline
+        """
         import pandas as pd
         from kwutil import util_time
         table = agg.table.copy()
