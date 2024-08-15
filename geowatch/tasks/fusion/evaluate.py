@@ -1484,6 +1484,12 @@ class _DelayedBlockingJobQueue:
         self._num_unhandled -= 1
         self._submit_if_room()
 
+    def shutdown(self):
+        """
+        Calls the shutdown function of the underlying backend.
+        """
+        return self.pool.shutdown()
+
 
 from threading import BoundedSemaphore  # NOQA
 
@@ -1548,6 +1554,12 @@ class MaxQueuePool:
         """Called once task is done, releases one queue slot."""
         if self.pool_queue is not None:
             self.pool_queue.release()
+
+    def shutdown(self):
+        """
+        Calls the shutdown function of the underlying backend.
+        """
+        return self.pool.shutdown()
 
 
 def _redraw_measures(eval_dpath):
