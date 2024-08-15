@@ -347,7 +347,7 @@ def main(cmdline=True, **kwargs):
         final_title = '\n'.join(title_lines)
         fig.suptitle(final_title)
 
-        dst_fpath = ub.Path(config['dst'])
+        dst_fpath = None if config['dst'] is None else ub.Path(config['dst'])
         if dst_fpath is not None:
             print('Write spectra viz to dst_fpath = {!r}'.format(dst_fpath))
             dst_fpath.parent.ensuredir()
