@@ -73,6 +73,8 @@ class SegmentationEvalConfig(scfg.DataConfig):
     draw_workers = scfg.Value('auto', help='number of parallel drawing workers')
     viz_thresh = scfg.Value('auto', help='visualization threshold')
     balance_area = scfg.Value(False, isflag=True, help='upweight small instances, downweight large instances')
+    # thresh_bins = scfg.Value(128 * 128, help='threshold resolution, default is high, generally ok to lower')
+    thresh_bins = scfg.Value(32 * 32, help='threshold resolution.')
 
 
 def main(cmdline=True, **kwargs):
@@ -1061,9 +1063,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     rows = []
     chunk_size = 5
-    # thresh_bins = 256 * 256
-    # thresh_bins = 64 * 64
-    thresh_bins = np.linspace(0, 1, 128 * 128)  # this is more stable using an ndarray
+    num_thresh_bins = config.get('thresh_bins', 32 * 32)
+    thresh_bins = np.linspace(0, 1, num_thresh_bins)  # this is more stable using an ndarray
 
     if draw_curves == 'auto':
         draw_curves = bool(eval_dpath is not None)
@@ -1109,8 +1110,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Prepare job pools
     print('workers = {!r}'.format(workers))
     print('draw_workers = {!r}'.format(draw_workers))
-    metrics_executor = ub.Executor(mode='process', max_workers=workers)
-    draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
+
+    metrics_executor = _DelayedBlockingJobQueue(max_unhandled_jobs=workers, mode='process', max_workers=workers)
+    # draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
+    # metrics_executor = ub.Executor(mode='process', max_workers=workers)
+
+    # We want to prevent too many evaluate jobs from piling up results to draw,
+    # as it takes longer to draw than it does to score. For this reason, block
+    # if the draw queue gets too big.
+
+    draw_executor = MaxQueuePool(mode='process', max_workers=draw_workers, max_queue_size=draw_workers * 4)
 
     prog = ub.ProgIter(total=total_images, desc='submit scoring jobs', adjust=False, freq=1)
     prog.begin()
@@ -1155,7 +1164,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if score_space == 'image':
         gids1 = image_matches['match_gids1']
         gids2 = image_matches['match_gids2']
+        gid_pairs = list(zip(gids1, gids2))
+        # Might want to vary the order (or shuffle) depending on user input
+        gid_pairs = sorted(gid_pairs, key=lambda x: x[1])
 
+        # TODO: modify to prevent to many unhandled jobs from building up and
+        # causing memory issues. Maybe with kwutil.BlockingJobQueue
         for gid1, gid2 in zip(gids1, gids2):
             pred_coco_img = pred_coco.coco_image(gid1).detach()
             true_coco_img = true_coco.coco_image(gid2).detach()
@@ -1191,6 +1205,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if DEBUG:
         orig_infos = []
 
+    VERBOSE_DEBUG = 0
+
     with pman:
         score_prog = pman.progiter(desc="[cyan] Scoring...", total=num_jobs)
         score_prog.start()
@@ -1202,11 +1218,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             chunk_info = []
             for job in job_chunk:
                 info = job.result()
+                if VERBOSE_DEBUG:
+                    print('Gather job result')
                 if DEBUG:
                     orig_infos.append(info)
-
                 score_prog.update(1)
                 rows.append(info['row'])
+                if VERBOSE_DEBUG:
+                    print(f'Add new row: {info["row"]}')
+                    print(f'Table size: {len(rows)}')
 
                 class_measures = info.get('class_measures', None)
                 salient_measures = info.get('salient_measures', None)
@@ -1218,6 +1238,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                     chunk_info.append(info)
 
             # Once a job chunk is done, clear its memory
+            if VERBOSE_DEBUG:
+                print(f'Clear job chunk of len {len(job_chunk)}')
             job = None
             job_chunk.clear()
 
@@ -1231,6 +1253,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
                 # Let the draw executor release any memory it can
                 remaining_draw_jobs = []
+                if VERBOSE_DEBUG:
+                    print(f'Handle {len(draw_jobs)} draw jobs')
                 for draw_job in draw_jobs:
                     if draw_job.done():
                         draw_job.result()
@@ -1239,21 +1263,29 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                         remaining_draw_jobs.append(draw_job)
                 draw_job = None
                 draw_jobs = remaining_draw_jobs
+                if VERBOSE_DEBUG:
+                    print(f'Remaining draw jobs: {len(draw_jobs)}')
 
                 # As chunks of evaluation jobs complete, submit background jobs to
                 # draw results to disk if requested.
                 true_gids = [info['row']['true_gid'] for info in chunk_info]
                 true_coco_imgs = true_coco.images(true_gids).coco_images
                 true_coco_imgs = [g.detach() for g in true_coco_imgs]
+                if VERBOSE_DEBUG:
+                    print(f'Submit {len(true_gids)} new draw jobs')
                 draw_job = draw_executor.submit(
                     dump_chunked_confusion, full_classes, true_coco_imgs,
                     chunk_info, heatmap_dpath, title=title, config=config)
                 draw_jobs.append(draw_job)
 
+        if VERBOSE_DEBUG:
+            print('Finished metric jobs')
         metrics_executor.shutdown()
 
         if draw_heatmaps:
             # Allow all drawing jobs to finalize
+            if VERBOSE_DEBUG:
+                print(f'Finalize {len(draw_jobs)} draw jobs')
             while draw_jobs:
                 job = draw_jobs.pop()
                 job.result()
@@ -1362,6 +1394,160 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     rich.print(f'Eval Dpath: [link={eval_dpath}]{eval_dpath}[/link]')
     print(f'eval_fpath={eval_fpath}')
     return df
+
+
+class _DelayedFuture:
+    """
+    Wraps a future object so we can execute logic when its result has been
+    accessed.
+    """
+    def __init__(self, func, args, kwargs, parent):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.task = (func, args, kwargs)
+        self.parent = parent
+        self.future = None
+
+    def result(self, timeout=None):
+        if self.future is None:
+            raise Exception('The task has not been submitted yet')
+        result = self.future.result(timeout)
+        self.parent._job_result_accessed_callback(self)
+        return result
+
+
+class _DelayedBlockingJobQueue:
+    """
+
+    References:
+        .. [GISTnoxdafoxMaxQueuePool] https://gist.github.com/noxdafox/4150eff0059ea43f6adbdd66e5d5e87e
+
+    Ignore:
+        >>> self = _DelayedBlockingJobQueue(max_unhandled_jobs=5)
+        >>> futures = [
+        >>>     self.submit(print, i)
+        >>>     for i in range(10)
+        >>> ][::-1]
+        >>> import time
+        >>> time.sleep(0.5)
+        >>> print(self._num_submitted_jobs)
+        >>> print(self._num_handled_results)
+        >>> print('--- First 5 should have printed ---')
+        >>> for _ in range(3):
+        >>>     f = futures.pop()
+        >>>     f.result()
+        >>> time.sleep(0.5)
+        >>> print(self._num_submitted_jobs)
+        >>> print(self._num_handled_results)
+        >>> print('--- 3 Results were haneld, so 3 more can join the queue')
+        >>> for _ in range(3):
+        >>>     f = futures.pop()
+        >>>     f.result()
+        >>> time.sleep(0.5)
+        >>> print(self._num_submitted_jobs)
+        >>> print(self._num_handled_results)
+        >>> print('--- Handling the rest, but everything should have already been submitted')
+        >>> for _ in range(4):
+        >>>     f = futures.pop()
+        >>>     f.result()
+    """
+    def __init__(self, max_unhandled_jobs, mode='thread', max_workers=None):
+        from collections import deque
+        self._unsubmitted = deque()
+        self.pool = ub.Executor(mode=mode, max_workers=max_workers)
+        self.max_unhandled_jobs = max_unhandled_jobs
+        self._num_handled_results = 0
+        self._num_submitted_jobs = 0
+        self._num_unhandled = 0
+
+    def submit(self, func, *args, **kwargs):
+        """
+        Queues a new job, but wont execute until
+        some conditions are met
+        """
+        delayed = _DelayedFuture(func, args, kwargs, parent=self)
+        self._unsubmitted.append(delayed)
+        self._submit_if_room()
+        return delayed
+
+    def _submit_if_room(self):
+        while self._num_unhandled < self.max_unhandled_jobs and self._unsubmitted:
+            delayed = self._unsubmitted.popleft()
+            self._num_submitted_jobs += 1
+            self._num_unhandled += 1
+            delayed.future = self.pool.submit(delayed.func, *delayed.args, **delayed.kwargs)
+
+    def _job_result_accessed_callback(self, _):
+        """Called when the user handles a result """
+        self._num_handled_results += 1
+        self._num_unhandled -= 1
+        self._submit_if_room()
+
+
+from threading import BoundedSemaphore  # NOQA
+
+
+class MaxQueuePool:
+    """
+    This Class wraps a concurrent.futures.Executor
+    limiting the size of its task queue.
+    If `max_queue_size` tasks are submitted, the next call to submit will block
+    until a previously submitted one is completed.
+
+    References:
+        .. [GISTnoxdafoxMaxQueuePool] https://gist.github.com/noxdafox/4150eff0059ea43f6adbdd66e5d5e87e
+
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/geowatch'))
+        from geowatch.tasks.fusion.evaluate import *  # NOQA
+        from geowatch.tasks.fusion.evaluate import _memo_legend, _redraw_measures
+        self = MaxQueuePool(max_queue_size=0)
+
+        dpath = ub.Path.appdir('kwutil/doctests/maxpoolqueue')
+        dpath.delete().ensuredir()
+        signal_fpath = dpath / 'signal'
+
+        def waiting_worker():
+            counter = 0
+            while not signal_fpath.exists():
+                counter += 1
+            return counter
+
+        future = self.submit(waiting_worker)
+
+        try:
+            future.result(timeout=0.001)
+        except TimeoutError:
+            ...
+        signal_fpath.touch()
+        result = future.result()
+
+    """
+    def __init__(self, max_queue_size=None, mode='thread', max_workers=0):
+        if max_queue_size is None:
+            max_queue_size = max_workers
+        self.pool = ub.Executor(mode=mode, max_workers=max_workers)
+        if 'serial' in self.pool.backend.__class__.__name__.lower():
+            self.pool_queue = None
+        else:
+            self.pool_queue = BoundedSemaphore(max_queue_size)
+
+    def submit(self, function, *args, **kwargs):
+        """Submits a new task to the pool, blocks if Pool queue is full."""
+        if self.pool_queue is not None:
+            self.pool_queue.acquire()
+
+        future = self.pool.submit(function, *args, **kwargs)
+        future.add_done_callback(self.pool_queue_callback)
+
+        return future
+
+    def pool_queue_callback(self, _):
+        """Called once task is done, releases one queue slot."""
+        if self.pool_queue is not None:
+            self.pool_queue.release()
 
 
 def _redraw_measures(eval_dpath):
