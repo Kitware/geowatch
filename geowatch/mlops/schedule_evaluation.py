@@ -220,8 +220,10 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
     pipeline = scfg.Value('joint_bas_sc', help=ub.paragraph(
         '''
         The name of the pipeline to run. Can also specify this in the params.
-        There are special SMART-specific names that are available, and initial
-        experimental support for custom pipelines, which needs documentation.
+        This can be a name of an internally registered pipeline, or it can
+        point to a function that defines a pipeline in a Python file. E.g.
+        ``user_module.pipelines.custom_pipeline_func()`` or
+        ``$HOME/my_code/my_pipeline.py::make_my_pipeline("arg")``.
         '''))
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')

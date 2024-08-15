@@ -84,7 +84,13 @@ class AggregateLoader(DataConfig):
         (2) one or more pre-aggregated files,
         '''), nargs='+', position=1)
 
-    pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
+    pipeline = Value('joint_bas_sc', help=ub.paragraph(
+        '''
+        The pipeline to run. This can be a name of an internally registered
+        pipeline, or it can point to a function that defines a pipeline
+        in a Python file. E.g. ``user_module.pipelines.custom_pipeline_func()``
+        or ``$HOME/my_code/my_pipeline.py::make_my_pipeline("arg")``.
+        '''))
 
     io_workers = Value('avail', help='number of processes to load results')
 
