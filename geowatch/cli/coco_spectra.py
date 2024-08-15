@@ -410,6 +410,7 @@ def single_persensor_table(full_df):
 
     sensor_chan_stats = pd.DataFrame(single_rows)
     sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
+    return sensor_chan_stats
 
 
 def sensor_stats_tables(full_df):
