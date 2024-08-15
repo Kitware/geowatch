@@ -276,6 +276,9 @@ def main(cmdline=True, **kwargs):
         if show_seen_props:
             seen_props = ub.ddict(set)
 
+        update_report_timer = ub.Timer().tic()
+        update_report_timer_seconds = 10  # Update the report once every 10 seconds
+
         for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
             intensity_stats = job.result()
             sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
@@ -300,16 +303,21 @@ def main(cmdline=True, **kwargs):
                 pman.update_info(
                     ('seen_props = {}'.format(seen_props_text))
                 )
-            if 1:
+            if update_report_timer.toc() > update_report_timer_seconds:
+                # TODO: can we compute a running average for efficiency
+                # instead? As a workaround, only compute once every few seconds
                 current_ave = single_persensor_table(accum.finalize())
                 pman.update_info(
                     current_ave.to_string()
                     # ('seen_props = {}'.format(seen_props_text))
                 )
 
-        full_df = accum.finalize()
-
-        sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+            full_df = accum.finalize()
+            sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+            pman.update_info(
+                sensor_chan_stats.to_string()
+                # ('seen_props = {}'.format(seen_props_text))
+            )
 
         COMPARSE_SENSORS = True
         if COMPARSE_SENSORS:
