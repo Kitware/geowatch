@@ -271,15 +271,20 @@ def main(cmdline=True, **kwargs):
             valid_max = math.inf
 
         accum = HistAccum()
-        seen_props = ub.ddict(set)
+
+        show_seen_props = False
+        if show_seen_props:
+            seen_props = ub.ddict(set)
+
         for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
             intensity_stats = job.result()
             sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
             for band_stats in intensity_stats['bands']:
                 intensity_hist = band_stats['intensity_hist']
                 band_props = band_stats['properties']
-                for k, v in band_props.items():
-                    seen_props[k].add(v)
+                if show_seen_props:
+                    for k, v in band_props.items():
+                        seen_props[k].add(v)
                 band_name = band_props['band_name']
                 intensity_hist = {k: v for k, v in intensity_hist.items()
                                   if k >= valid_min and k <= valid_max}
@@ -288,12 +293,19 @@ def main(cmdline=True, **kwargs):
             # Need to truncate repr...
             # should probably try to use geowatch.utils.util_kwutil.distributed_subitems
             # to reduce urepr overhead
-            from kwutil.slugify_ext import smart_truncate
-            seen_props_text = ub.urepr(seen_props, nl=1)
-            seen_props_text = smart_truncate(seen_props_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')
-            pman.update_info(
-                ('seen_props = {}'.format(seen_props_text))
-            )
+            if show_seen_props:
+                from kwutil.slugify_ext import smart_truncate
+                seen_props_text = ub.urepr(seen_props, nl=1)
+                seen_props_text = smart_truncate(seen_props_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')
+                pman.update_info(
+                    ('seen_props = {}'.format(seen_props_text))
+                )
+            if 1:
+                current_ave = single_persensor_table(accum.finalize())
+                pman.update_info(
+                    current_ave.to_string()
+                    # ('seen_props = {}'.format(seen_props_text))
+                )
 
         full_df = accum.finalize()
 
@@ -351,6 +363,55 @@ def main(cmdline=True, **kwargs):
 #     kde = sm.nonparametric.KDEUnivariate(obs_dist)
 
 
+def single_persensor_table(full_df):
+    """
+    Like sensor_stats_tables, but only used for intermediate stats
+    """
+    import pandas as pd
+    import numpy as np
+    sensor_channel_to_vwf = {}
+    for _key, chan_df in full_df.groupby(['sensor', 'channel']):
+        _sensor, channel = _key
+        _values = chan_df['intensity_bin']
+        _weights = chan_df['value']
+        norm_weights = _weights / _weights.sum()
+        sensor_channel_to_vwf[(_sensor, channel)] = {
+            'raw_values': _values,
+            'raw_weights': _weights,
+            'norm_weights': norm_weights,
+        }
+
+    single_rows = []
+    for sensor, channel in sensor_channel_to_vwf:
+        sensor_data = sensor_channel_to_vwf[(sensor, channel)]
+        values = sensor_data['raw_values']
+        weights = sensor_data['raw_weights']
+
+        # Note: the calculation of the variance depends on the type of
+        # weighting we choose
+        average = np.average(values, weights=weights)
+        variance = np.average((values - average) ** 2, weights=weights)
+        variance = variance * sum(weights) / (sum(weights) - 1)
+        stddev = np.sqrt(variance)
+
+        pytype = float if values.values.dtype.kind == 'f' else int
+
+        info = {
+            'min': pytype(values.min()),
+            'max': pytype(values.max()),
+            'mean': average,
+            'std': stddev,
+            'total_weight': weights.sum(),
+            'channel': channel,
+            'sensor': sensor,
+        }
+        assert info['max'] >= info['min']
+        single_rows.append(info)
+
+    sensor_chan_stats = pd.DataFrame(single_rows)
+    sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
+
+
 def sensor_stats_tables(full_df):
     import itertools as it
     import scipy
@@ -359,29 +420,20 @@ def sensor_stats_tables(full_df):
     import pandas as pd
     import numpy as np
     sensor_channel_to_vwf = {}
-    for _sensor, sensor_df in full_df.groupby('sensor'):
-        for channel, chan_df in sensor_df.groupby('channel'):
-            _values = chan_df['intensity_bin']
-            _weights = chan_df['value']
-            norm_weights = _weights / _weights.sum()
-            sensor_channel_to_vwf[(_sensor, channel)] = {
-                'raw_values': _values,
-                'raw_weights': _weights,
-                'norm_weights': norm_weights,
-                'sensorchan_df': chan_df,
-            }
+    for _key, chan_df in full_df.groupby(['sensor', 'channel']):
+        _sensor, channel = _key
+        _values = chan_df['intensity_bin']
+        _weights = chan_df['value']
+        norm_weights = _weights / _weights.sum()
+        sensor_channel_to_vwf[(_sensor, channel)] = {
+            'raw_values': _values,
+            'raw_weights': _weights,
+            'norm_weights': norm_weights,
+            'sensorchan_df': chan_df,
+        }
 
     print('compute per-sensor stats')
     print(ub.urepr(list(sensor_channel_to_vwf.keys()), nl=1))
-    chan_to_group = ub.group_items(
-        sensor_channel_to_vwf.keys(),
-        [t[1] for t in sensor_channel_to_vwf.keys()]
-    )
-    chan_to_combos = {
-        chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
-    }
-    to_compare = list(ub.flatten(chan_to_combos.values()))
-
     single_rows = []
     for sensor, channel in ub.ProgIter(sensor_channel_to_vwf, desc='compute stats'):
         sensor_data = sensor_channel_to_vwf[(sensor, channel)]
@@ -419,6 +471,14 @@ def sensor_stats_tables(full_df):
     print(sensor_chan_stats.to_string())
 
     print('compare channels between sensors')
+    chan_to_group = ub.group_items(
+        sensor_channel_to_vwf.keys(),
+        [t[1] for t in sensor_channel_to_vwf.keys()]
+    )
+    chan_to_combos = {
+        chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
+    }
+    to_compare = list(ub.flatten(chan_to_combos.values()))
     pairwise_rows = []
     for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=1):
         sensor1, channel1 = item1
