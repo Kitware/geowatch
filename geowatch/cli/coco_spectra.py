@@ -312,12 +312,12 @@ def main(cmdline=True, **kwargs):
                     # ('seen_props = {}'.format(seen_props_text))
                 )
 
-            full_df = accum.finalize()
-            sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
-            pman.update_info(
-                sensor_chan_stats.to_string()
-                # ('seen_props = {}'.format(seen_props_text))
-            )
+        full_df = accum.finalize()
+        sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+        pman.update_info(
+            sensor_chan_stats.to_string()
+            # ('seen_props = {}'.format(seen_props_text))
+        )
 
         COMPARSE_SENSORS = True
         if COMPARSE_SENSORS:
