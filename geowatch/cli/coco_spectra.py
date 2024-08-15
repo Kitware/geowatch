@@ -253,6 +253,12 @@ def main(cmdline=True, **kwargs):
     include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
+    if config['valid_range'] is not None:
+        valid_min, valid_max = map(float, config['valid_range'].split(':'))
+    else:
+        valid_min = -math.inf
+        valid_max = math.inf
+
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
     from kwutil import util_progress
     pman = util_progress.ProgressManager()
@@ -261,14 +267,10 @@ def main(cmdline=True, **kwargs):
             coco_img.detach()
             job = jobs.submit(ensure_intensity_stats, coco_img,
                               include_channels=include_channels,
-                              exclude_channels=exclude_channels)
+                              exclude_channels=exclude_channels,
+                              valid_min=valid_min,
+                              valid_max=valid_max)
             job.coco_img = coco_img
-
-        if config['valid_range'] is not None:
-            valid_min, valid_max = map(float, config['valid_range'].split(':'))
-        else:
-            valid_min = -math.inf
-            valid_max = math.inf
 
         accum = HistAccum()
 
@@ -285,12 +287,10 @@ def main(cmdline=True, **kwargs):
             for band_stats in intensity_stats['bands']:
                 intensity_hist = band_stats['intensity_hist']
                 band_props = band_stats['properties']
+                band_name = band_props['band_name']
                 if show_seen_props:
                     for k, v in band_props.items():
                         seen_props[k].add(v)
-                band_name = band_props['band_name']
-                intensity_hist = {k: v for k, v in intensity_hist.items()
-                                  if k >= valid_min and k <= valid_max}
                 accum.update(intensity_hist, sensor, band_name)
 
             # Need to truncate repr...
@@ -606,7 +606,9 @@ def ensure_intensity_sidecar(fpath, recompute=False):
 
 
 @profile
-def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
+def ensure_intensity_stats(coco_img, recompute=False, include_channels=None,
+                           exclude_channels=None, valid_min=-math.inf,
+                           valid_max=math.inf):
     """
     Ensures a sidecar file exists for the kwcoco image
     """
@@ -693,6 +695,15 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                         ...
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)
+
+    if math.isfinite(valid_max) or math.isfinite(valid_min):
+        # Filter on the fly, but in the worker process
+        for band_stats in intensity_stats['bands']:
+            intensity_hist = band_stats['intensity_hist']
+            band_stats['intensity_hist'] = {
+                k: v for k, v in intensity_hist.items()
+                if k >= valid_min and k <= valid_max}
+
     return intensity_stats
 
 
