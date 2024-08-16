@@ -1024,6 +1024,8 @@ def _write_ann_visualizations2(coco_dset,
     if 1:
         if resolution is None:
             factor = 1
+        elif isinstance(resolution, float):
+            factor = resolution
         else:
             factor = coco_img._scalefactor_for_resolution(
                 space=space, resolution=resolution)
