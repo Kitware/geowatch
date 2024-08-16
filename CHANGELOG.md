@@ -17,6 +17,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Moved balanced samplers to their own module.
 * MLops now puts slurm output in the node directory
 * Refactored / cleaned up code in fusion.predict
+* Big speedup in `geowatch spectra`
+* `geowatch spectra` now shows stats estimates as it is computing
 
 ### Removed
 * Removed several vendored utilities in favor of ones in other packages (`process_context`)

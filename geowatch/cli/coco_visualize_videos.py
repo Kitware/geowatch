@@ -905,6 +905,8 @@ def __default_kwcoco_build_image_header_text(**kwargs):
     # name = _multi_get('name', 'unknown', kwargs, img)
 
     date_captured = _multi_get('date_captured', '', kwargs, img)
+    if not date_captured:
+        date_captured = _multi_get('timestamp', '', kwargs, img)
     frame_index = _multi_get('frame_index', None, kwargs, img)
     gid = _multi_get('id', None, kwargs, img)
     image_name = _multi_get('name', '', kwargs, img)

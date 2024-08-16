@@ -255,6 +255,7 @@ monai>=0.6.0     ; python_version < '3.11'
 
 torch_optimizer>=0.1.0
 
+# TODO: modernize timm?
 timm>=0.6.13,<0.9.0 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 timm>=0.4.12,<0.9.0 ; python_version < '3.11'                               # Python 3.10-
 
