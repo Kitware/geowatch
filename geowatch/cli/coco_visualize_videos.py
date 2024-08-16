@@ -81,9 +81,8 @@ class CocoVisualizeConfig(scfg.DataConfig):
 
         'resolution': scfg.Value(None, help=ub.paragraph(
             '''
-            the resolution to make the output at. If specified as a number
-            without a unit, this becomes a scale factor. If unspecified use the
-            dataset default
+            the resolution to make the output at.
+            If unspecified use the dataset default
             ''')),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
@@ -518,7 +517,7 @@ def main(cmdline=True, **kwargs):
 
         common_kw = ub.udict(config) & {
             'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
-            'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
+            'stack', 'min_dim', 'max_dim', 'verbose', 'only_boxes',
             'draw_boxes', 'draw_labels', 'fixed_normalization_scheme', 'any3',
             'cmap', 'role_order', 'smart', 'ann_score_thresh', 'alpha',
         }
@@ -1029,9 +1028,6 @@ def _write_ann_visualizations2(coco_dset,
     if 1:
         if resolution is None:
             factor = 1
-        elif isinstance(resolution, float):
-            factor = resolution
-            resolution = None  # hack
         else:
             factor = coco_img._scalefactor_for_resolution(
                 space=space, resolution=resolution)

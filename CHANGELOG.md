@@ -30,6 +30,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added workaround to load 
 * Handle better printf escapes in mlops for job config and invoke 
 * Issue where images only datasets using dummy videos would keep prediction heatmaps in memory indefinitely
+* Bug in visualize where max dim was not respected
 
 
 ## Version 0.18.1 - Released 2024-06-25
