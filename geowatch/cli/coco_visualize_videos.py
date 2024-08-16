@@ -79,7 +79,12 @@ class CocoVisualizeConfig(scfg.DataConfig):
         'max_dim': scfg.Value(None, help='if specified, the visualization will resize if it has a dimension larger than this'),
         'min_dim': scfg.Value(384, help='if specified, the visualization will resize if it has a dimension smaller than this'),
 
-        'resolution': scfg.Value(None, help='the resolution to make the output at. If unspecified use the dataset default'),
+        'resolution': scfg.Value(None, help=ub.paragraph(
+            '''
+            the resolution to make the output at. If specified as a number
+            without a unit, this becomes a scale factor. If unspecified use the
+            dataset default
+            ''')),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
@@ -1026,6 +1031,7 @@ def _write_ann_visualizations2(coco_dset,
             factor = 1
         elif isinstance(resolution, float):
             factor = resolution
+            resolution = None  # hack
         else:
             factor = coco_img._scalefactor_for_resolution(
                 space=space, resolution=resolution)
