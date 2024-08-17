@@ -4,6 +4,12 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
+__dev_notes__ = """
+SeeAlso:
+    ~/code/graphid/graphid/cli/finish_install.py
+"""
+
+
 class FinishInstallCLI(scfg.DataConfig):
     """
     Finish the install of geowatch.

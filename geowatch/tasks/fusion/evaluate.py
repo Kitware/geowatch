@@ -31,8 +31,6 @@ import scriptconfig as scfg
 from shapely.ops import unary_union
 
 from geowatch.utils import kwcoco_extensions
-from kwutil import util_progress
-from kwutil import util_parallel
 from geowatch import heuristics
 
 try:
@@ -889,15 +887,23 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     max_gid = max(true_gids)
     min_gid = min(true_gids)
 
-    if max_frame == min_frame:
-        frame_part = f'{min_frame:04d}'
-    else:
-        frame_part = f'{min_frame:04d}-{max_frame:04d}'
+    try:
+        # num_digits = _max_digits(max_num) # TODO
+        if max_frame == min_frame:
+            frame_part = f'{min_frame:04d}'
+        else:
+            frame_part = f'{min_frame:04d}-{max_frame:04d}'
+    except TypeError:
+        frame_part = f'{min_frame}'
 
-    if max_gid == min_gid:
-        gid_part = f'{min_gid:04d}'
-    else:
-        gid_part = f'{min_gid:04d}-{max_gid:04d}'
+    try:
+        if max_gid == min_gid:
+            gid_part = f'{min_gid:04d}'
+        else:
+            gid_part = f'{min_gid:04d}-{max_gid:04d}'
+    except TypeError:
+        gid_part = f'{min_gid}'
+
     vidname_part = '_'.join(list(unique_vidnames))
     if not vidname_part:
         vidname_part = '_loose_images'

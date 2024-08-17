@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # shellcheck disable=SC2016
 __doc__='
 Install geowatch development environment
@@ -168,18 +168,34 @@ install_pytorch(){
     available_cuda_versions = [
         Version('11.8'),
         Version('12.1'),
+        Version('12.4'),
     ]
 
-    nvcc_path = ub.find_exe('nvcc')
-    if nvcc_path is None:
-        print('CPU')
-    else:
+    # Note nvcc can give us the installed version of cuda, but nvidia-smi gives
+    # us the maximum version of cuda supported by our driver. I believe torch
+    # ships with its own cuda, so we should use that as our indicator.
+
+    def parse_nvcc_version():
         parser = parse.Parser('{}, release {ver},{}')
         stdout = ub.cmd('nvcc --version').stdout
         result = parser.parse(stdout)
-
         cuda_version = Version(result.named['ver'])
+        return cuda_version
 
+    def parse_nvidia_smi_max_supported_cuda():
+        parser = parse.Parser('{}CUDA Version: {major:d}.{minor:4}{}')
+        stdout = ub.cmd('nvidia-smi').stdout
+        result = parser.parse(stdout)
+        cuda_version = Version('{major}.{minor}'.format(**result.named))
+        return cuda_version
+
+    nvidia_smi_path = ub.find_exe('nvidia-smi')
+    nvcc_path = ub.find_exe('nvcc')
+    if nvcc_path is None:
+        print('cpu')
+    else:
+        #cuda_version = parse_nvcc_version()
+        cuda_version = parse_nvidia_smi_max_supported_cuda()
         best = None
         for cand in available_cuda_versions:
             if cuda_version < cand:
@@ -196,16 +212,43 @@ install_pytorch(){
     elif [[ "$TARGET_TORCH_DEVICE" == "11.8" ]]; then
         pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
     elif [[ "$TARGET_TORCH_DEVICE" == "12.1" ]]; then
-        pip install torch torchvision torchaudio # --index-url https://download.pytorch.org/whl/cu121
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    elif [[ "$TARGET_TORCH_DEVICE" == "12.4" ]]; then
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
     fi
+}
 
 
+check_gpu_ops_work(){
+    __doc__="
+    quick check to ensure that GPU operations are generally functional
+    "
+    python -c "import torch; print(torch.cuda.is_available())"
+
+    xdoctest -m torch --style=google --global-exec "from torch import nn\nimport torch.nn.functional as F\nimport torch" --options="+IGNORE_WHITESPACE"
+
+    python -c "import torch; print(torch.nn.modules.Linear(10, 5).to(0)(torch.rand(10, 10).to(0)).sum().backward())"
+}
+
+remove_torch_and_deps(){
+    # Torch deps of 2.4.0
+    pip uninstall \
+        nvidia-cublas-cu12 nvidia-cuda-cupti-cu12 nvidia-cuda-nvrtc-cu12 \
+        nvidia-cuda-runtime-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 \
+        nvidia-curand-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 \
+        nvidia-nccl-cu12 nvidia-nvjitlink-cu12 nvidia-nvtx-cu12 \
+        triton torch
 }
 
 fix_opencv_conflicts(){
     __doc__="
     Check to see if the wrong opencv is installed, and perform steps to clean
     up the incorrect libraries and install the desired (headless) ones.
+
+    The issue this works around is documented in [CV2_467]_.
+
+    References:
+        .. [CV2_467] https://github.com/opencv/opencv-python/issues/467
     "
     # Fix opencv issues
     HAS_OPENCV_RETCODE="0"
@@ -248,10 +291,9 @@ torch_on_3090(){
 
 check_metrics_framework(){
     __doc__="
-    Check to see if the IARPA metrics framework is installed
+    Check to see if the IARPA metrics framework is installed.
+    TODO: remove, this is no longer necessary.
     "
-    #METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.modname_to_modpath('iarpa_smart_metrics'))")
-    #METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.util_import._pkgutil_modname_to_modpath('iarpa_smart_metrics'))")
     METRICS_MODPATH=$(python -c "if 1:
         try:
             import iarpa_smart_metrics
@@ -276,16 +318,6 @@ check_metrics_framework(){
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         "
     fi
-}
-
-
-check_gpu_ops_work(){
-    __doc__="
-    quick check to ensure that GPU operations are generally functional
-    "
-    xdoctest -m torch --style=google --global-exec "from torch import nn\nimport torch.nn.functional as F\nimport torch" --options="+IGNORE_WHITESPACE"
-
-    python -c "import torch; print(torch.nn.modules.Linear(10, 5).to(0)(torch.rand(10, 10).to(0)).sum().backward())"
 }
 
 
