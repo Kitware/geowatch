@@ -29,10 +29,8 @@ from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
 import scriptconfig as scfg
 from shapely.ops import unary_union
-from threading import BoundedSemaphore  # NOQA
 
 from geowatch.utils import kwcoco_extensions
-from geowatch.utils import process_context
 from kwutil import util_progress
 from kwutil import util_parallel
 from geowatch import heuristics
@@ -233,7 +231,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         undistinguished_classes)
 
     # Determine if saliency has been predicted
-    # 'salient'
     salient_class = salient_channel
     has_saliency = salient_class in pred_coco_img.channels
 
@@ -1007,6 +1004,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
     import rich
+    from kwutil import process_context
+    from kwutil import util_progress
+    from kwutil import util_parallel
 
     if config is None:
         config = {}
@@ -1578,6 +1578,7 @@ class MaxQueuePool:
         if 'serial' in self.pool.backend.__class__.__name__.lower():
             self.pool_queue = None
         else:
+            from threading import BoundedSemaphore  # NOQA
             self.pool_queue = BoundedSemaphore(max_queue_size)
 
     def submit(self, function, *args, **kwargs):
