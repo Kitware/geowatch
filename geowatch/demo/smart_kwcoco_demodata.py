@@ -614,6 +614,9 @@ def _random_chan_data(dims, sseg, rng):
 def hack_in_timedata(coco_dset, dates=True, rng=None):
     """
     Adds date_captured fields to demo toydata
+
+    Note:
+        superceded by kwcoco populate_random_timestamps, use that instead
     """
     from kwarray.distributions import Uniform
     from kwutil import util_time

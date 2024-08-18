@@ -19,6 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Refactored / cleaned up code in fusion.predict
 * Big speedup in `geowatch spectra`
 * `geowatch spectra` now shows stats estimates as it is computing
+* `geowatch spectra` can now be given a directory to intermediate dump cache file.
 
 ### Removed
 * Removed several vendored utilities in favor of ones in other packages (`process_context`)

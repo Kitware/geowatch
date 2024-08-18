@@ -42,6 +42,8 @@ class CocoSpectraConfig(scfg.DataConfig):
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
+        'cache_dpath': scfg.Value(None, help='if specified, read/write cached stats files from here instead of as sidecar files'),
+
         'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
         'draw': scfg.Value(True, isflag=True, help='if False disables all visualization and just print tables'),
 
@@ -259,6 +261,34 @@ def main(cmdline=True, **kwargs):
         valid_min = -math.inf
         valid_max = math.inf
 
+    class PeriodicCondition:
+        """
+        Helper that does something based on some periodic condition (e.g.
+        number of seconds passed, or every n-th iteration)
+
+        TODO:
+            rectify with PeriodicMemoryMonitor in fusion.predict and port
+            to kwutil
+        """
+        def __init__(self, seconds=10, do_first=True):
+            self.timer = ub.Timer().tic()
+            self.num_checks = 0
+            self.do_first = do_first
+            self.seconds = seconds
+
+        def _satisfied(self):
+            return (
+                (self.timer.toc() > self.seconds) or
+                (self.do_first and self.num_checks == 0)
+            )
+
+        def check(self):
+            if self._satisfied():
+                self.timer.tic()
+                self.num_checks += 1
+                return True
+            return False
+
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
     from kwutil import util_progress
     pman = util_progress.ProgressManager()
@@ -268,6 +298,8 @@ def main(cmdline=True, **kwargs):
             job = jobs.submit(ensure_intensity_stats, coco_img,
                               include_channels=include_channels,
                               exclude_channels=exclude_channels,
+                              cache_dpath=config.cache_dpath,
+                              bundle_dpath=coco_dset.bundle_dpath,
                               valid_min=valid_min,
                               valid_max=valid_max)
             job.coco_img = coco_img
@@ -278,8 +310,11 @@ def main(cmdline=True, **kwargs):
         if show_seen_props:
             seen_props = ub.ddict(set)
 
-        update_report_timer = ub.Timer().tic()
-        update_report_timer_seconds = 10  # Update the report once every 10 seconds
+        # Update the report once every 10 seconds
+        report_condition = PeriodicCondition(
+            seconds=3,
+            do_first=True,
+        )
 
         for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
             intensity_stats = job.result()
@@ -303,7 +338,7 @@ def main(cmdline=True, **kwargs):
                 pman.update_info(
                     ('seen_props = {}'.format(seen_props_text))
                 )
-            if update_report_timer.toc() > update_report_timer_seconds:
+            if report_condition.check():
                 # TODO: can we compute a running average for efficiency
                 # instead? As a workaround, only compute once every few seconds
                 current_ave = single_persensor_table(accum.finalize())
@@ -311,7 +346,6 @@ def main(cmdline=True, **kwargs):
                     current_ave.to_string()
                     # ('seen_props = {}'.format(seen_props_text))
                 )
-                update_report_timer.tic()
 
         full_df = accum.finalize()
         sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
@@ -325,8 +359,12 @@ def main(cmdline=True, **kwargs):
             request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
             have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
             harmony_scores = distance_metrics[have_columns].mean()
-            extra_text = ub.urepr(harmony_scores.to_dict(), precision=4, compact=1)
-            print('extra_text = {!r}'.format(extra_text))
+            harmony_scores = harmony_scores.to_dict()
+            if harmony_scores:
+                extra_text = ub.urepr(harmony_scores, precision=4, compact=1)
+                print('extra_text = {!r}'.format(extra_text))
+            else:
+                extra_text = None
         else:
             extra_text = None
 
@@ -549,9 +587,25 @@ def sensor_stats_tables(full_df):
 
 
 @profile
-def ensure_intensity_sidecar(fpath, recompute=False):
+def ensure_intensity_sidecar(fpath, cache_dpath=None, bundle_dpath=None,
+                             recompute=False):
     """
     Write statistics next to the image
+
+    Args:
+        fpath (str | PathLike): the path to the image to compute spectra for
+
+        cache_dpath (str | PathLike | None):
+            if specified, write cache files here instead of next to the input
+            file.
+
+        bundle_dpath (str | PathLike | None):
+            if cache_dpath is specified and this is specified, this is
+            considered the "root" of the image, which allows the cache to use
+            specific parent folders, but not the entire filesystem.
+            Specifying this allows portablity of the cache.
+
+        recompute (bool): if True, force recomputation.
 
     Example:
         >>> from geowatch.cli.coco_spectra import *  # NOQA
@@ -573,13 +627,41 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> import pickle
         >>> pickle.loads(stats_fpath1.read_bytes())
         >>> pickle.loads(stats_fpath2.read_bytes())
+
+    Example:
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
+        >>> import kwimage
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('geowatch/tests/intensity_sidecar2').ensuredir()
+        >>> dpath.delete().ensuredir()
+        >>> cache_dpath = dpath / 'cache'
+        >>> bundle_dpath = None
+        >>> img = kwimage.grab_test_image(dsize=(16, 16))
+        >>> img255 = kwimage.ensure_uint255(img)
+        >>> fpath = dpath / 'img255.tif'
+        >>> kwimage.imwrite(fpath, img255)
+        >>> stats_fpath = ensure_intensity_sidecar(fpath, cache_dpath=cache_dpath)
+        >>> import pickle
+        >>> pickle.loads(stats_fpath.read_bytes())
     """
     import os
     import kwarray
     import kwimage
     import pickle
-    stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
+
+    if cache_dpath is None:
+        stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
+    else:
+        fpath = ub.Path(fpath)
+        if bundle_dpath is not None:
+            relpath = fpath.relative_to(bundle_dpath)
+        else:
+            proxy_parent = ub.hash_data(fpath.parent, hasher='sha256')
+            relpath = ub.Path(proxy_parent) / fpath.name
+        stats_fpath = ub.Path(cache_dpath) / (relpath + '.stats_v1.pkl')
+
     if recompute or not stats_fpath.exists():
+        import safer
         imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: even better float handling
@@ -599,15 +681,20 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             stats_info['bands'].append({
                 'intensity_hist': intensity_hist,
             })
-        import safer
+        stats_fpath.parent.ensuredir()
         with safer.open(stats_fpath, 'wb') as file:
             pickle.dump(stats_info, file)
     return stats_fpath
 
 
 @profile
-def ensure_intensity_stats(coco_img, recompute=False, include_channels=None,
-                           exclude_channels=None, valid_min=-math.inf,
+def ensure_intensity_stats(coco_img,
+                           recompute=False,
+                           cache_dpath=None,
+                           bundle_dpath=None,
+                           include_channels=None,
+                           exclude_channels=None,
+                           valid_min=-math.inf,
                            valid_max=math.inf):
     """
     Ensures a sidecar file exists for the kwcoco image
@@ -645,7 +732,10 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None,
             requested_channels = requested_channels - exclude_channels
 
         if requested_channels.numel() > 0:
-            stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
+            stats_fpath = ensure_intensity_sidecar(fpath,
+                                                   cache_dpath=cache_dpath,
+                                                   bundle_dpath=bundle_dpath,
+                                                   recompute=recompute)
             try:
                 with open(stats_fpath, 'rb') as file:
                     stat_info = pickle.load(file)
