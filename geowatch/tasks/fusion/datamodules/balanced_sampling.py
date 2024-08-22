@@ -372,6 +372,45 @@ class BalancedSampleForest(ub.NiceRepr):
         >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
 
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.balanced_sampling import BalancedSampleForest
+        >>> from collections import Counter
+        >>> # Imagine you have a dataset where each sample location could have 1 or
+        >>> # more category. In this case make the value a dictionary where keys
+        >>> # indicate the classes in the sample and the values are the importance
+        >>> # of those classes to the sample.
+        >>> # Make a very large dataset to test speed constraints
+        >>> sample_grid = [
+        >>>     { 'image_id': 1, 'class': {'dog': 1}},  # only 1 dog in this image
+        >>>     { 'image_id': 2, 'class': {'dog': 1, 'cat': 2}},  # 1 dog and 2 cats in this image
+        >>>     { 'image_id': 3, 'class': {'cat': 1}},
+        >>>     { 'image_id': 4, 'class': {'cat': 1}},
+        >>>     { 'image_id': 5, 'class': {'cat': 1}},
+        >>>     { 'image_id': 6, 'class': {'cat': 1}},
+        >>>     { 'image_id': 7, 'class': {'cat': 1}},
+        >>>     { 'image_id': 8, 'class': {'cat': 1}},
+        >>>     { 'image_id': 9, 'class': {'cat': 1}},
+        >>>     { 'image_id': 10, 'class': {'cat': 3, 'dog': 1}}, # 3 cats and 1 dog in the image
+        >>>     { 'image_id': 11, 'class': {'cat': 1, 'dog': 3}}, # 3 dogs and 1 cat in the image
+        >>> ]
+        >>> #
+        >>> self = BalancedSampleForest(sample_grid)
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> class_counts = Counter()
+        >>> for sample in sampled:
+        >>>     class_counts.update(sample['class'])
+        >>> print('Before Balancing')
+        >>> print(f'class_counts = {ub.urepr(class_counts, nl=1)}')
+        >>> # Do the balance step
+        >>> self.subdivide('class')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> class_counts = Counter()
+        >>> for sample in sampled:
+        >>>     class_counts.update(sample['class'])
+        >>> print('After Balancing')
+        >>> print(f'class_counts = {ub.urepr(class_counts, nl=1)}')
+
     TODO:
         Currently this will look at all attributes passed in each item in the
         sample grid. I think we want to specify what the attributes that could
