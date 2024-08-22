@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.18.3 - Unreleased
 
+### Added
+* Add top-level matrices argument to param_grid.
 
 ## Version 0.18.2 - Released 2024-08-22
 

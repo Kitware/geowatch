@@ -73,15 +73,34 @@ def handle_yaml_grid(default, auto, arg):
 def coerce_list_of_action_matrices(arg):
     """
     Preprocess the parameter grid input into a standard form
+
+    CommandLine:
+        xdoctest -m geowatch.utils.util_param_grid coerce_list_of_action_matrices
+
+    Example:
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
+        >>> arg = ub.codeblock(
+            '''
+            matrices:
+              - matrix:
+                    foo: bar
+              - matrix:
+                    foo: baz
+            '''
+            )
+        >>> arg = coerce_list_of_action_matrices(arg)
+        >>> print(arg)
+        >>> assert len(arg) == 2
     """
     import ruamel.yaml
     if isinstance(arg, str):
         data = ruamel.yaml.safe_load(arg)
     else:
         data = arg.copy()
-    if isinstance(data, dict):
-        pass
     action_matrices = []
+    if isinstance(data, dict):
+        if 'matrices' in data:
+            data = data["matrices"]
     if isinstance(data, list):
         for item in data:
             action_matrices.append(item)
