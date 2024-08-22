@@ -218,6 +218,10 @@ class DataFrame(pd.DataFrame):
 
     def varied_values(self, **kwargs):
         """
+        Kwargs:
+            min_variations=0, max_variations=None, default=ub.NoParam,
+            dropna=False, on_error='raise'
+
         SeeAlso:
             :func:`geowatch.utils.result_analysis.varied_values`
         """
@@ -227,6 +231,10 @@ class DataFrame(pd.DataFrame):
 
     def varied_value_counts(self, **kwargs):
         """
+        Kwargs:
+            min_variations=0, max_variations=None, default=ub.NoParam,
+            dropna=False, on_error='raise'
+
         SeeAlso:
             :func:`geowatch.utils.result_analysis.varied_value_counts`
         """

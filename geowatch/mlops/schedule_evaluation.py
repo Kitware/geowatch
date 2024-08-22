@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 r"""
 Helper for scheduling a set of prediction + evaluation jobs.
 
@@ -219,8 +220,10 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
     pipeline = scfg.Value('joint_bas_sc', help=ub.paragraph(
         '''
         The name of the pipeline to run. Can also specify this in the params.
-        There are special SMART-specific names that are available, and initial
-        experimental support for custom pipelines, which needs documentation.
+        This can be a name of an internally registered pipeline, or it can
+        point to a function that defines a pipeline in a Python file. E.g.
+        ``user_module.pipelines.custom_pipeline_func()`` or
+        ``$HOME/my_code/my_pipeline.py::make_my_pipeline("arg")``.
         '''))
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
@@ -272,7 +275,7 @@ def schedule_evaluation(config):
     from kwutil import slugify_ext
     from kwutil import util_progress
     from kwutil.util_yaml import Yaml
-    from geowatch.mlops import smart_pipeline
+    from geowatch.mlops import pipeline_nodes
     from geowatch.utils.result_analysis import varied_values
     from geowatch.utils.util_param_grid import expand_param_grid
 
@@ -325,16 +328,7 @@ def schedule_evaluation(config):
             param_arg['submatrices'] = submatrices
 
     # Load the requested pipeline
-    EXPERIMENTAL_CUSTOM_PIPELINES = True
-    try:
-        dag = smart_pipeline.make_smart_pipeline(pipeline)
-    except Exception:
-        if EXPERIMENTAL_CUSTOM_PIPELINES:
-            # New experimental pipelines
-            dag = _experimental_resolve_pipeline(pipeline)
-        else:
-            raise
-        ...
+    dag = pipeline_nodes.coerce_pipeline(pipeline)
     dag.print_graphs(smart_colors=1)
     dag.inspect_configurables()
 
@@ -441,106 +435,6 @@ def _auto_gpus():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS
-
-
-def _experimental_resolve_pipeline(pipeline):
-    """
-    Users need to be able to build and specify their own pipelines here
-    (similar to how kwiver pipelines work). This is initial support.
-
-    Ignore:
-        pipeline = 'user_module.pipelines.custom_pipeline_func()'
-        pipeline = 'geowatch.mlops.smart_pipeline.make_smart_pipeline("bas")'
-        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
-        _experimental_resolve_pipeline(pipeline)
-    """
-    # Case: given in the format `{module_name}.{attribute_expression}`
-    # Note the attribute_expression allows arbitrary code execution
-    print('Resolving user-specified pipeline')
-    if '.' in pipeline:
-        # Find which part is the module and which is the member
-        parts = pipeline.split('.')
-        found = None
-        for idx in reversed(range(1, len(parts) + 1)):
-            candidate = '.'.join(parts[:idx])
-            try:
-                modpath = _coerce_modpath(candidate)
-            except ValueError:
-                ...
-            else:
-                lhs = candidate
-                rhs = '.'.join(parts[idx:])
-                module = ub.import_module_from_path(modpath)
-                found = (module, modpath, lhs, rhs)
-                print(f'found = {ub.urepr(found, nl=1)}')
-                break
-        if found is None:
-            raise ValueError('unable to resolve pipeline')
-        else:
-            # This initial specification allows arbitrary code execution.
-            # We should define a hardened variant which does not require this.
-            (module, modpath, lhs, rhs) = found
-            limited_namespace = {'pipeline_module': module}
-            statement = f'pipeline_module.{rhs}'
-            dag = eval(statement, limited_namespace)
-            return dag
-    else:
-        raise ValueError(pipeline)
-
-
-def _coerce_modpath(modpath_or_name):
-    import types
-    import os
-    if isinstance(modpath_or_name, types.ModuleType):
-        raise TypeError('Expected a static module but got a dynamic one')
-    modpath = ub.modname_to_modpath(modpath_or_name)
-    if modpath is None:
-        if os.path.exists(modpath_or_name):
-            modpath = modpath_or_name
-        else:
-            raise ValueError('Cannot find module={}'.format(modpath_or_name))
-    return modpath
-
-
-__notes__ = """
-If this is going to be a real mlops framework, then we need to abstract the
-pipeline. The user needs to define what the steps are, but then they need to
-explicitly connect them. We can't make the assumptions we are currently using.
-
-Ignore:
-
-    # We can use our CLIs as definitions of the pipeline as long as the config
-    # object has enough metadata. With scriptconfig+jsonargparse we should be
-    # able to do this.
-
-    import geowatch.cli.run_metrics_framework
-    import geowatch.cli.run_tracker
-    import geowatch.tasks.fusion.predict
-
-    geowatch.cli.run_tracker.__config__.__default__
-
-    list(geowatch.tasks.fusion.predict.make_predict_config().__dict__.keys())
-
-    from geowatch.tasks.tracking.from_heatmap import TimeAggregatedBAS
-    from geowatch.tasks.tracking.from_heatmap import TimeAggregatedSC
-    # from geowatch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
-
-    import jsonargparse
-    parser = jsonargparse.ArgumentParser()
-    parser.add_class_arguments(TimeAggregatedBAS, nested_key='bas_poly')
-    parser.add_class_arguments(TimeAggregatedSC, nested_key='sc_poly')
-    parser.print_help()
-
-    parser.parse_known_args([])
-
-
-    import jsonargparse
-    parser = jsonargparse.ArgumentParser()
-    parser.add_argument('--foo')
-    args = parser.parse_args(args=[])
-    parser.save(args)
-
-"""
 
 
 __config__ = ScheduleEvaluationConfig

@@ -278,7 +278,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_dataset_config['use_centered_positives'] = False
 
         self.test_dataset_config = self.train_dataset_config.copy()
-        self.test_dataset_config['test_with_annot_info'] = self.config.test_with_annot_info
+        self.test_dataset_config['test_with_annot_info'] = self.config['test_with_annot_info']
 
         self.num_workers = util_parallel.coerce_num_workers(cfgdict['num_workers'])
         self.dataset_stats = None
@@ -361,7 +361,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.coco_datasets[_key] = _coco_output
             return _coco_output
 
-        if stage == 'fit' or stage is None:
+        if stage in {'fit', 'train'} or stage is None:
             train_coco_dset = _read_kwcoco_split('train')
             self.coco_datasets['train'] = train_coco_dset
 
@@ -518,6 +518,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     specifying tasks easier is needed without relying on the
                     ``global_head_weights``.
                     '''))
+
         print(f'datamodule notified: requested_tasks={requested_tasks} predictable_classes={predictable_classes}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks

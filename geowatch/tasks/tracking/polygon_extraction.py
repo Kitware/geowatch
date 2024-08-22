@@ -1181,24 +1181,10 @@ def toydata_demo():
         self = PolygonExtractor.demo()
     """
     from geowatch.utils import util_kwimage
+    from geowatch.utils import util_kwplot
     import kwplot
 
-    def autompl2():
-        """
-        New autompl with inline logic for notebooks
-        """
-        import kwplot
-        try:
-            import IPython
-            ipy = IPython.get_ipython()
-            ipy.config
-            if 'colab' in str(ipy.config['IPKernelApp']['kernel_class']):
-                ipy.run_line_magic('matplotlib', 'inline')
-        except NameError:
-            ...
-        kwplot.autompl()
-
-    autompl2()
+    util_kwplot.autompl2()
 
     self = PolygonExtractor.demo()
     stacked = self.draw_timesequence()

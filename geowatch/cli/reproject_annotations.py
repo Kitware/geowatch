@@ -1779,7 +1779,6 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     import matplotlib as mpl
     import kwimage
     import numpy as np
-    from geowatch.utils import util_kwplot
     from kwutil import util_progress
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
@@ -1871,8 +1870,8 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
     cat_to_color = {cat['name']: cat['color'] for cat in coco_dset.cats.values()}
 
-    util_kwplot.phantom_legend(status_to_color, ax=ax, legend_id=1, loc=0)
-    util_kwplot.phantom_legend(cat_to_color, ax=ax, legend_id=3, loc=3)
+    kwplot.phantom_legend(status_to_color, ax=ax, legend_id=1, loc=0)
+    kwplot.phantom_legend(cat_to_color, ax=ax, legend_id=3, loc=3)
 
     ax.set_xlabel('Time')
     ax.set_ylabel('Site Index')

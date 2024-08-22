@@ -1,4 +1,14 @@
 #!/bin/bash
+__notes__="
+Optimizing CIFAR:
+
+* Testing if a ramdisk helps throughput
+
+sudo mkdir -p /mnt/tmpfs
+sudo mount -o size=16G -t tmpfs none /mnt/tmpfs
+
+kwcoco grab cifar10 --dpath /mnt/tmpfs
+"
 kwcoco grab cifar10
 
 export CUDA_VISIBLE_DEVICES=0
@@ -6,12 +16,15 @@ DVC_EXPT_DPATH=$HOME/data/dvc-repos/cifar10
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 DATASET_CODE=cifar10
+#CIFAR_ROOT=/mnt/tmpfs/
+CIFAR_ROOT=$HOME/.cache/kwcoco/data
 
-TRAIN_FPATH=$HOME/.cache/kwcoco/data/cifar10-train/cifar10-train.kwcoco.json
-VALI_FPATH=$HOME/.cache/kwcoco/data/cifar10-test/cifar10-test.kwcoco.json
+TRAIN_FPATH=$CIFAR_ROOT/cifar10-train/cifar10-train.kwcoco.json
+VALI_FPATH=$CIFAR_ROOT/cifar10-test/cifar10-test.kwcoco.json
 
 inspect_kwcoco_files(){
     kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH"
+    kwcoco validate --corrupted "$TRAIN_FPATH" "$VALI_FPATH"
     kwcoco info "$VALI_FPATH" -g 1
     kwcoco info "$VALI_FPATH" -v 1
     #kwcoco info "$VALI_FPATH" -a 1
@@ -51,7 +64,7 @@ MAX_EPOCHS=3
 TRAIN_ITEMS_PER_EPOCH=50000
 VALI_ITEMS_PER_EPOCH=10000
 ACCUMULATE_GRAD_BATCHES=1
-BATCH_SIZE=100
+BATCH_SIZE=1000
 TRAIN_BATCHES_PER_EPOCH=$(python -c "print($TRAIN_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 VALI_BATCHES_PER_EPOCH=$(python -c "print($VALI_ITEMS_PER_EPOCH // $BATCH_SIZE)")
 echo "TRAIN_ITEMS_PER_EPOCH = $TRAIN_ITEMS_PER_EPOCH"
@@ -86,11 +99,11 @@ DDP_WORKAROUND=1
 LINE_PROFILE=0 DDP_WORKAROUND=$DDP_WORKAROUND python -m geowatch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 32
+    num_workers            : 2
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '32,32'
-    time_steps             : 1
+    time_steps             : 0
     time_sampling          : uniform
     #time_kernel           : '[0.0s,]'
     window_resolution     : 1.0
@@ -121,8 +134,12 @@ data:
     use_grid_positives     : False
     use_grid_negatives     : False
     normalize_inputs       : 50000
-    balance_options        : sequential_without_replacement
+
+    augment_time_resample_rate : 0
+    augment_space_shift_rate : 0
     balance_areas          : false
+    reduce_item_size       : true
+    balance_options        : sequential_without_replacement
 
 model:
     class_path: geowatch.tasks.fusion.methods.torchvision_nets.Resnet50
@@ -158,14 +175,15 @@ trainer:
     strategy             : $STRATEGY
     limit_train_batches  : $TRAIN_BATCHES_PER_EPOCH
     limit_val_batches    : $VALI_BATCHES_PER_EPOCH
-    #limit_train_batches  : 5
-    #limit_val_batches    : 3
-    log_every_n_steps    : 1
+    #limit_train_batches : 5
+    #limit_val_batches   : 3
+    log_every_n_steps    : 50
     check_val_every_n_epoch: 1
     enable_checkpointing: true
     enable_model_summary: true
     num_sanity_val_steps : 0
-    #profiler: advanced
+    # profiler: advanced
+    # profiler: simple
     max_epochs: $MAX_EPOCHS
     #max_epochs: 1
     callbacks:
@@ -185,3 +203,44 @@ initializer:
 "
 
 #"${PREV_CHECKPOINT_ARGS[@]}"
+
+
+
+python -m geowatch.tasks.fusion fit --config "
+data:
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_kernel            : [-1year, 0.0year, +1year]
+    fixed_resolution       : 10GSD
+    normalize_perframe     : true
+    channels               : 'red|green|blue|nir'
+    use_centered_positives : True
+    use_grid_positives     : False
+    use_grid_negatives     : True
+    balance_options :
+        - attribute: region
+        - attribute: contains_annotation
+          weights:
+              False: 0.5
+              True: 0.5
+        - attribute: phases
+          default_weight: 0.1
+          weights:
+              'No Activity': 0.05
+              'Site Preparation': 0.8
+              'Active Construction': 0.1
+              'Post Construction': 0.05
+model:
+  class_path: watch.tasks.fusion.methods.MultimodalTransformer
+  init_args:
+    arch_name: smt_it_stm_p16
+optimizer:
+    class_path: torch.optim.SGD
+    init_args:
+        lr           : 1e-4
+initializer:
+    init: path/to/partial_pretrained_state.py
+"
+
+

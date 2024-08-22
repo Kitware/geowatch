@@ -721,6 +721,23 @@ def build_image_header_text(**kwargs):
         >>> }
         >>> header_lines = build_image_header_text(**kwargs)
         >>> print('header_lines = {}'.format(ub.urepr(header_lines, nl=1)))
+
+    Example:
+        >>> from geowatch.heuristics import *  # NOQA
+        >>> img = {
+        >>>     'id': 1,
+        >>>     'frame_index': 0,
+        >>>     'timestamp': '2020-01-01',
+        >>>     'name': 'BLARG',
+        >>> }
+        >>> kwargs = {
+        >>>     'img': img,
+        >>>     'dset_idstr': '',
+        >>>     'name': '',
+        >>>     '_header_extra': None,
+        >>> }
+        >>> header_lines = build_image_header_text(**kwargs)
+        >>> print('header_lines = {}'.format(ub.urepr(header_lines, nl=1)))
     """
     img = kwargs.get('img', {})
     _header_extra = kwargs.get('_header_extra', None)
@@ -741,6 +758,9 @@ def build_image_header_text(**kwargs):
     # name = _multi_get('name', 'unknown', kwargs, img)
 
     date_captured = _multi_get('date_captured', '', kwargs, img)
+    if not date_captured:
+        date_captured = _multi_get('timestamp', '', kwargs, img)
+
     frame_index = _multi_get('frame_index', None, kwargs, img)
     gid = _multi_get('id', None, kwargs, img)
     image_name = _multi_get('name', '', kwargs, img)

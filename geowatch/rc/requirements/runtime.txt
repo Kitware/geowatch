@@ -149,7 +149,9 @@ xmltodict>=0.12.0
 Pygments>=2.12.0
 requests>=2.27.1
 fasteners>=0.17.3
-kwutil>=0.2.5
+kwutil>=0.3.2
+kwgis>=0.1.0
+simple_dvc>=0.2.1
 
 blake3>=0.3.1  ;  python_version < '4' and python_version >= '3.11'    # Python 3.11+ 
 blake3>=0.2.1  ;  python_version < '3.11' # Python 3.10- 
@@ -208,6 +210,10 @@ kwplot>=0.4.14
 seaborn>=0.11.1
 
 # GIS
+# Note: kwgis contains tools that have historically lived in geowatch 
+# We are gradually transitioning this codebase to use those instead of
+# internal variants to maintain a more modular software stack. 
+kwgis>=0.1.0
 geopandas>=0.10.2,<1.0.0
 utm>=0.7.0
 rgd_imagery_client>=0.2.7
@@ -233,11 +239,6 @@ torch_liberator>=0.2.1
 omegaconf >=2.3
 hydra-core >=1.3.2
 
-#pytorch_lightning[extra]>=1.8.6,<2.0.0
-#pytorch_lightning[extra]>=1.8.6
-#pytorch_lightning>=1.9.0
-
-
 # FIXME: pinned because update broke our aliases
 jsonargparse[signatures]==4.19.0
 pytorch_lightning==2.0.8
@@ -249,6 +250,8 @@ monai>=0.6.0     ; python_version < '3.11'
 
 torch_optimizer>=0.1.0
 
+# TODO: modernize timm?
+#timm>=0.6.13 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 timm>=0.6.13,<0.9.0 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 timm>=0.4.12,<0.9.0 ; python_version < '3.11'                               # Python 3.10-
 

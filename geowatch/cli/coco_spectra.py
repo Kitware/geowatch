@@ -42,6 +42,8 @@ class CocoSpectraConfig(scfg.DataConfig):
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
+        'cache_dpath': scfg.Value(None, help='if specified, read/write cached stats files from here instead of as sidecar files'),
+
         'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
         'draw': scfg.Value(True, isflag=True, help='if False disables all visualization and just print tables'),
 
@@ -54,11 +56,11 @@ class CocoSpectraConfig(scfg.DataConfig):
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
-        'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics'),
-
         'valid_range': scfg.Value(None, help='Only include values within this range; specified as <min_val>:<max_val> e.g. (0:10000)'),
 
         'title': scfg.Value(None, help='Provide a title for the histogram figure'),
+
+        'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics', group='subset'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -82,7 +84,7 @@ class CocoSpectraConfig(scfg.DataConfig):
                 where myattr is either val1 or val4.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group='subset'),
 
         'select_videos': scfg.Value(
             None, help=ub.paragraph(
@@ -99,7 +101,7 @@ class CocoSpectraConfig(scfg.DataConfig):
                 Only applicable for dataset that contain videos.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group='subset'),
 
 
         # Histogram modifiers
@@ -253,6 +255,40 @@ def main(cmdline=True, **kwargs):
     include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
+    if config['valid_range'] is not None:
+        valid_min, valid_max = map(float, config['valid_range'].split(':'))
+    else:
+        valid_min = -math.inf
+        valid_max = math.inf
+
+    class PeriodicCondition:
+        """
+        Helper that does something based on some periodic condition (e.g.
+        number of seconds passed, or every n-th iteration)
+
+        TODO:
+            rectify with PeriodicMemoryMonitor in fusion.predict and port
+            to kwutil
+        """
+        def __init__(self, seconds=10, do_first=True):
+            self.timer = ub.Timer().tic()
+            self.num_checks = 0
+            self.do_first = do_first
+            self.seconds = seconds
+
+        def _satisfied(self):
+            return (
+                (self.timer.toc() > self.seconds) or
+                (self.do_first and self.num_checks == 0)
+            )
+
+        def check(self):
+            if self._satisfied():
+                self.timer.tic()
+                self.num_checks += 1
+                return True
+            return False
+
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
     from kwutil import util_progress
     pman = util_progress.ProgressManager()
@@ -261,44 +297,74 @@ def main(cmdline=True, **kwargs):
             coco_img.detach()
             job = jobs.submit(ensure_intensity_stats, coco_img,
                               include_channels=include_channels,
-                              exclude_channels=exclude_channels)
+                              exclude_channels=exclude_channels,
+                              cache_dpath=config.cache_dpath,
+                              bundle_dpath=coco_dset.bundle_dpath,
+                              valid_min=valid_min,
+                              valid_max=valid_max)
             job.coco_img = coco_img
 
-        if config['valid_range'] is not None:
-            valid_min, valid_max = map(float, config['valid_range'].split(':'))
-        else:
-            valid_min = -math.inf
-            valid_max = math.inf
-
         accum = HistAccum()
-        seen_props = ub.ddict(set)
+
+        show_seen_props = False
+        if show_seen_props:
+            seen_props = ub.ddict(set)
+
+        # Update the report once every 10 seconds
+        report_condition = PeriodicCondition(
+            seconds=3,
+            do_first=True,
+        )
+
         for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
             intensity_stats = job.result()
             sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
             for band_stats in intensity_stats['bands']:
                 intensity_hist = band_stats['intensity_hist']
                 band_props = band_stats['properties']
-                for k, v in band_props.items():
-                    seen_props[k].add(v)
                 band_name = band_props['band_name']
-                intensity_hist = {k: v for k, v in intensity_hist.items()
-                                  if k >= valid_min and k <= valid_max}
+                if show_seen_props:
+                    for k, v in band_props.items():
+                        seen_props[k].add(v)
                 accum.update(intensity_hist, sensor, band_name)
-            pman.update_info(
-                ('seen_props = {}'.format(ub.urepr(seen_props, nl=1)))
-            )
+
+            # Need to truncate repr...
+            # should probably try to use geowatch.utils.util_kwutil.distributed_subitems
+            # to reduce urepr overhead
+            if show_seen_props:
+                from kwutil.slugify_ext import smart_truncate
+                seen_props_text = ub.urepr(seen_props, nl=1)
+                seen_props_text = smart_truncate(seen_props_text, max_length=1600, head='\n~TRUNCATED...', tail='\n...~')
+                pman.update_info(
+                    ('seen_props = {}'.format(seen_props_text))
+                )
+            if report_condition.check():
+                # TODO: can we compute a running average for efficiency
+                # instead? As a workaround, only compute once every few seconds
+                current_ave = single_persensor_table(accum.finalize())
+                pman.update_info(
+                    current_ave.to_string()
+                    # ('seen_props = {}'.format(seen_props_text))
+                )
 
         full_df = accum.finalize()
-
         sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+        pman.update_info(
+            sensor_chan_stats.to_string()
+            # ('seen_props = {}'.format(seen_props_text))
+        )
 
         COMPARSE_SENSORS = True
         if COMPARSE_SENSORS:
             request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
             have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
             harmony_scores = distance_metrics[have_columns].mean()
-            extra_text = ub.urepr(harmony_scores.to_dict(), precision=4, compact=1)
-            print('extra_text = {!r}'.format(extra_text))
+            harmony_scores = harmony_scores.to_dict()
+            if harmony_scores:
+                extra_text = ub.urepr(harmony_scores, precision=4, compact=1)
+                print('extra_text = {!r}'.format(extra_text))
+            else:
+                extra_text = None
         else:
             extra_text = None
 
@@ -319,9 +385,10 @@ def main(cmdline=True, **kwargs):
         final_title = '\n'.join(title_lines)
         fig.suptitle(final_title)
 
-        dst_fpath = config['dst']
+        dst_fpath = None if config['dst'] is None else ub.Path(config['dst'])
         if dst_fpath is not None:
-            print('dump to dst_fpath = {!r}'.format(dst_fpath))
+            print('Write spectra viz to dst_fpath = {!r}'.format(dst_fpath))
+            dst_fpath.parent.ensuredir()
             fig.set_size_inches(np.array([6.4, 4.8]) * 1.68)
             fig.tight_layout()
             fig.savefig(dst_fpath)
@@ -343,6 +410,56 @@ def main(cmdline=True, **kwargs):
 #     kde = sm.nonparametric.KDEUnivariate(obs_dist)
 
 
+def single_persensor_table(full_df):
+    """
+    Like sensor_stats_tables, but only used for intermediate stats
+    """
+    import pandas as pd
+    import numpy as np
+    sensor_channel_to_vwf = {}
+    for _key, chan_df in full_df.groupby(['sensor', 'channel']):
+        _sensor, channel = _key
+        _values = chan_df['intensity_bin']
+        _weights = chan_df['value']
+        norm_weights = _weights / _weights.sum()
+        sensor_channel_to_vwf[(_sensor, channel)] = {
+            'raw_values': _values,
+            'raw_weights': _weights,
+            'norm_weights': norm_weights,
+        }
+
+    single_rows = []
+    for sensor, channel in sensor_channel_to_vwf:
+        sensor_data = sensor_channel_to_vwf[(sensor, channel)]
+        values = sensor_data['raw_values']
+        weights = sensor_data['raw_weights']
+
+        # Note: the calculation of the variance depends on the type of
+        # weighting we choose
+        average = np.average(values, weights=weights)
+        variance = np.average((values - average) ** 2, weights=weights)
+        variance = variance * sum(weights) / (sum(weights) - 1)
+        stddev = np.sqrt(variance)
+
+        pytype = float if values.values.dtype.kind == 'f' else int
+
+        info = {
+            'min': pytype(values.min()),
+            'max': pytype(values.max()),
+            'mean': average,
+            'std': stddev,
+            'total_weight': weights.sum(),
+            'channel': channel,
+            'sensor': sensor,
+        }
+        assert info['max'] >= info['min']
+        single_rows.append(info)
+
+    sensor_chan_stats = pd.DataFrame(single_rows)
+    sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
+    return sensor_chan_stats
+
+
 def sensor_stats_tables(full_df):
     import itertools as it
     import scipy
@@ -351,29 +468,20 @@ def sensor_stats_tables(full_df):
     import pandas as pd
     import numpy as np
     sensor_channel_to_vwf = {}
-    for _sensor, sensor_df in full_df.groupby('sensor'):
-        for channel, chan_df in sensor_df.groupby('channel'):
-            _values = chan_df['intensity_bin']
-            _weights = chan_df['value']
-            norm_weights = _weights / _weights.sum()
-            sensor_channel_to_vwf[(_sensor, channel)] = {
-                'raw_values': _values,
-                'raw_weights': _weights,
-                'norm_weights': norm_weights,
-                'sensorchan_df': chan_df,
-            }
+    for _key, chan_df in full_df.groupby(['sensor', 'channel']):
+        _sensor, channel = _key
+        _values = chan_df['intensity_bin']
+        _weights = chan_df['value']
+        norm_weights = _weights / _weights.sum()
+        sensor_channel_to_vwf[(_sensor, channel)] = {
+            'raw_values': _values,
+            'raw_weights': _weights,
+            'norm_weights': norm_weights,
+            'sensorchan_df': chan_df,
+        }
 
     print('compute per-sensor stats')
     print(ub.urepr(list(sensor_channel_to_vwf.keys()), nl=1))
-    chan_to_group = ub.group_items(
-        sensor_channel_to_vwf.keys(),
-        [t[1] for t in sensor_channel_to_vwf.keys()]
-    )
-    chan_to_combos = {
-        chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
-    }
-    to_compare = list(ub.flatten(chan_to_combos.values()))
-
     single_rows = []
     for sensor, channel in ub.ProgIter(sensor_channel_to_vwf, desc='compute stats'):
         sensor_data = sensor_channel_to_vwf[(sensor, channel)]
@@ -408,9 +516,17 @@ def sensor_stats_tables(full_df):
 
     sensor_chan_stats = pd.DataFrame(single_rows)
     sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
-    print(sensor_chan_stats)
+    print(sensor_chan_stats.to_string())
 
     print('compare channels between sensors')
+    chan_to_group = ub.group_items(
+        sensor_channel_to_vwf.keys(),
+        [t[1] for t in sensor_channel_to_vwf.keys()]
+    )
+    chan_to_combos = {
+        chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
+    }
+    to_compare = list(ub.flatten(chan_to_combos.values()))
     pairwise_rows = []
     for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=1):
         sensor1, channel1 = item1
@@ -471,9 +587,25 @@ def sensor_stats_tables(full_df):
 
 
 @profile
-def ensure_intensity_sidecar(fpath, recompute=False):
+def ensure_intensity_sidecar(fpath, cache_dpath=None, bundle_dpath=None,
+                             recompute=False):
     """
     Write statistics next to the image
+
+    Args:
+        fpath (str | PathLike): the path to the image to compute spectra for
+
+        cache_dpath (str | PathLike | None):
+            if specified, write cache files here instead of next to the input
+            file.
+
+        bundle_dpath (str | PathLike | None):
+            if cache_dpath is specified and this is specified, this is
+            considered the "root" of the image, which allows the cache to use
+            specific parent folders, but not the entire filesystem.
+            Specifying this allows portablity of the cache.
+
+        recompute (bool): if True, force recomputation.
 
     Example:
         >>> from geowatch.cli.coco_spectra import *  # NOQA
@@ -495,13 +627,41 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> import pickle
         >>> pickle.loads(stats_fpath1.read_bytes())
         >>> pickle.loads(stats_fpath2.read_bytes())
+
+    Example:
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
+        >>> import kwimage
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('geowatch/tests/intensity_sidecar2').ensuredir()
+        >>> dpath.delete().ensuredir()
+        >>> cache_dpath = dpath / 'cache'
+        >>> bundle_dpath = None
+        >>> img = kwimage.grab_test_image(dsize=(16, 16))
+        >>> img255 = kwimage.ensure_uint255(img)
+        >>> fpath = dpath / 'img255.tif'
+        >>> kwimage.imwrite(fpath, img255)
+        >>> stats_fpath = ensure_intensity_sidecar(fpath, cache_dpath=cache_dpath)
+        >>> import pickle
+        >>> pickle.loads(stats_fpath.read_bytes())
     """
     import os
     import kwarray
     import kwimage
     import pickle
-    stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
+
+    if cache_dpath is None:
+        stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
+    else:
+        fpath = ub.Path(fpath)
+        if bundle_dpath is not None:
+            relpath = fpath.relative_to(bundle_dpath)
+        else:
+            proxy_parent = ub.hash_data(fpath.parent, hasher='sha256')
+            relpath = ub.Path(proxy_parent) / fpath.name
+        stats_fpath = ub.Path(cache_dpath) / (relpath + '.stats_v1.pkl')
+
     if recompute or not stats_fpath.exists():
+        import safer
         imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: even better float handling
@@ -521,14 +681,21 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             stats_info['bands'].append({
                 'intensity_hist': intensity_hist,
             })
-        import safer
+        stats_fpath.parent.ensuredir()
         with safer.open(stats_fpath, 'wb') as file:
             pickle.dump(stats_info, file)
     return stats_fpath
 
 
 @profile
-def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
+def ensure_intensity_stats(coco_img,
+                           recompute=False,
+                           cache_dpath=None,
+                           bundle_dpath=None,
+                           include_channels=None,
+                           exclude_channels=None,
+                           valid_min=-math.inf,
+                           valid_max=math.inf):
     """
     Ensures a sidecar file exists for the kwcoco image
     """
@@ -565,7 +732,10 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
             requested_channels = requested_channels - exclude_channels
 
         if requested_channels.numel() > 0:
-            stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
+            stats_fpath = ensure_intensity_sidecar(fpath,
+                                                   cache_dpath=cache_dpath,
+                                                   bundle_dpath=bundle_dpath,
+                                                   recompute=recompute)
             try:
                 with open(stats_fpath, 'rb') as file:
                     stat_info = pickle.load(file)
@@ -615,6 +785,15 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                         ...
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)
+
+    if math.isfinite(valid_max) or math.isfinite(valid_min):
+        # Filter on the fly, but in the worker process
+        for band_stats in intensity_stats['bands']:
+            intensity_hist = band_stats['intensity_hist']
+            band_stats['intensity_hist'] = {
+                k: v for k, v in intensity_hist.items()
+                if k >= valid_min and k <= valid_max}
+
     return intensity_stats
 
 
@@ -690,6 +869,7 @@ def plot_intensity_histograms(full_df, config, ax=None):
     print(f'unique_sensors={unique_sensors}')
     if ax is None:
         fig = kwplot.figure(fnum=1, doclf=True)
+        fig.clf()
         print('fig = {!r}'.format(fig))
         pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
         print('pnum_ = {!r}'.format(pnum_))
@@ -706,9 +886,7 @@ def plot_intensity_histograms(full_df, config, ax=None):
             weightvar = hist_data_kw['weights']
             hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, xvar, weightvar)
 
-        print(f'ax={ax}')
-        if ax is None:
-            ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
+        ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
 
         # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
         # ub.find_duplicates(z)

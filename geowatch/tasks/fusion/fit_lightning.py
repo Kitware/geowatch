@@ -160,12 +160,10 @@ class SmartTrainer(pl.Trainer):
 
         # Add executable permission
         try:
-            from geowatch.utils.util_chmod import new_chmod
             for key, script in scripts.items():
                 fpath = script['fpath']
                 # Can use new ubelt
-                # ub.Path(fpath).chmod('u+x')
-                new_chmod(fpath, 'u+x')
+                ub.Path(fpath).chmod('u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 
@@ -611,6 +609,7 @@ def main(config=None):
         >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>>     'fit.trainer.add_to_registery': 0,
         >>> }
         >>> cli = main(config=config)
 
@@ -634,6 +633,7 @@ def main(config=None):
         >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
+        >>>     'fit.trainer.add_to_registery': 0,
         >>> }
         >>> main(config=config)
 

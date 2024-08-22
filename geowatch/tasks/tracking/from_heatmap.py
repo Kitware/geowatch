@@ -707,8 +707,11 @@ def _determine_tracking_scale(config, sub_dset, video_gids, video):
             first_gid = video_gids[0]
             first_coco_img = sub_dset.coco_image(first_gid)
             # (w, h)
-            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
-            default_gsd = np.mean(vidspace_resolution)
+            try:
+                vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+                default_gsd = np.mean(vidspace_resolution)
+            except Exception:
+                default_gsd = None
         else:
             default_gsd = 30
             print(f'warning: video {video["name"]} in dset {sub_dset.tag} '

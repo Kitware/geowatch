@@ -88,6 +88,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
 
     # TODO: generalize the load-package
     raw_module = utils.load_model_from_package(package_fpath)
+
     if hasattr(raw_module, 'module'):
         module = raw_module.module
     else:

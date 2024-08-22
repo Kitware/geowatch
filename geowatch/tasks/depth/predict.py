@@ -90,7 +90,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     input_bundle_dpath = ub.Path(input_dset.bundle_dpath)
 
     from geowatch.utils import kwcoco_extensions
-    from geowatch.tasks.fusion.predict import quantize_float01
+    from geowatch.tasks.fusion.coco_stitcher import quantize_image
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset,
         include_sensors=['WV'],
@@ -205,7 +205,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
                 batch_item = None  # dereference for memory
                 image = None  # dereference for memory
 
-                quant_pred, quantization = quantize_float01(
+                quant_pred, quantization = quantize_image(
                     pred, old_min=0, old_max=1, quantize_dtype=np.uint8)
                 pred = None  # dereference for memory
 
@@ -247,7 +247,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
 
             # Hack to get the quantization dict that would have been computed
             # at predict time.
-            _, quantization = quantize_float01(
+            _, quantization = quantize_image(
                 None, old_min=0, old_max=1, quantize_dtype=np.uint8)
 
             info = _build_aux_info(img_info, pred_shape, pred_filename,
@@ -303,8 +303,8 @@ def _test():
                                  overlap=overlap,
                                  output_dtype=output_dtype)
 
-    from geowatch.tasks.fusion.predict import quantize_float01
-    quant_pred, quantization = quantize_float01(pred, old_min=0, old_max=1,
+    from geowatch.tasks.fusion.coco_stitcher import quantize_image
+    quant_pred, quantization = quantize_image(pred, old_min=0, old_max=1,
                                                 quantize_dtype=np.uint8)
     print('quantization = {}'.format(ub.urepr(quantization, nl=1)))
 

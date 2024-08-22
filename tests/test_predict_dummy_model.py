@@ -156,7 +156,7 @@ def test_predict_with_dummy_model():
     predictor._load_dataset()
 
     # Execute the pipeline
-    result_dataset = predictor._run()
+    result_dataset = predictor._run_critical_loop()
 
     if 0:
         import ubelt as ub
@@ -195,7 +195,7 @@ def test_predict_with_dummy_model_memmap():
     predictor._load_dataset()
 
     # Execute the pipeline
-    result_dataset = predictor._run()
+    result_dataset = predictor._run_critical_loop()
 
     if 0:
         import ubelt as ub
@@ -204,6 +204,9 @@ def test_predict_with_dummy_model_memmap():
 
 
 def test_predict_with_dummy_model_lower_resolution():
+    """
+    pytest -s -k test_predict_with_dummy_model_lower_resolution
+    """
     import ubelt as ub
     from geowatch.tasks.fusion import predict as predict_mod
     from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
@@ -248,7 +251,7 @@ def test_predict_with_dummy_model_lower_resolution():
     outputs['saliency_probs'][0].shape
 
     # Execute the pipeline
-    result_dataset = predictor._run()
+    result_dataset = predictor._run_critical_loop()
 
     if 0:
         import ubelt as ub

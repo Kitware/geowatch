@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 r"""
 Loads results from an evaluation, aggregates them, and reports text or visual
 results.
@@ -83,7 +84,13 @@ class AggregateLoader(DataConfig):
         (2) one or more pre-aggregated files,
         '''), nargs='+', position=1)
 
-    pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
+    pipeline = Value('joint_bas_sc', help=ub.paragraph(
+        '''
+        The pipeline to run. This can be a name of an internally registered
+        pipeline, or it can point to a function that defines a pipeline
+        in a Python file. E.g. ``user_module.pipelines.custom_pipeline_func()``
+        or ``$HOME/my_code/my_pipeline.py::make_my_pipeline("arg")``.
+        '''))
 
     io_workers = Value('avail', help='number of processes to load results')
 
@@ -135,24 +142,27 @@ class AggregateLoader(DataConfig):
         import pandas as pd
         input_targets = util_path.coerce_patterned_paths(config.target)
         eval_type_to_tables = ub.ddict(list)
+
+        print('Coerce aggregators for pipeline:')
+        from geowatch.mlops import pipeline_nodes
+        dag = pipeline_nodes.coerce_pipeline(config.pipeline)
+        dag.print_graphs()
+
         print(f'Found {len(input_targets)} input targets')
         for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
             if target.is_dir():
                 # Assume Pipeline Output dir
                 root_dpath = target
-                pipeline = config.pipeline
+                dag.configure(config=None, root_dpath=root_dpath)
+
                 eval_nodes = config.eval_nodes
                 io_workers = config.io_workers
                 cache_resolved_results = config.cache_resolved_results
                 eval_type_to_results = build_tables(
-                    root_dpath, pipeline, io_workers, eval_nodes,
+                    root_dpath, dag, io_workers, eval_nodes,
                     cache_resolved_results=cache_resolved_results)
                 for type, results in eval_type_to_results.items():
-                    # print('GOT RESULTS')
-                    # print(results['resolved_params']['resolved_params.sc_poly.smoothing'])
                     table = pd.concat(list(results.values()), axis=1)
-                    # print('TABLE')
-                    # print(table['resolved_params.sc_poly.smoothing'])
                     eval_type_to_tables[type].append(table)
             if target.is_file():
                 # Assume CSV file
@@ -164,14 +174,11 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
-            # print('TABLE2')
-            # print(table['resolved_params.sc_poly.smoothing'])
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
-                             display_metric_cols=config.display_metric_cols)
+                             display_metric_cols=config.display_metric_cols,
+                             dag=dag)
             agg.build()
-            # print('agg.TABLE')
-            # print(agg.table['resolved_params.sc_poly.smoothing'])
             eval_type_to_aggregator[type] = agg
         return eval_type_to_aggregator
 
@@ -221,6 +228,18 @@ class AggregateEvluationConfig(AggregateLoader):
         '''
         a pandas query to restrict the rows of the table we consider.
         E.g. "df['param_hashid'] == 'blpiinmvwgng'"
+        '''
+    ))
+
+    custom_query = Value(None, type=str, help=ub.paragraph(
+        '''
+        This is raw Python code executed after a query which can be used to
+        create complex filters not directly supported by other arguments.
+        The code must define a name "new_eval_type_to_aggregator", which should
+        be a filtered version of eval_type_to_aggregator.
+        Ideally we can determine common cases and codify them without this
+        arbitrary code execution. Use only if necessary.
+        This is highly experimental and may be removed.
         '''
     ))
 
@@ -274,12 +293,15 @@ def main(cmdline=True, **kwargs):
         cmdline = 0
         main(cmdline=cmdline, **kwargs)
     """
-
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
-    from kwutil.util_yaml import Yaml
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    run_aggregate(config)
 
+
+def run_aggregate(config):
+    import rich
+    from kwutil.util_yaml import Yaml
     eval_type_to_aggregator = config.coerce_aggregators()
     orig_eval_type_to_aggregator = eval_type_to_aggregator  # NOQA
 
@@ -292,6 +314,35 @@ def main(cmdline=True, **kwargs):
 
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+
+    if config.query:
+        print('Running query')
+        new_eval_type_to_aggregator = {}
+        for key, agg in eval_type_to_aggregator.items():
+            new_agg = agg.filterto(query=config.query)
+            new_eval_type_to_aggregator[key] = new_agg
+            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        eval_type_to_aggregator = new_eval_type_to_aggregator
+
+    if config.custom_query:
+        vars_ = dict(globals()) | dict(locals())
+        code = ub.codeblock(config.custom_query)
+        print('Executing custom query')
+        print(ub.highlight_code(code, backend='rich'))
+        res = exec(code, vars_)
+        new_eval_type_to_aggregator = vars_['new_eval_type_to_aggregator']
+        print(f'new_eval_type_to_aggregator={new_eval_type_to_aggregator}')
+        # new_eval_type_to_aggregator = {}
+        # for key, agg in eval_type_to_aggregator.items():
+        #     chosen_idxs = []
+        #     for group_id, group in agg.table.groupby('resolved_params.heatmap_pred_fit.trainer.default_root_dir'):
+        #         group['metrics.heatmap_eval.salient_AP'].argsort()
+        #         keep_idxs = group['metrics.heatmap_eval.salient_AP'].sort_values()[-5:].index
+        #         chosen_idxs.extend(keep_idxs)
+        #     new_agg = agg.filterto(index=chosen_idxs)
+        #     rich.print(f'Special filter {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        #     new_eval_type_to_aggregator[key] = new_agg
+        eval_type_to_aggregator = new_eval_type_to_aggregator
 
     if config.embed or config.snapshot:
         # Sneaky way around linting filters, but also a more concise than
@@ -316,15 +367,6 @@ def main(cmdline=True, **kwargs):
                 embed_module.embed()
             else:
                 raise AssertionError('unreachable')
-
-    if config.query:
-        print('Running query')
-        new_eval_type_to_aggregator = {}
-        for key, agg in eval_type_to_aggregator.items():
-            new_agg = agg.filterto(query=config.query)
-            new_eval_type_to_aggregator[key] = new_agg
-            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
-        eval_type_to_aggregator = new_eval_type_to_aggregator
 
     for eval_type, agg in eval_type_to_aggregator.items():
         print(f'agg={agg}')
@@ -389,6 +431,7 @@ def main(cmdline=True, **kwargs):
                     # for region_id, group in subagg.index.groupby('region_id'):
                     #     group_agg = subagg.filterto(index=group.index)
                     #     # confusor_analysis.main(cmdline=0, )
+    return eval_type_to_aggregator
 
 
 class TopResultsReport:
@@ -651,7 +694,11 @@ class AggregatorAnalysisMixin:
             # Rank reference region param_hashids of the primary metrics
             metric_cols = group.columns.intersection(agg.metrics.columns)
             metric_group = group[metric_cols]
-            top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            try:
+                top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            except Exception:
+                print("FIXME: Something when wrong when sorting the reference region")
+                raise
             top_param_hashids = group.loc[top_locs]['param_hashid']
 
             if verbose > 3:
@@ -769,6 +816,10 @@ class AggregatorAnalysisMixin:
                 rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
 
             if show_csv:
+                ub.schedule_deprecation(
+                    'geowatch', 'show_csv', 'param',
+                    migration='This option should not be relied on.',
+                    deprecate='0.18.3', error='1.0.0', remove='1.1.0')
                 varied_keys = list(varied.keys())
                 param_table = pd.DataFrame.from_dict(top_param_lut).T
                 param_table.index.name = 'param_hashid'
@@ -786,7 +837,7 @@ class AggregatorAnalysisMixin:
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
             only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
 
-            if only_one_top_item:
+            if only_one_top_item and len(region_id_to_summary):
                 # In this case there is only a single top result per-region, so
                 # we can show them all in the same table rather than having on
                 # table per-region.
@@ -802,7 +853,7 @@ class AggregatorAnalysisMixin:
                 if concise:
                     _justone = _justone.safe_drop(['node'], axis=1)
                     _justone = _justone.safe_drop(['fpath'], axis=1)
-                rich.print(_justone)
+                rich.print(_justone.to_string())
 
                 if not only_one_source_item:
                     # again, not sure why this is different
@@ -884,56 +935,62 @@ class AggregatorAnalysisMixin:
             table.loc[top_locs, 'rank'] = np.arange(len(top_locs))
             table = table.sort_values('rank')
 
-            model_col = agg.model_cols[0]
+            if len(agg.model_cols) == 0:
+                print('No model columns are availble')
+            else:
+                model_col = agg.model_cols[0]
 
-            # HACK: we want to group models that came from the same training
-            # run so we report a more diverse set of models. We typically group
-            # models together in a folder, but this is not robust, so we Only
-            # do this grouping if the parent folder has a special name
+                # HACK: we want to group models that came from the same training
+                # run so we report a more diverse set of models. We typically group
+                # models together in a folder, but this is not robust, so we Only
+                # do this grouping if the parent folder has a special name
 
-            # import xdev
-            # with xdev.embed_on_exception_context:
-            model_paths = [
-                ub.Path(p)
-                if not pd.isnull(p) else None
-                for p in table[model_col].tolist()]
-            hacked_groups = [
-                p if p is not None and p.parent.name.startswith('Drop') else p
-                for p in model_paths]
-            table['_hackgroup'] = hacked_groups
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                model_paths = [
+                    ub.Path(p)
+                    if not pd.isnull(p) else None
+                    for p in table[model_col].tolist()]
+                hacked_groups = [
+                    p if p is not None and p.parent.name.startswith('Drop') else p
+                    for p in model_paths]
+                table['_hackgroup'] = hacked_groups
 
-            chosen_locs = []
-            for expt, group in table.groupby('_hackgroup'):
-                # group[model_col].tolist()
-                # flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
-                # group = group[flags]
-                group = group.sort_values('rank')
-                chosen_locs.extend(group.index[0:per_group])
-            chosen_locs = table.loc[chosen_locs, 'rank'].sort_values().index
+                chosen_locs = []
+                for expt, group in table.groupby('_hackgroup'):
+                    # group[model_col].tolist()
+                    # flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
+                    # group = group[flags]
+                    group = group.sort_values('rank')
+                    chosen_locs.extend(group.index[0:per_group])
+                chosen_locs = table.loc[chosen_locs, 'rank'].sort_values().index
 
-            top_k = 40
-            chosen_locs = chosen_locs[:top_k]
-            chosen_table = table.loc[chosen_locs]
+                top_k = 40
+                chosen_locs = chosen_locs[:top_k]
+                chosen_table = table.loc[chosen_locs]
 
-            print('Model shortlist (lower rank is a better scoring model):')
-            for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
-                model_fpath = chosen_row[model_col]
-                param_hashid = chosen_row['param_hashid']
-                rank = chosen_row['rank']
-                rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
-                print(Yaml.dumps([model_fpath]).strip())
+                print('Model shortlist (lower rank is a better scoring model):')
+                for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
+                    model_fpath = chosen_row[model_col]
+                    param_hashid = chosen_row['param_hashid']
+                    rank = chosen_row['rank']
+                    rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
+                    print(Yaml.dumps([model_fpath]).strip())
 
-            # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-            # known_models = Yaml.coerce(all_models_fpath)
-            # set(known_models).issuperset(set(chosen_models))
-            # if 0:
-            #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
-            # new_models_fpath.write_text(shortlist_text)
+                # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+                # known_models = Yaml.coerce(all_models_fpath)
+                # set(known_models).issuperset(set(chosen_models))
+                # if 0:
+                #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
+                # new_models_fpath.write_text(shortlist_text)
 
         report = TopResultsReport(region_id_to_summary, top_param_lut)
         return report
 
     def resource_summary_table(agg):
+        """
+        Sumarize resource usage of the pipeline
+        """
         import pandas as pd
         from kwutil import util_time
         table = agg.table.copy()
@@ -944,7 +1001,8 @@ class AggregatorAnalysisMixin:
             if k.endswith('.duration')
         ]
         for k in duration_cols:
-            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+            new_vals = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+            table[k] = new_vals
 
         resource_summary = []
         for duration_key in duration_cols:
@@ -1146,7 +1204,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def __init__(agg, table, output_dpath=None,
                  type=None,
                  primary_metric_cols='auto',
-                 display_metric_cols='auto'):
+                 display_metric_cols='auto',
+                 dag=None):
         """
         Args:
             table (pandas.DataFrame):
@@ -1170,6 +1229,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 if "auto", then the "type" must be known by the global helpers.
                 Otherwise list the metric columns in the order they should be
                 displayed (after the primary metrics).
+
+            dag (geowatch.mlops.Pipeline):
+                The pipeline that the evaluation table corresponds to.
+                Only needed if introspection if necessary.
+                If all "auto" params are specified, this should not be needed.
         """
         agg.output_dpath = output_dpath
 
@@ -1179,6 +1243,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         agg.table = table
         agg.type = type
+        agg.dag = dag
         agg.subtables = None
         agg.config = {
             'display_metric_cols': display_metric_cols,
@@ -1352,17 +1417,27 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         metrics_prefix = f'metrics.{agg.type}'
         # params_prefix = f'params.{agg.type}'
         if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            try:
+                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            except Exception:
+                node = agg.dag.nodes[agg.type]
+                if hasattr(node, '_default_metrics'):
+                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                    # should we prevent double prefixes?
+                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                else:
+                    # fallback to something
+                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                    _primary_metrics = _display_metrics[0:1]
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = _primary_metrics
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = _display_metrics
 
-            if agg.primary_metric_cols == 'auto':
-                # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                #     agg.metrics, _primary_metrics_suffixes)
-                agg.primary_metric_cols = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-            if agg.display_metric_cols == 'auto':
-                # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                #     agg.metrics, _display_metrics_suffixes)
-                agg.display_metric_cols = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
-
+        # FIXME: HARD CODED from SMART
+        # TODO: add mechanism where nodes can tag their parameters with these
+        # categories like isa model suffix or isa test dataset.
         _model_suffixes = ['package_fpath']
         _testdset_suffixes = ['test_dataset', 'crop_src_fpath']
 
@@ -1397,6 +1472,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
+        # FIXME; region-id is a SMART thing, needs to be generalized
         for region_id, idx_group in agg.index.groupby('region_id'):
             agg.region_to_tables[region_id] = agg.table.loc[idx_group.index]
         agg.macro_compatible = agg.find_macro_comparable()
@@ -1525,7 +1601,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def compress(agg, flags):
         new_table = agg.table[flags].copy()
         new_agg = Aggregator(new_table, type=agg.type,
-                             output_dpath=agg.output_dpath, **agg.config)
+                             dag=agg.dag, output_dpath=agg.output_dpath,
+                             **agg.config)
         new_agg.build()
         return new_agg
 
@@ -1557,6 +1634,17 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     @property
     def resolved_params(self):
         return self.subtables['resolved_params']
+
+    @property
+    def default_vantage_points(self):
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
+        try:
+            if self.dag is not None:
+                node = self.dag.nodes[self.type]
+                vantage_points = node.default_vantage_points
+        except Exception:
+            vantage_points = SMART_HELPER.default_vantage_points(self.type)
+        return vantage_points
 
     def build_effective_params(self):
         """
@@ -1650,7 +1738,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, list) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
@@ -1682,7 +1770,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         hashid_to_params = {}
         # import xdev
         # with xdev.embed_on_exception_context:
-        for param_vals, group in effective_params.groupby(param_cols, dropna=False):
+        if len(param_cols) > 0:
+            param_groups = effective_params.groupby(param_cols, dropna=False)
+        else:
+            # fallback case, something is probably wrong if we are here
+            param_groups = {None: effective_params}.items()
+
+        for param_vals, group in param_groups:
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             is_group_included = is_param_included.loc[group.index]
@@ -1693,7 +1787,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             # itself.
             unique_params = group.iloc[0][param_cols]
 
-            for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
+            if len(param_cols) > 0:
+                param_subgroups = is_group_included.groupby(param_cols, dropna=False)
+            else:
+                # fallback case, something is probably wrong if we are here
+                param_subgroups = {tuple(): is_group_included}.items()
+
+            for param_flags, subgroup in param_subgroups:
                 # valid_param_cols = list(ub.compress(param_cols, param_flags))
                 # valid_param_vals = list(ub.compress(param_vals, param_flags))
                 # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
@@ -1809,7 +1909,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             for single_rois in rois:
                 agg.build_single_macro_table(single_rois, **kwargs)
         else:
-            print(f'Building a single macro table: {rois}')
+            print(f'Building a single macro table: rois={rois!r}')
             agg.build_single_macro_table(rois, **kwargs)
 
     @profile
@@ -1840,6 +1940,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         macro_key = hash_regions(regions_of_interest)
 
         # Define how to aggregate each column
+        # FIXME: handle in general.
         sum_cols = [c for c in agg.metrics.columns if c.endswith((
             '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
         average_cols = [c for c in agg.metrics.columns if c.endswith((
@@ -1851,6 +1952,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         start_time_cols = DotDictDataFrame.search_columns(agg.table, 'start_timestamp')
         stop_time_cols = DotDictDataFrame.search_columns(agg.table, 'stop_timestamp')
 
+        # FIXME: SMART-specific
         ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
 
         average_cols = agg.metrics.columns.intersection(average_cols)

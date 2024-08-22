@@ -9,6 +9,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Ability to change cold feature frequency
 * Ability to output hidden features from the multimodal transformer in fusion.predict.
+* Add the concept of a `"primary_out_key"` to mlops ProcessNode
+* A ProcessNode can now specify a `load_result` function to utilize mlops 
+* Add `override_meanstd` to fusion.predict
+
+### Changed
+* Moved balanced samplers to their own module.
+* MLops now puts slurm output in the node directory
+* Refactored / cleaned up code in fusion.predict
+* Big speedup in `geowatch spectra`
+* `geowatch spectra` now shows stats estimates as it is computing
+* `geowatch spectra` can now be given a directory to intermediate dump cache file.
+
+### Removed
+* Removed several vendored utilities in favor of ones in other packages (`process_context`)
+
+### Fixed
+* Added missing top level functions to ArrayAPI
+* normalize_peritem can now be specified as True on the command line without casting to a string.
+* normalize_peritem no longer breaks computing cached dataset stats
+* Added workaround to load 
+* Handle better printf escapes in mlops for job config and invoke 
+* Issue where images only datasets using dummy videos would keep prediction heatmaps in memory indefinitely
+* Bug in visualize where max dim was not respected
 
 
 ## Version 0.18.1 - Released 2024-06-25

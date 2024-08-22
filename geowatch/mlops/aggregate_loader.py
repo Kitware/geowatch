@@ -9,34 +9,66 @@ from kwutil import util_parallel
 from geowatch.utils import util_dotdict
 import parse
 import json
-from geowatch.mlops import smart_pipeline
+#from geowatch.mlops import smart_pipeline
 from geowatch.mlops import smart_result_parser
 
 
-def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
+def build_tables(root_dpath, dag, io_workers, eval_nodes,
                  cache_resolved_results):
     import pandas as pd
     from kwutil import util_progress
-    dag = smart_pipeline.make_smart_pipeline(pipeline)
-    dag.print_graphs()
-    dag.configure(config=None, root_dpath=root_dpath)
 
     io_workers = util_parallel.coerce_num_workers(io_workers)
     print(f'io_workers={io_workers}')
 
     # Hard coded nodes of interest to gather. Should abstract later.
+    # The user-defined pipelines should be responsible for providing the
+    # methods needed to parse their outputs.
     node_eval_infos = [
         {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath'},
         {'name': 'sc_poly_eval', 'out_key': 'eval_fpath'},
         {'name': 'bas_poly_eval', 'out_key': 'eval_fpath'},
         {'name': 'sv_poly_eval', 'out_key': 'eval_fpath'},
     ]
+    lut = ub.udict({info['name']: info for info in node_eval_infos})
+
+    DEVFLAG = 1
+    if DEVFLAG:
+        for node_name in eval_nodes:
+            node = dag.nodes[node_name]
+            if node_name not in lut:
+                if len(node.out_paths) == 1:
+                    primary_out_key = list(node.out_paths)[0]
+                elif getattr(node, 'primary_out_key', None) is not None:
+                    primary_out_key = node.primary_out_key
+                else:
+                    raise Exception(ub.paragraph(
+                        '''
+                        evaluation nodes must have a single item in out_paths
+                        or define a primary_out_key
+                        '''))
+                node_eval_infos.append({
+                    'name': node.name,
+                    'out_key': primary_out_key,
+                })
+
+    lut = ub.udict({info['name']: info for info in node_eval_infos})
 
     if eval_nodes is None:
         node_eval_infos_chosen = node_eval_infos
     else:
-        lut = ub.udict({info['name']: info for info in node_eval_infos})
-        node_eval_infos_chosen = list(lut.take(eval_nodes))
+        try:
+            node_eval_infos_chosen = list(lut.take(eval_nodes))
+        except Exception as ex:
+            from kwutil.util_exception import add_exception_note
+            raise add_exception_note(ex, ub.paragraph(
+                f'''
+                Unknown evaluation node. Evaluation nodes need to be
+                connected to a function that can parse their results.
+
+                Requested evaluation nodes were: {eval_nodes}.
+                But available nodes are {list(lut.keys())}.
+                '''))
 
     from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
@@ -55,7 +87,6 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
 
             node = dag.nodes[node_name]
             out_node = node.outputs[out_key]
-            out_node_key = out_node.key
 
             fpaths = out_node_matching_fpaths(out_node)
 
@@ -79,7 +110,7 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
                 transient=True)
             for fpath in submit_prog:
                 job = executor.submit(load_result_worker, fpath, node_name,
-                                      out_node_key,
+                                      node=node, dag=dag,
                                       use_cache=cache_resolved_results)
                 jobs.append(job)
 
@@ -113,14 +144,13 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
     return eval_type_to_results
 
 
-def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
+def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
     """
     Main driver for loading results
 
     Ignore:
         fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
         node_name = 'bas_poly_eval'
-        out_node_key = 'bas_poly_eval.eval_fpath'
     """
     import json
     import safer
@@ -128,7 +158,7 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
     from kwutil import util_json
     fpath = ub.Path(fpath)
 
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v9.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v011.json'
 
     if use_cache and resolved_json_fpath.exists():
         # Load the cached row data
@@ -140,7 +170,12 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
         # Read the requested config
         job_config_fpath = node_dpath / 'job_config.json'
         if job_config_fpath.exists():
-            _requested_params = json.loads(job_config_fpath.read_text())
+            job_config_text = job_config_fpath.read_text()
+            try:
+                _requested_params = json.loads(job_config_text)
+            except Exception:
+                print(f'Failed to parse json job config {job_config_fpath}')
+                raise
         else:
             _requested_params = {}
 
@@ -150,7 +185,7 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
         # Read the resolved config
         # (Uses the DAG to trace the result lineage)
         try:
-            flat = load_result_resolved(node_dpath)
+            flat = load_result_resolved(node_dpath, node=node, dag=dag)
 
             HACK_FOR_REGION_ID = True
             if HACK_FOR_REGION_ID:
@@ -159,10 +194,17 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
                 region_ids = None
                 for k in candidate_keys:
                     region_ids = flat[k]
-                assert region_ids is not None
-                import re
-                region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
-                region_ids = ','.join(list(region_pat.findall(region_ids)))
+                if region_ids is None:
+                    print(ub.paragraph(
+                        '''
+                        Warning: no region ids available, some assumptions may
+                        be violated.
+                        '''))
+                    region_ids = 'unknown'
+                else:
+                    import re
+                    region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
+                    region_ids = ','.join(list(region_pat.findall(region_ids)))
 
             resolved_params_keys = list(flat.query_keys('resolved_params'))
             metrics_keys = list(flat.query_keys('metrics'))
@@ -172,7 +214,6 @@ def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
             other = flat - (resolved_params_keys + metrics_keys)
 
             index = {
-                # 'type': out_node_key,
                 'node': node_name,
                 'region_id': region_ids,
             }
@@ -254,7 +295,7 @@ def new_process_context_parser(proc_item):
     return output
 
 
-def load_result_resolved(node_dpath):
+def load_result_resolved(node_dpath, node=None, dag=None):
     """
     Recurse through the DAG filesytem structure and load resolved
     configurations from each step.
@@ -264,6 +305,15 @@ def load_result_resolved(node_dpath):
             the path to the evaluation node directory. The specific type of
             evaluation node must have a known (currently hard-coded) condition
             in this function that knows how to parse it.
+
+        node (None | ProcessNode):
+            new experimental way to allow users to specify how results should
+            be loaded. The node should have a "load_result" function that
+            accepts node_dpath as a single argument and then returns a flat
+            resolved dotdict of hyperparams, metrics, and context.
+
+        dag (None | Pipeline):
+            Used to lookup loading functions for predecessor nodes.
 
     Returns:
         Dict - flat_resolved - a flat dot-dictionary with resolved params
@@ -332,7 +382,16 @@ def load_result_resolved(node_dpath):
     node_type_dpath = node_dpath.parent
     node_type = node_type_dpath.name
 
-    if node_type in {'sc_pxl', 'bas_pxl'}:
+    if dag is not None:
+        if node is None:
+            node = dag.nodes[node_type]
+
+    if node is not None and hasattr(node, 'load_result'):
+        flat_resolved = node.load_result(node_dpath)
+        if flat_resolved is None:
+            raise AssertionError('node.load_result should have returned a dict')
+
+    elif node_type in {'sc_pxl', 'bas_pxl'}:
         pat = util_pattern.Pattern.coerce(node_dpath / 'pred.kwcoco.*')
         found = list(pat.paths())
         if len(found) == 0:
@@ -461,14 +520,25 @@ def load_result_resolved(node_dpath):
         node_process_name = 'geowatch.tasks.depth_pcd.filter_tracks'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     else:
-        raise NotImplementedError(node_type)
+        raise NotImplementedError(ub.paragraph(
+            f'''
+            Attempted to load a result for {node_type} in {node_dpath}.
+            But was unable to determine how to do so.
+            In your pipeline class you a method ``def load_result(self,
+            node_dpath):`` which returns a flat dot-dictionary of params and
+            results from the node.
+            '''))
 
+    # Determine if this node has any predecessor computations and load results
+    # from those as well to have a flat and complete picture of the process
+    # lineage for this node.
     predecessor_dpath = node_dpath / '.pred'
     for predecessor_node_type_dpath in predecessor_dpath.glob('*'):
         # predecessor_node_type = predecessor_node_type_dpath.name
         for predecessor_node_dpath in predecessor_node_type_dpath.glob('*'):
             if predecessor_node_dpath.exists():
-                flat_resolved |= load_result_resolved(predecessor_node_dpath)
+                predecessor_flat_resolved = load_result_resolved(predecessor_node_dpath, dag=dag)
+                flat_resolved |= predecessor_flat_resolved
 
     return flat_resolved
 

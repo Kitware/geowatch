@@ -203,23 +203,23 @@ class Evaluator(object):
                 # recon_up3 = None
                 recon_up5 = None
 
-        from geowatch.tasks.fusion.predict import quantize_float01
+        from geowatch.tasks.fusion.coco_stitcher import quantize_image
         # Note using -11 and +11 as a tradeoff range because we cannot
         # guarentee the bounds of this data. Usually it is mean zero with
         # a std < 3, so this should be a decent range to work within.
-        quant_recon, quantization = quantize_float01(recon, old_min=-11, old_max=11)
+        quant_recon, quantization = quantize_image(recon, old_min=-11, old_max=11)
         nodata = quantization['nodata']
 
         save_path = self._output_path_for_image(gid)
         save_path = os.fspath(save_path)
 
         if self.save_raw_features:
-            # quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
+            # quant_recon_up3, quantization_up3 = quantize_image(recon_up3, old_min=-11, old_max=11)
             # nodata_up3 = quantization_up3['nodata']
             # save_path_up3 = self._features_path_for_image(gid, 'up3')
             # save_path_up3 = os.fspath(save_path_up3)
 
-            quant_recon_up5, quantization_up5 = quantize_float01(recon_up5, old_min=-11, old_max=11)
+            quant_recon_up5, quantization_up5 = quantize_image(recon_up5, old_min=-11, old_max=11)
             nodata_up5 = quantization_up5['nodata']
             save_path_up5 = self._features_path_for_image(gid, 'up5')
             save_path_up5 = os.fspath(save_path_up5)

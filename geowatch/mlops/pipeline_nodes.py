@@ -327,7 +327,7 @@ class Pipeline:
         files and symlinks to node output paths.
         """
         import cmd_queue
-        import shlex
+        # import shlex
         import json
         import networkx as nx
 
@@ -404,9 +404,18 @@ class Pipeline:
                                          if n.enabled]
                     # Submit a primary queue process
                     node_command = node.final_command()
+
+                    extra_submitkw = {}
+                    if 'slurm' in queue.__class__.__name__.lower():
+                        # Set the slurm output file to be in the node directory
+                        # to make debugging somewhat easier.  Need to see if
+                        # there is a cleaner way to do this.
+                        extra_submitkw['output_fpath'] = node.final_node_dpath / f'slurm-output-{node_procid}.log'
+
                     node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
-                                            name=node_procid)
+                                            name=node_procid,
+                                            **extra_submitkw)
                     node_status[node_name] = 'new_submission'
                 else:
                     # Some other config submitted this job, we can skip the
@@ -462,9 +471,13 @@ class Pipeline:
                     invoke_command = node._raw_command()
                     invoke_lines.append(invoke_command)
                     invoke_text = '\n'.join(invoke_lines)
+
+                    escaped_invoke_text = bash_printf_literal_string(invoke_text)
+                    # escaped_invoke_text = shlex.quote(invoke_text)
+
                     command = '\n'.join([
                         f'mkdir -p {invoke_fpath.parent} && \\',
-                        f'printf {shlex.quote(invoke_text)} \\',
+                        f'printf {escaped_invoke_text} \\',
                         f"> {invoke_fpath}",
                     ])
                     before_node_commands.append(command)
@@ -475,15 +488,16 @@ class Pipeline:
                     # execute this node.
                     job_config_fpath = node.final_node_dpath / 'job_config.json'
                     json_text = json.dumps(depends_config)
+                    escaped_json_text = bash_printf_literal_string(json_text)
                     if _has_jq():
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' | jq . > {job_config_fpath}",
+                            f"printf {escaped_json_text} | jq . > {job_config_fpath}",
                         ])
                     else:
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' > {job_config_fpath}",
+                            f"printf {escaped_json_text} > {job_config_fpath}",
                         ])
                     before_node_commands.append(command)
 
@@ -507,6 +521,35 @@ class Pipeline:
         return summary
 
     make_queue = submit_jobs
+
+
+def bash_printf_literal_string(text, escape_newlines=True):
+    r"""
+    Not only do we need to make a bash literal string we
+    need to make sure that it is interpreted as literal by
+    printf.
+
+    Example:
+        json_text = '{"step1.param1": "- this: \\"is text 100% representing\\"\\n  some: \\"yaml config\\"\\n  omg: \\"single \' quote\\"\\n  eek: \'double \\" quote\'"}'
+        json.loads(json_text)
+        import shlex
+        text = json_text
+        literal_bash_json_text = bash_printf_literal_string(json_text)
+        print(json_text)
+        print(literal_bash_json_text)
+        command = f"printf {literal_bash_json_text} | jq"
+        print(command)
+        ub.cmd(command, verbose=3, shell=True)
+    """
+    s = text
+    s = s.replace('\\', '\\\\')
+    s = s.replace("'", "'\"'\"'")
+    s = s.replace('%', '%%')
+    if escape_newlines:
+        s = s.replace('\n', '\\n')
+    s = s.replace('\t', '\\t')
+    inside_text = s
+    return f"'{inside_text}'"
 
 
 def glob_templated_path(template):
@@ -833,6 +876,7 @@ class ProcessNode(Node):
         >>>     },
         >>>     in_paths={'src'},
         >>>     out_paths={'dst': 'there.txt'},
+        >>>     primary_out_key='dst',
         >>>     perf_params={'num_workers'},
         >>>     group_dname='predictions',
         >>>     #node_dname='proc1/{proc1_algo_id}/{proc1_id}',
@@ -847,6 +891,7 @@ class ProcessNode(Node):
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
         >>> print('self.final = {}'.format(ub.urepr(self.final, nl=2)))
         >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
+        >>> print('self.primary_out_key = {}'.format(ub.urepr(self.primary_out_key, nl=2)))
 
     Example:
         >>> # How to use a ProcessNode to handle an arbitrary process call
@@ -924,6 +969,8 @@ class ProcessNode(Node):
     # Should be specified as templates
     out_paths : Collection = None
 
+    primary_out_key : str = None
+
     def __init__(self,
                  *,  # TODO: allow positional arguments after we find a good order
                  name=None,
@@ -938,6 +985,7 @@ class ProcessNode(Node):
                  config=None,
                  node_dpath=None,  # overwrites configured node dapth
                  group_dpath=None,  # overwrites configured node dapth
+                 primary_out_key=None,
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
                  _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
@@ -980,11 +1028,16 @@ class ProcessNode(Node):
             'out_paths': {},
             'perf_params': {},
             'algo_params': {},
+            'primary_out_key': None,
         }
         _classvar_init(self, args, fallbacks)
         super().__init__(args['name'])
 
         self._configured_cache = {}
+
+        if self.primary_out_key is None:
+            if len(self.out_paths) == 1:
+                self.primary_out_key = ub.peek(self.out_paths)
 
         if self.group_dname is None:
             self.group_dname = '.'
@@ -1036,6 +1089,8 @@ class ProcessNode(Node):
             config = {}
         config = _fixup_config_serializability(config)
         self.enabled = config.pop('enabled', enabled)
+        # Special case for process specific slurm options
+        self.__slurm_options__ = config.pop('__slurm_options__', '{}')
         self.config = ub.udict(config)
 
         if isinstance(self.in_paths, dict):
@@ -1903,3 +1958,105 @@ def demo_pipeline_run():
 
 # Backwards compat
 PipelineDAG = Pipeline
+
+
+def coerce_pipeline(pipeline):
+    """
+    Attempts to resolve a concise expression (typically from the command line) into a pre-defined pipeline.
+
+    Args:
+        pipeline (str): a pre-registered name, or evaluatable code to construct a pipeline.
+
+    Returns:
+        Pipeline
+    """
+    EXPERIMENTAL_CUSTOM_PIPELINES = True
+    if isinstance(pipeline, str):
+        try:
+            """
+            If this is going to be a real mlops framework, then we need to abstract the
+            pipeline. The user needs to define what the steps are, but then they need to
+            explicitly connect them. We can't make the assumptions we are currently using.
+            """
+            from geowatch.mlops import smart_pipeline
+            dag = smart_pipeline.make_smart_pipeline(pipeline)
+        except Exception:
+            if EXPERIMENTAL_CUSTOM_PIPELINES:
+                # New experimental pipelines
+                dag = _experimental_resolve_pipeline(pipeline)
+            else:
+                raise
+    else:
+        if isinstance(pipeline, Pipeline):
+            return pipeline
+        else:
+            raise TypeError('Unknown coerce technique for {type(pipeline)} with value {pipeline}')
+    return dag
+
+
+def _experimental_resolve_pipeline(pipeline):
+    """
+    Users need to be able to build and specify their own pipelines here
+    (similar to how kwiver pipelines work). This is initial support.
+
+    Ignore:
+        pipeline = 'user_module.pipelines.custom_pipeline_func()'
+        pipeline = 'geowatch.mlops.smart_pipeline.make_smart_pipeline("bas")'
+        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        pipeline = 'shitspotter.pipelines.heatmap_evaluation_pipeline()'
+        pipeline = '/home/joncrall/code/geowatch/geowatch/mlops/smart_pipeline.py::make_smart_pipeline("bas")'
+        _experimental_resolve_pipeline(pipeline)
+    """
+    # Case: given in the format `{module_name}.{attribute_expression}`
+    # Note the attribute_expression allows arbitrary code execution
+    print('Resolving user-specified pipeline')
+    if '::' in pipeline:
+        fpath, code = pipeline.split('::', 1)
+        module = ub.import_module_from_path(fpath)
+        limited_namespace = {'pipeline_module': module}
+        statement = f'pipeline_module.{code}'
+        dag = eval(statement, limited_namespace)
+        return dag
+    elif '.' in pipeline:
+        # Find which part is the module and which is the member
+        parts = pipeline.split('.')
+        found = None
+        for idx in reversed(range(1, len(parts) + 1)):
+            candidate = '.'.join(parts[:idx])
+            try:
+                modpath = _coerce_modpath(candidate)
+            except ValueError:
+                ...
+            else:
+                lhs = candidate
+                rhs = '.'.join(parts[idx:])
+                module = ub.import_module_from_path(modpath)
+                found = (module, modpath, lhs, rhs)
+                print(f'found = {ub.urepr(found, nl=1)}')
+                break
+        if found is None:
+            raise ValueError('unable to resolve pipeline')
+        else:
+            # This initial specification allows arbitrary code execution.
+            # We should define a hardened variant which does not require this.
+            (module, modpath, lhs, rhs) = found
+            limited_namespace = {'pipeline_module': module}
+            statement = f'pipeline_module.{rhs}'
+            dag = eval(statement, limited_namespace)
+            return dag
+    else:
+        raise ValueError(pipeline)
+
+
+def _coerce_modpath(modpath_or_name):
+    import types
+    import os
+    if isinstance(modpath_or_name, types.ModuleType):
+        raise TypeError('Expected a static module but got a dynamic one')
+    modpath = ub.modname_to_modpath(modpath_or_name)
+    if modpath is None:
+        if os.path.exists(modpath_or_name):
+            modpath = modpath_or_name
+        else:
+            raise ValueError('Cannot find module={}'.format(modpath_or_name))
+    return modpath
