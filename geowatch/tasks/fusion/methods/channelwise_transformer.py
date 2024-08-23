@@ -327,6 +327,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
             >>> assert "tokenizer" in model.hparams
         """
+        import kwutil
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
         print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
@@ -343,39 +344,46 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
         input_norms = None
-        if input_stats is not None:
-            input_norms = RobustModuleDict()
-            for s, c in sorted(self.unique_sensor_modes):
-                if s not in input_norms:
-                    input_norms[s] = RobustModuleDict()
-                stats = input_stats.get((s, c), None)
-                if stats is None:
-                    input_norms[s][c] = InputNorm()
-                else:
-                    input_norms[s][c] = InputNorm(
-                        **ub.udict(stats) & {'mean', 'std'})
-
-            # Not sure what causes the format to change. Just hitting test
-            # cases.
-            for k, v in sorted(input_stats.items()):
-                if isinstance(k, str):
-                    for c, stats in v.items():
-                        if s not in input_norms:
-                            input_norms[s] = RobustModuleDict()
-                        input_norms[s][c] = InputNorm(
-                            **ub.udict(stats) & {'mean', 'std'})
-                else:
-                    # for (s, c), stats in input_stats.items():
-                    s, c = k
-                    stats = v
+        try:
+            if input_stats is not None:
+                input_norms = RobustModuleDict()
+                for s, c in sorted(self.unique_sensor_modes):
                     if s not in input_norms:
                         input_norms[s] = RobustModuleDict()
-                    input_norms[s][c] = InputNorm(
-                        **ub.udict(stats) & {'mean', 'std'})
+                    stats = input_stats.get((s, c), None)
+                    if stats is None:
+                        input_norms[s][c] = InputNorm()
+                    else:
+                        input_norms[s][c] = InputNorm(
+                            **ub.udict(stats) & {'mean', 'std'})
+
+                # Not sure what causes the format to change. Just hitting test
+                # cases.
+                for k, v in sorted(input_stats.items()):
+                    if isinstance(k, str):
+                        for c, stats in v.items():
+                            if s not in input_norms:
+                                input_norms[s] = RobustModuleDict()
+                            stats = ub.udict(stats)
+                            input_norms[s][c] = InputNorm(
+                                **(stats & {'mean', 'std'}))
+                    else:
+                        s, c = k
+                        stats = v
+                        if s not in input_norms:
+                            input_norms[s] = RobustModuleDict()
+                        stats = ub.udict(stats)
+                        input_norms[s][c] = InputNorm(
+                            **(stats & {'mean', 'std'}))
+        except Exception:
+            import rich
+            from rich.markup import escape
+            rich.print('[red]ERROR: Issue in building stats modules')
+            rich.print('input_stats: ' + escape(ub.urepr(input_stats, nl=1)))
+            raise
 
         self.input_norms = input_norms
 
-        import kwutil
         predictable_classes = kwutil.util_yaml.Yaml.coerce(
             self.hparams.predictable_classes)
         if predictable_classes is not None:
