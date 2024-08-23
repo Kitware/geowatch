@@ -378,8 +378,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         except Exception:
             import rich
             from rich.markup import escape
-            rich.print('[red]ERROR: Issue in building stats modules')
-            rich.print('input_stats: ' + escape(ub.urepr(input_stats, nl=1)))
+            rich.print('[red]ERROR: Issue in building input_norms modules from input stats')
+            rich.print('dataset_stats: ' + escape(ub.urepr(dataset_stats, nl=2)))
+            rich.print('input_sensorchan: ' + escape(ub.urepr(input_sensorchan, nl=2)))
+            rich.print('input_channels: ' + escape(ub.urepr(input_channels, nl=2)))
+            rich.print('classes: ' + escape(ub.urepr(classes, nl=1)))
+            # rich.print('input_stats: ' + escape(ub.urepr(input_stats, nl=1)))
             raise
 
         self.input_norms = input_norms
