@@ -380,6 +380,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Validation/test dataset defaults to zero.
 
         NOTE: This will be deprecated and superceded by "balance_options".
+        To reproduce this with "balance_options" use:
+        balance_options : [
+            {attribute: contains_annotation, weights: {True: 0.5, False: 0.5}}
+        ]
         '''))
 
     balance_options = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(

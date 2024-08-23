@@ -328,7 +328,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "tokenizer" in model.hparams
         """
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
-        print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+        print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
         assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
