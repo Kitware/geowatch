@@ -926,6 +926,31 @@ class DatasetStatsMixin:
         else:
             unique_sensor_modes = dataset_stats['unique_sensor_modes']
 
+        if True:
+            # hack None to '*'
+            _fixed_sensor_modes = []
+            for k in unique_sensor_modes:
+                if isinstance(k, str):
+                    if k == '*':
+                        s = c = '*'
+                    else:
+                        raise AssertionError
+                else:
+                    s, c = k
+                if s is None:
+                    s = '*'
+                _fixed_sensor_modes.append((s, c))
+            unique_sensor_modes = _fixed_sensor_modes
+
+            if input_stats is not None:
+                _fixed_input_stats = {}
+                for k, v in input_stats.items():
+                    s, c = k
+                    if s is None:
+                        s = '*'
+                    _fixed_input_stats[(s, c)] = v
+                input_stats = _fixed_input_stats
+
         self.class_freq = class_freq
         self.dataset_stats = dataset_stats
         self.unique_sensor_modes = unique_sensor_modes

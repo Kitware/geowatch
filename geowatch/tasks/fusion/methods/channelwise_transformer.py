@@ -329,7 +329,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         import kwutil
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
-        print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
+        VERBOSE = 1
+        if VERBOSE:
+            print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
         assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
@@ -344,47 +346,36 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
         input_norms = None
-        try:
-            if input_stats is not None:
-                input_norms = RobustModuleDict()
-                for s, c in sorted(self.unique_sensor_modes):
-                    if s not in input_norms:
-                        input_norms[s] = RobustModuleDict()
-                    stats = input_stats.get((s, c), None)
-                    if stats is None:
-                        input_norms[s][c] = InputNorm()
-                    else:
-                        input_norms[s][c] = InputNorm(
-                            **ub.udict(stats) & {'mean', 'std'})
+        if input_stats is not None:
+            input_norms = RobustModuleDict()
+            for s, c in sorted(self.unique_sensor_modes):
+                if s not in input_norms:
+                    input_norms[s] = RobustModuleDict()
+                stats = input_stats.get((s, c), None)
+                if stats is None:
+                    input_norms[s][c] = InputNorm()
+                else:
+                    input_norms[s][c] = InputNorm(
+                        **ub.udict(stats) & {'mean', 'std'})
 
-                # Not sure what causes the format to change. Just hitting test
-                # cases.
-                for k, v in sorted(input_stats.items()):
-                    if isinstance(k, str):
-                        for c, stats in v.items():
-                            if s not in input_norms:
-                                input_norms[s] = RobustModuleDict()
-                            stats = ub.udict(stats)
-                            input_norms[s][c] = InputNorm(
-                                **(stats & {'mean', 'std'}))
-                    else:
-                        s, c = k
-                        stats = v
+            # Not sure what causes the format to change. Just hitting test
+            # cases.
+            for k, v in sorted(input_stats.items()):
+                if isinstance(k, str):
+                    for c, stats in v.items():
                         if s not in input_norms:
                             input_norms[s] = RobustModuleDict()
                         stats = ub.udict(stats)
                         input_norms[s][c] = InputNorm(
                             **(stats & {'mean', 'std'}))
-        except Exception:
-            import rich
-            from rich.markup import escape
-            rich.print('[red]ERROR: Issue in building input_norms modules from input stats')
-            rich.print('dataset_stats: ' + escape(ub.urepr(dataset_stats, nl=2)))
-            rich.print('input_sensorchan: ' + escape(ub.urepr(input_sensorchan, nl=2)))
-            rich.print('input_channels: ' + escape(ub.urepr(input_channels, nl=2)))
-            rich.print('classes: ' + escape(ub.urepr(classes, nl=1)))
-            # rich.print('input_stats: ' + escape(ub.urepr(input_stats, nl=1)))
-            raise
+                else:
+                    s, c = k
+                    stats = v
+                    if s not in input_norms:
+                        input_norms[s] = RobustModuleDict()
+                    stats = ub.udict(stats)
+                    input_norms[s][c] = InputNorm(
+                        **(stats & {'mean', 'std'}))
 
         self.input_norms = input_norms
 
@@ -445,7 +436,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if isinstance(class_weights, str) and class_weights == 'auto':
                 class_weights = class_weights + ':' + modulate_class_weights
 
-        print(f'self.hparams.saliency_weights={self.hparams.saliency_weights}')
+        if VERBOSE:
+            print(f'self.hparams.saliency_weights={self.hparams.saliency_weights}')
         self.saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
         self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
@@ -453,16 +445,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.positive_change_weight
         ])
         #self.object_weights = self._coerce_object_weights(self.hparams.object_weights)
-        print(f'self.change_weights={self.change_weights}')
+        if VERBOSE:
+            print(f'self.change_weights={self.change_weights}')
 
         if isinstance(self.hparams.stream_channels, str):
             RAW_CHANS = int(self.hparams.stream_channels.split(' ')[0])
         else:
             RAW_CHANS = None
-        print(f'RAW_CHANS={RAW_CHANS}')
+        if VERBOSE:
+            print(f'RAW_CHANS={RAW_CHANS}')
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
-        print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
-        print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
+        if VERBOSE:
+            print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
+            print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
 
         self.rescale_nan_method = self.hparams.rescale_nans
         if self.rescale_nan_method == 'perframe':
@@ -482,8 +477,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
+        sensor_modes = sorted(sensor_modes)
 
-        for k in sorted(sensor_modes):
+        for k in sensor_modes:
             if isinstance(k, str):
                 if k == '*':
                     s = c = '*'
@@ -537,7 +533,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
 
-        print(f'in_features_raw={in_features_raw}')
+        if VERBOSE:
+            print(f'in_features_raw={in_features_raw}')
 
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
@@ -548,7 +545,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
 
-        print(f'self.in_features={self.in_features}')
+        if VERBOSE:
+            print(f'self.in_features={self.in_features}')
         ### NEW:
         # Learned positional encodings
         self.token_learner1_time_delta = MultiLayerPerceptronNd(
@@ -726,9 +724,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
 
         self.automatic_optimization = True
-
-        if 0:
-            ...
 
     @classmethod
     def add_argparse_args(cls, parent_parser):

@@ -9,6 +9,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Add top-level matrices argument to param_grid.
 
+### Fixed
+* Fix issue in MultimodalModel when input sensor is None.
+
 ## Version 0.18.2 - Released 2024-08-22
 
 ### Added
