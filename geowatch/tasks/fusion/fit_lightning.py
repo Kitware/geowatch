@@ -163,7 +163,10 @@ class SmartTrainer(pl.Trainer):
             for key, script in scripts.items():
                 fpath = script['fpath']
                 # Can use new ubelt
-                ub.Path(fpath).chmod('u+x')
+                try:
+                    ub.Path(fpath).chmod('u+x')
+                except PermissionError as ex:
+                    print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 

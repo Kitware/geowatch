@@ -3664,6 +3664,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
+            print('Channels specified as auto, attempting to introspsect')
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(self.sampler.dset)['sensorchan_hist']
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
@@ -3672,6 +3673,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            print(f'Automatically determined sensorchans = {ub.urepr(sensorchans, nl=1)}')
             if len(sensorchan_hist) > 0 and channels is None:
                 # Only warn if not explicitly in auto mode
                 warnings.warn(
