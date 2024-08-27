@@ -1,13 +1,34 @@
 """
 CommandLine:
     # Benchmark time sampling
-    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
+    LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
 
 
 TODO:
     - [ ] The functions that take too many arguments should be refactored as
           object oriented code and use object attribute to store the extra
           data.
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:LINE_PROFILE)
+    >>> from geowatch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=100)
+    >>> window_overlap = 0.0
+    >>> time_dims = 1
+    >>> window_dims = (32, 32)
+    >>> keepbound = False
+    >>> time_sampling = 'soft2+distribute'
+    >>> sample_grid1 = SpacetimeGridBuilder(
+    >>>     dset, time_dims, window_dims, window_overlap, use_cache=0,
+    >>>     use_centered_positives=0,
+    >>>     use_annot_info=0,
+    >>>     time_sampling='contiguous').build()
+    >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
+    >>> all_boxes = kwimage.Boxes.concatenate(boxes)
+    >>> assert np.all(all_boxes.height == window_dims[0])
+    >>> assert np.all(all_boxes.width == window_dims[1])
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
