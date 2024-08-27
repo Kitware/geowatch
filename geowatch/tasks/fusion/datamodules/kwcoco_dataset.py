@@ -1321,9 +1321,11 @@ class GetItemMixin(TruthMixin):
                 'saliency_weights': None,
             }
 
+            output_dims = output_dsize[::-1]  # the size we want to predict
+            frame_item['output_dims'] = output_dims
+
             if not self.config['reduce_item_size']:
                 scale_outspace_from_vid = output_dsize / np.array(vidspace_dsize)
-                output_dims = output_dsize[::-1]  # the size we want to predict
                 # The size of the larger image this output is expected to be
                 # embedded in.
                 outimg_dsize = video_dsize * scale_outspace_from_vid
@@ -1335,7 +1337,6 @@ class GetItemMixin(TruthMixin):
                     'class_output_dims': output_dims,
                     'saliency_output_dims': output_dims,
                     #
-                    'output_dims': output_dims,
                     'output_space_slice': frame_outspace_box.to_slice(),
                     'output_image_dsize': outimg_box.dsize,
                     'scale_outspace_from_vid': scale_outspace_from_vid,
@@ -2131,7 +2132,7 @@ class GetItemMixin(TruthMixin):
                 'class_output_dims',
                 'saliency_output_dims',
                 #
-                'output_dims',
+                # 'output_dims',
                 'output_space_slice',
                 'output_image_dsize',
                 'scale_outspace_from_vid',
