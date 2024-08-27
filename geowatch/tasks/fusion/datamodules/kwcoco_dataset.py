@@ -2099,7 +2099,7 @@ class GetItemMixin(TruthMixin):
                 # '_new_inputs': ...,
                 # '_new_outputs': ...,
                 'video_id': vidid,
-                'video_name': video['name'],
+                'video_name': video.get('name', None),
                 'domain': video.get('domain', video.get('name', None)),
                 'input_gsd': resolved_input_scale.get('gsd', None),
                 'output_gsd': resolved_output_scale.get('gsd', None),
