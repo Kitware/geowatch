@@ -737,9 +737,9 @@ class CoerceMixins:
 
         Args:
             saliency_weights (Tensor | str | None):
-                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
+                Can be None, a raw tensor, "auto", or a string ``"<bg>:<fg>"``.
                 Can also accept a YAML mapping from the keys "bg" and "fg" to
-                their respective float weights.
+                their respective float weights, e.g. ``"{fg: 1, bg: 2}"``.
 
         Returns:
             Tensor:

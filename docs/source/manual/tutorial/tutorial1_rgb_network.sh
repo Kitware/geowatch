@@ -17,7 +17,12 @@ RunMe:
     source ~/code/geowatch/docs/source/manual/tutorial/tutorial1_rgb_network.sh
 "
 
-export ACCELERATOR="${ACCELERATOR:-cpu}"
+# Default to GPU if you have nvidia-smi, otherwise cpu
+if type nvidia-smi; then
+    export ACCELERATOR="${ACCELERATOR:-gpu}"
+else
+    export ACCELERATOR="${ACCELERATOR:-cpu}"
+fi
 
 
 # For those windows folks:
@@ -175,7 +180,7 @@ model:
     init_args:
         name        : $EXPERIMENT_NAME
         arch_name   : smt_it_stm_p8
-        global_box_weight: 1
+        global_box_weight: 0
 optimizer:
   class_path: torch.optim.AdamW
   init_args:

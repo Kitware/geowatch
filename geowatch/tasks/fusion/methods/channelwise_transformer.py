@@ -142,8 +142,13 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         `negative*0,background*0.001,No Activity*0.1+1`
         '''))
 
-    # TODO: better encoding
-    saliency_weights = scfg.Value('auto', type=str, help='saliency weighting strategy. Can be None, "auto", or a string "<bg>:<fg>"')
+    saliency_weights = scfg.Value('auto', type=str, help=ub.paragraph(
+        '''
+        Saliency weighting strategy.
+        Can be None, a raw tensor, "auto", or a string ``"<bg>:<fg>"``.
+        Can also accept a YAML mapping from the keys "bg" and "fg" to
+        their respective float weights, e.g. ``"{fg: 1, bg: 2}"``.
+        '''))
 
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''

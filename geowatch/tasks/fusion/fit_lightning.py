@@ -163,10 +163,7 @@ class SmartTrainer(pl.Trainer):
             for key, script in scripts.items():
                 fpath = script['fpath']
                 # Can use new ubelt
-                try:
-                    ub.Path(fpath).chmod('u+x')
-                except PermissionError as ex:
-                    print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
+                ub.Path(fpath).chmod('u+x')
         except Exception as ex:
             print('WARNING ex = {}'.format(ub.urepr(ex, nl=1)))
 
@@ -511,10 +508,20 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
-    default_callbacks = [
-        pl.callbacks.RichProgressBar(),
+    default_callbacks = []
+    import os
+
+    if os.environ.get('SLURM_JOBID', ''):
+        # slurm does not play well with the rich progress bar
+        # The default TQDM iter seems to work well enough.
+        # from geowatch.utils.lightning_ext.callbacks.progiter_progress import ProgIterProgressBar
+        # default_callbacks.append(ProgIterProgressBar())
+        ...
+    else:
+        default_callbacks.append(pl.callbacks.RichProgressBar())
         # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
+    default_callbacks.extend([
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=4),
@@ -531,7 +538,7 @@ def make_cli(config=None):
         #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(
         #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
-    ]
+    ])
 
     if not DDP_WORKAROUND:
         # FIXME: Why aren't the rank zero checks enough here?
@@ -706,18 +713,20 @@ if __name__ == "__main__":
         python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=NoopModel
 
+        # Simple run CLI style
         python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
             --data.window_dims=64 \
             --data.workers=4 \
             --trainer.accelerator=gpu \
-            --trainer.strategy=ddp \
-            --trainer.devices=0,1 \
-            --data.batch_size=4 \
-            --model.class_path=HeterogeneousModel \
+            --trainer.devices=0, \
+            --data.batch_size=1 \
+            --model.class_path=MultimodalTransformer \
             --optimizer.class_path=torch.optim.Adam \
             --trainer.default_root_dir ./demo_train
 
+        # Simple run YAML config CLI style
+        srun \
         python -m geowatch.tasks.fusion.fit_lightning fit --config="
             data:
                 train_dataset: special:vidshapes8-frames9-speed0.5
@@ -731,15 +740,51 @@ if __name__ == "__main__":
                           video: video1
                           mean: [87.572401, 87.572401, 87.572401]
                           std: [99.449996, 99.449996, 99.449996]
+            model:
+                class_path: MultimodalTransformer
+            optimizer:
+                class_path: torch.optim.Adam
             trainer:
                 accelerator: gpu
-                strategy: ddp
-                devices: 0,1
+                devices: 1
+                default_root_dir: ./demo_train
+        "
+
+        # Multi GPU run with DDP and CLI config
+        python -m geowatch.tasks.fusion.fit_lightning fit \
+            --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
+            --data.window_dims=64 \
+            --data.workers=4 \
+            --trainer.accelerator=gpu \
+            --trainer.strategy=ddp \
+            --trainer.devices=0,1 \
+            --data.batch_size=4 \
+            --model.class_path=HeterogeneousModel \
+            --optimizer.class_path=torch.optim.Adam \
+            --trainer.default_root_dir ./demo_train
+
+        # Multi GPU run with DDP and YAML config
+        python -m geowatch.tasks.fusion.fit_lightning fit --config="
+            data:
+                train_dataset: special:vidshapes8-frames9-speed0.5
+                window_dims: 64
+                workers: 4
+                batch_size: 4
+                normalize_inputs:
+                    input_stats:
+                        - sensor: '*'
+                          channels: r|g|b
+                          video: video1
+                          mean: [87.572401, 87.572401, 87.572401]
+                          std: [99.449996, 99.449996, 99.449996]
             model:
                 class_path: HeterogeneousModel
             optimizer:
                 class_path: torch.optim.Adam
             trainer:
+                accelerator: gpu
+                strategy: ddp
+                devices: 0,1
                 default_root_dir: ./demo_train
         "
 
