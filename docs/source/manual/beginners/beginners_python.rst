@@ -144,6 +144,8 @@ Third party modules::
 Builtins
 --------
 
+.. code::
+
     # Debug
     breakpoint,
 
@@ -298,3 +300,7 @@ I've written a stackoverflow answer that contains good information about python
 packaging and how to handle importing external files.
 
 https://stackoverflow.com/questions/74976153/what-is-the-best-practice-for-imports-when-developing-a-python-package/74976641#74976641
+
+.. ... Preview:
+
+   python -m instant_rst -f ~/code/geowatch/docs/source/manual/beginners/beginners_python.rst
