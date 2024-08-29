@@ -4,6 +4,12 @@ Supporting Projects
 These are a list of important projects that are used extensively in GeoWATCH. In
 some cases these are being developed simultaneously with GeoWATCH.
 
+First a graph overview of some dependencies
+
+.. image:: https://i.imgur.com/xEea6kL.png
+
+And now links and a description
+
 
 * https://gitlab.kitware.com/computer-vision/kwcoco - Importance: CRITICAL - This is our data exchange
 
