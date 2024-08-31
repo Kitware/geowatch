@@ -1493,8 +1493,7 @@ class _SiteOrSummaryMixin:
                         'date': date.date().isoformat(),
                         'type': 'point',
                         'point_version': '1.0',
-                        'date_version': '1.1000000000000001',
-                       },
+                        'date_version': '1.1000000000000001'},
             geometry=point_geom)
         return point
 
