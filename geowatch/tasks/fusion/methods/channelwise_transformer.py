@@ -2053,8 +2053,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         outputs = self.forward_step(batch, with_loss=True, stage='test')
         return outputs
 
-    def save_package(self, package_path, verbose=1):
+    def save_package(self, package_path, context=None, verbose=1):
         """
+        Save model architecture and checkpoint as a torch package.
+
+        Args:
+            package_path (str | PathLike): where to save the package
+            context (Any): custom json-serializable data to save in the header
+            verbose (int): verbosity level
 
         CommandLine:
             xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
@@ -2094,7 +2100,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             print('HACK NOT SAVING FOR CONTINUAL LEARNING')
             # HACK
             return
-        self._save_package(package_path, verbose=verbose)
+        self._save_package(package_path, context=context, verbose=verbose)
 
     @profile
     def forward(self, batch):

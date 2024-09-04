@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fix issue in MultimodalModel when input sensor is None.
 
 ### Changed
+* More information is now saved when packaging checkpoints.
 * Prevent the loading of some external torch modules unless they are used via module properties.
 
 ## Version 0.18.2 - Released 2024-08-22

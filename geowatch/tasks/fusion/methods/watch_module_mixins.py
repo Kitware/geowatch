@@ -489,7 +489,7 @@ class OverfitMixin:
 
 class PackageMixin:
 
-    def _save_package(self, package_path, verbose=1):
+    def _save_package(self, package_path, context=None, verbose=1):
         """
         We define this as a protected method to allow modules to reuse the core
         code, but force each module to define the ``save_package`` method
@@ -552,6 +552,7 @@ class PackageMixin:
             exp = torch.package.PackageExporter(package_path, debug=True)
             """
             import warnings
+            import sys
             warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
             # with torch.package.PackageExporter(package_path) as exp:
             with torch.package.PackageExporter(package_path) as exp:
@@ -572,12 +573,15 @@ class PackageMixin:
                 # Add information about how this was trained, and what epoch it
                 # was saved at.
                 package_header = {
-                    'version': '0.3.0',
+                    'version': '0.4.0',
                     'arch_name': arch_name,
                     'module_name': module_name,
                     'packaging_time': ub.timestamp(),
                     'git_hash': None,
                     'module_path': None,
+                    'torch_version': torch.__version__,
+                    'python_version': sys.version,
+                    'context': context,
                 }
 
                 # Encode a git hash if we can identify that we are in a git
