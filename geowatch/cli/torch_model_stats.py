@@ -253,11 +253,16 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         "mean": min([summary["mean"] for summary in param_stats.values()]),
     }
 
+    try:
+        unique_sensors = sorted(unique_sensors)
+    except TypeError:
+        ...
+
     row = {
         'name': package_fpath.stem,
         'task': 'TODO',
         'file_name': str(package_fpath),
-        'sensors': sorted(unique_sensors),
+        'sensors': unique_sensors,
         'train_dataset': str(train_dataset),
         'fit_config': fit_config,
         'config_cli_yaml': config_cli_yaml,
