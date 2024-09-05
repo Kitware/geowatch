@@ -297,6 +297,16 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         model.train_dpath_hint = train_dpath_hint
 
     context = inspect_checkpoint_context(checkpoint_fpath)
+
+    try:
+        context['epoch'] = checkpoint['epoch']
+    except KeyError:
+        ...
+    try:
+        context['global_step'] = checkpoint['global_step']
+    except KeyError:
+        ...
+
     from kwcoco.util import util_json
     context = util_json.ensure_json_serializable(context)
 
