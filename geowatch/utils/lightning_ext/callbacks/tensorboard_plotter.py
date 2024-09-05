@@ -195,7 +195,10 @@ def _write_helper_scripts(out_dpath, train_dpath):
         #!/usr/bin/env bash
         kwimage stack_images --out "{train_dpath_}/monitor/tensorboard-stack.png" -- {train_dpath_}/monitor/tensorboard/*.png
         '''))
-    stack_fpath.chmod('ug+x')
+    try:
+        stack_fpath.chmod('ug+x')
+    except PermissionError as ex:
+        print(f'Unable to change permissions on {stack_fpath}: {ex}')
 
     refresh_fpath = (out_dpath / 'redraw.sh')
     refresh_fpath.write_text(ub.codeblock(
@@ -204,7 +207,10 @@ def _write_helper_scripts(out_dpath, train_dpath):
         WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {train_dpath_}
         '''))
-    refresh_fpath.chmod('ug+x')
+    try:
+        refresh_fpath.chmod('ug+x')
+    except PermissionError as ex:
+        print(f'Unable to change permissions on {refresh_fpath}: {ex}')
 
 
 def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outliers=True, verbose=0):

@@ -50,7 +50,6 @@ import einops
 from einops import rearrange, repeat
 
 import ubelt as ub  # NOQA
-import math
 
 try:
     import xdev
@@ -198,110 +197,79 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         return attn_out
 
 
-try:
-    from performer_pytorch import FastAttention
+class MetaModuleProperties(type):
+    """
+    Experimental way to get concisely property like behavior at a module level.
 
-    class FastMultiheadSelfAttention(FastAttention):
-        """
-        This seems like a good idea, but either I'm using it wrong or the
-        C-bindings in normal attention make this lose all of its benefit.
+    This defines code run whenever a the user **DEFINES** a class that inherits
+    from :class:`MetaModuleProperties`.
+    """
 
-        Ignore:
-            D = 9  # embedding dimension
-            H = 3   # number of heads
-            B = 5   # batch size
-            S = 7   # sequence length
-            x = torch.rand(S, B, D)
-            MultiheadSelfAttention(D, H)(x).shape
-            FastMultiheadSelfAttention(D, H)(x)
-            from performer_pytorch import FastAttention
-            q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
-            FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
-        """
+    @staticmethod
+    def __new__(mcls, name, bases, namespace, *args, **kwargs):
+        # print(f'MetaModuleProperties.__new__ called: {mcls=} {name=} {bases=} {namespace=} {args=} {kwargs=}')
+        _property_lut = {}
+        for key, value in list(namespace.items()):
+            if isinstance(value, property):
+                _property_lut[key] = value.fget
+                namespace.pop(key)
+        namespace['_property_lut'] = _property_lut
+        # print('FINAL namespace = {}'.format(ub.urepr(namespace, nl=2)))
+        cls = super().__new__(mcls, name, bases, namespace, *args, **kwargs)
+        return cls
 
-        def __init__(self, embed_dim, num_heads):
-            self.embed_dim = embed_dim
-            self.num_heads = num_heads
-            assert embed_dim % num_heads == 0
-            dim_heads = embed_dim // num_heads
-            nb_features = int(dim_heads * math.log(dim_heads))
-            # nb_features = int(dim_heads * 2)
-            super().__init__(
-                dim_heads, nb_features=nb_features, ortho_scaling=0,
-                causal=False, generalized_attention=False, kernel_fn=nn.ReLU(),
-                no_projection=False)
-
-        @profile
-        def forward(self, x, key_padding_mask=None):
-            # import xdev
-            # xdev.embed()
-            # make compatible with nn.MultiheadAttention
-            # s, b, he = x.shape
-            # e = self.dim_heads
-            # h = self.num_heads
-            # Much faster than einops
-            if key_padding_mask is not None:
-                raise NotImplementedError
-            # q = x.contiguous().view(s, b, h, e).permute(1, 2, 0, 3)
-            q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
-            # a = FastAttention.forward(self, q, q, q)
-            a = super().forward(q, q, q)
-            # out = a.permute(2, 1, 0, 3).contiguous().view(s, b, he)
-            out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
-            return out
-except ImportError:
-    pass
+    def __getattr__(cls, name):
+        try:
+            return cls._property_lut[name]()
+        except KeyError:
+            module_name = __name__  # generalize
+            raise AttributeError(f'Module {module_name!r} has no attribute {name!r}')
 
 
-try:
-    from reformer_pytorch import LSHSelfAttention
+class ModuleProperties(metaclass=MetaModuleProperties):
+    """
+    Experimental way to get concisely property like behavior at a module level.
 
-    class ReformerMultiheadedSelfAttention(LSHSelfAttention):
-        """
-        This seems like a good idea, but either I'm using it wrong or the
-        C-bindings in normal attention make this lose all of its benefit.
+    Inherit from this class. This class forwards metaclass magic that allows us
+    to register any function decorated with ``@property``. It also creates the
+    ``__getattr__`` method that will be assigned to the module.
+    """
 
-        Ignore:
-            from geowatch.tasks.fusion.architectures.transformer import *  # NOQA
-            D = 9  # embedding dimension
-            H = 3   # number of heads
-            B = 5   # batch size
-            S = 7   # sequence length
-            x = torch.rand(S, B, D)
+    @classmethod
+    def getattr(cls, name):
+        try:
+            return cls._property_lut[name]()
+        except KeyError:
+            module_name = __name__  # generalize
+            raise AttributeError(f'Module {module_name!r} has no attribute {name!r}')
 
-            self = ReformerMultiheadedSelfAttention(D, H)
 
-            MultiheadSelfAttention(D, H)(x).shape
-            ReformerMultiheadedSelfAttention(D, H)(x)
-            from reformer_pytorch import LSHAttention
-            q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
-            FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
-        """
+class __module_properties__(ModuleProperties):
+    """
+    CommandLine:
+        xdoctest -m geowatch.tasks.fusion.architectures.transformer __module_properties__
 
-        def __init__(self, embed_dim, num_heads):
-            self.embed_dim = embed_dim
-            self.num_heads = num_heads
-            assert embed_dim % num_heads == 0
-            dim_heads = embed_dim // num_heads
-            self.dim_heads = dim_heads
-            # nb_features = int(dim_heads * math.log(dim_heads))
-            # nb_features = int(dim_heads * 2)
-            super().__init__(
-                dim=embed_dim, heads=num_heads, dim_head=dim_heads,
-                bucket_size=64, n_hashes=8, causal=False)
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from geowatch.tasks.fusion.architectures import transformer as mod
+        >>> attr = mod.FastMultiheadSelfAttention
+        >>> print(f'attr={attr}')
+        >>> attr = mod.ReformerMultiheadedSelfAttention
+        >>> print(f'attr={attr}')
+    """
 
-        @profile
-        def forward(self, x, key_padding_mask=None):
-            if key_padding_mask is not None:
-                raise NotImplementedError
-            s, b, he = x.shape
-            bsd = x.permute(1, 0, 2)
-            # a = LSHSelfAttention.forward(self, bsd)
-            a = super().forward(bsd)
-            out = a.permute(1, 0, 2)
-            return out
-except ImportError:
-    pass
+    @property
+    def FastMultiheadSelfAttention():
+        from geowatch.tasks.fusion.architectures.optional.performer_attention import FastMultiheadSelfAttention
+        return FastMultiheadSelfAttention
+
+    @property
+    def ReformerMultiheadedSelfAttention():
+        from geowatch.tasks.fusion.architectures.optional.reformer_attention import ReformerMultiheadedSelfAttention
+        return ReformerMultiheadedSelfAttention
+
+
+__getattr__ = __module_properties__.getattr
 
 
 def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
@@ -343,8 +311,10 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwarg
         import performer_pytorch  # NOQA
         # from performer_pytorch import SelfAttention
         # attention = SelfAttention(dim=embedding_size, heads=n_heads)
+        from geowatch.tasks.fusion.architectures.optional.performer_attention import FastMultiheadSelfAttention
         attention = FastMultiheadSelfAttention(embedding_size, n_heads, **kwargs)
     elif attention_impl == 'reformer':
+        from geowatch.tasks.fusion.architectures.optional.reformer_attention import ReformerMultiheadedSelfAttention
         attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads, **kwargs)
     else:
         raise KeyError(attention_impl)

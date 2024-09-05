@@ -380,6 +380,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Validation/test dataset defaults to zero.
 
         NOTE: This will be deprecated and superceded by "balance_options".
+        To reproduce this with "balance_options" use:
+        balance_options : [
+            {attribute: contains_annotation, weights: {True: 0.5, False: 0.5}}
+        ]
         '''))
 
     balance_options = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
@@ -1317,9 +1321,11 @@ class GetItemMixin(TruthMixin):
                 'saliency_weights': None,
             }
 
+            output_dims = output_dsize[::-1]  # the size we want to predict
+            frame_item['output_dims'] = output_dims
+
             if not self.config['reduce_item_size']:
                 scale_outspace_from_vid = output_dsize / np.array(vidspace_dsize)
-                output_dims = output_dsize[::-1]  # the size we want to predict
                 # The size of the larger image this output is expected to be
                 # embedded in.
                 outimg_dsize = video_dsize * scale_outspace_from_vid
@@ -1331,7 +1337,6 @@ class GetItemMixin(TruthMixin):
                     'class_output_dims': output_dims,
                     'saliency_output_dims': output_dims,
                     #
-                    'output_dims': output_dims,
                     'output_space_slice': frame_outspace_box.to_slice(),
                     'output_image_dsize': outimg_box.dsize,
                     'scale_outspace_from_vid': scale_outspace_from_vid,
@@ -2095,7 +2100,7 @@ class GetItemMixin(TruthMixin):
                 # '_new_inputs': ...,
                 # '_new_outputs': ...,
                 'video_id': vidid,
-                'video_name': video['name'],
+                'video_name': video.get('name', None),
                 'domain': video.get('domain', video.get('name', None)),
                 'input_gsd': resolved_input_scale.get('gsd', None),
                 'output_gsd': resolved_output_scale.get('gsd', None),
@@ -2127,7 +2132,7 @@ class GetItemMixin(TruthMixin):
                 'class_output_dims',
                 'saliency_output_dims',
                 #
-                'output_dims',
+                # 'output_dims',
                 'output_space_slice',
                 'output_image_dsize',
                 'scale_outspace_from_vid',
@@ -3659,6 +3664,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
+            print('Channels specified as auto, attempting to introspsect')
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(self.sampler.dset)['sensorchan_hist']
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
@@ -3667,6 +3673,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            print(f'Automatically determined sensorchans = {ub.urepr(sensorchans, nl=1)}')
             if len(sensorchan_hist) > 0 and channels is None:
                 # Only warn if not explicitly in auto mode
                 warnings.warn(
