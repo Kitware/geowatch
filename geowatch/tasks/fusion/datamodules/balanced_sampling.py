@@ -45,7 +45,7 @@ class BalancedSampleTree(ub.NiceRepr):
         >>> #
         >>> # First we can just create a flat uniform sampling grid
         >>> # and inspect the imbalance that causes.
-        >>> self = BalancedSampleTree(sample_grid)
+        >>> self = BalancedSampleTree(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
@@ -322,7 +322,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
         >>> ]
         >>> #
-        >>> self = BalancedSampleForest(sample_grid)
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
@@ -354,7 +354,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
         >>> ] * 10000
         >>> #
-        >>> self = BalancedSampleForest(sample_grid)
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
@@ -394,7 +394,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'image_id': 11, 'class': {'cat': 1, 'dog': 3}}, # 3 dogs and 1 cat in the image
         >>> ]
         >>> #
-        >>> self = BalancedSampleForest(sample_grid)
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> class_counts = Counter()
