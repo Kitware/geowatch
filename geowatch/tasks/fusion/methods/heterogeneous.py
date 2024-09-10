@@ -1714,7 +1714,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                       prog_bar=False, logger=True,
                       batch_size=self._prev_batch_size)
 
-    def save_package(self, package_path, verbose=1):
+    def save_package(self, package_path, context=None, verbose=1):
         """
         CommandLine:
             xdoctest -m geowatch.tasks.fusion.methods.heterogeneous HeterogeneousModel.save_package
@@ -1863,7 +1863,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Ignore:
             7z l $HOME/.cache/geowatch/tests/package/my_package.pt
         """
-        self._save_package(package_path, verbose=verbose)
+        self._save_package(package_path, context=context, verbose=verbose)
 
     # hack because of inheritence rules
     configure_optimizers = WatchModuleMixins.configure_optimizers

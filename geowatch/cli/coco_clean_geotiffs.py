@@ -563,7 +563,7 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
 
 def _probe_correct_nodata_value(fpath, band_idxs, nodata_value=-9999):
     asset_summary = {}
-    from geowatch.utils import util_gdal
+    from kwgis.utils import util_gdal
     gdal_dset = util_gdal.GdalDataset.open(fpath)
     band_infos = gdal_dset.info()['bands']
     gdal_dset = None
@@ -753,7 +753,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> #kwplot.imshow((asset_summary['is_samecolor'] > 0), pnum=(3, 2, 5), title='is samecolor mask')
     """
     import os
-    from geowatch.utils import util_gdal
+    from kwgis.utils import util_gdal
     from osgeo import gdal
     import numpy as np
     import tempfile

@@ -91,14 +91,14 @@ def debug_feature_loading():
     dset = coco_dset
     space_slice = tr['space_slice']
 
-    from kwcoco import channel_spec
+    from delayed_image import channel_spec
     request_chanspec = channel_spec.ChannelSpec.coerce(channels)
 
     if 0:
         obj = dset.imgs[2]['auxiliary'][0]
         xdev.profile_now(dset._delay_load_imglike)(obj)
 
-        from kwcoco.channel_spec import FusedChannelSpec
+        from delayed_image.channel_spec import FusedChannelSpec
         xdev.profile_now(FusedChannelSpec.coerce)(obj['channels'])
         xdev.profile_now(FusedChannelSpec.parse)(obj['channels'])
 

@@ -1,6 +1,10 @@
 
 
 def test_tracker_time_split_thresh():
+    """
+    CommandLine:
+        xdoctest tests/test_recurring_sites_in_tracker.py test_tracker_time_split_thresh
+    """
     import json
     import os
     import kwcoco
@@ -54,6 +58,9 @@ def test_tracker_time_split_thresh():
 def build_recurring_sites_coco():
     """
     Build a simple test case where the site blips in and out every year.
+
+    CommandLine:
+        xdoctest tests/test_recurring_sites_in_tracker.py build_recurring_sites_coco
     """
     import geowatch
     import ubelt as ub
@@ -143,3 +150,4 @@ def build_recurring_sites_coco():
         ub.cmd(f'geowatch visualize {coco_dset.fpath} --stack=only --smart', system=1)
 
     return coco_dset
+

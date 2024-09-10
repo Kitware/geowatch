@@ -629,7 +629,7 @@ def main(cmdline=True, **kw):
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from geowatch.cli.coco_align import *  # NOQA
         >>> from geowatch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
-        >>> from geowatch.utils import util_gdal
+        >>> from kwgis.utils import util_gdal
         >>> import kwimage
         >>> import geojson
         >>> import json
@@ -2130,7 +2130,7 @@ def _aligncrop(obj_group,
     Threaded worker function for :func:`SimpleDataCube.extract_image_job`.
 
     This functions contains the expensive calls to GDAL, which are abstracted
-    by :mod:`geowatch.utils.util_gdal`.
+    by :mod:`kwgis.utils.util_gdal`.
 
     Args:
         asset_config (AssetExtractConfig): main options
@@ -2140,7 +2140,7 @@ def _aligncrop(obj_group,
     import geowatch
     import json
     import kwcoco
-    from geowatch.utils import util_gdal
+    from kwgis.utils import util_gdal
     from os.path import join
 
     assert asset_config is not None

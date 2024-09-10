@@ -16,45 +16,51 @@ from pytorch_lightning.cli import Namespace
 from packaging.version import parse as Version
 JSONARGPARSE_VERSION = Version(jsonargparse.__version__)
 
-if JSONARGPARSE_VERSION < Version('4.21.0'):
-    from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_xx_and_lt_4_21 as _jsonargparse_ext
-elif JSONARGPARSE_VERSION < Version('4.22.0'):
+if Version('4.0.0') <= JSONARGPARSE_VERSION < Version('4.21.0'):
+    from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_00_and_lt_4_21 as _jsonargparse_ext
+elif Version('4.21.0') <=  JSONARGPARSE_VERSION < Version('4.22.0'):
     from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_21_and_lt_4_22 as _jsonargparse_ext
-elif JSONARGPARSE_VERSION < Version('4.24.0'):
+elif Version('4.22.0') <=  JSONARGPARSE_VERSION < Version('4.24.0'):
     from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_22_and_lt_4_24 as _jsonargparse_ext
+elif Version('4.24.0') <=  JSONARGPARSE_VERSION < Version('4.24.2'):
+    from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_24_and_lt_4_24_2 as _jsonargparse_ext
+elif Version('4.30.0') <=  JSONARGPARSE_VERSION < Version('5.0.0'):
+    from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_30_and_lt_5_xx as _jsonargparse_ext
 else:
-    from geowatch.utils.lightning_ext import _jsonargparse_ext_ge_4_24_and_lt_4_xx as _jsonargparse_ext
-
-
-class LightningArgumentParser_Extension(_jsonargparse_ext.ArgumentParserPatches, LightningArgumentParser):
-    """
-    CommandLine:
-        xdoctest -m geowatch.utils.lightning_ext.lightning_cli_ext LightningArgumentParser_Extension
-
-    Example:
-        >>> from geowatch.utils.lightning_ext.lightning_cli_ext import *  # NOQA
-        >>> LightningArgumentParser_Extension()
-
-    Refactor references:
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/pytorch_lightning/cli.py
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/core.py
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/signatures.py
-    """
     ...
 
 
-# Monkey patch jsonargparse so its subcommands use our extended functionality
-jsonargparse.ArgumentParser = LightningArgumentParser_Extension
+if JSONARGPARSE_VERSION < Version('4.30.0'):
+    class LightningArgumentParser_Extension(_jsonargparse_ext.ArgumentParserPatches, LightningArgumentParser):
+        """
+        CommandLine:
+            xdoctest -m geowatch.utils.lightning_ext.lightning_cli_ext LightningArgumentParser_Extension
 
+        Example:
+            >>> from geowatch.utils.lightning_ext.lightning_cli_ext import *  # NOQA
+            >>> LightningArgumentParser_Extension()
 
-if JSONARGPARSE_VERSION < Version('4.22.0'):
-    jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
-    jsonargparse.core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
-    jsonargparse.actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+        Refactor references:
+            ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/pytorch_lightning/cli.py
+            ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/core.py
+            ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/signatures.py
+        """
+
+    # Monkey patch jsonargparse so its subcommands use our extended functionality
+    jsonargparse.ArgumentParser = LightningArgumentParser_Extension
+
+    if JSONARGPARSE_VERSION < Version('4.22.0'):
+        jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
+        jsonargparse.core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+        jsonargparse.actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+    elif JSONARGPARSE_VERSION < Version('4.22.0'):
+        jsonargparse._core.ArgumentParser = LightningArgumentParser_Extension
+        jsonargparse._core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+        jsonargparse._actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
 else:
-    jsonargparse._core.ArgumentParser = LightningArgumentParser_Extension
-    jsonargparse._core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
-    jsonargparse._actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+    # Monkey patching is simpler in newer versions
+    _jsonargparse_ext.apply_monkeypatch()
+    LightningArgumentParser_Extension = LightningArgumentParser
 
 
 # Should try to patch into upstream
@@ -93,4 +99,23 @@ class LightningCLI_Extension(LightningCLI):
         if isinstance(args, (dict, Namespace)):
             self.config = parser.parse_object(args)
         else:
-            self.config = parser.parse_args(args)
+            self.config = parser.parse_args(args, _skip_check=True)
+
+    # def _add_instantiators(self) -> None:
+    #     import yaml
+    #     from pytorch_lightning.cli import _InstantiatorFn
+    #     from pytorch_lightning.cli import _get_module_type
+    #     self.config_dump = yaml.safe_load(self.parser.dump(self.config, skip_check=True, skip_link_targets=False, skip_none=False))
+    #     if "subcommand" in self.config:
+    #         self.config_dump = self.config_dump[self.config.subcommand]
+
+    #     self.parser.add_instantiator(
+    #         _InstantiatorFn(cli=self, key="model"),
+    #         _get_module_type(self._model_class),
+    #         subclasses=self.subclass_mode_model,
+    #     )
+    #     self.parser.add_instantiator(
+    #         _InstantiatorFn(cli=self, key="data"),
+    #         _get_module_type(self._datamodule_class),
+    #         subclasses=self.subclass_mode_data,
+    #     )

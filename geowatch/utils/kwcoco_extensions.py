@@ -1187,7 +1187,7 @@ def check_kwcoco_spatial_transforms(coco_dset):
     """
 
     import kwimage
-    from geowatch.utils import util_gdal
+    from kwgis.utils import util_gdal
     import numpy as np
 
     for video in coco_dset.videos().objs:

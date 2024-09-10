@@ -17,7 +17,7 @@ Notes:
     # need to edit the conf.py
 
     cd ~/code/geowatch/docs
-    # sphinx-apidoc --private --separate -f -o ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch
+    sphinx-apidoc --private --separate --force --output-dir ~/code/geowatch/docs/source/auto ~/code/geowatch/geowatch
 
     rm -rf ~/code/geowatch/docs/source/auto/*
     sphinx-apidoc --separate --force \

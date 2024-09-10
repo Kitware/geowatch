@@ -602,7 +602,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
     # this is a special thing for the predict step
     forward_step = shared_step
 
-    def save_package(self, package_path, verbose=1):
+    def save_package(self, package_path, context=None, verbose=1):
         """
 
         CommandLine:
@@ -719,4 +719,4 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>>         raise AssertionError(f'Difference in key={key}')
             >>>     assert v1 is not v2, 'should be distinct copies'
         """
-        self._save_package(package_path, verbose=verbose)
+        self._save_package(package_path, context=context, verbose=verbose)

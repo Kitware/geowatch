@@ -64,6 +64,8 @@ class RobustModuleDict(torch.nn.ModuleDict):
     repl_empty = '__EMPTY'
 
     def _normalize_key(self, key):
+        if key is None:
+            return '*'
         key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         return key
 

@@ -431,7 +431,7 @@ class _ValueGetter:
         if not data.did_setup:
             data.setup('fit')
 
-        if data.config.num_workers > 0:
+        if data.config.num_workers not in {0, '0'}:
             # Hack to disconnect SQL coco databases before we fork
             # TODO: find a way to handle this more ellegantly
             if hasattr(data, 'coco_datasets'):
@@ -508,10 +508,20 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
-    default_callbacks = [
-        pl.callbacks.RichProgressBar(),
+    default_callbacks = []
+    import os
+
+    if os.environ.get('SLURM_JOBID', ''):
+        # slurm does not play well with the rich progress bar
+        # The default TQDM iter seems to work well enough.
+        # from geowatch.utils.lightning_ext.callbacks.progiter_progress import ProgIterProgressBar
+        # default_callbacks.append(ProgIterProgressBar())
+        ...
+    else:
+        default_callbacks.append(pl.callbacks.RichProgressBar())
         # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
+    default_callbacks.extend([
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=4),
@@ -528,7 +538,7 @@ def make_cli(config=None):
         #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(
         #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
-    ]
+    ])
 
     if not DDP_WORKAROUND:
         # FIXME: Why aren't the rank zero checks enough here?
@@ -565,6 +575,7 @@ def make_cli(config=None):
         parser_kwargs=dict(
             parser_mode='yaml_unsafe_for_tuples',
             error_handler=None,
+            exit_on_error=False,
         ),
         trainer_defaults=dict(
             # The following works, but it might be better to move some of these callbacks into the cli
@@ -594,6 +605,7 @@ def main(config=None):
         xdoctest -m geowatch.tasks.fusion.fit_lightning main:0
 
     Example:
+        >>> import os
         >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -601,7 +613,7 @@ def main(config=None):
         >>> config = {
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
-        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.trainer.default_root_dir': os.fspath(dpath),
         >>>     'fit.data.train_dataset': 'special:vidshapes2-frames9-gsize32',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
         >>>     'fit.data.chip_dims': 32,
@@ -614,6 +626,7 @@ def main(config=None):
         >>> cli = main(config=config)
 
     Example:
+        >>> import os
         >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -625,7 +638,7 @@ def main(config=None):
         >>>     'fit.model.class_path': 'geowatch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
         >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
         >>>     'fit.optimizer.init_args.lr': 1e-3,
-        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.trainer.default_root_dir': os.fspath(dpath),
         >>>     'fit.data.train_dataset': 'special:vidshapes2-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.chip_dims': 64,
@@ -703,6 +716,44 @@ if __name__ == "__main__":
         python -m geowatch.tasks.fusion.fit_lightning fit \
                 --model.help=NoopModel
 
+        # Simple run CLI style
+        python -m geowatch.tasks.fusion.fit_lightning fit \
+            --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
+            --data.window_dims=64 \
+            --data.workers=4 \
+            --trainer.accelerator=gpu \
+            --trainer.devices=0, \
+            --data.batch_size=1 \
+            --model.class_path=MultimodalTransformer \
+            --optimizer.class_path=torch.optim.Adam \
+            --trainer.default_root_dir ./demo_train
+
+        # Simple run YAML config CLI style
+        srun \
+        python -m geowatch.tasks.fusion.fit_lightning fit --config="
+            data:
+                train_dataset: special:vidshapes8-frames9-speed0.5
+                window_dims: 64
+                num_workers: 4
+                batch_size: 4
+                normalize_inputs:
+                    input_stats:
+                        - sensor: '*'
+                          channels: r|g|b
+                          video: video1
+                          mean: [87.572401, 87.572402, 87.572403]
+                          std: [99.449997, 99.449998, 99.449999]
+            model:
+                class_path: MultimodalTransformer
+            optimizer:
+                class_path: torch.optim.Adam
+            trainer:
+                accelerator: gpu
+                devices: 1
+                default_root_dir: ./demo_train
+        "
+
+        # Multi GPU run with DDP and CLI config
         python -m geowatch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
             --data.window_dims=64 \
@@ -715,6 +766,7 @@ if __name__ == "__main__":
             --optimizer.class_path=torch.optim.Adam \
             --trainer.default_root_dir ./demo_train
 
+        # Multi GPU run with DDP and YAML config
         python -m geowatch.tasks.fusion.fit_lightning fit --config="
             data:
                 train_dataset: special:vidshapes8-frames9-speed0.5
@@ -728,15 +780,14 @@ if __name__ == "__main__":
                           video: video1
                           mean: [87.572401, 87.572401, 87.572401]
                           std: [99.449996, 99.449996, 99.449996]
-            trainer:
-                accelerator: gpu
-                strategy: ddp
-                devices: 0,1
             model:
                 class_path: HeterogeneousModel
             optimizer:
                 class_path: torch.optim.Adam
             trainer:
+                accelerator: gpu
+                strategy: ddp
+                devices: 0,1
                 default_root_dir: ./demo_train
         "
 

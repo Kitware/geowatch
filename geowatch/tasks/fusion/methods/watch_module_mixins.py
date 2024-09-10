@@ -489,7 +489,7 @@ class OverfitMixin:
 
 class PackageMixin:
 
-    def _save_package(self, package_path, verbose=1):
+    def _save_package(self, package_path, context=None, verbose=1):
         """
         We define this as a protected method to allow modules to reuse the core
         code, but force each module to define the ``save_package`` method
@@ -552,6 +552,7 @@ class PackageMixin:
             exp = torch.package.PackageExporter(package_path, debug=True)
             """
             import warnings
+            import sys
             warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
             # with torch.package.PackageExporter(package_path) as exp:
             with torch.package.PackageExporter(package_path) as exp:
@@ -572,12 +573,15 @@ class PackageMixin:
                 # Add information about how this was trained, and what epoch it
                 # was saved at.
                 package_header = {
-                    'version': '0.3.0',
+                    'version': '0.4.0',
                     'arch_name': arch_name,
                     'module_name': module_name,
                     'packaging_time': ub.timestamp(),
                     'git_hash': None,
                     'module_path': None,
+                    'torch_version': torch.__version__,
+                    'python_version': sys.version,
+                    'context': context,
                 }
 
                 # Encode a git hash if we can identify that we are in a git
@@ -737,9 +741,9 @@ class CoerceMixins:
 
         Args:
             saliency_weights (Tensor | str | None):
-                Can be None, a raw tensor, "auto", or a string "<bg>:<fg>".
+                Can be None, a raw tensor, "auto", or a string ``"<bg>:<fg>"``.
                 Can also accept a YAML mapping from the keys "bg" and "fg" to
-                their respective float weights.
+                their respective float weights, e.g. ``"{fg: 1, bg: 2}"``.
 
         Returns:
             Tensor:
@@ -912,7 +916,8 @@ class DatasetStatsMixin:
         if input_sensorchan is None:
             raise Exception(
                 'need to specify input_sensorchan at least as the number of '
-                'input channels')
+                f'input channels. Got input_sensorchan={input_sensorchan!r} and '
+                f'dataset_stats={dataset_stats!r}')
         input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
 
         if dataset_stats is None:
@@ -925,6 +930,31 @@ class DatasetStatsMixin:
             }
         else:
             unique_sensor_modes = dataset_stats['unique_sensor_modes']
+
+        if True:
+            # hack None to '*'
+            _fixed_sensor_modes = []
+            for k in unique_sensor_modes:
+                if isinstance(k, str):
+                    if k == '*':
+                        s = c = '*'
+                    else:
+                        raise AssertionError
+                else:
+                    s, c = k
+                if s is None:
+                    s = '*'
+                _fixed_sensor_modes.append((s, c))
+            unique_sensor_modes = _fixed_sensor_modes
+
+            if input_stats is not None:
+                _fixed_input_stats = {}
+                for k, v in input_stats.items():
+                    s, c = k
+                    if s is None:
+                        s = '*'
+                    _fixed_input_stats[(s, c)] = v
+                input_stats = _fixed_input_stats
 
         self.class_freq = class_freq
         self.dataset_stats = dataset_stats

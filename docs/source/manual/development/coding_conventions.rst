@@ -80,9 +80,9 @@ Misc termonology:
 
 Short semi-ambiguous identifiers:
 
-    * ``ub.udict`` - The extended ubelt dictionary with set operations and other nice methods
+* ``ub.udict`` - The extended ubelt dictionary with set operations and other nice methods
 
-    * ``ub.ddict`` - A defaultdict alias
+* ``ub.ddict`` - A defaultdict alias
 
 
 Module aliases
@@ -125,26 +125,26 @@ See `KWCOCO Spaces <https://kwcoco.readthedocs.io/en/release/concepts/warping_an
 
 There are several 'spaces' (which we will are rebranding as 'views') here and that can get confusing.
 
-**Native Space/View** / **Asset Space/View** - The space of the data on disk
+* **Native Space/View** / **Asset Space/View** - The space of the data on disk
 
-**Image Space/View** - The space all bands in an image are aligned to.
+* **Image Space/View** - The space all bands in an image are aligned to.
 
-**Video Space/View** - The space a sequence is geo-aligned in.  This is the space we generally want to be thinking in.
+* **Video Space/View** - The space a sequence is geo-aligned in.  This is the space we generally want to be thinking in.
     It is hard coded wrt to the kwcoco dataset.
 
-**Window Space/View** - GSD the sliding window is expressed in.
+* **Window Space/View** - GSD the sliding window is expressed in.
    Defaults to video space.
    Computes a integer-sized box as the 'space_slice' in video space.
    Effectively this space is only used to compute the size of the box
    in the underlying video space. It does nothing else.
    Alias: Grid Space
 
-**Input Space/View** - GSD of the input to the network
+* **Input Space/View** - GSD of the input to the network
    Computes a scale factor relative to video space.
    Alias: Sample Space
    Alias: Data Space
 
-**Output Space/View** - GSD of the output of the network
+* **Output Space/View** - GSD of the output of the network
    Scale factor is wrt to video space.
    Alias: Prediction Space
 

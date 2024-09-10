@@ -33,7 +33,7 @@ def _map_location(storage, location):
     return storage
 
 
-def load_model_from_package(package_path):
+def load_model_from_package(package_path, with_header=False):
     """
     Loads a kitware-flavor torch package (requires a package_header exists)
 
@@ -122,7 +122,10 @@ def load_model_from_package(package_path):
             setattr(model, candidate_dest, fit_config)
 
     model.package_path = package_path
-    return model
+    if with_header:
+        return model, package_header
+    else:
+        return model
 
 
 def load_model_header(package_path):

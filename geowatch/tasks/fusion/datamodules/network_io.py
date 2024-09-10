@@ -88,7 +88,8 @@ class HeterogeneousBatchItem(BatchItem):
     @property
     def sensorchan_histogram(self):
         histogram = ub.dict_hist(
-            frame['sensor'] + ':' + mode_key for frame in self['frames']
+            frame.get('sensor', '*') + ':' + mode_key
+            for frame in self['frames']
             for mode_key in frame['modes'].keys()
         )
         return histogram
@@ -162,7 +163,10 @@ class HeterogeneousBatchItem(BatchItem):
         canvas = builder.build()
 
         if show_summary_text:
-            summary = item.summarize()
+            try:
+                summary = item.summarize()
+            except Exception as ex:
+                summary = {'summary_error': str(ex)}
             summary = ub.udict(summary) - {'frame_summaries'}
             summary_text = ub.urepr(summary, nobr=1, precision=2, nl=-1)
             header = kwimage.draw_text_on_image(None, text=summary_text, halign='left', color='kitware_blue')

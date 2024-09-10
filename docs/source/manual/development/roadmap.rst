@@ -9,11 +9,11 @@ Features
 
 - [ ] **Lineage tracking**: design the storage format and parser.
 
-- [ ] **Bounding Box Head**: Add support for bounding box heads and associated loss functions. `Issue: !9 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/9>`_
+- [X] **Bounding Box Head**: Add support for bounding box heads and associated loss functions. `Issue: !9 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/9>`_
 
 - [ ] **Multi-head objectives**: Allow multiple non-weight-tied versions of the same head to have different losses. `Issue: !10 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/10>`_
 
-- [ ] **Balanced Sampling**: Better balanced API and code structure.
+- [X] **Balanced Sampling**: Better balanced API and code structure.
 
 - [ ] **Augmentation**: Better augmentation API with more options (time symmetry).
 
@@ -23,7 +23,7 @@ Features
 
 - [ ] **Distilation**: Easy distilation (i.e. student / teacher networks) by settting heatmaps from existing predictions as truth targets. `Issue: !17 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/17>`_
 
-- [ ] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps `Issue: !14 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/14>`_
+- [X] **SMQTK**: Integrate with SMQTK by providing it feature descriptors derived from our network activations / heatmaps `Issue: !14 <https://gitlab.kitware.com/computer-vision/geowatch/-/issues/14>`_
 
 - [ ] **Train Monitoring**: Log more weight statistics like rank, magnitude, etc. in tensorboard to better understand the training process.
 
@@ -31,7 +31,9 @@ Features
 Quality of Life
 ---------------
 
-- [ ] Manual specification of input mean / std at train (or predict) time.
+- [ ] Manual specification of input mean / std at train time.
+
+- [X] Manual specification of input mean / std at predict time.
 
 - [ ] Better checkpoint / package management CLI tools
 
@@ -43,7 +45,7 @@ Quality of Life
 Bugs
 ----
 
-- [ ] Delayed Image #1 - bottom-left pixel bug
+- [X] Delayed Image #1 - bottom-left pixel bug
 
 - [ ] Callbacks with DDP can cause system freeze; we can workaround by disabling our callbacks, but results in other limitations.
 
@@ -81,15 +83,15 @@ Research
 
    - [ ] Black Marble
 
-- [ ] Support for point-based annotations at train time. Build a loss function.
+- [X] Support for point-based annotations at train time. Build a loss function.
 
 
 Compatibility
 -------------
 
-- [ ] Further subdivide and sequester software dependencies.
+- [ ] Further subdivide and sequester software dependencies (open ended).
 
-- [ ] Upgrade pytorch lightning / jsonargparse to latest versions.
+- [X] Upgrade pytorch lightning / jsonargparse to latest versions.
 
 
 Documentation
@@ -98,6 +100,9 @@ Documentation
 - [ ] External review / revision.
 
 - [ ] Document how to effectively use MLOps (and potentially improve on).
+
+    Partial Progress:
+        * MLOps used across more projects, which serve as independent examples of its capabilities
 
 
 System Design

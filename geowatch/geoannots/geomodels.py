@@ -1435,6 +1435,10 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         return self
 
 
+class Point(_Feature):
+    ...
+
+
 class _SiteOrSummaryMixin:
     """
     Site summaries and site headers are nearly the same
@@ -1468,6 +1472,30 @@ class _SiteOrSummaryMixin:
     @property
     def site_id(self):
         return self['properties']['site_id']
+
+    @property
+    def status(self):
+        return self['properties']['status']
+
+    def to_point(self):
+        date = self.start_date
+        from shapely import geometry
+        # import json
+        # import shapely
+        geom = geometry.shape(self['geometry'])
+        point_geom = geom.centroid
+        # point_geom = json.loads(shapely.to_geojson(geom.centroid))
+
+        point = Point(
+            properties={'site_id': self.site_id,
+                        'base_version': '2.0.2',
+                        'status': self.status,
+                        'date': date.date().isoformat(),
+                        'type': 'point',
+                        'point_version': '1.0',
+                        'date_version': '1.1000000000000001'},
+            geometry=point_geom)
+        return point
 
     def _update_cache_key(self):
         """
@@ -1889,6 +1917,10 @@ class ModelCollection(list):
                 raise Exception(f'Failed to validate {num_failed} / {num_total} models')
 
 
+class PointModelCollection(ModelCollection):
+    ...
+
+
 class SiteModelCollection(ModelCollection):
 
     def as_region_model(self, region_header=None, region_id=None, strict=True):
@@ -1945,6 +1977,15 @@ class SiteModelCollection(ModelCollection):
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)
         return region_model
+
+    def to_point_model(self):
+        points = [s.as_summary().to_point() for s in self]
+        point_model = PointModel(points)
+        return point_model
+
+
+class PointModel(_Model):
+    ...
 
 
 def _infer_region_header_from_site_summaries(region_header, site_summaries, strict=True):

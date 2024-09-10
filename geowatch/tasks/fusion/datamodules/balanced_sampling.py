@@ -1,3 +1,6 @@
+"""
+Defines two classes that help with balanced sampling (with replacement)
+"""
 import numpy as np
 import ubelt as ub
 import kwarray
@@ -45,7 +48,7 @@ class BalancedSampleTree(ub.NiceRepr):
         >>> #
         >>> # First we can just create a flat uniform sampling grid
         >>> # and inspect the imbalance that causes.
-        >>> self = BalancedSampleTree(sample_grid)
+        >>> self = BalancedSampleTree(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([(g['region'], g['category']) for g in sampled])
@@ -204,6 +207,8 @@ class BalancedSampleTree(ub.NiceRepr):
     @profile
     def subdivide(self, key, weights=None, default_weight=0):
         """
+        Adds a new layer to the tree that balances across the given attribute.
+
         Args:
             key (str):
                 A key into the item dictionary of a sample that maps to the
@@ -275,6 +280,10 @@ class BalancedSampleTree(ub.NiceRepr):
 
     @profile
     def sample(self):
+        """
+        Returns:
+            int
+        """
         current = '__root__'
         while self.graph.out_degree(current) > 0:
             children = list(self.graph.successors(current))
@@ -322,7 +331,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
         >>> ]
         >>> #
-        >>> self = BalancedSampleForest(sample_grid)
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
@@ -354,7 +363,7 @@ class BalancedSampleForest(ub.NiceRepr):
         >>>     { 'region': 'region2', 'color': {'green': 5, 'purple': 5}},
         >>> ] * 10000
         >>> #
-        >>> self = BalancedSampleForest(sample_grid)
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
         >>> print(f'self={self}')
         >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
         >>> hist0 = ub.dict_hist([g['region'] for g in sampled])
@@ -372,6 +381,45 @@ class BalancedSampleForest(ub.NiceRepr):
         >>> hist2 = ub.dict_hist([(g['region'],) + tuple(g['color'].keys()) for g in sampled])
         >>> print('hist2 = {}'.format(ub.urepr(hist2, nl=1)))
 
+    Example:
+        >>> from geowatch.tasks.fusion.datamodules.balanced_sampling import BalancedSampleForest
+        >>> from collections import Counter
+        >>> # Imagine you have a dataset where each sample location could have 1 or
+        >>> # more category. In this case make the value a dictionary where keys
+        >>> # indicate the classes in the sample and the values are the importance
+        >>> # of those classes to the sample.
+        >>> # Make a very large dataset to test speed constraints
+        >>> sample_grid = [
+        >>>     { 'image_id': 1, 'class': {'dog': 1}},  # only 1 dog in this image
+        >>>     { 'image_id': 2, 'class': {'dog': 1, 'cat': 2}},  # 1 dog and 2 cats in this image
+        >>>     { 'image_id': 3, 'class': {'cat': 1}},
+        >>>     { 'image_id': 4, 'class': {'cat': 1}},
+        >>>     { 'image_id': 5, 'class': {'cat': 1}},
+        >>>     { 'image_id': 6, 'class': {'cat': 1}},
+        >>>     { 'image_id': 7, 'class': {'cat': 1}},
+        >>>     { 'image_id': 8, 'class': {'cat': 1}},
+        >>>     { 'image_id': 9, 'class': {'cat': 1}},
+        >>>     { 'image_id': 10, 'class': {'cat': 3, 'dog': 1}}, # 3 cats and 1 dog in the image
+        >>>     { 'image_id': 11, 'class': {'cat': 1, 'dog': 3}}, # 3 dogs and 1 cat in the image
+        >>> ]
+        >>> #
+        >>> self = BalancedSampleForest(sample_grid, rng=0)
+        >>> print(f'self={self}')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> class_counts = Counter()
+        >>> for sample in sampled:
+        >>>     class_counts.update(sample['class'])
+        >>> print('Before Balancing')
+        >>> print(f'class_counts = {ub.urepr(class_counts, nl=1)}')
+        >>> # Do the balance step
+        >>> self.subdivide('class')
+        >>> sampled = list(ub.take(sample_grid, self._sample_many(100)))
+        >>> class_counts = Counter()
+        >>> for sample in sampled:
+        >>>     class_counts.update(sample['class'])
+        >>> print('After Balancing')
+        >>> print(f'class_counts = {ub.urepr(class_counts, nl=1)}')
+
     TODO:
         Currently this will look at all attributes passed in each item in the
         sample grid. I think we want to specify what the attributes that could
@@ -379,10 +427,16 @@ class BalancedSampleForest(ub.NiceRepr):
     """
     @profile
     def __init__(self, sample_grid, rng=None, n_trees=16, scoring='uniform'):
+        """
+        Args:
+            sample_grid (List[Dict[str, Any]]) table of sample properties
+            rng (int | None | RandomState):
+                random number generator or seed
+            n_trees (int): number of trees in the forest
+            scoring (str): can be uniform or inverse
+        """
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
-
-        # TODO: validate input
         self.n_trees = n_trees
         self.forest = self._create_forest(sample_grid, n_trees, scoring)
 
@@ -431,7 +485,7 @@ class BalancedSampleForest(ub.NiceRepr):
                         elif scoring == 'uniform':
                             sample[key] = self.rng.choice(list(val.keys()))
                         else:
-                            raise NotImplementedError
+                            raise NotImplementedError(scoring)
 
             # initialize a BalancedSampleTree with this sample grid
             bst = BalancedSampleTree(local_sample_grid, rng=self.rng)
@@ -440,6 +494,23 @@ class BalancedSampleForest(ub.NiceRepr):
 
     @profile
     def subdivide(self, key, weights=None, default_weight=0):
+        """
+        Adds a new layer to each tree in the forest that balances across the
+        given attribute.
+
+        Args:
+            key (str):
+                A key into the item dictionary of a sample that maps to the
+                property to balance over.
+
+            weights (None | Dict[Any, Number]):
+                an optional mapping from values that ``key`` could point to
+                to a numeric weight.
+
+            default_weight (None | Number):
+                if an attribute is unspecified in the weight table, this is
+                the default weight it should be given. Default is 0.
+        """
         for tree in self.forest:
             tree.subdivide(key, weights=weights, default_weight=default_weight)
 
@@ -451,7 +522,12 @@ class BalancedSampleForest(ub.NiceRepr):
 
     @profile
     def sample(self):
-        """ Uniformly sample a tree from the forest, then sample from it. """
+        """
+        Uniformly sample a tree from the forest, then sample from it.
+
+        Returns:
+            int
+        """
         idx = self.rng.choice(self.n_trees)
         return self.forest[idx].sample()
 

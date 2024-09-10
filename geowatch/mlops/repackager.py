@@ -210,6 +210,9 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     will need new logic to handle them. It would be nice to find a way to
     generalize this.
 
+    CommandLine:
+        xdoctest -m geowatch.mlops.repackager repackage_single_checkpoint
+
     Example:
         >>> import ubelt as ub
         >>> import torch
@@ -252,7 +255,8 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         ...     assert params1[k] is not params2[k]
         >>> # Test that we can get model stats
         >>> from geowatch.cli import torch_model_stats
-        >>> torch_model_stats.torch_model_stats(package_fpath)
+        >>> row = torch_model_stats.torch_model_stats(package_fpath)
+        >>> print(f'row = {ub.urepr(row, nl=2)}')
     """
     from torch_liberator.xpu_device import XPU
     xpu = XPU.coerce('cpu')
@@ -292,8 +296,22 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     if train_dpath_hint is not None:
         model.train_dpath_hint = train_dpath_hint
 
+    context = inspect_checkpoint_context(checkpoint_fpath)
+
+    try:
+        context['epoch'] = checkpoint['epoch']
+    except KeyError:
+        ...
+    try:
+        context['global_step'] = checkpoint['global_step']
+    except KeyError:
+        ...
+
+    from kwcoco.util import util_json
+    context = util_json.ensure_json_serializable(context)
+
     # We assume the module has its own save package method implemented.
-    model.save_package(os.fspath(package_fpath))
+    model.save_package(package_fpath, context=context)
     print(f'wrote: package_fpath={package_fpath}')
 
 

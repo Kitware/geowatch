@@ -8,6 +8,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add top-level matrices argument to param_grid.
+* Experimental progiter-based progress backend for lightning to work around slurm issues.
+* Added initial limited accelerator option to fusion.predict to move towards faster prediction
+
+### Fixed
+* Fix issue in MultimodalModel when input sensor is None.
+* Able to unpin jsonargparse and lightning with new versions
+
+### Changed
+* More information is now saved when packaging checkpoints.
+* Prevent the loading of some external torch modules unless they are used via module properties.
+* `geowatch.utils.util_gdal` now forwards the user to `kwgis.utils.util_gdal`.
 
 ## Version 0.18.2 - Released 2024-08-22
 

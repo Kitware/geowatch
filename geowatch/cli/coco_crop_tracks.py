@@ -563,7 +563,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
 def run_crop_asset_task(crop_asset_task, keep):
     from osgeo import osr
     osr.GetPROJSearchPaths()
-    from geowatch.utils import util_gdal
+    from kwgis.utils import util_gdal
     import kwimage
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')

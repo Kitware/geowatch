@@ -142,8 +142,13 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         `negative*0,background*0.001,No Activity*0.1+1`
         '''))
 
-    # TODO: better encoding
-    saliency_weights = scfg.Value('auto', type=str, help='saliency weighting strategy. Can be None, "auto", or a string "<bg>:<fg>"')
+    saliency_weights = scfg.Value('auto', type=str, help=ub.paragraph(
+        '''
+        Saliency weighting strategy.
+        Can be None, a raw tensor, "auto", or a string ``"<bg>:<fg>"``.
+        Can also accept a YAML mapping from the keys "bg" and "fg" to
+        their respective float weights, e.g. ``"{fg: 1, bg: 2}"``.
+        '''))
 
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''
@@ -234,7 +239,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         taken care of by weight decay.
         '''))
 
-    continual_learning = scfg.Value(False, type=float, help=ub.paragraph(
+    continual_learning = scfg.Value(False, type=bool, help=ub.paragraph(
         '''
         If True, attempt to enable experimental loss-of-plasticity generate and
         test algorithm to encourage continual learning.
@@ -327,8 +332,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
             >>> assert "tokenizer" in model.hparams
         """
+        import kwutil
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
-        print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+        VERBOSE = 1
+        if VERBOSE:
+            print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
         assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
@@ -362,20 +370,20 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     for c, stats in v.items():
                         if s not in input_norms:
                             input_norms[s] = RobustModuleDict()
+                        stats = ub.udict(stats)
                         input_norms[s][c] = InputNorm(
-                            **ub.udict(stats) & {'mean', 'std'})
+                            **(stats & {'mean', 'std'}))
                 else:
-                    # for (s, c), stats in input_stats.items():
                     s, c = k
                     stats = v
                     if s not in input_norms:
                         input_norms[s] = RobustModuleDict()
+                    stats = ub.udict(stats)
                     input_norms[s][c] = InputNorm(
-                        **ub.udict(stats) & {'mean', 'std'})
+                        **(stats & {'mean', 'std'}))
 
         self.input_norms = input_norms
 
-        import kwutil
         predictable_classes = kwutil.util_yaml.Yaml.coerce(
             self.hparams.predictable_classes)
         if predictable_classes is not None:
@@ -433,7 +441,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if isinstance(class_weights, str) and class_weights == 'auto':
                 class_weights = class_weights + ':' + modulate_class_weights
 
-        print(f'self.hparams.saliency_weights={self.hparams.saliency_weights}')
+        if VERBOSE:
+            print(f'self.hparams.saliency_weights={self.hparams.saliency_weights}')
         self.saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
         self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
@@ -441,16 +450,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.positive_change_weight
         ])
         #self.object_weights = self._coerce_object_weights(self.hparams.object_weights)
-        print(f'self.change_weights={self.change_weights}')
+        if VERBOSE:
+            print(f'self.change_weights={self.change_weights}')
 
         if isinstance(self.hparams.stream_channels, str):
             RAW_CHANS = int(self.hparams.stream_channels.split(' ')[0])
         else:
             RAW_CHANS = None
-        print(f'RAW_CHANS={RAW_CHANS}')
+        if VERBOSE:
+            print(f'RAW_CHANS={RAW_CHANS}')
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
-        print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
-        print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
+        if VERBOSE:
+            print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
+            print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
 
         self.rescale_nan_method = self.hparams.rescale_nans
         if self.rescale_nan_method == 'perframe':
@@ -470,8 +482,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
+        sensor_modes = sorted(sensor_modes)
 
-        for k in sorted(sensor_modes):
+        for k in sensor_modes:
             if isinstance(k, str):
                 if k == '*':
                     s = c = '*'
@@ -525,7 +538,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
 
-        print(f'in_features_raw={in_features_raw}')
+        if VERBOSE:
+            print(f'in_features_raw={in_features_raw}')
 
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
@@ -536,7 +550,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
 
-        print(f'self.in_features={self.in_features}')
+        if VERBOSE:
+            print(f'self.in_features={self.in_features}')
         ### NEW:
         # Learned positional encodings
         self.token_learner1_time_delta = MultiLayerPerceptronNd(
@@ -714,9 +729,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
 
         self.automatic_optimization = True
-
-        if 0:
-            ...
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -2041,8 +2053,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         outputs = self.forward_step(batch, with_loss=True, stage='test')
         return outputs
 
-    def save_package(self, package_path, verbose=1):
+    def save_package(self, package_path, context=None, verbose=1):
         """
+        Save model architecture and checkpoint as a torch package.
+
+        Args:
+            package_path (str | PathLike): where to save the package
+            context (Any): custom json-serializable data to save in the header
+            verbose (int): verbosity level
 
         CommandLine:
             xdoctest -m geowatch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
@@ -2082,7 +2100,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             print('HACK NOT SAVING FOR CONTINUAL LEARNING')
             # HACK
             return
-        self._save_package(package_path, verbose=verbose)
+        self._save_package(package_path, context=context, verbose=verbose)
 
     @profile
     def forward(self, batch):

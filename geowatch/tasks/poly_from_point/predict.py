@@ -1,3 +1,50 @@
+"""
+Primary entrypoint to convert polygons to points.
+
+
+CommandLine:
+    python -m geowatch.tasks.poly_from_point.predict --help
+
+CommandLine:
+    xdoctest -m geowatch.tasks.poly_from_point.predict __doc__:0
+
+
+Example:
+    >>> from geowatch.tasks.poly_from_point.predict import *  # NOQA
+    >>> import geowatch
+    >>> from geowatch.geoannots import geomodels
+    >>> import ubelt as ub
+    >>> dpath = ub.Path.appdir('geowatch/poly_from_point/doc').ensuredir()
+    >>> region_model, site_models = geomodels.RegionModel.random(with_sites=True)
+    >>> region_models = [region_model]
+    >>> point_model = site_models.to_point_model()
+    >>> print(f'Number of region models: {len(region_models)}')
+    >>> print(f'Number of site models: {len(site_models)}')
+    >>> # It is also easy to convert these models to geopandas
+    >>> region_model = region_models[0]
+    >>> gdf = region_model.pandas()
+    >>> print(gdf)
+    >>> filepath_to_points = dpath / 'points.geojson'
+    >>> filepath_to_points.write_text(point_model.dumps())
+    >>> filepath_to_region = dpath / 'region.geojson'
+    >>> filepath_to_region.write_text(region_model.dumps())
+    >>> filepath_output = dpath / 'output_region.geojson'
+    >>> gpd.read_file(filepath_to_points) # check
+    >>> kwargs = dict(
+    >>>     filepath_to_points=filepath_to_points,
+    >>>     filepath_to_region=filepath_to_region,
+    >>>     filepath_output=filepath_output,
+    >>> )
+    >>> cmdline = 0
+    >>> PolyFromPointCLI.main(cmdline=cmdline, **kwargs)
+
+    # To Viz
+    import xdev
+    viz_fpath = dpath / 'viz.png'
+    ub.cmd(f'geowatch draw_region {filepath_output} --fpath {viz_fpath}', verbose=3)
+    xdev.startfile(viz_fpath)
+
+"""
 import scriptconfig as scfg
 import numpy as np
 import geopandas as gpd
@@ -7,18 +54,33 @@ from geowatch.geoannots.geomodels import RegionModel, SiteSummary
 import kwutil
 
 
-class HeatMapConfig(scfg.DataConfig):
-    region_id = scfg.Value(
-        None,
-        help="if the kwcoco file is unspecified, the region_id to extract points from must be given.",
-    )
+class PolyFromPointCLI(scfg.DataConfig):
+    r"""
+    Convert points to polygons based on trimaping or SAM (trimap seems to work
+    better, SAM could be improved).
 
-    filepath_to_images = scfg.Value(
-        None,
-        # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip",
-        help="Filepath to the kwcoco corresponding to a region",
-    )
+    Example
+    -------
 
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+    echo "$DVC_DATA_DPATH"
+    echo "$DVC_EXPT_DPATH"
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+    python -m geowatch.tasks.poly_from_point.predict \
+        --method 'ellipse' \
+        --filepath_output KR_R001-genpoints.geojson \
+        --region_id KR_R001 \
+        --size_prior "20x20@10mGSD" \
+        --ignore_buffer "10@10mGSD" \
+        --filepath_to_images None \
+        --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
+        --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+
+    geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
+
+    """
     filepath_to_points = scfg.Value(
         None,
         # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/submodules/annotations/point_based_annotations.zip",
@@ -29,14 +91,27 @@ class HeatMapConfig(scfg.DataConfig):
         # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/annotations/drop8/region_models/KR_R002.geojson",
         help="Filepath to geojson regions file.",
     )
+    filepath_output = scfg.Value(
+        "output_region.geojson",
+        help="Output region model with the polygons inferred from the points",
+    )
+
+    # --- TODO: improve api clarity
+
+    region_id = scfg.Value(
+        None,
+        help="if the kwcoco file is unspecified, the region_id to extract points from must be given.",
+    )
+    filepath_to_images = scfg.Value(
+        None,
+        # "/mnt/ssd2/data/dvc-repos/smart_phase3_data/Aligned-Drop8-ARA/KR_R002/imganns-KR_R002-rawbands.kwcoco.zip",
+        help="Filepath to the kwcoco corresponding to a region",
+    )
+
     filepath_to_sam = scfg.Value(
         None,
         # "/mnt/ssd3/segment-anything/demo/model/sam_vit_h_4b8939.pth",
         help="If the methos id SAM, specify the filepath to the SAM weights",
-    )
-    filepath_output = scfg.Value(
-        "output_region.geojson",
-        help="Output region model with the polygons inferred from the points",
     )
 
     size_prior = scfg.Value(
@@ -76,6 +151,156 @@ class HeatMapConfig(scfg.DataConfig):
     time_prior = scfg.Value(
         "1 year", help="time prior before and after", alias=["time_pad"]
     )
+
+    @classmethod
+    def main(cls, cmdline=0, **kwargs):
+        r"""
+        Ignore:
+            DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
+            DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
+            echo "$DVC_DATA_DPATH"
+            echo "$DVC_EXPT_DPATH"
+
+            python -m geowatch.tasks.poly_from_point.predict \
+                --method 'sam' \
+                --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
+                --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
+                --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+                --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
+
+            DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
+            python -m geowatch.tasks.poly_from_point.predict \
+                --method 'ellipse' \
+                --filepath_output KR_R001-genpoints.geojson \
+                --region_id KR_R001 \
+                --size_prior "20x20@10mGSD" \
+                --ignore_buffer "10@10mGSD" \
+                --filepath_to_images None \
+                --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
+                --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
+
+            geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
+        """
+        config = PolyFromPointCLI.cli(cmdline=cmdline, data=kwargs)
+        import rich
+        from rich.markup import escape
+        from shapely import geometry
+
+        rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
+
+        from geowatch.utils import util_resolution
+        import kwimage
+
+        filepath_to_points = ub.Path(config.filepath_to_points)
+        filepath_output = ub.Path(config.filepath_output)
+        config.time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
+        config.size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
+
+        if config.ignore_buffer is not None:
+            config.ignore_buffer = util_resolution.ResolvedScalar.coerce(
+                config.ignore_buffer
+            )
+
+        if not filepath_to_points.exists():
+            raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
+
+        main_region = RegionModel.coerce(config.filepath_to_region)
+        main_region_header = main_region.header
+
+        main_region_header["properties"]["originator"] = "Rutgers"
+        main_region_header["properties"]["comments"] = f"poly_from_points: {config.method}"
+
+        if config.region_id is None:
+            config.region_id = main_region.region_id
+
+        if config.filepath_to_images is not None:
+            filepath_to_images = ub.Path(config.filepath_to_images)
+            if not filepath_to_images.exists():
+                raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
+
+            # Load the kwcoco file and use its metadata extract information about
+            # video space.  We convert the size priors to videospace in this case.
+            # This is only necessary if we need to reference the images based on
+            # the "method".
+            dset = kwcoco.CocoDataset(filepath_to_images)
+            assert dset.n_videos == 1, "only handling 1 video for now"
+            video_obj = list(dset.videos().objs)[0]
+            if config.region_id is None:
+                config.region_id = video_obj["name"]
+
+            assert config.region_id == video_obj["name"], "inconsistent name"
+
+            utm_crs, warp_vid_from_utm = get_vidspace_info(video_obj)
+        else:
+            dset = None
+            utm_crs = None
+            if config.region_id is None:
+                raise ValueError("region_id is required when a kwcoco path is not given")
+            if config.method == "sam":
+                raise ValueError("SAM requires a kwcoco file for video space")
+
+        # Convert the size prior to meters
+        utm_gsd = util_resolution.ResolvedUnit.coerce("1mGSD")
+        size_prior_utm = config.size_prior.at_resolution(utm_gsd)
+
+        points_gdf_crs84 = load_point_annots(filepath_to_points, config.region_id)
+
+        main_region_header_points = [
+            geometry.Point(point)
+            for point in main_region_header["geometry"]["coordinates"][0]
+        ]
+        poly = geometry.Polygon(main_region_header_points)
+        indexs = points_gdf_crs84.index
+        for idx, point in enumerate(points_gdf_crs84["geometry"]):
+            if poly.contains(point):
+                print("hit")
+            else:
+                points_gdf_crs84.drop(indexs[idx], axis=0, inplace=True)
+        print('points_gdf_crs84:')
+        print("\n", points_gdf_crs84)
+
+        # Transform the points into a UTM CRS. If we didn't determine a which UTM
+        # crs to work with from the kwcoco file, then we need to infer a good one.
+        if utm_crs is None:
+            from geowatch.utils import util_gis
+
+            points_gdf_utm = util_gis.project_gdf_to_local_utm(
+                points_gdf_crs84, max_utm_zones=10, mode=1
+            )
+            utm_crs = points_gdf_utm.crs
+        else:
+            points_gdf_utm = points_gdf_crs84.to_crs(utm_crs)
+
+        points_utm = points_gdf_utm["geometry"]
+
+        if config.method == "box":
+            prior_width, prior_height = size_prior_utm.window
+            utm_polygons = kwimage.Boxes(
+                [[p.x, p.y, prior_width, prior_height] for p in points_utm],
+                "cxywh",
+            ).to_polygons()
+        elif config.method == "ellipse":
+            prior_width, prior_height = size_prior_utm.window
+            utm_polygons = [
+                kwimage.Polygon.circle(xy=(p.x, p.y), r=(prior_width, prior_height))
+                for p in points_utm
+            ]
+        elif config.method == "sam":
+            utm_polygons = convert_points_to_poly_with_sam_method(
+                dset, video_obj, points_gdf_utm, config
+            )
+        else:
+            raise KeyError(f"Unknown Method: {config.method}")
+
+        new_region_model = convert_polygons_to_region_model(
+            utm_polygons,
+            main_region_header,
+            points_gdf_utm,
+            points_gdf_crs84,
+            config,
+        )
+        print(f"Writing output to {filepath_output}")
+        filepath_output.write_text(new_region_model.dumps())
 
 
 """
@@ -392,9 +617,14 @@ def get_vidspace_info(video_obj):
 
 
 def load_point_annots(filepath_to_points, region_id):
+    """
+    filepath_to_points = '/home/joncrall/.cache/geowatch/poly_from_point/doc/points.geojson'
+    filepath_to_points = '/media/joncrall/flash1/smart_phase3_data/annotations/point_based_annotations.geojson'
+    """
     fpath = filepath_to_points
     # Read json text directly from the zipfile
     if fpath.endswith(".zip"):
+        # HACK
         file = ub.zopen(fpath + "/" + "point_based_annotations.geojson", "r")
     else:
         file = open(fpath, "r")
@@ -521,161 +751,7 @@ def convert_points_to_poly_with_sam_method(dset, video_obj, points_gdf_utm, conf
             # TODO: add default polygon
             yield None
 
-
-def main():
-    r"""
-    IGNORE:
-        black /mnt/ssd2/data/test/geowatch/geowatch/tasks/poly_from_point/predict.py
-        pyenv shell 3.10.5
-        source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
-        python -m geowatch.tasks.poly_from_point.predict --method 'box'
-        from geowatch.tasks.poly_from_point.predict import *
-
-
-    Ignore:
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=hdd)
-        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase3_expt' --hardware=auto)
-        echo "$DVC_DATA_DPATH"
-        echo "$DVC_EXPT_DPATH"
-
-        python -m geowatch.tasks.poly_from_point.predict \
-            --method 'sam' \
-            --filepath_to_images "$DVC_DATA_DPATH/Aligned-Drop8-ARA/KR_R001/imganns-KR_R001-rawbands.kwcoco.zip" \
-            --filepath_to_points "$DVC_DATA_DPATH/annotations/point_based_annotations.zip" \
-            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
-            --filepath_to_sam "$DVC_EXPT_DPATH/models/sam/sam_vit_h_4b8939.pth"
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase3_data' --hardware=ssd)
-        python -m geowatch.tasks.poly_from_point.predict \
-            --method 'ellipse' \
-            --filepath_output KR_R001-genpoints.geojson \
-            --region_id KR_R001 \
-            --size_prior "20x20@10mGSD" \
-            --ignore_buffer "10@10mGSD" \
-            --filepath_to_images None \
-            --filepath_to_points "$DVC_DATA_DPATH/submodules/annotations/supplemental_data/point_based_annotations.geojson" \
-            --filepath_to_region "$DVC_DATA_DPATH/annotations/drop8/region_models/KR_R001.geojson" \
-
-        geowatch draw_region KR_R001-genpoints.geojson --fpath KR_R001-genpoints.png
-    """
-    config = HeatMapConfig.cli(cmdline=1)
-    import rich
-    from rich.markup import escape
-    from shapely import geometry
-
-    rich.print(f"config = {escape(ub.urepr(config, nl=1))}")
-
-    from geowatch.utils import util_resolution
-    import kwimage
-
-    filepath_to_points = ub.Path(config.filepath_to_points)
-    filepath_output = ub.Path(config.filepath_output)
-    config.time_prior = kwutil.util_time.timedelta.coerce(config.time_prior)
-    config.size_prior = util_resolution.ResolvedWindow.coerce(config.size_prior)
-
-    if config.ignore_buffer is not None:
-        config.ignore_buffer = util_resolution.ResolvedScalar.coerce(
-            config.ignore_buffer
-        )
-
-    if not filepath_to_points.exists():
-        raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
-
-    main_region = RegionModel.coerce(config.filepath_to_region)
-    main_region_header = main_region.header
-
-    main_region_header["properties"]["originator"] = "Rutgers"
-    main_region_header["properties"]["comments"] = f"poly_from_points: {config.method}"
-
-    if config.filepath_to_images is not None:
-        filepath_to_images = ub.Path(config.filepath_to_images)
-        if not filepath_to_images.exists():
-            raise FileNotFoundError(f"filepath_to_points={filepath_to_points}")
-
-        # Load the kwcoco file and use its metadata extract information about
-        # video space.  We convert the size priors to videospace in this case.
-        # This is only necessary if we need to reference the images based on
-        # the "method".
-        dset = kwcoco.CocoDataset(filepath_to_images)
-        assert dset.n_videos == 1, "only handling 1 video for now"
-        video_obj = list(dset.videos().objs)[0]
-        if config.region_id is None:
-            config.region_id = video_obj["name"]
-
-        assert config.region_id == video_obj["name"], "inconsistent name"
-
-        utm_crs, warp_vid_from_utm = get_vidspace_info(video_obj)
-    else:
-        dset = None
-        utm_crs = None
-        if config.region_id is None:
-            raise ValueError("region_id is required when a kwcoco path is not given")
-        if config.method == "sam":
-            raise ValueError("SAM requires a kwcoco file for video space")
-
-    # Convert the size prior to meters
-    utm_gsd = util_resolution.ResolvedUnit.coerce("1mGSD")
-    size_prior_utm = config.size_prior.at_resolution(utm_gsd)
-
-    points_gdf_crs84 = load_point_annots(filepath_to_points, config.region_id)
-
-    main_region_header_points = [
-        geometry.Point(point)
-        for point in main_region_header["geometry"]["coordinates"][0]
-    ]
-    poly = geometry.Polygon(main_region_header_points)
-    indexs = points_gdf_crs84.index
-    for idx, point in enumerate(points_gdf_crs84["geometry"]):
-        if poly.contains(point):
-            print("hit")
-            continue
-        else:
-            points_gdf_crs84.drop(indexs[idx], axis=0, inplace=True)
-    print("\n", points_gdf_crs84)
-
-    # Transform the points into a UTM CRS. If we didn't determine a which UTM
-    # crs to work with from the kwcoco file, then we need to infer a good one.
-    if utm_crs is None:
-        from geowatch.utils import util_gis
-
-        points_gdf_utm = util_gis.project_gdf_to_local_utm(
-            points_gdf_crs84, max_utm_zones=10, mode=1
-        )
-        utm_crs = points_gdf_utm.crs
-    else:
-        points_gdf_utm = points_gdf_crs84.to_crs(utm_crs)
-
-    points_utm = points_gdf_utm["geometry"]
-
-    if config.method == "box":
-        prior_width, prior_height = size_prior_utm.window
-        utm_polygons = kwimage.Boxes(
-            [[p.x, p.y, prior_width, prior_height] for p in points_utm],
-            "cxywh",
-        ).to_polygons()
-    elif config.method == "ellipse":
-        prior_width, prior_height = size_prior_utm.window
-        utm_polygons = [
-            kwimage.Polygon.circle(xy=(p.x, p.y), r=(prior_width, prior_height))
-            for p in points_utm
-        ]
-    elif config.method == "sam":
-        utm_polygons = convert_points_to_poly_with_sam_method(
-            dset, video_obj, points_gdf_utm, config
-        )
-    else:
-        raise KeyError(f"Unknown Method: {config.method}")
-
-    new_region_model = convert_polygons_to_region_model(
-        utm_polygons,
-        main_region_header,
-        points_gdf_utm,
-        points_gdf_crs84,
-        config,
-    )
-    print(f"Writing output to {filepath_output}")
-    filepath_output.write_text(new_region_model.dumps())
-
+__cli__ = PolyFromPointCLI
 
 if __name__ == "__main__":
-    main()
+    __cli__.main()

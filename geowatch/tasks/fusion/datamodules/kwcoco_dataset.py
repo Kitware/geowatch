@@ -12,7 +12,7 @@ from needing to specify what the available options are in multiple places.
 
 
 For notes on Spaces, see
-    ~/code/geowatch/docs/development/coding_conventions.rst
+    ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
 
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
@@ -379,7 +379,11 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Only applies to training dataset when used in the data module.
         Validation/test dataset defaults to zero.
 
-        NOTE: This will be deprecated and superceded by "balance_options".
+        DEPRECATED: Use "balance_options" instead.
+        To reproduce this with "balance_options" use:
+        balance_options : [
+            {attribute: contains_annotation, weights: {True: 0.5, False: 0.5}}
+        ]
         '''))
 
     balance_options = scfg.Value(None, group=SAMPLE_GROUP, help=ub.paragraph(
@@ -526,9 +530,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Channels to use for SAMECOLOR_QUALITY_HEURISTIC. This should be
         FusedChannelSpec coercible.
         '''))
-    mask_samecolor_values = scfg.Value(0, type=list, group=FILTER_GROUP, help=ub.paragraph(
+    mask_samecolor_values = scfg.Value(0, group=FILTER_GROUP, help=ub.paragraph(
         '''
         List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
+        Can be an integer or list of intergers
         '''))
     force_bad_frames = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -624,7 +629,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     #     Train at multiple scales.
     #     '''), group=AUGMENTATION_GROUP),
 
-    reseed_fit_random_generators = scfg.Value(True, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
+    reseed_fit_random_generators = scfg.Value(True, type=bool, group=AUGMENTATION_GROUP, help=ub.paragraph(
         '''
         This option forces the dataloader random number generator to reseed
         itself, effectively ignoring any global seed in non- test mode. In test
@@ -1317,9 +1322,11 @@ class GetItemMixin(TruthMixin):
                 'saliency_weights': None,
             }
 
+            output_dims = output_dsize[::-1]  # the size we want to predict
+            frame_item['output_dims'] = output_dims
+
             if not self.config['reduce_item_size']:
                 scale_outspace_from_vid = output_dsize / np.array(vidspace_dsize)
-                output_dims = output_dsize[::-1]  # the size we want to predict
                 # The size of the larger image this output is expected to be
                 # embedded in.
                 outimg_dsize = video_dsize * scale_outspace_from_vid
@@ -1331,7 +1338,6 @@ class GetItemMixin(TruthMixin):
                     'class_output_dims': output_dims,
                     'saliency_output_dims': output_dims,
                     #
-                    'output_dims': output_dims,
                     'output_space_slice': frame_outspace_box.to_slice(),
                     'output_image_dsize': outimg_box.dsize,
                     'scale_outspace_from_vid': scale_outspace_from_vid,
@@ -2095,7 +2101,7 @@ class GetItemMixin(TruthMixin):
                 # '_new_inputs': ...,
                 # '_new_outputs': ...,
                 'video_id': vidid,
-                'video_name': video['name'],
+                'video_name': video.get('name', None),
                 'domain': video.get('domain', video.get('name', None)),
                 'input_gsd': resolved_input_scale.get('gsd', None),
                 'output_gsd': resolved_output_scale.get('gsd', None),
@@ -2127,7 +2133,7 @@ class GetItemMixin(TruthMixin):
                 'class_output_dims',
                 'saliency_output_dims',
                 #
-                'output_dims',
+                # 'output_dims',
                 'output_space_slice',
                 'output_image_dsize',
                 'scale_outspace_from_vid',
@@ -2589,12 +2595,13 @@ class BalanceMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10, rng=0)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> num_samples = 50
         >>> neg_to_pos_ratio = 0
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> self.reseed(0)
         >>> num_targets = len(self.sample_grid['targets'])
         >>> positives_indexes = self.sample_grid['positives_indexes']
         >>> negatives_indexes = self.sample_grid['negatives_indexes']
@@ -2613,6 +2620,7 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = .1
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> self.reseed(0)
         >>> num_targets = len(self.sample_grid['targets'])
         >>> positives_indexes = self.sample_grid['positives_indexes']
         >>> negatives_indexes = self.sample_grid['negatives_indexes']
@@ -2776,26 +2784,7 @@ class BalanceMixin:
             self.balanced_sampler = None
             return
 
-        if self.config['balance_options'] == 'scott':
-            # Hard coded special mapping for scott
-            balance_options = kwutil.Yaml.coerce(
-                '''
-                - attribute: region
-                - attribute: contains_phase
-                  weights:
-                      False: 0
-                      True: 1
-                - attribute: phases
-                  default_weight: 0.0
-                  weights:
-                      'No Activity': 0.25
-                      'Site Preparation': 0.25
-                      'Active Construction': 0.25
-                      'Post Construction': 0.25
-                ''')
-            balance_options = kwutil.Yaml.coerce(balance_options)
-        else:
-            balance_options = kwutil.Yaml.coerce(self.config['balance_options'])
+        balance_options = kwutil.Yaml.coerce(self.config['balance_options'])
 
         if balance_options is None:
             balance_options = []
@@ -3319,7 +3308,7 @@ class MiscMixin:
     TODO: better groups
     """
 
-    def reseed(self):
+    def reseed(self, rng='auto'):
         """
         Reinitialize the random number generator
 
@@ -3329,18 +3318,18 @@ class MiscMixin:
             could fix that.
         """
         # Randomize across DDP workers
-        if hasattr(self, 'balanced_sampler'):
-            rng = kwarray.ensure_rng(rng=None)
-            import secrets
-            import time
-            # Really try to be random
-            rng_seed = rng.randint(0, int(2 ** 31 - 2))
-            rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
-            secret_seed = secrets.randbits(22) + int(time.time())
-            seed = secret_seed ^ rank_seed ^ rng_seed
-            rng = kwarray.ensure_rng(rng=seed)
-            if self.balanced_sampler is not None:
-                self.balanced_sampler.rng = rng
+        if getattr(self, 'balanced_sampler', None) is not None:
+            if rng == 'auto':
+                rng = kwarray.ensure_rng(rng=None)
+                import secrets
+                import time
+                # Really try to be random
+                rng_seed = rng.randint(0, int(2 ** 31 - 2))
+                rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
+                secret_seed = secrets.randbits(22) + int(time.time())
+                seed = secret_seed ^ rank_seed ^ rng_seed
+                rng = kwarray.ensure_rng(rng=seed)
+            self.balanced_sampler.reseed(rng)
 
     @property
     def coco_dset(self):
@@ -3486,6 +3475,7 @@ class BackwardCompatMixin:
 
     @property
     def new_sample_grid(self):
+        ub.schedule_deprecation()
         return self.sample_grid
 
 
@@ -3659,6 +3649,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
+            print('Channels specified as auto, attempting to introspsect')
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(self.sampler.dset)['sensorchan_hist']
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
@@ -3667,6 +3658,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            print(f'Automatically determined sensorchans = {ub.urepr(sensorchans, nl=1)}')
             if len(sensorchan_hist) > 0 and channels is None:
                 # Only warn if not explicitly in auto mode
                 warnings.warn(
@@ -4279,7 +4271,6 @@ class FailedSample(Exception):
     """
     Used to indicate that a sample should be skipped.
     """
-    ...
 
 
 class Modality(NamedTuple):

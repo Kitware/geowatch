@@ -28,7 +28,8 @@ Alternatives:
 DRY_RUN=${DRY_RUN:=0}
 DEV_TRACE=${DEV_TRACE:=0}
 WATCH_STRICT=${WATCH_STRICT:=0}
-WITH_MMCV=${WITH_MMCV:="auto"}
+#WITH_MMCV=${WITH_MMCV:="auto"}
+WITH_MMCV=${WITH_MMCV:=0}
 WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
 WITH_DVC=${WITH_DVC:=0}
 WITH_AWS=${WITH_AWS:=0}
@@ -102,6 +103,32 @@ command_exists(){
     '
     COMMAND=$1
     command -v "$COMMAND" &> /dev/null
+}
+
+have_sudo(){
+    __doc__='
+    Tests if we have the ability to use sudo.
+    Returns the string "True" if we do.
+
+    References:
+        https://stackoverflow.com/questions/18431285/check-if-a-user-is-in-a-group
+
+    Example:
+        HAVE_SUDO=$(have_sudo)
+        if [ "$HAVE_SUDO" == "True" ]; then
+            sudo do stuff
+        else
+            we dont have sudo
+        fi
+    '
+    # New pure-bash implementation
+    local USER_GROUPS
+    USER_GROUPS=$(id -Gn "$(whoami)")
+    if [[ " $USER_GROUPS " == *" sudo "* ]]; then
+        echo "True"
+    else
+        echo "False"
+    fi
 }
 
 
@@ -334,7 +361,17 @@ main(){
     if [[ "$WITH_APT_ENSURE" == "auto" ]]; then
         # If on debian/ubuntu ensure the dependencies are installed
         if command_exists apt; then
-            WITH_APT_ENSURE=1
+            HAVE_SUDO=$(have_sudo)
+            if [ "$HAVE_SUDO" == "True" ]; then
+                WITH_APT_ENSURE=1
+            else
+                WITH_APT_ENSURE=0
+                echo "
+                WARNING: User does not have sudo permissions. Cannot install apt packages.
+                You may an admin to instal ZLIB, GSL, and OpenMP before running
+                this script, depending on which options are enabled.
+                "
+            fi
         else
             WITH_APT_ENSURE=0
             echo "

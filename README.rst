@@ -137,7 +137,7 @@ Note IPFS links use the ipfs.io gateway, but the CID can be used to accesss the 
 +---------------+----------------------------------------------------------------+-----------------------------+
 
 
-.. _bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa: https://ipfs.io/ipfs/bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa
+.. _bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa: https://ipfs.io/ipfs/QmQonrckXZq37ZHDoRGN4xVBkqedvJRgYyzp2aBC5Ujpyp?redirectURL=bafybeiclo3c4bnhuumj77nxzodth442ybovw77cvbzp7ue23lsfnw4tyxa&autoadapt=0&requiresorigin=0&web3domain=0&immediatecontinue=1&magiclibraryconfirmation=0
 .. _65a94833d5d9e43895a66505: https://data.kitware.com/#item/65a94833d5d9e43895a66505
 
 
