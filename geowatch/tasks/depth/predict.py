@@ -234,7 +234,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
                     'Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     if cache and hit_gids:
-        from geowatch.utils import util_gdal
+        from kwgis.utils import util_gdal
         # add metadata for cache items
         for gid in hit_gids:
             img_info = torch_dataset.dset.imgs[gid]
