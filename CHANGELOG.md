@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Add top-level matrices argument to param_grid.
 * Experimental progiter-based progress backend for lightning to work around slurm issues.
+* Added initial limited accelerator option to fusion.predict to move towards faster prediction
 
 ### Fixed
 * Fix issue in MultimodalModel when input sensor is None.

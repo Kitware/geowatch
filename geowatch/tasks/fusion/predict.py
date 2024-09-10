@@ -120,8 +120,20 @@ class PredictConfig(DataModuleConfigMixin):
         The predict script makes certain assumptions about what type of model
         this will be. We are working on generalizing this.
         '''), alias=['model'])
-    devices = scfg.Value(None, help='lightning devices')
-    thresh = scfg.Value(0.01, help=None)
+    accelerator = scfg.Value('auto', help=ub.paragraph(
+        '''
+        Mimics lightning's accelerator argument, but is not quite the same
+        (yet). We plan to move towards a common interface between training and
+        prediction. To maintain backwards compatibility the current behavior of
+        "auto" is to default to the old "devices" behavior. If specified as cpu
+        or gpu, then devices will be interpreted in the context of the given
+        accelerator.
+        '''))
+    devices = scfg.Value(None, help=ub.paragraph(
+        '''
+        lightning devices
+        '''))
+    thresh = scfg.Value(0.01, help='DEPRECATED and unused')
     with_change = scfg.Value('auto', help=None)
     with_class = scfg.Value('auto', help=None)
     with_saliency = scfg.Value('auto', help=None)
@@ -1538,9 +1550,14 @@ class Predictor:
                 f'Got {config["pred_dataset"]=}')
         result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
 
-        from geowatch.utils.lightning_ext import util_device
         print('devices = {!r}'.format(config['devices']))
-        devices = util_device.coerce_devices(config['devices'])
+        print('accelerator = {!r}'.format(config['accelerator']))
+        if config['accelerator'] == 'auto':
+            from geowatch.utils.lightning_ext import util_device
+            devices = util_device.coerce_devices(config['devices'])
+        else:
+            devices = util_device.coerce_accelerator_devices(config['accelerator'], config['devices'])
+
         print('devices = {!r}'.format(devices))
         if len(devices) > 1:
             raise NotImplementedError('TODO: handle multiple devices')

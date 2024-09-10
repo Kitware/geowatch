@@ -65,9 +65,9 @@ VALI_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
 TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 
 # Generate toy datasets using the "kwcoco toydata" tool
-kwcoco toydata vidshapes2-frames10-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
-kwcoco toydata vidshapes4-frames10-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_vali
-kwcoco toydata vidshapes2-frames6-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_test
+kwcoco toydata vidshapes2-frames10-amazon --dst "$TRAIN_FPATH"
+kwcoco toydata vidshapes4-frames10-amazon --dst "$VALI_FPATH"
+kwcoco toydata vidshapes2-frames6-amazon --dst "$TEST_FPATH"
 
 
 echo "
@@ -294,8 +294,10 @@ are stripped and ignored during prediction.
 python -m geowatch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$PACKAGE_FPATH"  \
+    --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \
     --format="png"  \
-    --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+    --accelerator="$ACCELERATOR" \
+    --devices=1
 
 echo '
 The output of the predictions is just another kwcoco file, but it augments the

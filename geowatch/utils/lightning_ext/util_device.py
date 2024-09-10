@@ -30,6 +30,10 @@ def coerce_devices(gpus):
     Returns:
         List[torch.device]
 
+    Note:
+        Prefer :func:`coerce_accelerator_devices` over this, but even that new
+        function may change in the future.
+
     Example:
         >>> from geowatch.utils.lightning_ext import util_device
         >>> print(util_device.coerce_devices('cpu'))
@@ -97,6 +101,99 @@ def coerce_devices(gpus):
         devices = [torch.device('cpu')]
     else:
         devices = [torch.device(_id) for _id in gpu_ids]
+    return devices
+
+
+def coerce_accelerator_devices(accelerator, devices, _use_private_api=False):
+    """
+    A simplified version of lightning's accelerator connector, which
+    is currently non a public API, so we are avoiding depending on it.
+    If it becomes a public API we may just use it.
+
+    Example:
+        >>> from geowatch.utils.lightning_ext.util_device import *  # NOQA
+        >>> coerce_accelerator_devices('cpu', 1)
+        [device(type='cpu')]
+
+    Example:
+        >>> from geowatch.utils.lightning_ext.util_device import *  # NOQA
+        >>> import torch
+        >>> results = []
+        >>> if True:
+        >>>     basis = {
+        >>>         'accelerator': ['cpu'],
+        >>>         'devices': ['auto', 1],
+        >>>         '_use_private_api': [0, 1],
+        >>>     }
+        >>>     for kwargs in ub.named_product(basis):
+        >>>         row = {**kwargs, 'result': coerce_accelerator_devices(**kwargs)}
+        >>>         results.append(row)
+        >>> if True:
+        >>>     basis = {
+        >>>         'accelerator': ['auto'],
+        >>>         'devices': ['auto'],
+        >>>         '_use_private_api': [0, 1],
+        >>>     }
+        >>>     for kwargs in ub.named_product(basis):
+        >>>         row = {**kwargs, 'result': coerce_accelerator_devices(**kwargs)}
+        >>>         results.append(row)
+        >>> if torch.cuda.is_available():
+        >>>     basis = {
+        >>>         'accelerator': ['cuda'],
+        >>>         'devices': [1, (0,), '0,'],
+        >>>         '_use_private_api': [0, 1],
+        >>>     }
+        >>>     for kwargs in ub.named_product(basis):
+        >>>         row = {**kwargs, 'result': coerce_accelerator_devices(**kwargs)}
+        >>>         results.append(row)
+        >>> if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        >>>     basis = {
+        >>>         'accelerator': ['cuda'],
+        >>>         'devices': [1, (1, 0), (1,), '1,'],
+        >>>         '_use_private_api': [0, 1],
+        >>>     }
+        >>>     for kwargs in ub.named_product(basis):
+        >>>         row = {**kwargs, 'result': coerce_accelerator_devices(**kwargs)}
+        >>>         results.append(row)
+        >>> print(f'results = {ub.urepr(results, nl=1)}')
+        >>> groups = ub.group_items(results, key=lambda x: (x['accelerator'], x['devices']))
+        >>> # check that our function matches the lightning API
+        >>> for group in groups.values():
+        ...     assert ub.allsame([g['result'] for g in group])
+    """
+
+    if _use_private_api:
+        # dont depend on the public API, but here is an example of what it may
+        # look like
+        from pytorch_lightning.trainer.connectors.accelerator_connector import (
+            _AcceleratorConnector
+        )
+        acc_conn = _AcceleratorConnector(
+            accelerator=accelerator, devices=devices)
+        devices = (
+            acc_conn.strategy.parallel_devices
+            if hasattr(acc_conn.strategy, 'parallel_devices')
+            else [acc_conn.strategy.root_device]
+        )
+    else:
+        import torch
+        if accelerator == 'auto':
+            accelerator = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if accelerator in {'cpu'}:
+            if devices == 'auto':
+                devices = 1
+            devices = [torch.device('cpu')] * devices
+        elif accelerator in {'gpu', 'cuda'}:
+            if devices == 'auto':
+                devices = torch.cuda.device_count()
+            if not isinstance(devices, int):
+                from geowatch.utils.lightning_ext import old_parser_devices as device_parser
+                device_ids = device_parser.parse_gpu_ids(devices)
+            else:
+                device_ids = list(range(devices))
+            devices = [torch.device(_id) for _id in device_ids]
+        else:
+            raise NotImplementedError(accelerator)
     return devices
 
 
