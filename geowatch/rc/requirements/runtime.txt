@@ -186,9 +186,6 @@ albumentations==1.0.0  # pinned for invariants model
 ndsampler>=0.7.8
 tifffile>=2021.4.8
 
-# Includes SimpleITK. Used in depth predictor.
-medpy>=0.4.0
-
 # Plotting
 kwplot>=0.4.14
 seaborn>=0.11.2
