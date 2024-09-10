@@ -91,7 +91,7 @@ Compatibility
 
 - [ ] Further subdivide and sequester software dependencies (open ended).
 
-- [ ] Upgrade pytorch lightning / jsonargparse to latest versions.
+- [X] Upgrade pytorch lightning / jsonargparse to latest versions.
 
 
 Documentation

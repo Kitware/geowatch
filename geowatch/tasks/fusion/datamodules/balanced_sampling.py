@@ -1,3 +1,6 @@
+"""
+Defines two classes that help with balanced sampling (with replacement)
+"""
 import numpy as np
 import ubelt as ub
 import kwarray
@@ -204,6 +207,8 @@ class BalancedSampleTree(ub.NiceRepr):
     @profile
     def subdivide(self, key, weights=None, default_weight=0):
         """
+        Adds a new layer to the tree that balances across the given attribute.
+
         Args:
             key (str):
                 A key into the item dictionary of a sample that maps to the
@@ -275,6 +280,10 @@ class BalancedSampleTree(ub.NiceRepr):
 
     @profile
     def sample(self):
+        """
+        Returns:
+            int
+        """
         current = '__root__'
         while self.graph.out_degree(current) > 0:
             children = list(self.graph.successors(current))
@@ -418,10 +427,16 @@ class BalancedSampleForest(ub.NiceRepr):
     """
     @profile
     def __init__(self, sample_grid, rng=None, n_trees=16, scoring='uniform'):
+        """
+        Args:
+            sample_grid (List[Dict[str, Any]]) table of sample properties
+            rng (int | None | RandomState):
+                random number generator or seed
+            n_trees (int): number of trees in the forest
+            scoring (str): can be uniform or inverse
+        """
         super().__init__()
         self.rng = rng = kwarray.ensure_rng(rng)
-
-        # TODO: validate input
         self.n_trees = n_trees
         self.forest = self._create_forest(sample_grid, n_trees, scoring)
 
@@ -470,7 +485,7 @@ class BalancedSampleForest(ub.NiceRepr):
                         elif scoring == 'uniform':
                             sample[key] = self.rng.choice(list(val.keys()))
                         else:
-                            raise NotImplementedError
+                            raise NotImplementedError(scoring)
 
             # initialize a BalancedSampleTree with this sample grid
             bst = BalancedSampleTree(local_sample_grid, rng=self.rng)
@@ -479,6 +494,23 @@ class BalancedSampleForest(ub.NiceRepr):
 
     @profile
     def subdivide(self, key, weights=None, default_weight=0):
+        """
+        Adds a new layer to each tree in the forest that balances across the
+        given attribute.
+
+        Args:
+            key (str):
+                A key into the item dictionary of a sample that maps to the
+                property to balance over.
+
+            weights (None | Dict[Any, Number]):
+                an optional mapping from values that ``key`` could point to
+                to a numeric weight.
+
+            default_weight (None | Number):
+                if an attribute is unspecified in the weight table, this is
+                the default weight it should be given. Default is 0.
+        """
         for tree in self.forest:
             tree.subdivide(key, weights=weights, default_weight=default_weight)
 
@@ -490,7 +522,12 @@ class BalancedSampleForest(ub.NiceRepr):
 
     @profile
     def sample(self):
-        """ Uniformly sample a tree from the forest, then sample from it. """
+        """
+        Uniformly sample a tree from the forest, then sample from it.
+
+        Returns:
+            int
+        """
         idx = self.rng.choice(self.n_trees)
         return self.forest[idx].sample()
 

@@ -12,7 +12,7 @@ from needing to specify what the available options are in multiple places.
 
 
 For notes on Spaces, see
-    ~/code/geowatch/docs/development/coding_conventions.rst
+    ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
 
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
@@ -379,7 +379,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Only applies to training dataset when used in the data module.
         Validation/test dataset defaults to zero.
 
-        NOTE: This will be deprecated and superceded by "balance_options".
+        DEPRECATED: Use "balance_options" instead.
         To reproduce this with "balance_options" use:
         balance_options : [
             {attribute: contains_annotation, weights: {True: 0.5, False: 0.5}}
@@ -2595,12 +2595,13 @@ class BalanceMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10, rng=0)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> num_samples = 50
         >>> neg_to_pos_ratio = 0
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> self.reseed(0)
         >>> num_targets = len(self.sample_grid['targets'])
         >>> positives_indexes = self.sample_grid['positives_indexes']
         >>> negatives_indexes = self.sample_grid['negatives_indexes']
@@ -2619,6 +2620,7 @@ class BalanceMixin:
         >>> neg_to_pos_ratio = .1
         >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
         >>>                           channels='r|g|b', neg_to_pos_ratio=neg_to_pos_ratio)
+        >>> self.reseed(0)
         >>> num_targets = len(self.sample_grid['targets'])
         >>> positives_indexes = self.sample_grid['positives_indexes']
         >>> negatives_indexes = self.sample_grid['negatives_indexes']
@@ -2782,26 +2784,7 @@ class BalanceMixin:
             self.balanced_sampler = None
             return
 
-        if self.config['balance_options'] == 'scott':
-            # Hard coded special mapping for scott
-            balance_options = kwutil.Yaml.coerce(
-                '''
-                - attribute: region
-                - attribute: contains_phase
-                  weights:
-                      False: 0
-                      True: 1
-                - attribute: phases
-                  default_weight: 0.0
-                  weights:
-                      'No Activity': 0.25
-                      'Site Preparation': 0.25
-                      'Active Construction': 0.25
-                      'Post Construction': 0.25
-                ''')
-            balance_options = kwutil.Yaml.coerce(balance_options)
-        else:
-            balance_options = kwutil.Yaml.coerce(self.config['balance_options'])
+        balance_options = kwutil.Yaml.coerce(self.config['balance_options'])
 
         if balance_options is None:
             balance_options = []
@@ -3325,7 +3308,7 @@ class MiscMixin:
     TODO: better groups
     """
 
-    def reseed(self):
+    def reseed(self, rng='auto'):
         """
         Reinitialize the random number generator
 
@@ -3335,18 +3318,18 @@ class MiscMixin:
             could fix that.
         """
         # Randomize across DDP workers
-        if hasattr(self, 'balanced_sampler'):
-            rng = kwarray.ensure_rng(rng=None)
-            import secrets
-            import time
-            # Really try to be random
-            rng_seed = rng.randint(0, int(2 ** 31 - 2))
-            rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
-            secret_seed = secrets.randbits(22) + int(time.time())
-            seed = secret_seed ^ rank_seed ^ rng_seed
-            rng = kwarray.ensure_rng(rng=seed)
-            if self.balanced_sampler is not None:
-                self.balanced_sampler.rng = rng
+        if getattr(self, 'balanced_sampler', None) is not None:
+            if rng == 'auto':
+                rng = kwarray.ensure_rng(rng=None)
+                import secrets
+                import time
+                # Really try to be random
+                rng_seed = rng.randint(0, int(2 ** 31 - 2))
+                rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
+                secret_seed = secrets.randbits(22) + int(time.time())
+                seed = secret_seed ^ rank_seed ^ rng_seed
+                rng = kwarray.ensure_rng(rng=seed)
+            self.balanced_sampler.reseed(rng)
 
     @property
     def coco_dset(self):
@@ -3492,6 +3475,7 @@ class BackwardCompatMixin:
 
     @property
     def new_sample_grid(self):
+        ub.schedule_deprecation()
         return self.sample_grid
 
 
@@ -4287,7 +4271,6 @@ class FailedSample(Exception):
     """
     Used to indicate that a sample should be skipped.
     """
-    ...
 
 
 class Modality(NamedTuple):
