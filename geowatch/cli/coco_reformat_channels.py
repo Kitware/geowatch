@@ -146,7 +146,7 @@ def main(cmdline=False, **kwargs):
 
 def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
     import xarray as xr
-    from kwcoco.channel_spec import FusedChannelSpec
+    from delayed_image.channel_spec import FusedChannelSpec
     import kwimage
     import numpy as np
     quantize_dtype = np.int16

@@ -359,7 +359,7 @@ class CocoStitchingManager(object):
             ub.schedule_deprecation(
                 'geowatch', 'write_preds', 'needs a different abstraction.',
                 deprecate='now')
-            from kwcoco import channel_spec
+            from delayed_image import channel_spec
             chan_spec = channel_spec.FusedChannelSpec.coerce(chan_code)
             if self.polygon_categories is None:
                 self.polygon_categories = chan_spec.parsed

@@ -170,7 +170,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> #channels = chan_info['common_channels']
         >>> channels = 'blue|green|red|nir|swir16|swir22,forest|bare_ground,matseg_0|matseg_1|matseg_2,invariants.0:3,cloudmask'
         >>> #channels = 'blue|green|red|depth'
-        >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
         >>> #
         >>> batch_size = 1
@@ -210,10 +209,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> # Run the data module on coco demo datamodules for the CI
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
         >>> import kwcoco
+        >>> import delayed_image
         >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
         >>> channels = '|'.join([aux['channels'] for aux in train_dataset.imgs[1]['auxiliary']])
-        >>> chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
+        >>> chan_spec = delayed_image.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #
         >>> batch_size = 2
         >>> time_steps = 3

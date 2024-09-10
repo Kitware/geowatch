@@ -761,7 +761,7 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
     """
     Resolve which channel groups should be requested.
     """
-    from kwcoco import channel_spec
+    from delayed_image import channel_spec
     import kwcoco
     import rich
     if channels is not None:
