@@ -916,7 +916,8 @@ class DatasetStatsMixin:
         if input_sensorchan is None:
             raise Exception(
                 'need to specify input_sensorchan at least as the number of '
-                'input channels')
+                f'input channels. Got input_sensorchan={input_sensorchan!r} and '
+                f'dataset_stats={dataset_stats!r}')
         input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
 
         if dataset_stats is None:

@@ -152,6 +152,12 @@ if [[ "$(uname -a)" == "MINGW"* ]]; then
     export HOME=$USERPROFILE
     export USER=$USERNAME
 fi
+if type nvidia-smi; then
+    export ACCELERATOR="${ACCELERATOR:-gpu}"
+else
+    export ACCELERATOR="${ACCELERATOR:-cpu}"
+fi
+
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
 DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_train/data.kwcoco.json
@@ -190,7 +196,6 @@ trainer:
   default_root_dir     : $DEFAULT_ROOT_DIR
   accelerator          : $ACCELERATOR
   devices              : 1
-  #devices              : 0,
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
   limit_val_batches    : 2

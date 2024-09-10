@@ -431,7 +431,7 @@ class _ValueGetter:
         if not data.did_setup:
             data.setup('fit')
 
-        if data.config.num_workers > 0:
+        if data.config.num_workers not in {0, '0'}:
             # Hack to disconnect SQL coco databases before we fork
             # TODO: find a way to handle this more ellegantly
             if hasattr(data, 'coco_datasets'):
@@ -575,6 +575,7 @@ def make_cli(config=None):
         parser_kwargs=dict(
             parser_mode='yaml_unsafe_for_tuples',
             error_handler=None,
+            exit_on_error=False,
         ),
         trainer_defaults=dict(
             # The following works, but it might be better to move some of these callbacks into the cli
@@ -731,15 +732,15 @@ if __name__ == "__main__":
             data:
                 train_dataset: special:vidshapes8-frames9-speed0.5
                 window_dims: 64
-                workers: 4
+                num_workers: 4
                 batch_size: 4
                 normalize_inputs:
                     input_stats:
                         - sensor: '*'
                           channels: r|g|b
                           video: video1
-                          mean: [87.572401, 87.572401, 87.572401]
-                          std: [99.449996, 99.449996, 99.449996]
+                          mean: [87.572401, 87.572402, 87.572403]
+                          std: [99.449997, 99.449998, 99.449999]
             model:
                 class_path: MultimodalTransformer
             optimizer:

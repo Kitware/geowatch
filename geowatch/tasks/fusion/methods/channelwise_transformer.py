@@ -239,7 +239,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         taken care of by weight decay.
         '''))
 
-    continual_learning = scfg.Value(False, type=float, help=ub.paragraph(
+    continual_learning = scfg.Value(False, type=bool, help=ub.paragraph(
         '''
         If True, attempt to enable experimental loss-of-plasticity generate and
         test algorithm to encourage continual learning.

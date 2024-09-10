@@ -313,6 +313,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.window_space_scale = {!r}'.format(self.window_space_scale))
             print('self.input_space_scale = {!r}'.format(self.input_space_scale))
             print('self.output_space_scale = {!r}'.format(self.output_space_scale))
+            print(f'self.num_workers={self.num_workers!r}')
 
     def setup(self, stage):
 

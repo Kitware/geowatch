@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * Fix issue in MultimodalModel when input sensor is None.
+* Able to unpin jsonargparse and lightning with new versions
 
 ### Changed
 * More information is now saved when packaging checkpoints.

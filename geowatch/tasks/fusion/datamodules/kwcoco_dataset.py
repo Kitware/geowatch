@@ -530,9 +530,10 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Channels to use for SAMECOLOR_QUALITY_HEURISTIC. This should be
         FusedChannelSpec coercible.
         '''))
-    mask_samecolor_values = scfg.Value(0, type=list, group=FILTER_GROUP, help=ub.paragraph(
+    mask_samecolor_values = scfg.Value(0, group=FILTER_GROUP, help=ub.paragraph(
         '''
         List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
+        Can be an integer or list of intergers
         '''))
     force_bad_frames = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -628,7 +629,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     #     Train at multiple scales.
     #     '''), group=AUGMENTATION_GROUP),
 
-    reseed_fit_random_generators = scfg.Value(True, type=float, group=AUGMENTATION_GROUP, help=ub.paragraph(
+    reseed_fit_random_generators = scfg.Value(True, type=bool, group=AUGMENTATION_GROUP, help=ub.paragraph(
         '''
         This option forces the dataloader random number generator to reseed
         itself, effectively ignoring any global seed in non- test mode. In test
