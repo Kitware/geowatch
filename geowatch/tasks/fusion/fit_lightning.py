@@ -605,6 +605,7 @@ def main(config=None):
         xdoctest -m geowatch.tasks.fusion.fit_lightning main:0
 
     Example:
+        >>> import os
         >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -612,7 +613,7 @@ def main(config=None):
         >>> config = {
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'geowatch.tasks.fusion.methods.noop_model.NoopModel',
-        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.trainer.default_root_dir': os.fspath(dpath),
         >>>     'fit.data.train_dataset': 'special:vidshapes2-frames9-gsize32',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
         >>>     'fit.data.chip_dims': 32,
@@ -625,6 +626,7 @@ def main(config=None):
         >>> cli = main(config=config)
 
     Example:
+        >>> import os
         >>> from geowatch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from geowatch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -636,7 +638,7 @@ def main(config=None):
         >>>     'fit.model.class_path': 'geowatch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
         >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
         >>>     'fit.optimizer.init_args.lr': 1e-3,
-        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.trainer.default_root_dir': os.fspath(dpath),
         >>>     'fit.data.train_dataset': 'special:vidshapes2-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.chip_dims': 64,

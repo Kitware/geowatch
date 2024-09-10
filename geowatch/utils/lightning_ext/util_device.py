@@ -116,6 +116,7 @@ def coerce_accelerator_devices(accelerator, devices, _use_private_api=False):
         [device(type='cpu')]
 
     Example:
+        >>> import ubelt as ub
         >>> from geowatch.utils.lightning_ext.util_device import *  # NOQA
         >>> import torch
         >>> results = []
