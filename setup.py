@@ -244,6 +244,7 @@ if __name__ == '__main__':
         'geowatch_tpl/submodules_static/torchview',
         'geowatch_tpl/submodules_static/segment-anything',
         'geowatch_tpl/submodules_static/scale-mae',
+        'geowatch_tpl/submodules_static/jsonargparse',
         'geowatch_tpl/submodules_static/loss-of-plasticity',
         'geowatch_tpl/modules',
     ]

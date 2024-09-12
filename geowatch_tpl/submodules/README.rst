@@ -31,6 +31,8 @@ Here is what the steps were for jsonargparse
 
 Need to register the submodule in ``~/code/geowatch/geowatch_tpl/__init__.py`` along with specific directories that need to be copied.
 
+Also need to register in ``~/code/geowatch/setup.py`` so it is included in the wheel
+
 .. code:: bash
 
     cd "$HOME"/code/geowatch/geowatch_tpl
