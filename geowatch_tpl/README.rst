@@ -50,6 +50,6 @@ directory to update the static variant based on your dynamic copy.
 
 .. code:: bash
 
-   cd $HOME/code/watch/geowatch_tpl
+   cd $HOME/code/geowatch/geowatch_tpl
 
    python snapshot_submodules.py

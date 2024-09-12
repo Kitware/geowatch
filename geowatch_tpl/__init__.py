@@ -6,13 +6,13 @@ To regenerate static submodule:
     # Checkout submodules
 
     # Run script:
-    python ~/code/watch/geowatch_tpl/snapshot_submodules.py
+    python ~/code/geowatch/geowatch_tpl/snapshot_submodules.py
 """
 
 import os
 import sys
 # Adds the "modules" subdirectory to the python path.
-# See https://gitlab.kitware.com/smart/watch/-/merge_requests/148#note_1050127
+# See https://gitlab.kitware.com/smart/geowatch/-/merge_requests/148#note_1050127
 # for discussion of how to refactor this in the future.
 
 
@@ -49,6 +49,13 @@ STATIC_SUBMODULES = {
         'parts': [
             'segment-anything/segment_anything',
             'segment-anything/LICENSE',
+        ]
+    },
+    'jsonargparse_fork': {
+        'rel_dpath': 'jsonargparse/jsonargparse_fork',
+        'parts': [
+            'jsonargparse/jsonargparse_fork',
+            'jsonargparse/LICENSE.rst',
         ]
     },
 }
