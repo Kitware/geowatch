@@ -515,10 +515,18 @@ class AggregatorAnalysisMixin:
         """
         Write the varied parameter report to disk
         """
-        from kwutil.util_yaml import Yaml
+        import kwutil
         import rich
         report = agg.varied_parameter_report()
-        yaml_text = Yaml.dumps(report)
+        list(kwutil.Json.find_unserializable(report))
+        fixed_report = kwutil.Json.ensure_serializable(report, verbose=3, normalize_containers=True)
+        # kwutil.Json.dumps(fixed_report)
+        try:
+            yaml_text = kwutil.Yaml.dumps(fixed_report)
+        except Exception:
+            # not sure why ruamel.yaml will cause an error here
+            yaml_text = kwutil.Yaml.dumps(fixed_report, backend='pyyaml')
+
         agg.output_dpath.ensuredir()
         report_fpath = agg.output_dpath / 'varied_param_report.yaml'
         rich.print(f'Write varied parameter report to: {report_fpath}')
@@ -537,11 +545,13 @@ class AggregatorAnalysisMixin:
         concise_value_char_threshold = 80
         report = {}
 
-        varied_counts = util_pandas.DataFrame(agg.effective_params).varied_value_counts()
+        # varied_counts = util_pandas.DataFrame(agg.effective_params).varied_value_counts()
         # on_error='placeholder')
 
         # from geowatch.utils import result_analysis
-        varied_counts = agg.table.varied_value_counts(on_error='placeholder')
+        resolved_params = util_pandas.DataFrame(agg.resolved_params)
+        varied_counts = resolved_params.varied_value_counts(on_error='placeholder')
+        # varied_counts = agg.table.varied_value_counts(on_error='placeholder')
         param_summary = {}
         for key, value_counts in varied_counts.items():
             type_counts = ub.ddict(lambda: 0)
@@ -585,7 +595,7 @@ class AggregatorAnalysisMixin:
             column_summary.append({
                 'top': top,
                 'num_subcolumns': len(parts),
-                'subcolcolumn_depth_hist': length_hist,
+                'subcolumn_depth_hist': length_hist,
             })
 
         report['param_summary'] = param_summary
@@ -599,15 +609,15 @@ class AggregatorAnalysisMixin:
         """
         from geowatch.utils import util_pandas
         from geowatch.utils import result_analysis
-        params = util_pandas.DataFrame(agg.resolved_params)
+        resolved_params = util_pandas.DataFrame(agg.resolved_params)
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
             # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
         metrics = agg.metrics[metrics_of_interest]
-        params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+        resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
-        varied_counts = params.varied_value_counts(dropna=True)
+        varied_counts = resolved_params.varied_value_counts(dropna=True)
 
         if 1:
             # Only look at reasonable groupings
@@ -620,7 +630,7 @@ class AggregatorAnalysisMixin:
             chosen_params = None
 
         results = {
-            'params': params,
+            'params': resolved_params,
             'metrics': metrics,
         }
         analysis = result_analysis.ResultAnalysis(results, params=chosen_params)
@@ -755,8 +765,9 @@ class AggregatorAnalysisMixin:
                 ranking = ranking[np.isfinite(ranking)]
                 ranked_locs = ranking.sort_values().index
 
+            # Note: this report will only display requested params, but there
+            # might be more detailed variations of interest.
             ranked_group = group.loc[ranked_locs]
-
             param_lut = _agg.hashid_to_effective_params.subdict(ranked_group['param_hashid'])
             big_param_lut.update(param_lut)
 
