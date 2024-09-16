@@ -757,7 +757,7 @@ class AggregatorAnalysisMixin:
 
             ranked_group = group.loc[ranked_locs]
 
-            param_lut = _agg.hashid_to_params.subdict(ranked_group['param_hashid'])
+            param_lut = _agg.hashid_to_effective_params.subdict(ranked_group['param_hashid'])
             big_param_lut.update(param_lut)
 
             have_metric_display_cols = list(ub.oset(metric_display_cols) & list(ranked_group.columns))
@@ -814,6 +814,8 @@ class AggregatorAnalysisMixin:
                 rich.print('Varied Basis: = {}'.format(ub.urepr(varied, nl=2)))
                 rich.print('Constant Params: {}'.format(ub.urepr(non_varied_params, nl=2)))
                 rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
+            else:
+                raise KeyError(PARAMTER_DISPLAY_MODE)
 
             if show_csv:
                 ub.schedule_deprecation(
@@ -1256,7 +1258,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # This attribute will hold columns that store paths test datasets
         agg.test_dset_cols = None
 
-        agg.hashid_to_params = None
+        agg.hashid_to_effective_params = None
         agg.mappings = None
         agg.effective_params = None
         agg.macro_key_to_regions = None
@@ -1465,10 +1467,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # util_pandas.pandas_suffix_columns(agg.resolved_params, _testdset_suffixes)
 
         agg.build_effective_params()
-        # effective_params, mappings, hashid_to_params = agg.build_effective_params()
-        # agg.hashid_to_params = ub.udict(hashid_to_params)
-        # agg.mappings = mappings
-        # agg.effective_params = effective_params
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
@@ -1620,8 +1618,21 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     @property
     def params(self):
-        ub.schedule_deprecation(None, migration='use requested_params instead')
+        ub.schedule_deprecation(
+            modname='geowatch', name='params', type='property',
+            migration='use requested_params instead',
+            deprecate='0.15.0', error='1.0.0', remove='1.1.0',
+        )
         return self.subtables['params']
+
+    @property
+    def hashid_to_params(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='hashid_to_params', type='property',
+            migration='use hashid_to_effective_params instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+        )
+        return self.hashid_to_effective_params
 
     @property
     def requested_params(self):
@@ -1659,7 +1670,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         Populates:
 
-            * ``self.hashid_to_params``
+            * ``self.hashid_to_effective_params`` : Dict[str, Dict[str, Any]]
 
             * ``self.mappings``
 
@@ -1669,8 +1680,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         import pandas as pd
         from geowatch.utils import util_pandas
         from geowatch.mlops.smart_global_helper import SMART_HELPER
-        params = self.requested_params
-        effective_params = params.copy()
+        requested_params = self.requested_params
+        effective_params = requested_params.copy()
 
         HACK_FIX_JUNK_PARAMS = True
         if HACK_FIX_JUNK_PARAMS:
@@ -1685,10 +1696,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         mappings : Dict[str, Dict[Any, str]] = {}
         path_colnames = model_cols + test_dset_cols
         path_colnames = path_colnames + SMART_HELPER.EXTRA_PATH_COLUMNS
-        existing_path_colnames = params.columns.intersection(path_colnames)
+        existing_path_colnames = requested_params.columns.intersection(path_colnames)
 
         for colname in existing_path_colnames:
-            colvals = params[colname]
+            colvals = requested_params[colname]
             condensed, mapper = util_pandas.pandas_condense_paths(colvals)
             mappings[colname] = mapper
             effective_params[colname] = condensed
@@ -1767,7 +1778,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
-        hashid_to_params = {}
+        hashid_to_effective_params = {}
         # import xdev
         # with xdev.embed_on_exception_context:
         if len(param_cols) > 0:
@@ -1794,20 +1805,17 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 param_subgroups = {tuple(): is_group_included}.items()
 
             for param_flags, subgroup in param_subgroups:
-                # valid_param_cols = list(ub.compress(param_cols, param_flags))
-                # valid_param_vals = list(ub.compress(param_vals, param_flags))
-                # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
-
-                valid_unique_params = unique_params[list(param_flags)].to_dict()
+                _flags = list(param_flags)
+                valid_unique_params = unique_params[_flags].to_dict()
 
                 hashid = hash_param(valid_unique_params, version=1)
-                hashid_to_params[hashid] = valid_unique_params
+                hashid_to_effective_params[hashid] = valid_unique_params
                 hashids_v1.loc[subgroup.index] = hashid
 
         # Update the index with an effective parameter hashid
         self.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         self.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-        self.hashid_to_params = ub.udict(hashid_to_params)
+        self.hashid_to_effective_params = ub.udict(hashid_to_effective_params)
         self.mappings = mappings
         self.effective_params = effective_params
 
