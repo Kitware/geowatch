@@ -242,9 +242,50 @@ class DataFrame(pd.DataFrame):
         varied = varied_value_counts(self, **kwargs)
         return varied
 
+    def shorten_columns(self, return_mapping=False, min_length=0):
+        """
+        Shorten column names by separating unique suffixes based on the "."
+        separator.
+
+        Args:
+            return_mapping (bool):
+                if True, returns the
+
+            min_length (int):
+                minimum size of the new column names in terms of parts.
+
+        Returns:
+            DataFrame | Tuple[DataFrame, Dict[str, str]]:
+                Either the new data frame with shortened column names or that
+                data frame and the mapping from old column names to new column
+                names.
+
+        Example:
+            >>> from geowatch.utils.util_pandas import DataFrame
+            >>> # If all suffixes are unique, then they are used.
+            >>> self = DataFrame.random(columns=['id', 'params.metrics.f1', 'params.metrics.acc', 'params.fit.model.lr', 'params.fit.data.seed'])
+            >>> new = self.shorten_columns()
+            >>> assert list(new.columns) == ['id', 'f1', 'acc', 'lr', 'seed']
+            >>> # Conflicting suffixes impose limitations on what can be shortened
+            >>> self = DataFrame.random(columns=['id', 'params.metrics.magic', 'params.metrics.acc', 'params.fit.model.lr', 'params.fit.data.magic'])
+            >>> new = self.shorten_columns()
+            >>> assert list(new.columns) == ['id', 'metrics.magic', 'metrics.acc', 'model.lr', 'data.magic']
+        """
+        import ubelt as ub
+        old_cols = self.columns
+        new_cols = shortest_unique_suffixes(old_cols, sep='.', min_length=min_length)
+        mapping = ub.dzip(old_cols, new_cols)
+        new = self.rename(columns=mapping)
+        if return_mapping:
+            return new, mapping
+        else:
+            return new
+
 
 def pandas_reorder_columns(df, columns):
-    # Use DataFrame.reorder instead
+    """
+    DEPRECATED: Use :func:`DataFrame.reorder` instead
+    """
     remain = df.columns.difference(columns)
     return df.reindex(columns=(columns + list(remain)))
 
@@ -303,6 +344,8 @@ def pandas_nan_eq(a, b):
 def pandas_shorten_columns(summary_table, return_mapping=False, min_length=0):
     """
     Shorten column names
+
+    DEPRECATED: Use :func:`DataFrame.shorten_columns` instead.
 
     Example:
         >>> from geowatch.utils.util_pandas import *  # NOQA

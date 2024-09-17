@@ -1011,12 +1011,14 @@ class AggregatorAnalysisMixin:
             a, b, c = duration_key.split('.')
             uuid_key = f'context.{b}.uuid'
 
+            # Later stages in the pipeline may be based on the same earlier
+            # result. We deduplicate to avoid double-counting resource usage
             chosen = []
             for _, group in table.groupby(uuid_key):
                 idx = group[duration_key].idxmax()
                 chosen.append(idx)
 
-            asec = util_time.coerce_timedelta('1second')
+            asec = util_time.timedelta(seconds=1)
 
             unique_rows = table.loc[chosen]
             row = {
@@ -1057,6 +1059,42 @@ class AggregatorAnalysisMixin:
     def report_resources(agg):
         import rich
         resource_summary_df = agg.resource_summary_table()
+
+        if 0:
+            # TODO: nicer report
+            import kwutil
+            import pandas as pd
+            def format_kwh(v):
+                return str(round(v, 2)) + ' kWh'
+
+            def format_co2(v):
+                return str(round(v, 2)) + ' CO2Kg'
+
+            def format_duration(v):
+                v = kwutil.timedelta.coerce(v, nan_policy='return-nan', none_policy='return-nan')
+                if pd.isnull(v):
+                    return v
+                return v.format(unit='auto', precision=2)
+
+            # Make more human friendly
+            new_groups = []
+            for resource, group in resource_summary_df.groupby('resource'):
+                if resource == 'kwh':
+                    group['total'] = group['total'].apply(format_kwh)
+                    group['mean'] = group['mean'].apply(format_kwh)
+                elif resource == 'duration':
+                    group['total'] = group['total'].apply(format_duration)
+                    group['mean'] = group['mean'].apply(format_duration)
+                elif resource == 'co2_kg':
+                    group['total'] = group['total'].apply(format_co2)
+                    group['mean'] = group['mean'].apply(format_co2)
+                else:
+                    raise NotImplementedError(resource)
+                new_groups.append(group)
+            friendly = pd.concat(new_groups).loc[resource_summary_df.index]
+            rich.print(friendly.to_string())
+            print(friendly.to_csv())
+
         rich.print(resource_summary_df.to_string())
 
     def make_summary_analysis(subagg, config):
@@ -1194,7 +1232,40 @@ class AggregatorAnalysisMixin:
         return all_metric_table
 
 
-class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
+class _AggregatorDeprecatedMixin:
+    """
+    Old property names for backwards compatability
+    """
+
+    @property
+    def params(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='params', type='property',
+            migration='use requested_params instead',
+            deprecate='0.15.0', error='1.0.0', remove='1.1.0',
+        )
+        return self.subtables['params']
+
+    @property
+    def hashid_to_params(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='hashid_to_params', type='property',
+            migration='use hashid_to_effective_params instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+        )
+        return self.hashid_to_effective_params
+
+    @property
+    def type(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='type', type='property',
+            migration='use node_type instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+        )
+        return self.node_type
+
+
+class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixin):
     """
     Stores multiple data frames that separate metrics, parameters, and other
     information using consistent pandas indexing. Can be filtered to a
@@ -1615,33 +1686,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     @property
     def index(self):
         return self.subtables['index']
-
-    @property
-    def params(self):
-        ub.schedule_deprecation(
-            modname='geowatch', name='params', type='property',
-            migration='use requested_params instead',
-            deprecate='0.15.0', error='1.0.0', remove='1.1.0',
-        )
-        return self.subtables['params']
-
-    @property
-    def hashid_to_params(self):
-        ub.schedule_deprecation(
-            modname='geowatch', name='hashid_to_params', type='property',
-            migration='use hashid_to_effective_params instead',
-            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
-        )
-        return self.hashid_to_effective_params
-
-    @property
-    def type(self):
-        ub.schedule_deprecation(
-            modname='geowatch', name='type', type='property',
-            migration='use node_type instead',
-            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
-        )
-        return self.node_type
 
     @property
     def requested_params(self):
