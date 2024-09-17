@@ -39,7 +39,7 @@ class UnpackModelCLI(scfg.DataConfig):
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + escape(ub.urepr(config, nl=1)))
         package_fpath = config.fpath
-        unpack_model(package_fpath)
+        unpack_model(package_fpath, dst_dpath=config.dst_dpath)
 
 
 def unpack_model(package_fpath, dst_dpath=None):
@@ -161,7 +161,14 @@ def extract_package_contents(package_fpath):
     # Construct a checkpoint the repackager will accept.
     checkpoint = {}
     checkpoint['state_dict'] = raw_module.state_dict()
-    checkpoint['hyper_parameters'] = raw_module.hparams
+    try:
+        # TODO: remove numpy arrays if possible
+        # They can cause read errors if there are binary incompatabilities
+        # todo: make configurable?
+        import kwutil
+        checkpoint['hyper_parameters'] = kwutil.Json.ensure_serializable(raw_module.hparams)
+    except Exception:
+        checkpoint['hyper_parameters'] = raw_module.hparams
 
     package_header = utils.load_model_header(package_fpath)
     config_content = package_header.get('config', None)

@@ -142,9 +142,10 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
                 'channel': channel,
             }
             if stem_stats:
+                import numpy as np
                 sensor_stat.update({
-                    'mean': stats['mean'].ravel().tolist(),
-                    'std': stats['std'].ravel().tolist(),
+                    'mean': np.asarray(stats['mean']).ravel().tolist(),
+                    'std': np.asarray(stats['std']).ravel().tolist(),
                 })
             known_input_stats.append(sensor_stat)
 

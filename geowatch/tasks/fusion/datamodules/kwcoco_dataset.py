@@ -665,7 +665,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                     p1, p2 = arg.split(',')
                     arg = [int(p1), int(p2)]
             if isinstance(arg, list):
-                assert len(arg) == 2
+                assert len(arg) == 2, 'arglist should be len 2'
                 arg = [int(arg[0]), int(arg[1])]
             if isinstance(arg, int):
                 arg = [arg, arg]
@@ -1255,7 +1255,7 @@ class GetItemMixin(TruthMixin):
             img = coco_dset.index.imgs[gid]
 
             stream_sample = gid_to_sample[gid]
-            assert len(stream_sample) > 0
+            assert len(stream_sample) > 0, 'should have at least one stream'
 
             # Collect image data from all modes within this frame
             mode_to_imdata = {}
@@ -1572,7 +1572,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.videos[vidid]
         except KeyError:
             # hack for single image datasets
-            assert len(target_['gids']) == 1
+            assert len(target_['gids']) == 1, 'should have only 1 image id'
             gid = target_['gids'][0]
             video = coco_dset.index.imgs[gid]
 
@@ -2169,7 +2169,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.videos[vidid]
         except KeyError:
             # Hack for loose images
-            assert len(target_['gids']) == 1
+            assert len(target_['gids']) == 1, 'should have only 1 image id'
             gid = target_['gids'][0]
             video = coco_dset.index.imgs[gid]
             is_loose_img = True
@@ -3366,7 +3366,7 @@ class MiscMixin:
         visualizations cleaner).
         """
         if model is not None:
-            assert requested_tasks is None
+            assert requested_tasks is None, 'requested tasks should be none'
             if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
             if hasattr(model, 'predictable_classes'):
