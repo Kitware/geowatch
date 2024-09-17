@@ -161,25 +161,25 @@ class AggregateLoader(DataConfig):
                 eval_type_to_results = build_tables(
                     root_dpath, dag, io_workers, eval_nodes,
                     cache_resolved_results=cache_resolved_results)
-                for type, results in eval_type_to_results.items():
+                for node_type, results in eval_type_to_results.items():
                     table = pd.concat(list(results.values()), axis=1)
-                    eval_type_to_tables[type].append(table)
+                    eval_type_to_tables[node_type].append(table)
             if target.is_file():
                 # Assume CSV file
                 table = pd.read_csv(target, low_memory=False)
                 if len(table):
-                    type = table['node'].iloc[0]
-                    eval_type_to_tables[type].append(table)
+                    node_type = table['node'].iloc[0]
+                    eval_type_to_tables[node_type].append(table)
 
         eval_type_to_aggregator = {}
-        for type, tables in eval_type_to_tables.items():
+        for eval_type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
                              display_metric_cols=config.display_metric_cols,
                              dag=dag)
             agg.build()
-            eval_type_to_aggregator[type] = agg
+            eval_type_to_aggregator[eval_type] = agg
         return eval_type_to_aggregator
 
 
@@ -263,8 +263,8 @@ def main(cmdline=True, **kwargs):
     """
     Aggregate entry point.
 
-    Loads results for each evaluation type, constructs aggregator objects, and
-    then executes user specified commands that could include filtering,
+    Loads results for each evaluation node_type, constructs aggregator objects,
+    and then executes user specified commands that could include filtering,
     macro-averaging, reporting, plotting, etc...
 
     Ignore:
@@ -354,7 +354,7 @@ def run_aggregate(config):
         if embedding_modpath is not None:
 
             print(f'eval_type_to_aggregator = {ub.urepr(eval_type_to_aggregator, nl=1)}')
-            for type, agg in eval_type_to_aggregator.items():
+            for node_type, agg in eval_type_to_aggregator.items():
                 print(f'agg={agg}')
 
             embed_module = ub.import_module_from_name('xdev')
@@ -379,7 +379,7 @@ def run_aggregate(config):
             num_results = len(agg)
             if num_results > 0:
                 agg.output_dpath.ensuredir()
-                fname = f'{agg.type}_{hostname}_{num_results:05d}_{timestamp}.csv.zip'
+                fname = f'{agg.node_type}_{hostname}_{num_results:05d}_{timestamp}.csv.zip'
                 csv_fpath = agg.output_dpath / fname
                 print(f'Exported tables to: {csv_fpath}')
                 agg.table.to_csv(csv_fpath, index_label=False)
@@ -873,9 +873,9 @@ class AggregatorAnalysisMixin:
 
                     if region_id in _agg.macro_key_to_regions:
                         macro_regions = _agg.macro_key_to_regions[region_id]
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id} = {macro_regions}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.node_type}, {region_id} = {macro_regions}{ref_text}')
                     else:
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.node_type}, {region_id}{ref_text}')
 
                     _summary_table = util_pandas.DataFrame(summary_table)
                     _summary_table_csv = _summary_table
@@ -1082,8 +1082,8 @@ class AggregatorAnalysisMixin:
         hashids.
         """
         assert agg.output_dpath is not None
-        assert agg.type is not None
-        base_dpath = (agg.output_dpath / 'param_links' / agg.type)
+        assert agg.node_type is not None
+        base_dpath = (agg.output_dpath / 'param_links' / agg.node_type)
         byregion_dpath = (base_dpath / 'by_region').ensuredir()
         byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
         print('base_dpath = {}'.format(ub.urepr(base_dpath, nl=1)))
@@ -1204,7 +1204,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     Set config based on your problem
     """
     def __init__(agg, table, output_dpath=None,
-                 type=None,
+                 node_type=None,
                  primary_metric_cols='auto',
                  display_metric_cols='auto',
                  dag=None):
@@ -1218,17 +1218,17 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             output_dpath (None | PathLike):
                 Path where output aggregate results should be written
 
-            type (str | None):
+            node_type (str | None):
                 should not need to specify this anymore. This should just be
                 the "node" column in the table.
 
             primary_metric_cols (List[str] | Literal['auto']):
-                if "auto", then the "type" must be known by the global helpers.
+                if "auto", then the "node_type" must be known by the global helpers.
                 Otherwise list the metric columns in the priority that should
                 be used to rank the rows.
 
             display_metric_cols (List[str] | Literal['auto']):
-                if "auto", then the "type" must be known by the global helpers.
+                if "auto", then the "node_type" must be known by the global helpers.
                 Otherwise list the metric columns in the order they should be
                 displayed (after the primary metrics).
 
@@ -1244,7 +1244,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             table = util_pandas.DataFrame(table)
 
         agg.table = table
-        agg.type = type
+        agg.node_type = node_type
         agg.dag = dag
         agg.subtables = None
         agg.config = {
@@ -1375,7 +1375,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     # def __export(agg):
     #     ...
     #     agg.table
-    #     fname = f'{agg.type}_{agg.output_dpath.parent.name}.csv'
+    #     fname = f'{agg.node_type}_{agg.output_dpath.parent.name}.csv'
     #     agg.table.to_csv(fpath, index_label=False)
     #     fpath = 'bas_results_2023-01.csv.zip'
     #     agg.table.to_csv(fpath, index_label=False)
@@ -1389,7 +1389,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.__dict__.update(**agg.config)
 
         if len(agg.table) == 0:
-            agg.type = 'unknown-type-empty-table'
+            agg.node_type = 'unknown-node_type-empty-table'
             return
 
         _table = util_pandas.DotDictDataFrame(agg.table)
@@ -1413,16 +1413,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             raise Exception(str(unknown_cols))
         agg.subtables = subtables
 
-        if agg.type is None:
-            agg.type = agg.table['node'].iloc[0]
+        if agg.node_type is None:
+            agg.node_type = agg.table['node'].iloc[0]
 
-        metrics_prefix = f'metrics.{agg.type}'
-        # params_prefix = f'params.{agg.type}'
+        metrics_prefix = f'metrics.{agg.node_type}'
+        # params_prefix = f'params.{agg.node_type}'
         if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
             try:
                 _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
             except Exception:
-                node = agg.dag.nodes[agg.type]
+                node = agg.dag.nodes[agg.node_type]
                 if hasattr(node, '_default_metrics'):
                     _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
                     # should we prevent double prefixes?
@@ -1476,7 +1476,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.macro_compatible = agg.find_macro_comparable()
 
     def __nice__(self):
-        return f'{self.type}, n={len(self)}'
+        return f'{self.node_type}, n={len(self)}'
 
     def __len__(self):
         return len(self.table)
@@ -1598,7 +1598,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     def compress(agg, flags):
         new_table = agg.table[flags].copy()
-        new_agg = Aggregator(new_table, type=agg.type,
+        new_agg = Aggregator(new_table, node_type=agg.node_type,
                              dag=agg.dag, output_dpath=agg.output_dpath,
                              **agg.config)
         new_agg.build()
@@ -1635,6 +1635,15 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         return self.hashid_to_effective_params
 
     @property
+    def type(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='type', type='property',
+            migration='use node_type instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+        )
+        return self.node_type
+
+    @property
     def requested_params(self):
         return self.subtables['params']
 
@@ -1651,10 +1660,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         try:
             if self.dag is not None:
-                node = self.dag.nodes[self.type]
+                node = self.dag.nodes[self.node_type]
                 vantage_points = node.default_vantage_points
         except Exception:
-            vantage_points = SMART_HELPER.default_vantage_points(self.type)
+            vantage_points = SMART_HELPER.default_vantage_points(self.node_type)
         return vantage_points
 
     def build_effective_params(self):

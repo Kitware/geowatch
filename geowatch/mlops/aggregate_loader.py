@@ -339,7 +339,7 @@ def load_result_resolved(node_dpath, node=None, dag=None):
         >>> # eval nodes grouped in eval/flat, so enumerate those
         >>> node_type_dpaths = list(mlops_dpath.glob('eval/flat/*'))
         >>> node_type_dpaths += list(mlops_dpath.glob('pred/flat/*'))
-        >>> # For each eval type, choose a node in it.
+        >>> # For each eval node_type, choose a node in it.
         >>> for node_type_dpath in node_type_dpaths:
         >>>     for node_dpath in node_type_dpath.ls():
         >>>         if len(node_dpath.ls()) > 2:
@@ -350,7 +350,7 @@ def load_result_resolved(node_dpath, node=None, dag=None):
         >>>     rich.print(f'flat_resolved = {ub.urepr(flat_resolved, nl=1)}')
 
     Ignore:
-        ## OR If you know the type of node you want
+        ## OR If you know the node_type of node you want
         from geowatch.mlops.aggregate_loader import *  # NOQA
         import geowatch
         import rich
