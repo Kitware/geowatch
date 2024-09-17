@@ -19,7 +19,7 @@ class UnpackModelCLI(scfg.DataConfig):
     -------
     python -m geowatch/mlops/repackager
     """
-    fpath = scfg.Value(None, help='the path to a torch package')
+    fpath = scfg.Value(None, help='the path to a torch package', position=1)
     dst_dpath = scfg.Value(None, help='Path to a destination directory to write to. If unspecfied chooses one.')
 
     @classmethod
@@ -90,6 +90,7 @@ def unpack_model(package_fpath, dst_dpath=None):
     from kwutil.util_yaml import Yaml
     import torch
 
+    package_fpath = ub.Path(package_fpath)
     package_content = extract_package_contents(package_fpath)
 
     if dst_dpath is None:
