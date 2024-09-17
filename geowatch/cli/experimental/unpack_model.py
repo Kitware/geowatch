@@ -20,6 +20,7 @@ class UnpackModelCLI(scfg.DataConfig):
     python -m geowatch/mlops/repackager
     """
     fpath = scfg.Value(None, help='the path to a torch package')
+    dst_dpath = scfg.Value(None, help='Path to a destination directory to write to. If unspecfied chooses one.')
 
     @classmethod
     def main(cls, cmdline=1, **kwargs):
