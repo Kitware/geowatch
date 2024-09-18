@@ -37,4 +37,4 @@ Also need to register in ``~/code/geowatch/setup.py`` so it is included in the w
 
     cd "$HOME"/code/geowatch/geowatch_tpl
 
-    python snapshot_submodules.py
+    python -m geowatch_tpl.snapshot_submodules

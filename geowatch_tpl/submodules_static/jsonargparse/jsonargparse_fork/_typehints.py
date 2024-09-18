@@ -684,12 +684,14 @@ def get_subclasses_from_type(typehint, names=True, subclasses=None) -> tuple:
     return tuple(subclasses)
 
 
-def raise_unexpected_value(message: str, val: Any = inspect._empty, exception: Optional[Exception] = None) -> NoReturn:
+def raise_unexpected_value(message: str, val: Any = inspect._empty, exception: Optional[Exception] = None, warn: bool = False) -> NoReturn:
     if val is not inspect._empty:
         message += f". Got value: {val}"
-    import warnings
-    warnings.warn(message)
-    # raise ValueError(message) from exception
+    if warn:
+        import warnings
+        warnings.warn(f'msg={message}: ex={exception}')
+    else:
+        raise ValueError(message) from exception
 
 
 def raise_union_unexpected_value(uniontype, val: Any, exceptions: List[Exception]) -> NoReturn:
@@ -731,6 +733,8 @@ def adapt_typehints(
     subtypehints = getattr(typehint, "__args__", None)
     typehint_origin = get_typehint_origin(typehint) or typehint
 
+    DISABLE_SIMPLE_TYPE_ERRORS = 1
+
     # Any
     if typehint == Any:
         type_val = type(val)
@@ -747,7 +751,7 @@ def adapt_typehints(
             subtypes = Union[tuple({type(v) for v in subtypehints})]
             val = adapt_typehints(val, subtypes, **adapt_kwargs)
         if val not in subtypehints:
-            raise_unexpected_value(f"Expected a {typehint}", val)
+            raise_unexpected_value(f"Expected a {typehint}", val, warn=DISABLE_SIMPLE_TYPE_ERRORS)
 
     # Basic types
     elif typehint in leaf_types:
@@ -757,7 +761,7 @@ def adapt_typehints(
         if typehint is float and isinstance(val, int) and not isinstance(val, bool):
             val = float(val)
         if not isinstance(val, typehint) or (typehint in (int, float) and isinstance(val, bool)):
-            raise_unexpected_value(f"Expected a {typehint}", val)
+            raise_unexpected_value(f"Expected a {typehint}", val, warn=DISABLE_SIMPLE_TYPE_ERRORS)
 
     # Annotated
     elif is_annotated(typehint):
