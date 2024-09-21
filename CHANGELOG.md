@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 * Vendored a fork of jsonargparse in geowatch-tpl to maintain compatibility with scriptconfig
+* Changed instances of `__config__` to `__cli__`
 
 
 ## Version 0.18.3 - Released 2024-09-10

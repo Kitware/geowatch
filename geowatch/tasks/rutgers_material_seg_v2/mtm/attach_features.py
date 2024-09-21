@@ -101,7 +101,7 @@ class MaterialsPredictConfig(scfg.DataConfig):
                             '''))
 
 
-__config__ = MaterialsPredictConfig
+__cli__ = MaterialsPredictConfig
 
 
 def make_material_predictions(eval_loader,

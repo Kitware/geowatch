@@ -18,17 +18,17 @@ modal.__command__ = 'mlops'
 # modal.__group__ = 'learning'
 
 
-modal.register(manager.__config__)
-modal.register(aggregate.__config__)
-modal.register(schedule_evaluation.__config__)
+modal.register(manager.__cli__)
+modal.register(aggregate.__cli__)
+modal.register(schedule_evaluation.__cli__)
 
 
 def main(cmdline=None, **kwargs):
     return modal.run(strict=True)
 
 
-__config__ = modal
-__config__.main = main
+__cli__ = modal
+__cli__.main = main
 
 
 if __name__ == '__main__':

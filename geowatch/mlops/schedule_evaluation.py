@@ -437,8 +437,8 @@ def _auto_gpus():
     return GPUS
 
 
-__config__ = ScheduleEvaluationConfig
-__config__.main = main
+__cli__ = ScheduleEvaluationConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

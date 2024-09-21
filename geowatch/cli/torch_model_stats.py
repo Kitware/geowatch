@@ -283,7 +283,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     return row
 
 
-__config__ = TorchModelStatsConfig
+__cli__ = TorchModelStatsConfig
 
 if __name__ == '__main__':
     """

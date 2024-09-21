@@ -53,7 +53,7 @@ class WatchCocoStats(scfg.DataConfig):
             >>> dset2 = geowatch.coerce_kwcoco('vidshapes8')
             >>> kw = dict(src=[dset1.fpath, dset2.fpath])
             >>> cmdline = 0
-            >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
+            >>> watch_coco_stats.__cli__.main(cmdline=cmdline, **kw)
 
         Example:
             >>> from geowatch.cli import watch_coco_stats
@@ -61,7 +61,7 @@ class WatchCocoStats(scfg.DataConfig):
             >>> dset1 = geowatch.coerce_kwcoco('geowatch-msi', geodata=True, dates=True, heatmap=True)
             >>> kw = dict(src=dset1.fpath)
             >>> cmdline = 0
-            >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
+            >>> watch_coco_stats.__cli__.main(cmdline=cmdline, **kw)
         """
         config = WatchCocoStats.cli(data=kw, cmdline=cmdline, strict=True)
         import rich
@@ -428,8 +428,8 @@ def coco_sensorchan_gsd_stats(coco_dset):
     return sensorchan_gsd_stats
 
 
-__cli__ = __config__ = WatchCocoStats
-main = __config__.main
+__cli__ = WatchCocoStats
+main = __cli__.main
 
 if __name__ == '__main__':
     """

@@ -129,7 +129,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
 
-__config__ = CleanGeotiffConfig
+__cli__ = CleanGeotiffConfig
 
 
 def main(cmdline=1, **kwargs):

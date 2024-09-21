@@ -329,7 +329,7 @@ class PrepareTA2Config(CMDQueueConfig):
         return func
 
 
-__config__ = PrepareTA2Config
+__cli__ = PrepareTA2Config
 
 
 def _justkeys(d):
@@ -337,7 +337,7 @@ def _justkeys(d):
     # return d
 
 
-@__config__._register_main
+@__cli__._register_main
 def main(cmdline=False, **kwargs):
     """
 

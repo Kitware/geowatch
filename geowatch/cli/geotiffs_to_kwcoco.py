@@ -345,7 +345,7 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     return imgs
 
 
-__config__ = KWCocoFromGeotiffConfig
+__cli__ = KWCocoFromGeotiffConfig
 
 
 if __name__ == '__main__':

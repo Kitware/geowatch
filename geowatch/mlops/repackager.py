@@ -60,8 +60,8 @@ def main(cmdline=True, **kwargs):
     repackage(checkpoint_fpath, strict=config.strict, force=config.force)
 
 
-__config__ = RepackageConfig
-__config__.main = main
+__cli__ = RepackageConfig
+__cli__.main = main
 
 
 def repackage(checkpoint_fpath, force=False, strict=False, dry=False):

@@ -2316,8 +2316,8 @@ def nan_eq(a, b):
         return a == b
 
 
-__config__ = AggregateEvluationConfig
-__config__.main = main
+__cli__ = AggregateEvluationConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

@@ -602,8 +602,8 @@ def geopandas_shape_stats(df):
     return df
 
 
-__config__ = GeojsonSiteStatsConfig
-__config__.main = main
+__cli__ = GeojsonSiteStatsConfig
+__cli__.main = main
 
 if __name__ == '__main__':
     """
