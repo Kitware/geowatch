@@ -1088,7 +1088,15 @@ class ProcessNode(Node):
         if config is None:
             config = {}
         config = _fixup_config_serializability(config)
-        self.enabled = config.pop('enabled', enabled)
+        if 'enabled' in config:
+            ub.schedule_deprecation(
+                modname='geowatch', name='enabled',
+                type='mlops special parameter',
+                migration='use __enabled__ instead',
+                deprecate='0.18.4', error='1.0.0', remove='1.1.0')
+        enabled = config.pop('enabled', enabled)
+        enabled = config.pop('__enabled__', enabled)
+        self.enabled = enabled
         # Special case for process specific slurm options
         self.__slurm_options__ = config.pop('__slurm_options__', '{}')
         self.config = ub.udict(config)

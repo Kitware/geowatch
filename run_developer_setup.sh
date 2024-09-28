@@ -60,38 +60,40 @@ apt_ensure(){
     Args:
         *ARGS : one or more requested packages
 
+    Environment:
+        UPDATE : if this is populated also runs and apt update
+
     Example:
         apt_ensure git curl htop
-
-    Ignore:
-        REQUESTED_PKGS=(git curl htop)
     "
     # Note the $@ is not actually an array, but we can convert it to one
     # https://linuxize.com/post/bash-functions/#passing-arguments-to-bash-functions
     ARGS=("$@")
     MISS_PKGS=()
     HIT_PKGS=()
+    _SUDO=""
+    if [ "$(whoami)" != "root" ]; then
+        # Only use the sudo command if we need it (i.e. we are not root)
+        _SUDO="sudo "
+    fi
     for PKG_NAME in "${ARGS[@]}"
     do
-        #apt_ensure_single $EXE_NAME
-        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" || true)
-        if [ "$RESULT" == "" ]; then
-            echo "Do not have PKG_NAME='$PKG_NAME'"
-            # shellcheck disable=SC2268,SC2206
-            MISS_PKGS=(${MISS_PKGS[@]} "$PKG_NAME")
-        else
+        # Check if the package is already installed or not
+        if dpkg-query -W -f='${Status}' "$PKG_NAME" 2>/dev/null | grep -q "install ok installed"; then
             echo "Already have PKG_NAME='$PKG_NAME'"
-            # shellcheck disable=SC2268,SC2206
-            HIT_PKGS=(${HIT_PKGS[@]} "$PKG_NAME")
+            HIT_PKGS+=("$PKG_NAME")
+        else
+            echo "Do not have PKG_NAME='$PKG_NAME'"
+            MISS_PKGS+=("$PKG_NAME")
         fi
     done
 
-    if [ "${#MISS_PKGS}" -gt 0 ]; then
-        if type sudo ; then
-            sudo apt install -y "${MISS_PKGS[@]}"
-        else
-            apt install -y "${MISS_PKGS[@]}"
+    # Install the packages if any are missing
+    if [ "${#MISS_PKGS[@]}" -gt 0 ]; then
+        if [ "${UPDATE}" != "" ]; then
+            $_SUDO apt update -y
         fi
+        DEBIAN_FRONTEND=noninteractive $_SUDO apt install -y "${MISS_PKGS[@]}"
     else
         echo "No missing packages"
     fi

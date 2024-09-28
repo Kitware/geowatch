@@ -42,6 +42,29 @@ Example:
     >>> kwplot.imshow(canvas)
     >>> kwplot.show_if_requested()
 
+Example:
+    >>> # Basic Data Sampling
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> import geowatch
+    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> self = KWCocoVideoDataset(sampler, window_dims='full', channels='r|g|b')
+    >>> self.disable_augmenter = True
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
+    >>> item = self[index]
+    >>> # Summarize batch item in text
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=2))
+    >>> # Draw batch item
+    >>> canvas = self.draw_item(item)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
 
 Example:
     >>> # Demo toy data without augmentation
@@ -204,8 +227,14 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     chip_dims = scfg.Value(128, alias=['window_space_dims', 'window_dims', 'chip_size'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Spatial height/width per batch. If given as a single number,
-        used as both width and height.
+        The spatial window dimension (i.e. width and height) used to sample
+        from the images. This is the window that is "slid over" images in the
+        dataset when building the spacetime grid.  If given as a number it is
+        used as both width and height. Can also be a width, height tuple.  Can
+        also be a string code. Valid codes are "full", which always read the
+        entire image.
+
+        NOTE: The main key will change to window_space_dims in the future.
         '''), nargs='+')
     fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
         '''
@@ -258,7 +287,11 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # TIME OPTIONS
     ##############
 
-    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help='number of temporal samples (i.e. frames) per batch')
+    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help=ub.paragraph(
+        '''
+        number of temporal samples (i.e. frames) per batch.
+        NOTE: The default of this will change to 1 in the future.
+        '''))
     time_sampling = scfg.Value('contiguous', type=str, group=TIME_GROUP, help=ub.paragraph(
         '''
         Strategy for expanding the time window across non-contiguous
@@ -3542,6 +3575,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
     """
+    __scriptconfig__ = KWCocoVideoDatasetConfig
 
     @profile
     def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):

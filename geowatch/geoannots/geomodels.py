@@ -1434,6 +1434,15 @@ class _Feature(ub.NiceRepr, geojson.Feature):
             self.properties['mgrs'] = mgrs_code
         return self
 
+    def _fix_geojson_geometry(self):
+        """
+        Turn any shapely objects into serializable geojson
+        """
+        geometry =  self['geometry']
+        if not isinstance(geometry, dict):
+            import geojson
+            self['geometry'] = geojson.loads(geojson.dumps(geometry))
+
 
 class Point(_Feature):
     ...
@@ -1814,10 +1823,41 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
             raise TypeError(type(data))
         return self
 
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site header in this region model.
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry
+
+            **kwargs :
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteHeader
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> site_header = SiteHeader.random(rng=0)
+            >>> print('site_header = {}'.format(ub.urepr(site_header, nl=2)))
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return site.header
+
 
 class Observation(_Feature):
     """
     The observation body feature of a site model.
+
+    Example:
+        >>> from geowatch.geoannots.geomodels import *  # NOQA
+        >>> Observation()
     """
     _model_cls = SiteModel
     _feat_type = SiteModel._body_type
@@ -1837,6 +1877,58 @@ class Observation(_Feature):
     @property
     def observation_date(self):
         return util_time.coerce_datetime(self['properties']['observation_date'])
+
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new observation in this region model.
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new observation
+
+            **kwargs :
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            Observation
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> obs = Observation.random(rng=0)
+            >>> print(f'obs={obs}')
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return list(site.observations())[0]
+
+    @classmethod
+    def empty(cls):
+        """
+        Create an empty observation
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> self = Observation.empty()
+            >>> print(f'self = {ub.urepr(self, nl=2)}')
+        """
+        self = cls(
+            properties={
+                'type': 'observation',
+                'observation_date': None,  # e.g. '2011-05-28',
+                'source': None,  # e.g. 'demosat-220110528T132754',
+                'sensor_name': None,  # e.g. 'demosat-2',
+                'current_phase': None,  # e.g. "No Activity".
+                'is_occluded': None,  # quirk / note: bool should be a string
+                'is_site_boundary': None,  # quirk / note: bool should be a string
+                'score': None,
+            },
+            geometry=None,
+        )
+        return self
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
