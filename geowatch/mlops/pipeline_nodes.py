@@ -1704,8 +1704,12 @@ class ProcessNode(Node):
         if not self.final_out_paths:
             return None
         import shlex
-        quoted_paths = [shlex.quote(str(p))
-                        for p in self.final_out_paths.values()]
+        if self.primary_out_key is not None:
+            quoted_paths = [shlex.quote(str(p))
+                            for p in [self.final_out_paths[self.primary_out_key]]]
+        else:
+            quoted_paths = [shlex.quote(str(p))
+                            for p in self.final_out_paths.values()]
         # Make the command look nicer
         tmp_paths = [f'-e {p}' for p in quoted_paths]
         tmp_paths = [p + ' -a' for p in tmp_paths[:-1]] + tmp_paths[-1:]
