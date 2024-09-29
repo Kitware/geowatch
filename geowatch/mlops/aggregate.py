@@ -1026,7 +1026,10 @@ class AggregatorAnalysisMixin:
             # result. We deduplicate to avoid double-counting resource usage
             chosen = []
             for _, group in table.groupby(uuid_key):
-                idx = group[duration_key].idxmax()
+                try:
+                    idx = group[duration_key].idxmax()
+                except TypeError:
+                    idx = 0
                 chosen.append(idx)
 
             asec = util_time.timedelta(seconds=1)
@@ -1035,10 +1038,20 @@ class AggregatorAnalysisMixin:
             row = {
                 'node': b,
                 'resource': c,
-                'total': unique_rows[duration_key].sum().round(asec),
-                'mean': unique_rows[duration_key].mean().round(asec),
                 'num': len(chosen),
             }
+            row['total'] = unique_rows[duration_key].sum()
+            row['mean'] = unique_rows[duration_key].mean()
+
+            try:
+                row['total'] = row['total'].round(asec)
+            except AttributeError:
+                ...
+            try:
+                row['mean'] = row['mean'].round(asec)
+            except AttributeError:
+                ...
+
             resource_summary.append(row)
 
             co2_key = f'{a}.{b}.co2_kg'

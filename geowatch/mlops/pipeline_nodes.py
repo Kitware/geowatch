@@ -102,6 +102,8 @@ class Pipeline:
     def submit(self, executable, **kwargs):
         """
         Dynamically create a new unique process node and add it to the dag
+
+        Is this ever used? May be able to simplify and remove this.
         """
         name = kwargs.get('name', None)
         if name is not None:
@@ -290,6 +292,12 @@ class Pipeline:
                 node.configure(config=node.config, cache=cache)
 
     def print_process_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
+        """
+        Draw the networkx process graph, which only shows if there exists
+        a connection between processes, and does not show details of which
+        output connects to which input.  See :func:`PipelineDAG.print_io_graph`
+        for that level of detail.
+        """
         import rich
         from cmd_queue.util import util_networkx
         self._ensure_clean()
@@ -299,6 +307,10 @@ class Pipeline:
         util_networkx.write_network_text(self.proc_graph, path=rich.print, end='', vertical_chains=True)
 
     def print_io_graph(self, shrink_labels=1, show_types=0, smart_colors=0):
+        """
+        Draw the networkx IO graph, which shows the connections between
+        the inputs and the outputs of the processes in the pipeline.
+        """
         import rich
         from cmd_queue.util import util_networkx
         self._ensure_clean()
@@ -306,6 +318,21 @@ class Pipeline:
         print('')
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='', vertical_chains=True)
+
+    def print_commands(self, **kwargs):
+        """
+        Helper (mostly for debugging) to show the commands for the current
+        pipeline configuration. This involves making a cmdqueue instance, which
+        is the real object that knows how to structure the commmand sequence.
+
+        Args:
+            **kwargs:
+                See :func:`cmd_queue.base_queue.Queue.print_commands`
+                with_status=False, with_gaurds=False, with_locks=1,
+                exclude_tags=None, style='colors', **kwargs
+        """
+        queue = self.make_queue()['queue']
+        queue.print_commands(**kwargs)
 
     def print_graphs(self, shrink_labels=1, show_types=0, smart_colors=0):
         """
@@ -1024,7 +1051,7 @@ class ProcessNode(Node):
             #     'gpus': 0,
             # },
             'config': {},
-            'in_paths': {},
+            'in_paths': {},  # should this be a set instead?
             'out_paths': {},
             'perf_params': {},
             'algo_params': {},
@@ -1067,6 +1094,111 @@ class ProcessNode(Node):
         self._pred_nodes_without_io_connection = []
 
         self.configure(self.config)
+
+    @classmethod
+    def _from_scriptconfig(cls, config_cls, **kwargs):
+        """
+        EXPERIMENTAL
+
+        Wrap a scriptconfig object to define a baseline process node.
+
+        Ignore:
+            >>> import scriptconfig as scfg
+            >>> class Step1CLI(scfg.DataConfig):
+            >>>     src = scfg.Value(None, tags=['in_path', 'primary'])
+            >>>     dst = scfg.Value('step1_output.txt', tags=['out_path', 'primary'])
+            >>>     extra_dpath = scfg.Value('some_dpath', tags=['out_path'])
+            >>>     optional_path = scfg.Value(None, tags=['out_path'])
+            >>>     foo = scfg.Value(None, tags=['algo_param'])
+            >>>     bar = scfg.Value(None, tags=['algo_param'])
+            >>>     workers = scfg.Value(None, tags=['perf_param'])
+            >>>     verbose = scfg.Value(None, tags=['perf_param'])
+            >>> #
+            >>>     @classmethod
+            >>>     def main(cls, cmdline=1, **kwargs):
+            >>>         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            >>>         print('config = ' + ub.urepr(config, nl=1))
+            >>> #
+            >>> class Step2CLI(scfg.DataConfig):
+            >>>     src = scfg.Value(None, tags=['in_path', 'primary'])
+            >>>     dst = scfg.Value('step2_output.txt', tags=['out_path', 'primary'])
+            >>>     thresh = 0.5
+            >>>     io_workers = scfg.Value(None, tags=['perf_param'])
+            >>>     verbose = scfg.Value(None, tags=['perf_param'])
+            >>> #
+            >>>     @classmethod
+            >>>     def main(cls, cmdline=1, **kwargs):
+            >>>         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            >>>         print('config = ' + ub.urepr(config, nl=1))
+            >>> #
+            >>> config_cls = Step1CLI
+            >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
+            >>> step1 = self = ProcessNode._from_scriptconfig(Step1CLI, executable='python step1.py', name='step1')
+            >>> step2 = ProcessNode._from_scriptconfig(Step2CLI, executable='python step2.py', name='step2')
+            >>> step1.outputs['dst'].connect(step2.inputs['src'])
+            >>> print(step1.command)
+            >>> print(step2.command)
+            >>> nodes = [step1, step2]
+            >>> dag = Pipeline(nodes)
+            >>> dag.configure(
+            >>> )
+            >>> dag.print_io_graph()
+            >>> dag.print_commands(with_status=0, exclude_tags='boilerplate')
+            >>> param_basis = {
+            >>>     'step1.foo': [1, 2, 3],
+            >>>     'step2.thresh': [0.2],
+            >>> }
+            >>> param_grid = list(ub.named_product(**param_basis))
+            >>> queue = dag.make_queue()['queue']
+            >>> for config in param_grid:
+            >>>     dag.configure(config)
+            >>>     dag.submit_jobs(queue)
+            >>> queue.print_commands(with_status=0, exclude_tags='boilerplate')
+        """
+        tag_to_group = {
+            'in_path': 'in_paths',
+            'in': 'in_paths',
+            'out_path': 'out_paths',
+            'out': 'out_paths',
+            'algo_param': 'algo_params',
+            'algo': 'algo_params',
+            'perf_param': 'perf_params',
+            'perf': 'perf_params',
+
+        }
+        path_kwargs = {
+            'in_paths': set(),
+            'out_paths': {},
+            'perf_params': {},
+            'algo_params': {},
+        }
+        for key, value in config_cls.__default__.items():
+            if hasattr(value, 'tags'):
+                tags = set(value.tags)
+                have_tags = tag_to_group.keys() & tags
+                assert len(have_tags) <= 1
+                have_groups = {tag_to_group[t] for t in have_tags}
+                if 'primary' in tags and 'out_paths' in have_groups:
+                    path_kwargs['primary_out_key'] = key
+
+                for group_key in have_groups:
+                    if group_key == 'in_paths':
+                        path_kwargs[group_key].add(key)
+                    else:
+                        path_kwargs[group_key][key] = value.value
+
+        name = kwargs.get('name', None)
+        if name is None:
+            name = getattr(config_cls, '__command__', name)
+        if name is None:
+            name = config_cls.__name__
+        node_kwargs = {}
+        node_kwargs['name'] = name
+        node_kwargs['executable'] = '<EXECUTABLE UNSPECIFIED>'
+        node_kwargs.update(path_kwargs)
+        node_kwargs.update(kwargs)
+        self = cls(**node_kwargs)
+        return self
 
     @profile
     def configure(self, config=None, cache=True, enabled=True):
@@ -1277,8 +1409,10 @@ class ProcessNode(Node):
         else:
             out_paths = self.out_paths
         template_node_dpath = self.template_node_dpath
+        # Can we handle the case where one out path isn't specified, or is
+        # given a special non-string value?
         template_out_paths = {
-            k: str(template_node_dpath / v)
+            k: None if v is None else str(template_node_dpath / v)
             for k, v in out_paths.items()
         }
         return template_out_paths
@@ -1294,7 +1428,7 @@ class ProcessNode(Node):
         condensed = self.condensed
         template_out_paths = self.template_out_paths
         final_out_paths = {
-            k: ub.Path(v.format(**condensed))
+            k: None if v is None else ub.Path(v.format(**condensed))
             for k, v in template_out_paths.items()
         }
         # The use config is allowed to overload outpaths
