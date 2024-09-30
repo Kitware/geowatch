@@ -268,7 +268,31 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     xpu = XPU.coerce('cpu')
     checkpoint = xpu.load(checkpoint_fpath)
 
+    context = inspect_checkpoint_context(checkpoint_fpath)
+
     hparams = checkpoint['hyper_parameters']
+
+    HACK_WORKAROUND_HPARAM_MISMATCH = True
+    if HACK_WORKAROUND_HPARAM_MISMATCH:
+        # Due to issues with pytorch-lightning 2.3.0 we check for if hparams
+        # are inconsistent and use the one on disk (which is easier to hack
+        # into a valid state).
+        # References:
+        #     https://github.com/Lightning-AI/pytorch-lightning/issues/20311
+        hparams_fpath = context['hparams_fpath']
+        if hparams_fpath is not None:
+            assert hparams_fpath.exists()
+            import kwutil
+            ondisk_hparams = kwutil.Yaml.load(hparams_fpath, backend='pyyaml')
+            common_ondisk_hparams = ub.udict(ondisk_hparams) & hparams.keys()
+
+            if hparams != common_ondisk_hparams:
+                print(ub.paragraph(
+                    '''
+                    Warning: hparams in checkpoint differ from the file in the
+                    training directory. Using the one from disk instead.
+                    '''))
+                hparams = common_ondisk_hparams
 
     if 'input_channels' in hparams:
         import kwcoco
@@ -301,8 +325,6 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     if train_dpath_hint is not None:
         model.train_dpath_hint = train_dpath_hint
-
-    context = inspect_checkpoint_context(checkpoint_fpath)
 
     try:
         context['epoch'] = checkpoint['epoch']
