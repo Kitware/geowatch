@@ -351,8 +351,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             print(f'input_sensorchan={input_sensorchan}')
 
         super().__init__()
-        import xdev
-        xdev.embed()
         self.save_hyperparameters()
         self.hparams.update(**_cfgdict)
 
