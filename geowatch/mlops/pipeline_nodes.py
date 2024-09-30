@@ -1734,7 +1734,7 @@ class ProcessNode(Node):
             # Can only cache if we know what output paths are
             return False
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
-        return all(ub.Path(p).expand().exists() for p in self.final_out_paths.values())
+        return all(ub.Path(p).expand().exists() if p is not None else True for p in self.final_out_paths.values())
 
     @memoize_configured_property
     @profile
@@ -1883,6 +1883,7 @@ def _labelize_graph(graph, shrink_labels, show_types, smart_colors, color_procs=
                 data['label'] = f'[{color}]{label}[/{color}]'
 
         elif smart_colors:
+            # ub.schedule_deprecation()
             # SMART specific hack: remove later
             if 'bas' in data['label']:
                 data['label'] = '[yellow]' + data['label']

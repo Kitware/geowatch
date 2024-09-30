@@ -1876,12 +1876,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             unique_params = group.iloc[0][param_cols]
 
             if len(param_cols) > 0:
+                # TODO: Used the fixed groupby to avoid the need to ensure
+                # param_flags is a list.
                 param_subgroups = is_group_included.groupby(param_cols, dropna=False)
             else:
                 # fallback case, something is probably wrong if we are here
                 param_subgroups = {tuple(): is_group_included}.items()
 
             for param_flags, subgroup in param_subgroups:
+                if not ub.iterable(param_flags):
+                    param_flags = [param_flags]
                 _flags = list(param_flags)
                 valid_unique_params = unique_params[_flags].to_dict()
 
