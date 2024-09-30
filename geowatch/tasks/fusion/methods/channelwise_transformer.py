@@ -344,6 +344,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         assert _config.arch_name in available_encoders, f'bad arch name, {_config.arch_name}'
         assert _config.decoder in ['mlp', 'segmenter'], f'bad decoder, {_config.decoder}'
         assert _config.attention_impl in ["exact", "performer", "reformer"], 'bad attention impl'
+        if VERBOSE:
+            print(f'classes={classes}')
+            print(f'dataset_stats={dataset_stats}')
+            print(f'input_channels={input_channels}')
+            print(f'input_sensorchan={input_sensorchan}')
 
         super().__init__()
         self.save_hyperparameters()
