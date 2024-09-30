@@ -180,6 +180,12 @@ def parse_and_init_config(config):
         class_path = config["class_path"]
         init_args = config["init_args"]
 
+        # I'm not sure how these keys got into the init args, but
+        # we can hack around them and remove them. Hopefully nobody
+        # uses these names as real config options
+        _block_init_args = {'_instantiator', '_class_path'}
+        init_args = ub.udict(init_args) - _block_init_args
+
         init_args = parse_and_init_config(init_args)
 
         # https://stackoverflow.com/a/8719100
