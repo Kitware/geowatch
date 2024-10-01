@@ -433,6 +433,13 @@ main(){
 
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
 
+    # Note: on aarch64 / arm64, we need to install gdal before we can install
+    # rasterio because it does not ship with arm64 binaries.
+    if [[ "$(arch)" == "aarch64" ]]; then
+        python -m pip install --no-deps .
+        WATCH_PREIMPORT_VARIANTS=none python -m geowatch.cli.special.finish_install
+    fi
+
     # Install the geowatch module in development mode
     python -m pip install --prefer-binary -e ".$EXTRAS"
 
