@@ -223,7 +223,7 @@ hydra-core >=1.3.2
 # FIXME: pinned because update broke our aliases
 # But we have seem to have a fix for jsonargparse 4.30.0
 jsonargparse[signatures]>=4.19.0
-pytorch_lightning>=2.0.8
+pytorch_lightning>=2.0.8,!=2.3.*,!=2.4.0
 #pytorch_lightning>=2.0.8
 #jsonargparse[signatures]>=4.24.1
 

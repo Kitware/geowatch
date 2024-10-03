@@ -663,7 +663,7 @@ def filter_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs, main_type=None,
     return valid_gdf_crs84
 
 
-__config__ = CropSitesToRegionsConfig
+__cli__ = CropSitesToRegionsConfig
 
 
 if __name__ == '__main__':

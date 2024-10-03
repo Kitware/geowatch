@@ -2415,7 +2415,7 @@ class SkipImage(Exception):
     ...
 
 
-__config__ = CocoAlignGeotiffConfig
+__cli__ = CocoAlignGeotiffConfig
 
 
 if __name__ == '__main__':

@@ -329,7 +329,7 @@ def schedule_evaluation(config):
 
     # Load the requested pipeline
     dag = pipeline_nodes.coerce_pipeline(pipeline)
-    dag.print_graphs(smart_colors=1)
+    dag.print_graphs()
     dag.inspect_configurables()
 
     if config.run:
@@ -437,8 +437,8 @@ def _auto_gpus():
     return GPUS
 
 
-__config__ = ScheduleEvaluationConfig
-__config__.main = main
+__cli__ = ScheduleEvaluationConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

@@ -2564,10 +2564,12 @@ def visualize_rois(coco_dset, zoom=None):
 
     import kwplot
     kwplot.autompl()
-
-    wld_map_gdf = gpd.read_file(
-        gpd.datasets.get_path('naturalearth_lowres')
-    )
+    # FIXME: use goedatasets instead
+    import geodatasets
+    wld_map_gdf = gpd.read_file(geodatasets.get_path('naturalearth.land'))
+    # wld_map_gdf = gpd.read_file(
+    #     gpd.datasets.get_path('naturalearth_lowres')
+    # )
     ax = wld_map_gdf.plot()
 
     def safe_centroids(gdf):

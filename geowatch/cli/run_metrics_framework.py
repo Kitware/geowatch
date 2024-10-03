@@ -612,8 +612,8 @@ def main(cmdline=True, **kwargs):
             viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 
 
-__config__ = MetricsConfig
-__config__.main = main
+__cli__ = MetricsConfig
+__cli__.main = main
 
 if __name__ == '__main__':
     main()

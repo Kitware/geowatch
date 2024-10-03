@@ -302,9 +302,12 @@ monkey_scriptconfig.patch_0_7_14()
 
 
 if 1:
-    from geowatch.monkey import monkey_numpy  # NOQA
-    # monkey_numpy.patch_numpy_dtypes()
-    monkey_numpy.patch_numpy_2x()
+    try:
+        from geowatch.monkey import monkey_numpy  # NOQA
+        # monkey_numpy.patch_numpy_dtypes()
+        monkey_numpy.patch_numpy_2x()
+    except Exception as ex:
+        warnings.warn(f'issue with applying monkey patch: ex={ex}')
 
 
 if 'hard-to-inspect-key' in vars():

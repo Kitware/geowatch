@@ -333,17 +333,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "tokenizer" in model.hparams
         """
         import kwutil
-        assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
+        assert kwargs.pop('config', None) is None, 'should not have a config opt'  # not sure why this is in the kwargs
         VERBOSE = 1
         if VERBOSE:
             print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
-        assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
-        assert _config.token_norm in ['none', 'auto', 'group', 'batch']
-        assert _config.arch_name in available_encoders
-        assert _config.decoder in ['mlp', 'segmenter']
-        assert _config.attention_impl in ["exact", "performer", "reformer"]
+        assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv'], 'bad tokenizer'
+        assert _config.token_norm in ['none', 'auto', 'group', 'batch'], 'bad token norm'
+        assert _config.arch_name in available_encoders, f'bad arch name, {_config.arch_name}'
+        assert _config.decoder in ['mlp', 'segmenter'], f'bad decoder, {_config.decoder}'
+        assert _config.attention_impl in ["exact", "performer", "reformer"], 'bad attention impl'
+        if VERBOSE:
+            print(f'classes={classes}')
+            print(f'dataset_stats={dataset_stats}')
+            print(f'input_channels={input_channels}')
+            print(f'input_sensorchan={input_sensorchan}')
 
         super().__init__()
         self.save_hyperparameters()

@@ -1271,7 +1271,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
     return final_image_ids
 
 
-__config__ = TimeCombineConfig
+__cli__ = TimeCombineConfig
 
 if __name__ == '__main__':
     """

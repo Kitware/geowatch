@@ -60,8 +60,8 @@ def main(cmdline=True, **kwargs):
     repackage(checkpoint_fpath, strict=config.strict, force=config.force)
 
 
-__config__ = RepackageConfig
-__config__.main = main
+__cli__ = RepackageConfig
+__cli__.main = main
 
 
 def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
@@ -180,6 +180,12 @@ def parse_and_init_config(config):
         class_path = config["class_path"]
         init_args = config["init_args"]
 
+        # I'm not sure how these keys got into the init args, but
+        # we can hack around them and remove them. Hopefully nobody
+        # uses these names as real config options
+        _block_init_args = {'_instantiator', '_class_path'}
+        init_args = ub.udict(init_args) - _block_init_args
+
         init_args = parse_and_init_config(init_args)
 
         # https://stackoverflow.com/a/8719100
@@ -262,7 +268,31 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     xpu = XPU.coerce('cpu')
     checkpoint = xpu.load(checkpoint_fpath)
 
+    context = inspect_checkpoint_context(checkpoint_fpath)
+
     hparams = checkpoint['hyper_parameters']
+
+    HACK_WORKAROUND_HPARAM_MISMATCH = True
+    if HACK_WORKAROUND_HPARAM_MISMATCH:
+        # Due to issues with pytorch-lightning 2.3.0 we check for if hparams
+        # are inconsistent and use the one on disk (which is easier to hack
+        # into a valid state).
+        # References:
+        #     https://github.com/Lightning-AI/pytorch-lightning/issues/20311
+        hparams_fpath = context['hparams_fpath']
+        if hparams_fpath is not None:
+            assert hparams_fpath.exists()
+            import kwutil
+            ondisk_hparams = kwutil.Yaml.load(hparams_fpath, backend='pyyaml')
+            common_ondisk_hparams = ub.udict(ondisk_hparams) & hparams.keys()
+
+            if hparams != common_ondisk_hparams:
+                print(ub.paragraph(
+                    '''
+                    Warning: hparams in checkpoint differ from the file in the
+                    training directory. Using the one from disk instead.
+                    '''))
+                hparams = common_ondisk_hparams
 
     if 'input_channels' in hparams:
         import kwcoco
@@ -295,8 +325,6 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     if train_dpath_hint is not None:
         model.train_dpath_hint = train_dpath_hint
-
-    context = inspect_checkpoint_context(checkpoint_fpath)
 
     try:
         context['epoch'] = checkpoint['epoch']
