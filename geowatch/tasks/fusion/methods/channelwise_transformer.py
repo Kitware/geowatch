@@ -472,9 +472,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             raise KeyError(f'Unknown: {self.rescale_nan_method}')
 
-        self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
-
         # Unique sensor modes obviously isn't very correct here.
         # We should fix that, but let's hack it so it at least
         # includes all sensor modes we probably will need.

@@ -1336,7 +1336,7 @@ class GetItemMixin(TruthMixin):
             else:
                 timestamp = np.nan
 
-            sensor = img.get('sensor_coarse', '*')
+            sensor = img.get('sensor_coarse', img.get('sensor', '*'))
 
             frame_item = {
                 'gid': gid,
@@ -1638,7 +1638,7 @@ class GetItemMixin(TruthMixin):
         """
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
-        sensor_coarse = coco_img.img.get('sensor_coarse', '*')
+        sensor_coarse = coco_img.img.get('sensor_coarse', coco_img.img.get('sensor', '*'))
 
         matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
@@ -3271,7 +3271,10 @@ class PreprocessMixin:
                     print(f'Warning: we are missing stats for {missing_sensor_modes}. '
                           'We will try to force something for them')
                     coco_images = self.sampler.dset.images().coco_images
-                    sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                    sensor_to_images = ub.group_items(
+                        coco_images,
+                        key=lambda x: x.img.get('sensor_coarse', x.img.get('sensor', None))
+                    )
                     extra_sample_groups = []
                     for sensor, mode in missing_sensor_modes:
                         candidate_images = sensor_to_images.get(sensor, [])
