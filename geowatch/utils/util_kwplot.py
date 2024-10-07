@@ -1,5 +1,17 @@
 """
 Many of these have been moved to kwplot and can be removed.
+
+SeeAlso:
+    ~/code/kwplot/kwplot/managers.py
+
+TODO:
+    - [ ] from kwplot.managers import LabelManager as LabelModifier
+    - [ ] from kwplot.managers import FigureManager
+    - [ ] from kwplot.managers import FigureFinalizer
+    - [ ] from kwplot.managers import Palette
+    - [ ] from kwplot.managers import PaletteManager
+    - [ ] from kwplot.managers import ArtistManager
+    - [ ] etc...
 """
 import ubelt as ub
 import matplotlib as mpl

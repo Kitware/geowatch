@@ -22,6 +22,7 @@ def build_plotter(agg, rois, plot_config):
     """
     from geowatch.mlops.smart_global_helper import SMART_HELPER
     from geowatch.utils import util_kwplot
+    from kwutil import Yaml
 
     build_special_columns(agg)
     agg.build()
@@ -84,10 +85,21 @@ def build_plotter(agg, rois, plot_config):
     plotter.plot_dpath = plot_dpath
     plotter.macro_plot_dpath = macro_plot_dpath
 
+    # Maps paramter values to colors
     plotter.param_to_palette = param_to_palette
+
+    # This is for remapping parameter values
+    plotter.param_to_valmap = Yaml.coerce(plot_config.get('param_to_valmap', {}))
+    plotter.param_to_valmap = plotter.param_to_valmap or {}
+
+    # The modifier is for remapping parameter names
     plotter.modifier = modifier
+    plotter.label_modifier = modifier
+
+    # The main data
     plotter.macro_table = macro_table
     plotter.single_table = single_table
+
     plotter.rois = rois
     plotter.plot_config = plot_config
     plotter.roi_attr = 'region_id'
@@ -210,9 +222,11 @@ class ParamPlotter:
         """
         import rich
         from geowatch.utils import util_kwplot
+        plotter.plot_dpath.ensuredir()
         agg = plotter.agg
         rich.print('[green] ### Plot Resources')
-        resource_summary_df = agg.resource_summary_table()
+        # resource_summary_df = agg.resource_summary_table()
+        resource_summary_df = agg.resource_summary_table_friendly()
         rich.print(resource_summary_df.to_string())
         resource_summary_df
 
@@ -226,6 +240,7 @@ class ParamPlotter:
         table_tex_fpath = plotter.plot_dpath / f'{table_title}.tex'
         tex = table.to_latex(index=False)
         tex = '\\begin{table*}[t]\n' + tex.rstrip('\n') + '\n\\end{table*}'
+        print(tex)
         table_tex_fpath.write_text(tex)
 
     def plot_overviews(plotter):
@@ -460,7 +475,7 @@ class ParamPlotter:
         roi_finalizer.finalize(fig, f'overview-macro_results-{name}.png')
         rich.print('[green] made overview-macro_results-{name}.png')
 
-    def plot_vantage_params(plotter, vantage, pman=None):
+    def plot_vantage_params(plotter, vantage, pman=None, params_of_interest=None):
         """
         The main parameter inspection plots.
 
@@ -515,7 +530,8 @@ class ParamPlotter:
         resolved_params = resolved_params[valid_cols]
 
         from kwutil.util_yaml import Yaml
-        params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
+        if params_of_interest is None:
+            params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
 
         if params_of_interest is not None:
             chosen_params = params_of_interest
@@ -568,6 +584,8 @@ class ParamPlotter:
 
         from kwutil.util_progress import ProgressManager
         owns_pman = 0
+
+        results = []
         if pman is None:
             pman = ProgressManager()
             pman.__enter__()
@@ -575,10 +593,10 @@ class ParamPlotter:
         try:
             for rank, param_name in enumerate(pman.progiter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
                 try:
-                    plotter._plot_single_vantage_param(rank, macro_table,
-                                                       param_name, vantage,
-                                                       params_of_interest,
-                                                       param_name_to_stats)
+                    drawn_rows = plotter._plot_single_vantage_param(
+                        rank, macro_table, param_name, vantage,
+                        params_of_interest, param_name_to_stats)
+                    results.append(drawn_rows)
                 except SkipPlot:
                     continue
 
@@ -587,6 +605,7 @@ class ParamPlotter:
         finally:
             if owns_pman:
                 pman.__exit__()
+        return results
 
     def _plot_single_vantage_param(plotter, rank, macro_table, param_name,
                                    vantage, params_of_interest,
@@ -693,8 +712,10 @@ class ParamPlotter:
             raise SkipPlot(msg)
 
         if 1:
-            # HACK: probably want to build palettes outside of this function
+            # HACK: if the parameter we are plotting doesn't have a palette, make one
+            # probably want to build palettes outside of this function?
             if param_name not in param_to_palette:
+                # We may want to sort the input here?
                 param_to_palette[param_name] = util_kwplot.Palette.coerce(macro_table[param_name].unique())
 
         snskw = {}
@@ -718,6 +739,13 @@ class ParamPlotter:
         header_text = title_builder.finalize()
 
         param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
+        print(f'had_value_remap={had_value_remap}')
+
+        if param_name in plotter.param_to_valmap:
+            had_value_remap = True
+            # User can overload the mappign of the parameter value names
+            param_valname_map.update(plotter.param_to_valmap[param_name])
+            ...
 
         # Mapper for the legend
         if had_value_remap:
@@ -896,6 +924,7 @@ class ParamPlotter:
             if row['type'] == 'main_metric_plot':
                 ...
         # ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+        return drawn_rows
 
     def _add_sv_hack_lines(plotter, ax, table, x, y):
         import matplotlib as mpl

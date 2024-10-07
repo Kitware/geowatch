@@ -312,12 +312,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         kwplot.autompl()
         kwplot.imshow(dataset.draw_item(batch[0]))
     """
-    _HANDLES_NANS = True
-
-    def get_cfgstr(self):
-        cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}'
-        return cfgstr
-
+    # Used by our jsonargparse_fork to introspect values for kwargs
     __scriptconfig__ = MultimodalTransformerConfig
 
     def __init__(self, classes=10, dataset_stats=None, input_sensorchan=None,
@@ -2142,6 +2137,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         with_loss = self.training
         return self.forward_step(batch, with_loss=with_loss)
         # raise NotImplementedError('see forward_step instad')
+
+    def get_cfgstr(self):
+        # used by plotter plugins, but I'm not in love with the name.
+        cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}'
+        return cfgstr
 
 
 def slice_to_agree(a1, a2, axes=None):

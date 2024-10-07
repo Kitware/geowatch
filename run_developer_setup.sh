@@ -437,7 +437,21 @@ main(){
     # rasterio because it does not ship with arm64 binaries.
     if [[ "$(arch)" == "aarch64" ]]; then
         python -m pip install --no-deps .
-        WATCH_PREIMPORT_VARIANTS=none python -m geowatch.cli.special.finish_install
+        echo "
+        # FIXME: we are very likely going to have to build some things to make
+        # arm64 builds work.
+        sudo apt install libgdal-dev  # probably require at least 3.4.1 from 22.04
+        pip install 'gdal==3.4.1'
+        pip install rasterio==1.3.5
+        WATCH_PREIMPORT=none python -m geowatch.cli.special.finish_install
+        https://rustup.rs/
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        "
+        echo '
+        sudo apt install gdal-bin
+        pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="-I/usr/include/gdal"
+        pip install rasterio==1.3.5 --global-option=build_ext --global-option="-I/usr/include/gdal"
+        '
     fi
 
     # Install the geowatch module in development mode

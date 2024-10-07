@@ -258,6 +258,14 @@ class AggregateEvluationConfig(AggregateLoader):
                 'enabled': bool(self.plot_params)
             }
 
+    @profile
+    def coerce_aggregators(config):
+        eval_type_to_aggregator = super().coerce_aggregators()
+        output_dpath = ub.Path(config['output_dpath'])
+        for agg in eval_type_to_aggregator.values():
+            agg.output_dpath = output_dpath
+        return eval_type_to_aggregator
+
 
 def main(cmdline=True, **kwargs):
     """
@@ -1080,44 +1088,59 @@ class AggregatorAnalysisMixin:
         resource_summary_df = pd.DataFrame(resource_summary)
         return resource_summary_df
 
+    def resource_summary_table_friendly(agg):
+        resource_summary_df = agg.resource_summary_table()
+        # TODO: nicer report
+        import kwutil
+        import pandas as pd
+        def format_kwh(v):
+            return str(round(v, 2)) + ' kWh'
+
+        def format_co2(v):
+            return str(round(v, 2)) + ' CO2Kg'
+
+        def format_duration(v):
+            v = kwutil.timedelta.coerce(v, nan_policy='return-nan', none_policy='return-nan')
+            if pd.isnull(v):
+                return v
+            return v.format(unit={'value': 'auto', 'min_unit': 'hour', 'exclude_units': ['week', 'month', 'min']}, precision=2)
+            # return v.format(unit='hour', precision=2)
+
+        # Make more human friendly
+        new_groups = []
+        for resource, group in resource_summary_df.groupby('resource'):
+            if resource == 'kwh':
+                group['total'] = group['total'].apply(format_kwh)
+                group['mean'] = group['mean'].apply(format_kwh)
+            elif resource == 'duration':
+                group['total'] = group['total'].apply(format_duration)
+                group['mean'] = group['mean'].apply(format_duration)
+            elif resource == 'co2_kg':
+                group['total'] = group['total'].apply(format_co2)
+                group['mean'] = group['mean'].apply(format_co2)
+            else:
+                raise NotImplementedError(resource)
+            new_groups.append(group)
+        friendly = pd.concat(new_groups).loc[resource_summary_df.index]
+
+        # Better column names when we include units in the value
+        mapper = {
+            'duration': 'time',
+            'kwh': 'electricity',
+            'co2_kg': 'emissions',
+        }
+        friendly['resource'] = friendly['resource'].map(lambda x: mapper.get(x, x))
+        return friendly
+
     def report_resources(agg):
         import rich
         resource_summary_df = agg.resource_summary_table()
 
-        if 0:
-            # TODO: nicer report
-            import kwutil
-            import pandas as pd
-            def format_kwh(v):
-                return str(round(v, 2)) + ' kWh'
-
-            def format_co2(v):
-                return str(round(v, 2)) + ' CO2Kg'
-
-            def format_duration(v):
-                v = kwutil.timedelta.coerce(v, nan_policy='return-nan', none_policy='return-nan')
-                if pd.isnull(v):
-                    return v
-                return v.format(unit='auto', precision=2)
-
-            # Make more human friendly
-            new_groups = []
-            for resource, group in resource_summary_df.groupby('resource'):
-                if resource == 'kwh':
-                    group['total'] = group['total'].apply(format_kwh)
-                    group['mean'] = group['mean'].apply(format_kwh)
-                elif resource == 'duration':
-                    group['total'] = group['total'].apply(format_duration)
-                    group['mean'] = group['mean'].apply(format_duration)
-                elif resource == 'co2_kg':
-                    group['total'] = group['total'].apply(format_co2)
-                    group['mean'] = group['mean'].apply(format_co2)
-                else:
-                    raise NotImplementedError(resource)
-                new_groups.append(group)
-            friendly = pd.concat(new_groups).loc[resource_summary_df.index]
+        if 1:
+            friendly = agg.resource_summary_table_friendly()
             rich.print(friendly.to_string())
             print(friendly.to_csv())
+            print(friendly.to_latex(index=False, escape=False))
 
         rich.print(resource_summary_df.to_string())
 
@@ -1826,7 +1849,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
