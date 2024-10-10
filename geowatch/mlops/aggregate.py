@@ -1308,6 +1308,7 @@ class _AggregatorDeprecatedMixin:
             modname='geowatch', name='type', type='property',
             migration='use node_type instead',
             deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+            stacklevel=2,
         )
         return self.node_type
 
