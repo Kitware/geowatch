@@ -130,6 +130,3 @@ def my_demo_pipeline():
     dag = PipelineDAG(nodes)
     dag.build_nx_graphs()
     return dag
-
-
-
