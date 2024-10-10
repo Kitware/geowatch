@@ -20,7 +20,7 @@ python -m geowatch.mlops.schedule_evaluation \
     " \
     --root_dpath="${EVAL_DPATH}" \
     --tmux_workers=2 \
-    --backend=serial --skip_existing=1 \
+    --backend=tmux --skip_existing=1 \
     --run=1
 
 
@@ -33,7 +33,6 @@ python -m geowatch.mlops.aggregate \
     --output_dpath="$EVAL_DPATH/full_aggregate" \
     --resource_report=1 \
     --io_workers=0 \
-    --rois=None \
     --eval_nodes="
         - stage1_evaluate
     " \

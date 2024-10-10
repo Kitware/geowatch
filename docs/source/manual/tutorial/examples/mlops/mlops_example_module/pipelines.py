@@ -25,7 +25,6 @@ class Stage1_Predict(ProcessNode):
         >>> print(self.command)
     """
     name = 'stage1_predict'
-    # group_dname = 'pred'
     executable = f'python {EXAMPLE_DPATH}/cli/stage1_predict.py'
 
     in_paths = {
@@ -59,7 +58,6 @@ class Stage1_Predict(ProcessNode):
 
 class Stage1_Evaluate(ProcessNode):
     name = 'stage1_evaluate'
-    # group_dname = 'eval'
     executable = f'python {EXAMPLE_DPATH}/cli/stage1_evaluate.py'
 
     in_paths = {
@@ -110,8 +108,6 @@ class Stage1_Evaluate(ProcessNode):
 def my_demo_pipeline():
     """
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/geowatch/docs/source/manual/tutorial/examples/mlops'))
         >>> from mlops_example_module.pipelines import *  # NOQA
         >>> dag = my_demo_pipeline()
         >>> dag.print_graphs(shrink_labels=1, show_types=1)
@@ -134,3 +130,6 @@ def my_demo_pipeline():
     dag = PipelineDAG(nodes)
     dag.build_nx_graphs()
     return dag
+
+
+
