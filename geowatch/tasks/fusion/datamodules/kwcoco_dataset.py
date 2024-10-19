@@ -1647,7 +1647,23 @@ class GetItemMixin(TruthMixin):
 
     @ub.memoize_method
     def _cached_sample_sensorchan_matching_sensor(self, sensor_coarse):
-        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+
+        def matching_sensor(self, sensor):
+            # HACK: port the fix to delayed image in 0.4.3
+            if sensor == '*':
+                return self
+            matching_streams = [
+                s for s in self.streams()
+                if s.sensor.spec == sensor or s.sensor.spec == '*'
+            ]
+            new = sum(matching_streams)
+            if new == 0:
+                from delayed_image import FusedSensorChanSpec, FusedChannelSpec, SensorSpec
+                new = FusedSensorChanSpec(SensorSpec(sensor), FusedChannelSpec.coerce(''))
+            return new
+
+        # matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+        matching_sensorchan = matching_sensor(self.sample_sensorchan, sensor_coarse)
         return matching_sensorchan
 
     @profile
@@ -1660,9 +1676,13 @@ class GetItemMixin(TruthMixin):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', coco_img.img.get('sensor', '*'))
+        print(f'sensor_coarse={sensor_coarse}')
+        print(f'self.sample_sensorchan={self.sample_sensorchan}')
 
         matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
+        print(f'matching_sensorchan={matching_sensorchan}')
         sensor_channels = matching_sensorchan.chans
+        print(f'sensor_channels={sensor_channels}')
 
         def _ensure_list(x):
             return x if isinstance(x, list) else [x]
@@ -2198,6 +2218,7 @@ class GetItemMixin(TruthMixin):
                     frame.pop(k, None)
 
         if True:
+            # Wrap the dictionary item in a convience class
             item = HeterogeneousBatchItem(item)
 
         return item
