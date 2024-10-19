@@ -1434,12 +1434,24 @@ class Predictor:
                 new_mean = torch.from_numpy(np.array(item['mean']))
                 new_std = torch.from_numpy(np.array(item['std']))
                 norm_layer = model.input_norms[sensor][channels]
-                new_mean = new_mean.reshape_as(norm_layer.mean)
-                new_std = new_std.reshape_as(norm_layer.std)
-                print(f' * "{sensor}:{channels}".mean - {norm_layer.mean.data.view(-1)} -> {new_mean.view(-1)}'.replace(chr(10), ' '))
-                print(f' * "{sensor}:{channels}".std  - {norm_layer.std.data.view(-1)} -> {new_std.view(-1)}'.replace(chr(10), ' '))
-                norm_layer.mean.data[:] = new_mean
-                norm_layer.std.data[:] = new_std
+
+                if norm_layer.mean is not None:
+                    new_mean = new_mean.reshape_as(norm_layer.mean)
+                    norm_layer.mean.data[:] = new_mean
+                    print(f' * "{sensor}:{channels}".mean - {norm_layer.mean.data.view(-1)} -> {new_mean.view(-1)}'.replace(chr(10), ' '))
+                else:
+                    new_mean = new_mean.reshape((1, 1, 1, -1))
+                    norm_layer.mean = new_mean
+                    print(f' * "{sensor}:{channels}".mean - None -> {new_mean.view(-1)}'.replace(chr(10), ' '))
+
+                if norm_layer.std is not None:
+                    new_std = new_std.reshape_as(norm_layer.std)
+                    print(f' * "{sensor}:{channels}".std  - {norm_layer.std.data.view(-1)} -> {new_std.view(-1)}'.replace(chr(10), ' '))
+                    norm_layer.std.data[:] = new_std
+                else:
+                    new_std = new_std.reshape((1, 1, 1, -1))
+                    norm_layer.std = new_std
+                    print(f' * "{sensor}:{channels}".std  - None -> {new_std.view(-1)}'.replace(chr(10), ' '))
 
         # Lookup the parameters used to fit the model (these should be stored in
         # the model, if they are not, then the model packaging needs to be
