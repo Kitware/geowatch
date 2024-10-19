@@ -2467,6 +2467,11 @@ class IntrospectMixin:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
 
+        Note:
+            In the future, the returned :class:`HeterogeneousBatchItem` will
+            control how it is drawn, removing this responsiblity from the
+            dataset itself.
+
         Example:
             >>> # Basic Data Sampling with lots of small objects
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
