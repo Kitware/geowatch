@@ -1,18 +1,18 @@
 """
-Defines a torch Dataset for kwcoco video data.
+Defines :class:`KWCocoVideoDataset`, a torch Dataset for kwcoco image and video
+data.
 
-The parameters to each are handled by scriptconfig objects, which prevents us
-from needing to specify what the available options are in multiple places.
+The configurable input parameters are defined in the
+:class:`KWCocoVideoDatasetConfig`, which is used to resolve kwargs passed to
+the main :class:`KWCocoVideoDataset` class. These parameters give the developer
+fine grined control over how sampling is done. At the most basic level the
+developer should specify:
 
-# import liberator
-# lib = liberator.Liberator()
-# lib.add_dynamic(KWCocoVideoDataset)
-# lib.expand(['geowatch'])
-# print(lib.current_sourcecode())
+    * window_space_scale - the size of the window (possibly in a virtual sample space) used to build the virtual sample grid.
 
+    * input_space_scale - the scale of the inputs (default to the window space scale, but could be different).
 
-For notes on Spaces, see
-    ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
+    * time_kernel - or (time_sampling / time_dims) to indicate how many / distribution of frames sampled over time.
 
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
@@ -130,9 +130,28 @@ Example:
     >>> kwplot.imshow(canvas)
     >>> kwplot.show_if_requested()
 
+
+SeeAlso:
+
+    * For notes on spaces, see: ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
+
 Known Issues
 ------------
 - [ ] FIXME: sensorchan codes should exclude non-specified sensors immediately before temporal sampling. Currently temporal sampling is given everything. E.g. (L8,S2):red|green|blue should not allow WV to be included in sampling.
+
+
+Ignore:
+    # For developers, to extract a copy of this dataloader that does not depend
+    # on the rest of geowatch, you can attempt to "liberate" it:
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    import liberator
+    lib = liberator.Liberator()
+    lib.add_dynamic(KWCocoVideoDataset)
+    lib.expand(['geowatch'])
+    text = lib.current_sourcecode()
+    print(ub.highlight_code(text))
+    num_lines = text.count(chr(10))
+    print(f'num_lines={num_lines}')
 
 """
 import einops
@@ -208,7 +227,6 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * time_sampling
         * chip_dims / window_space_dims
     """
-
     # TODO:
     # 'positive_labels': scfg.Value(None, help=ub.paragraph(
     #     '''
@@ -3625,7 +3643,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self.__dict__.update(_cfgdict)
 
         # Make config a normal dictionary to reduce attribute lookup overhead
-        #
         self.config = _cfgdict
 
         self.sampler = sampler
@@ -3682,7 +3699,65 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # dataset and model first.
         self.ignore_index = -100
 
-        channels = config['channels']
+        self._init_sensorchan()
+
+        if self.config['normalize_peritem']:
+            # (this probably should be extended to be a sensorchan...)
+            if self.config['normalize_peritem'] is True:
+                # If True, then normalize all known channels
+                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
+                    '|'.join(sorted(set(ub.flatten([
+                        s.chans.to_list()
+                        for s in self.input_sensorchan.streams()])))))
+            else:
+                # Otherwise assume the user specified what channels to normalize
+                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+        else:
+            self.config['normalize_peritem'] = None
+
+        # hidden option for now (todo: expose this)
+        self.inference_only = False
+
+        # TODO: better "notification of heads" specification and implementation
+        # TODO: modify these names to be less ambiguous.
+        self.requested_tasks = {
+            'change': True,  # Note: this is sequential frame change segmentation.
+
+            'class': True,     # Note: this is per-frame class segmentation.
+            'saliency': True,  # Note: this is per-frame saliency segmentation.
+            'boxes': True,     # Note: this is per-frame bbox detection.
+
+            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
+
+            # ouputs is not really a task, it requests the weights needed for
+            # predict-time stitching.
+            'outputs': mode != 'fit',
+        }
+
+        # Hacks: combinable channels can be visualized as RGB images.
+        # The only reason this is a hack is because of the hardcoded names
+        # otherwise it is a cool feature.
+        self.default_combinable_channels = [
+            ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['impervious', 'forest', 'water']),
+            ub.oset(['baren', 'field', 'water']),
+            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
+        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+        if autobuild:
+            self._init()
+
+    @profile
+    def _init_sensorchan(self):
+        """
+        Part of initialization that coerces sensorchannel information if it is
+        not provided.
+        """
+        channels = self.config['channels']
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
@@ -3776,61 +3851,11 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 ','.join(_input_sensorchans)
             )
 
-        if self.config['normalize_peritem']:
-            # (this probably should be extended to be a sensorchan...)
-            if self.config['normalize_peritem'] is True:
-                # If True, then normalize all known channels
-                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
-                    '|'.join(sorted(set(ub.flatten([
-                        s.chans.to_list()
-                        for s in self.input_sensorchan.streams()])))))
-            else:
-                # Otherwise assume the user specified what channels to normalize
-                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
-        else:
-            self.config['normalize_peritem'] = None
-
-        # hidden option for now (todo: expose this)
-        self.inference_only = False
-
-        # TODO: better "notification of heads" specification and implementation
-        # TODO: modify these names to be less ambiguous.
-        self.requested_tasks = {
-
-            'change': True,  # Note: this is sequential frame change segmentation.
-
-            'class': True,     # Note: this is per-frame class segmentation.
-            'saliency': True,  # Note: this is per-frame saliency segmentation.
-            'boxes': True,     # Note: this is per-frame bbox detection.
-
-            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
-
-            # ouputs is not really a task, it requests the weights needed for
-            # predict-time stitching.
-            'outputs': mode != 'fit',
-        }
-
-        # Hacks: combinable channels can be visualized as RGB images.
-        # The only reason this is a hack is because of the hardcoded names
-        # otherwise it is a cool feature.
-        self.default_combinable_channels = [
-            ub.oset(['red', 'green', 'blue']),
-            ub.oset(['Dred', 'Dgreen', 'Dblue']),
-            ub.oset(['r', 'g', 'b']),
-            ub.oset(['impervious', 'forest', 'water']),
-            ub.oset(['baren', 'field', 'water']),
-            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
-            ub.oset(['sam.0', 'sam.1', 'sam.2']),
-            ub.oset(['sam.3', 'sam.4', 'sam.5']),
-        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
-
-        if autobuild:
-            self._init()
-
     @profile
     def _init(self):
         """
-        The expensive part of initialization.
+        The expensive part of initialization that builds the sample grid based
+        on the user input.
         """
         config = self.config
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
