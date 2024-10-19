@@ -110,9 +110,19 @@ def my_demo_pipeline():
     Example:
         >>> from mlops_example_module.pipelines import *  # NOQA
         >>> dag = my_demo_pipeline()
+        >>> dag.configure({
+        ...     'stage1_predict.src_fpath': 'my-input-path',
+        ... })
         >>> dag.print_graphs(shrink_labels=1, show_types=1)
         >>> queue = dag.make_queue()['queue']
         >>> queue.print_commands(with_locks=0)
+
+    Ignore:
+        from graphid import util
+        proc_graph = dag.proc_graph.copy()
+        util.util_graphviz.dump_nx_ondisk(proc_graph, 'proc_graph.png')
+        import xdev
+        xdev.startfile('proc_graph.png')
     """
     # Define the nodes as stages in the pipeline
     nodes = {}

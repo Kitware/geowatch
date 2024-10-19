@@ -267,7 +267,9 @@ pytorch_msssim==0.1.5
 
 absl_py>=1.4.0
 
-PyYAML>=6.0
+PyYaml>=6.0.2     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+PyYaml>=6.0.1     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
+PyYaml>=6.0       ; python_version < '3.12'                                 # Python 3.11-
 tqdm>=4.64.1
 
 cmd_queue >= 0.1.20
