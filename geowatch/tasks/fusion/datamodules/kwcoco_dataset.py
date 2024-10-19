@@ -14,6 +14,9 @@ developer should specify:
 
     * time_kernel - or (time_sampling / time_dims) to indicate how many / distribution of frames sampled over time.
 
+The following doctests provide a crash course on what sort of sampling
+parameters are available.
+
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1 --show
