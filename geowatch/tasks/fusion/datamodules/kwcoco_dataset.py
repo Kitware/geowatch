@@ -1658,7 +1658,8 @@ class GetItemMixin(TruthMixin):
             ]
             new = sum(matching_streams)
             if new == 0:
-                from delayed_image import FusedSensorChanSpec, FusedChannelSpec, SensorSpec
+                from delayed_image.sensorchan_spec import FusedSensorChanSpec, SensorSpec
+                from delayed_image.channel_spec import FusedChannelSpec
                 new = FusedSensorChanSpec(SensorSpec(sensor), FusedChannelSpec.coerce(''))
             return new
 
@@ -1676,13 +1677,8 @@ class GetItemMixin(TruthMixin):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
         sensor_coarse = coco_img.img.get('sensor_coarse', coco_img.img.get('sensor', '*'))
-        print(f'sensor_coarse={sensor_coarse}')
-        print(f'self.sample_sensorchan={self.sample_sensorchan}')
-
         matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
-        print(f'matching_sensorchan={matching_sensorchan}')
         sensor_channels = matching_sensorchan.chans
-        print(f'sensor_channels={sensor_channels}')
 
         def _ensure_list(x):
             return x if isinstance(x, list) else [x]
