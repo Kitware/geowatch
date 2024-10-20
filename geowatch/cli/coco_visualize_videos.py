@@ -1296,7 +1296,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         canvas = blur2
         canvas = shift_dog
         # orig_max = np.nanmax(raw_canvas)
-        # canvas = kwimage.normalize(shift_dog) * orig_max
+        # canvas = kwarray.normalize(shift_dog) * orig_max
         # canvas = canvas * raw_canvas
         canvas = raw_canvas
         # median = np.nanmedian(canvas)
@@ -1306,7 +1306,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         canvas = (canvas - median).clip(0, None)
         canvas = np.sqrt(canvas)
 
-        # raw_canvas = kwimage.normalize(dog)
+        # raw_canvas = kwarray.normalize(dog)
         # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
         # raw_canvas = raw_canvas[:, :, None]
 

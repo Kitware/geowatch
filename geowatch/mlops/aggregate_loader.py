@@ -384,7 +384,13 @@ def load_result_resolved(node_dpath, node=None, dag=None):
 
     if dag is not None:
         if node is None:
-            node = dag.nodes[node_type]
+            try:
+                node = dag.nodes[node_type]
+            except KeyError:
+                print(f'node_dpath = {ub.urepr(node_dpath, nl=1)}')
+                print(f'node_type = {ub.urepr(node_type, nl=1)}')
+                print(f'dag.nodes = {ub.urepr(dag.nodes, nl=1)}')
+                raise
 
     if node is not None and hasattr(node, 'load_result'):
         flat_resolved = node.load_result(node_dpath)

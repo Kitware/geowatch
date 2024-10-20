@@ -80,7 +80,7 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     else:
         ax.set_title('Initialize update weights')
 
-    # kwplot.imshow(kwimage.normalize(affinity), title='Pairwise Affinity')
+    # kwplot.imshow(kwarray.normalize(affinity), title='Pairwise Affinity')
 
     chosen_so_far = list(initial_indexes)
 
@@ -144,11 +144,11 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         for row in affinity[chosen]:
             ax.plot(row)
         ax.set_title('Chosen affinities')
-        # kwplot.imshow(kwimage.normalize(), pnum=pnum_(), title='Chosen Affinities')
+        # kwplot.imshow(kwarray.normalize(), pnum=pnum_(), title='Chosen Affinities')
 
         final_mat = affinity[chosen][:, chosen]
         final_mat[np.isnan(final_mat)] = 0
-        final_mat = kwimage.normalize(final_mat)
+        final_mat = kwarray.normalize(final_mat)
         kwplot.imshow(final_mat, pnum=pnum_(), title='Final affinities')
 
     title_suffix = info.get('title_suffix', '')
