@@ -158,7 +158,7 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
     from kwutil import util_json
     fpath = ub.Path(fpath)
 
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v011.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v012.json'
 
     if use_cache and resolved_json_fpath.exists():
         # Load the cached row data

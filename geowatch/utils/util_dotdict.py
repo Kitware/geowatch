@@ -62,6 +62,8 @@ class DotDict(ub.UDict):
 
     def __init__(self, /, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Tries work well with prefix stuff, but they may be too complex for
+        # what we really need to do here.
         self._trie_cache = {}
 
     @classmethod
@@ -81,9 +83,59 @@ class DotDict(ub.UDict):
         return flat
 
     def to_nested(self):
+        """
+        Converts this flat DotDict into a nested representation.  I.e. keys are
+        broken using the "." separtor, with each separator becoming a new
+        nesting level.
+
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict(**{
+            >>>     'foo.bar.baz': 1,
+            >>>     'foo.bar.biz': 1,
+            >>>     'foo.spam': 1,
+            >>>     'eggs.spam': 1,
+            >>> })
+            >>> nested = self.to_nested()
+            >>> print(f'nested = {ub.urepr(nested, nl=2)}')
+            nested = {
+                'foo': {
+                    'bar': {'baz': 1, 'biz': 1},
+                    'spam': 1,
+                },
+                'eggs': {
+                    'spam': 1,
+                },
+            }
+        """
         return dotdict_to_nested(self)
 
     def to_nested_keys(self):
+        """
+        Converts this flat DotDict into a nested key representation.
+        The difference between this and to_nested is that the leafs are
+        sets of keys whereas the leafs in DotDict are dicts
+
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict(**{
+            >>>     'foo.bar.baz': 1,
+            >>>     'foo.bar.biz': 1,
+            >>>     'foo.spam': 1,
+            >>>     'eggs.spam': 1,
+            >>> })
+            >>> nested = self.to_nested_keys()
+            >>> print(f'nested = {ub.urepr(nested, nl=2)}')
+            nested = {
+                'foo': {
+                    'bar': {'baz': 'foo.bar.baz', 'biz': 'foo.bar.biz'},
+                    'spam': 'foo.spam',
+                },
+                'eggs': {
+                    'spam': 'eggs.spam',
+                },
+            }
+        """
         return dotkeys_to_nested(self)
 
     @property
@@ -103,6 +155,18 @@ class DotDict(ub.UDict):
     #     return self._trie_cache['suffix_trie']
 
     def prefix_get(self, key, default=ub.NoParam):
+        """
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict(**{
+            >>>     'foo.bar.baz': 1,
+            >>>     'foo.bar.biz': 1,
+            >>>     'foo.spam': 1,
+            >>>     'eggs.spam': 1,
+            >>> })
+            >>> self.prefix_get('foo')
+            {'bar.baz': 1, 'bar.biz': 1, 'spam': 1}
+        """
         try:
             suffix_dict = DotDict()
             full_keys = self._prefix_trie.values(key)
