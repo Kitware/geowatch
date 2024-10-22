@@ -156,6 +156,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     if [[ ${#needs_install[@]} -gt 0 ]]; then
         # * Disable build isolation because it is faster and we usually wont need it.
         # * Note the -e needs to be before every package, this is handled earlier
+        echo pip install --no-build-isolation "${needs_install[@]}"
         pip install --no-build-isolation "${needs_install[@]}"
     fi
 
