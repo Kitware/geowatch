@@ -62,6 +62,9 @@ DO_CLONE=1
 
 
 if [[ "$DO_FETCH" == "1" ]]; then
+    echo "====================="
+    echo "Start Pull and Update"
+    echo "====================="
     ### Pull and update
     for name in "${mylibs[@]}"
     do
@@ -85,11 +88,18 @@ if [[ "$DO_FETCH" == "1" ]]; then
             fi
         fi
     done
+else
+    echo "Skip Fetching"
 fi
 
 echo "
 My Libs:"
 bash_array_repr "${mylibs[@]}"
+
+
+echo "====================="
+echo "Check for tasks to do"
+echo "====================="
 
 needs_uninstall=()
 needs_install=()
@@ -126,6 +136,10 @@ bash_array_repr "${needs_install[@]}"
 
 
 if [[ "$DO_INSTALL" == "1" ]]; then
+    echo "===================="
+    echo "Do Developer Install"
+    echo "===================="
+
 
     echo "
     Uninstalling:
@@ -148,9 +162,16 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     echo "
     Finished Installing
     "
+else
+    echo "======================"
+    echo "Skip Developer Install"
+    echo "======================"
 fi
 
 
+echo "===================="
+echo "Check Installed Libs"
+echo "===================="
 echo "
 Check that the installed versions / paths are what you expect:
 "
