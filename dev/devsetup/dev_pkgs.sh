@@ -99,7 +99,7 @@ do
     REPO_DPATH=$CODE_DPATH/$name
     if [[ -d $REPO_DPATH ]]; then
         #base_fpath=$(python -c "import $name; print($name.__file__)")
-        if python -c "import sys, $name; sys.exit(1 if 'site-packages' in $name.__file__ else 0)" &2 > /dev/null; then
+        if python -c "import sys, $name; sys.exit(1 if 'site-packages' in $name.__file__ else 0)" 2> /dev/null; then
             echo " * already have REPO_DPATH = $REPO_DPATH"
         else
             echo " * will ensure REPO_DPATH = $REPO_DPATH"
