@@ -219,7 +219,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     This is the configuration for a single dataset that could be used for
     train, test, or validation.
 
-    In the future this might be convertable to, or handled by omegaconfig
+    In the future this might be convertible to, or handled by omegaconfig
 
     The core spacetime parameters are:
 
@@ -233,7 +233,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # TODO:
     # 'positive_labels': scfg.Value(None, help=ub.paragraph(
     #     '''
-    #     Labels to consider positive (in addition to infered labels)
+    #     Labels to consider positive (in addition to inferred labels)
     #     ''')),
 
     sampler_backend = scfg.Value(None, help="Can be None, 'npy', or 'cog'.")
@@ -259,6 +259,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         '''), nargs='+')
     fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
         '''
+        Convenience argument.
         If specified, fixes resolution of window, output, and input space.
         '''))
     window_space_scale = scfg.Value(None, alias=['window_resolution'], group=SPACE_GROUP, help=ub.paragraph(
@@ -332,7 +333,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     channels = scfg.Value(None, type=str, group='sensorchan', help=ub.paragraph(
         '''
-        channels to use should be SensorChanSpec coercable
+        channels to use should be SensorChanSpec coercible
         '''))
     include_sensors = scfg.Value(None, group='sensorchan', help=ub.paragraph(
         '''
@@ -362,7 +363,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         only image dictionaries where the value of myattr is "foo". '.id < 3
         and (.file_name | test(".*png"))' will select only images with id less
         than 3 that are also pngs. .myattr | in({"val1": 1, "val4": 1}) will
-        take images where myattr is either val1 or val4. Requries the "jq"
+        take images where myattr is either val1 or val4. Requires the "jq"
         python library is installed.
         '''))
     select_videos = scfg.Value(None, group=SELECTION_GROUP, help=ub.paragraph(
@@ -373,7 +374,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         select({select_images}) | .id'. Examples for this argument are as
         follows: '.name | startswith("foo")' will select only videos where the
         name starts with foo. Only applicable for dataset that contain videos.
-        Requries the "jq" python library is installed.
+        Requires the "jq" python library is installed.
         '''))
 
     # FIXME:
@@ -571,7 +572,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         '''))
     mask_nan_bands = scfg.Value('', group=FILTER_GROUP, help=ub.paragraph(
         '''
-        Channels that propogate their nans to other bands / streams.
+        Channels that propagate their nans to other bands / streams.
         This should be FusedChannelSpec coercible.
         '''))
     mask_samecolor_method = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
@@ -587,7 +588,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     mask_samecolor_values = scfg.Value(0, group=FILTER_GROUP, help=ub.paragraph(
         '''
         List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
-        Can be an integer or list of intergers
+        Can be an integer or list of integers
         '''))
     force_bad_frames = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -689,7 +690,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         itself, effectively ignoring any global seed in non- test mode. In test
         mode, this has no effect. The reason this defaults to True is because
         of our balanced sampling approach, where the index of a sample passed
-        to getitem is ignored and we randomly return an item acording to the
+        to getitem is ignored and we randomly return an item according to the
         balanced distribution. This relies on randomness and if this was set to
         False dataloader clones for ddp or multiple workers would generate the
         same sequence of data regardless of split indexes.
@@ -1333,7 +1334,7 @@ class GetItemMixin(TruthMixin):
                 mode_to_dsize[mode_key] = (w, h)
 
             # For each frame we need to choose a resolution for the truth.
-            # Using the maximum resolution mode should be decent choise.
+            # Using the maximum resolution mode should be decent choice.
             # We could choose this to be arbitrary or independent of the input
             # dimensions, but it makes sense to pin it to the input data
             # in most cases.
@@ -1584,7 +1585,7 @@ class GetItemMixin(TruthMixin):
                     resolved_index = requested_index
                 else:
                     # In non-test-mode we discard the user index and randomly
-                    # sample a grid location to achive balanced sampling.
+                    # sample a grid location to achieve balanced sampling.
                     try:
                         resolved_index = self.balanced_sampler.sample()
                     except Exception as ex:
@@ -2214,7 +2215,7 @@ class GetItemMixin(TruthMixin):
                     frame.pop(k, None)
 
         if True:
-            # Wrap the dictionary item in a convience class
+            # Wrap the dictionary item in a convenience class
             item = HeterogeneousBatchItem(item)
 
         return item
@@ -2486,7 +2487,7 @@ class IntrospectMixin:
 
         Note:
             In the future, the returned :class:`HeterogeneousBatchItem` will
-            control how it is drawn, removing this responsiblity from the
+            control how it is drawn, removing this responsibility from the
             dataset itself.
 
         Example:
@@ -2632,7 +2633,7 @@ class IntrospectMixin:
 
         Args:
             item (dict): an item returned by __getitem__
-            stats (bool): if True, include statistics on input datas.
+            stats (bool): if True, include statistics on input data.
 
         Returns:
             dict : a summary of the item
@@ -2822,7 +2823,7 @@ class BalanceMixin:
             column_attrs['phases'] = observed_phases
 
         if BACKWARDS_COMPAT_NEG_TO_POS:
-            # To maintain compatability with old neg_to_pos_ratio build an
+            # To maintain compatibility with old neg_to_pos_ratio build an
             # indicator array that flags the samples the prev v0.17 code
             # considered as positive / negative. We will eventually remove
             # this logic. Samples were previously considered as negative if
@@ -2979,7 +2980,7 @@ class PreprocessMixin:
             - [ ] Cacher needs to depend on any part of the config of this
                   dataset that could impact the pixel intensity distribution.
         """
-        # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
+        # Get stats on the dataset (todo: nice way to disable augmentation temporarily for this)
         depends = ub.odict([
             ('num', num),
             ('hashid', self.sampler.dset._cached_hashid()),
@@ -3161,7 +3162,7 @@ class PreprocessMixin:
                 }
 
             # We are now computing input stats across a finer set of modality
-            # variables. For backwards compatability also return the old-style
+            # variables. For backwards compatibility also return the old-style
             # input stats that are only over sensor/channel
             grouped_stats = ub.group_items(modality_input_stats.values(), [
                 (u.sensor, u.channels) for u in modality_input_stats.keys()])
@@ -3548,7 +3549,7 @@ class MiscMixin:
 
 class BackwardCompatMixin:
     """
-    Backwards compatability for modified properties.
+    Backwards compatibility for modified properties.
     (These may eventually be deprecated).
     """
 
@@ -3754,7 +3755,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
 
             'nonlocal_class': False,  # each frame is assigned non-localized class labels.
 
-            # ouputs is not really a task, it requests the weights needed for
+            # outputs is not really a task, it requests the weights needed for
             # predict-time stitching.
             'outputs': mode != 'fit',
         }
