@@ -143,6 +143,19 @@ Known Issues
 - [ ] FIXME: sensorchan codes should exclude non-specified sensors immediately before temporal sampling. Currently temporal sampling is given everything. E.g. (L8,S2):red|green|blue should not allow WV to be included in sampling.
 
 
+Roadmap
+-------
+
+- [ ] Get external feedback and suggestions.
+- [ ] Accept albumentations json or more concise spec for custom augmentation
+- [ ] Optimize fixed channel case.
+- [ ] Optimize fixed image size case.
+- [ ] Optimize fixed video size case.
+- [ ] Optimize the spacetime grid sampler.
+- [ ] Allow input resolution to be specified as a fixed pixel size.
+- [ ] Don't force compute of width / height if the window_space_dims is "full".
+
+
 Ignore:
     # For developers, to extract a copy of this dataloader that does not depend
     # on the rest of geowatch, you can attempt to "liberate" it:
@@ -191,6 +204,8 @@ from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
 
 try:
     import line_profiler
@@ -229,6 +244,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * time_steps
         * time_sampling
         * chip_dims / window_space_dims
+
+    This dataset defines an implicit grid of where it will sample, and it uses
+    these "targets" to request data from ndsampler, which is what gives us
+    amortized random access to the dataset.
+
+    The logic contained in this class concerns:
+        * interacting with the spacetime grids sampler to build a grid
+        * target-level augmentations
+        * data-level augmentations (need more of these)
+        * interacting with ndsampler to read data associated with a grid point
+        * balanced sampling over the targets
+        * mapping targets to a HeterogeneousBatchItem in the most general case.
     """
     # TODO:
     # 'positive_labels': scfg.Value(None, help=ub.paragraph(
@@ -706,6 +733,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         likely be restructured so items are produced with the minimal amount of
         information by default, and there must be a request to grab the
         enriched variant.
+        '''))
+
+    output_type = scfg.Value('heterogeneous', help=ub.paragraph(
+        '''
+        Can be heterogeneous, homogeneous, or rgb. This is a performance
+        parameter that allows implementation assumptions to be made.
+        Experimental in 0.18.4
         '''))
 
     def __post_init__(self):
@@ -2189,6 +2223,11 @@ class GetItemMixin(TruthMixin):
             # a helper class.
             item['predictable_classes'] = self.predictable_classes
             item['requested_tasks'] = self.requested_tasks
+        else:
+            # overhead should be small to at least return context by default
+            item.update({
+                'target': resolved_target_subset,
+            })
 
         if self.config['reduce_item_size']:
             nonessential_frame_keys = [
@@ -2215,8 +2254,15 @@ class GetItemMixin(TruthMixin):
                     frame.pop(k, None)
 
         if True:
-            # Wrap the dictionary item in a convenience class
-            item = HeterogeneousBatchItem(item)
+            # Wrap the dictionary item in a convinience class
+            if self.config['output_type'] == 'heterogeneous':
+                item = HeterogeneousBatchItem(item)
+            elif self.config['output_type'] == 'homogeneous':
+                item = HomogeneousBatchItem(item)
+            elif self.config['output_type'] == 'rgb':
+                item = RGBImageBatchItem(item)
+            else:
+                raise KeyError(self.config['output_type'])
 
         return item
 
@@ -3517,7 +3563,7 @@ class MiscMixin:
         return item_output
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
-                    pin_memory=False):
+                    pin_memory=False, collate_fn='identity'):
         """
         Use this to make the dataloader so we ensure that we have the right
         worker init function.
@@ -3525,6 +3571,11 @@ class MiscMixin:
         Args:
             subset (None | Dataset): if specified, the loader is made for
                 this dataset instead of ``self``.
+
+            collate_fn (callable | str):
+                Can be 'identity' or 'stack' or a callable.
+                The normal torch default is 'stack', but for heterogeneous
+                batch item support, we defaults to 'identity'.
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -3538,11 +3589,23 @@ class MiscMixin:
             dataset = self
         else:
             dataset = subset
+
+        if collate_fn is None:
+            collate_fn = ub.identity
+        elif isinstance(collate_fn, str):
+            if collate_fn == 'identity':
+                collate_fn = ub.identity
+            elif collate_fn in {'stack', 'torch-default'}:
+                import torch.utils.data as torch_data
+                collate_fn = torch_data.dataloader.default_collate
+            else:
+                raise KeyError(collate_fn)
+
         loader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory,
             worker_init_fn=worker_init_fn,
-            collate_fn=ub.identity,  # disable collation
+            collate_fn=collate_fn,
         )
         return loader
 
