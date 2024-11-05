@@ -58,6 +58,13 @@ STATIC_SUBMODULES = {
             'jsonargparse/LICENSE.rst',
         ]
     },
+    'detectron2': {
+        'rel_dpath': 'detectron2/detectron2',
+        'parts': [
+            'detectron2/detectron2',
+            'detectron2/LICENSE',
+        ]
+    },
 }
 
 

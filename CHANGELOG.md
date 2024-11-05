@@ -15,6 +15,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Modified
 * More documentation with an mlops minimal example.
 
+### Added
+* Added detectron2 as a tpl submodule
+
 
 
 ## Version 0.18.3 - Released 2024-09-10

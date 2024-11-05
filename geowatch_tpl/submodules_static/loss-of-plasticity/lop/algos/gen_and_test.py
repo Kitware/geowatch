@@ -3,7 +3,7 @@
 import ubelt as ub
 import rich
 from collections import defaultdict
-# from lop.utils.AdamGnT import AdamGnT
+from lop.utils.AdamGnT import AdamGnT
 from math import sqrt
 from torch.nn import Conv2d, Linear
 import numpy as np
@@ -227,8 +227,7 @@ class GenerateAndTest:
 
         self.opt = opt
         self.opt_type = 'sgd'
-        # if isinstance(self.opt, AdamGnT) or
-        if 'Adam' in self.opt.__class__.__name__:
+        if isinstance(self.opt, AdamGnT) or 'Adam' in self.opt.__class__.__name__:
             self.opt_type = 'adam'
 
         """
