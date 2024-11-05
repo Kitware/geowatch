@@ -323,8 +323,10 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             else:
                 row['smoothing'] = smoothing_values
             key_table.append(row)
-    print(f'key_table = {ub.urepr(key_table, nl=1)}')
-    print(pd.DataFrame(key_table))
+
+    if 0:
+        print(f'key_table = {ub.urepr(key_table, nl=1)}')
+        print(pd.DataFrame(key_table))
     key_table = [r for r in key_table if not r.get('ignore', False)]
 
     with BackendContext('agg'):
@@ -587,5 +589,3 @@ if __name__ == '__main__':
         WATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
     """
     TensorboardPlotterCLI.main()
-    # import fire
-    # fire.Fire(redraw_cli)

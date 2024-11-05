@@ -125,6 +125,7 @@ def import_submodule(submod_name):
         assert new_module_dpath.exists()
 
     new_sys_dpath = os.fspath(new_module_dpath.parent)
-    sys.path.append(new_sys_dpath)
+    # sys.path.append(new_sys_dpath)
+    sys.path.insert(0, new_sys_dpath)
     module = ub.import_module_from_name(submod_name)
     return module
