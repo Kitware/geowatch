@@ -3041,12 +3041,13 @@ class PreprocessMixin:
             depends['normalize_peritem'] = self.config['normalize_peritem'].concise().spec
         workdir = None
         print('📊 Gather dataset stats')
-        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends, verbose=1)
+        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends, verbose=3)
         dataset_stats = cacher.tryload()
         if dataset_stats is None or ub.argflag('--force-recompute-stats'):
             dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(dataset_stats)
+        print(f'dataset_stats = {ub.urepr(dataset_stats, nl=1)}')
         return dataset_stats
 
     def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
