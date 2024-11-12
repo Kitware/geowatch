@@ -3040,9 +3040,9 @@ class PreprocessMixin:
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem'].concise().spec
         workdir = None
-        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
-        dataset_stats = cacher.tryload()
         print('📊 Gather dataset stats')
+        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends, verbose=1)
+        dataset_stats = cacher.tryload()
         if dataset_stats is None or ub.argflag('--force-recompute-stats'):
             dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
