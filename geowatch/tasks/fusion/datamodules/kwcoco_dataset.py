@@ -1765,7 +1765,7 @@ class GetItemMixin(TruthMixin):
             is_low_quality = None
 
         if sensor_channels.numel() == 0:
-            force_bad = 'Missing requested channels'
+            force_bad = f'Missing requested channels. {sensor_coarse=}, {matching_sensorchan=}, {self.sample_sensorchan=}'
 
         modality_streams = sensor_channels.streams()
         if target_['allow_augment'] and self.config['modality_dropout_rate']:
