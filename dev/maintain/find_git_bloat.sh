@@ -1,4 +1,80 @@
+# POC bloat script with better python interaction
+python -c 'if 1:
+    import ubelt as ub
+    import xdev
 
+    # Define special characters for bash-embedded python
+    lbrace = chr(123)
+    rbrace = chr(125)
+    squote = chr(39)
+
+    # Sort all objects in the repo by size and show the top 20 along with the
+    # object ids they are associated with
+    awk_cmd = f"awk {squote}{lbrace}print $1{rbrace}{squote}"
+    command = f"git rev-list --all --objects | {awk_cmd} | git cat-file --batch-check | sort -k3nr"
+    info = ub.cmd(command, shell=True)
+
+    # Build a Python table with object info
+    lines = [x for x in info.stdout.split(chr(10)) if x.strip()]
+    rows = []
+    for line, _ in zip(lines, range(20)):
+        obj_id, type, size = line.split(" ")
+        rows.append({
+            "obj_id": obj_id,
+            "type": type,
+            "num_bytes": int(size),
+            "size": xdev.byte_str(int(size)),
+        })
+
+    # For each object in the table, determine if it is "big", and then
+    # determine what commits reference it.
+    big_threshold = 5000000  # Five megabytes
+    big_file_threshold = 100000  # tenth a megabyte
+
+    big_paths = ub.ddict(dict)
+    for row in rows:
+        if row["num_bytes"] > big_threshold:
+            obj_id = row["obj_id"]
+            obj_info = ub.cmd(f"git log --all --find-object={obj_id}")
+            for line in obj_info.stdout.split(chr(10)):
+                if line.startswith("commit "):
+                    commit_id = line.split(" ")[1]
+                    # Find all of the files associated with this commit
+                    commit_info = ub.cmd(f"git diff-tree --no-commit-id --name-only {commit_id} -r")
+                    paths = [p for p in commit_info.stdout.split(chr(10)) if p.strip()]
+
+                    for p in paths:
+                        p = ub.Path(p)
+                        # Find how big the file was at this point in time.
+                        result = ub.cmd(f"git ls-tree -r {commit_id} -- {p}").stdout.strip()
+                        if result:
+                            num_bytes = int(result.split()[0])
+                            if num_bytes > big_file_threshold:
+                                prow = big_paths[p]
+                                prow["path"] = p
+                                prow.setdefault("commit_ids", [])
+                                prow.setdefault("obj_ids", [])
+                                prow["obj_ids"].append(obj_id)
+                                prow["commit_ids"].append(commit_id)
+
+                                prow["num_bytes"] = num_bytes
+                                prow["size"] = xdev.byte_str(prow["num_bytes"])
+                                prow["exists"] = p.exists()
+                                if prow["exists"]:
+                                    prow["current_num_bytes"] = p.stat().st_size
+                                    prow["current_size"] = xdev.byte_str(prow["current_num_bytes"])
+                                else:
+                                    prow["current_num_bytes"] = 0
+                                    prow["current_size"] = 0
+            ...
+    big_paths = ub.udict(big_paths)
+    big_paths = big_paths.sorted_values(key=lambda x: x.get("num_bytes", -1))
+    print(ub.urepr(big_paths))
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+    print(df)
+'
 
 # https://stackoverflow.com/questions/13403069/how-to-find-out-which-files-take-up-the-most-space-in-git-repo
 #
@@ -27,64 +103,6 @@ env FILTER_BRANCH_SQUELCH_WARNING=1 \
   git filter-branch -f --prune-empty --index-filter '
     git rm -rf --cached --ignore-unmatch -- watch/tasks/super_res/model_zoo/swinir/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth
   ' main..HEAD
-
-
-
-# POC bloat script with better python interaction
-python -c 'if 1:
-
-    lbrace = chr(123)
-    rbrace = chr(125)
-    squote = chr(39)
-
-    import ubelt as ub
-    awk_cmd = f"awk {squote}{lbrace}print $1{rbrace}{squote}"
-    info = ub.cmd(f"git rev-list --all --objects | {awk_cmd} | git cat-file --batch-check | sort -k3nr", shell=True)
-
-    lines = [x for x in info.stdout.split(chr(10)) if x.strip()]
-    rows = []
-    import xdev
-    for line, _ in zip(lines, range(20)):
-        obj_id, type, size = line.split(" ")
-        rows.append({
-            "obj_id": obj_id,
-            "type": type,
-            "num_bytes": int(size),
-            "size": xdev.byte_str(int(size)),
-        })
-
-    big_paths = ub.ddict(dict)
-    for row in rows:
-        if row["num_bytes"] > 874274:
-            obj_id = row["obj_id"]
-            obj_info = ub.cmd(f"git log --all --find-object={obj_id}")
-            for line in obj_info.stdout.split(chr(10)):
-                if line.startswith("commit "):
-                    commit_id = line.split(" ")[1]
-                    commit_info = ub.cmd(f"git diff-tree --no-commit-id --name-only {commit_id} -r")
-                    paths = [p for p in commit_info.stdout.split(chr(10)) if p.strip()]
-
-                    for p in paths:
-                        p = ub.Path(p)
-                        prow = big_paths[p]
-                        prow["path"] = p
-                        prow.setdefault("commit_ids", [])
-                        prow.setdefault("obj_ids", [])
-                        prow["obj_ids"].append(obj_id)
-                        prow["commit_ids"].append(commit_id)
-                        if p.exists():
-                            prow["num_bytes"] = p.stat().st_size
-                            prow["size"] = xdev.byte_str(prow["num_bytes"])
-            ...
-    big_paths = ub.udict(big_paths)
-    big_paths = big_paths.sorted_values(key=lambda x: x.get("num_bytes", -1))
-    print(ub.urepr(big_paths))
-
-    import pandas as pd
-    df = pd.DataFrame(rows)
-    print(df)
-
-'
 
 
 
