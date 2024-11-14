@@ -265,8 +265,9 @@ def main(cmdline=True, **kwargs):
     import kwcoco
     import kwarray
     import rich
+    from rich.markup import escape
     import numpy as np
-    rich.print('config = {}'.format(ub.urepr(dict(config), nl=2)))
+    rich.print('config = {}'.format(escape(ub.urepr(dict(config), nl=2))))
 
     space = config['space']
     channels = config['channels']
@@ -334,8 +335,12 @@ def main(cmdline=True, **kwargs):
             # force RGB first
             chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
         channels = ','.join(chosen)
-        rich.print(f'AUTO channels={channels}')
-    elif channels is None:
+        rich.print(f'AUTO channels={escape(channels)}')
+        if len(channels) == 0:
+            print('Auto channel selection did not find any known heuristic, attempt to fallback to to all sensorchan')
+            channels = None
+
+    if channels is None:
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
         all_sensorchan = channel_stats['all_sensorchan']
         channels = all_sensorchan
