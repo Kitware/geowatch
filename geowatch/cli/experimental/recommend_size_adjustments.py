@@ -45,7 +45,7 @@ class RecommendSizeAdjustmentsCLI(scfg.DataConfig):
             >>> cls.main(cmdline=cmdline, **kwargs)
         """
         import rich
-        from rich.markdown import escape
+        from rich.markup import escape
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + escape(ub.urepr(config, nl=1, align=":")))
 
