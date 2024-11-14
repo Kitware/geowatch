@@ -10,6 +10,7 @@ file.
 TODO:
     - [ ] Differentiate between pixel models for different tasks.
     - [ ] Allow the output of tracking to feed into activity classification
+    - [ ] Rename to "schedule". The pipeline does not have to be an evaluation.
 
 
 Example:
