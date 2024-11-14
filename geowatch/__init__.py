@@ -124,7 +124,7 @@ __url__ = 'https://gitlab.kitware.com/computer-vision/geowatch'
 os.environ['USE_PYGEOS'] = '0'
 
 
-WATCH_PREIMPORT_VARIANTS = {
+GEOWATCH_PREIMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],               # CI machine
     'variant3': ['geopandas', 'pyproj'],          # delay gdal import
@@ -255,35 +255,35 @@ def _execute_ordered_preimports():
     isnt used.
 
     There are several known good configurations registered in the
-    ``WATCH_PREIMPORT_VARIANTS`` dictionary and the setting is
-    controlled by the ``WATCH_PREIMPORT`` environment variable.
+    ``GEOWATCH_PREIMPORT_VARIANTS`` dictionary and the setting is
+    controlled by the ``GEOWATCH_PREIMPORT`` environment variable.
     """
     if _GEOWATCH_DEBUG:
         print('Execute preordered imports')
     # Shorter alias because we are using it now
-    WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
-    WATCH_PREIMPORT = os.environ.get('WATCH_HACK_IMPORT_ORDER', WATCH_PREIMPORT)
+    GEOWATCH_PREIMPORT = os.environ.get('GEOWATCH_PREIMPORT', os.environ.get('WATCH_PREIMPORT', 'auto'))
+    GEOWATCH_PREIMPORT = os.environ.get('GEOWATCH_HACK_IMPORT_ORDER', os.environ.get('WATCH_HACK_IMPORT_ORDER', GEOWATCH_PREIMPORT))
 
     if _GEOWATCH_DEBUG:
-        print(f'WATCH_PREIMPORT = {ub.urepr(WATCH_PREIMPORT, nl=1)}')
+        print(f'GEOWATCH_PREIMPORT = {ub.urepr(GEOWATCH_PREIMPORT, nl=1)}')
 
-    if not WATCH_PREIMPORT:
+    if not GEOWATCH_PREIMPORT:
         if _GEOWATCH_DEBUG:
             print('Fast return')
         return
 
-    if WATCH_PREIMPORT == 'auto':
+    if GEOWATCH_PREIMPORT == 'auto':
         if RUNNING_FAST_CLI_TOOL:
             watch_preimport = None
         else:
             # This is the "known" best order for importing
-            watch_preimport = WATCH_PREIMPORT_VARIANTS['variant1']
-    elif WATCH_PREIMPORT in WATCH_PREIMPORT_VARIANTS:
-        watch_preimport = WATCH_PREIMPORT_VARIANTS[WATCH_PREIMPORT]
-    elif WATCH_PREIMPORT.lower() in {'0', 'false', 'no', ''}:
+            watch_preimport = GEOWATCH_PREIMPORT_VARIANTS['variant1']
+    elif GEOWATCH_PREIMPORT in GEOWATCH_PREIMPORT_VARIANTS:
+        watch_preimport = GEOWATCH_PREIMPORT_VARIANTS[GEOWATCH_PREIMPORT]
+    elif GEOWATCH_PREIMPORT.lower() in {'0', 'false', 'no', ''}:
         watch_preimport = None
     else:
-        watch_preimport = WATCH_PREIMPORT.split(',')
+        watch_preimport = GEOWATCH_PREIMPORT.split(',')
 
     if watch_preimport is not None:
         for modname in watch_preimport:
@@ -323,8 +323,8 @@ mkinit geowatch --lazy_loader -w
 
 # Debug import time
 python -X importtime -c "import geowatch"
-WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import geowatch"
-WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import geowatch"
+GEOWATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import geowatch"
+GEOWATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import geowatch"
 """
 
 
@@ -424,6 +424,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['WATCH_PREIMPORT_VARIANTS', 'cli', 'coerce_kwcoco', 'demo',
+__all__ = ['GEOWATCH_PREIMPORT_VARIANTS', 'cli', 'coerce_kwcoco', 'demo',
            'exceptions', 'find_dvc_dpath', 'find_smart_dvc_dpath', 'gis',
            'heuristics', 'mlops', 'monkey', 'rc', 'stac', 'tasks', 'utils']
