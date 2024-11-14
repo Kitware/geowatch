@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Vendored a fork of jsonargparse in geowatch-tpl to maintain compatibility with scriptconfig
 * Changed instances of `__config__` to `__cli__`
 * KWCocoVideoDataset will now respect the `"sensor"` field in an image in addition to `"sensor_coarse"` (which still takes priority)
+* Added aliases of `GEOWATCH_PREIMPORT` and `GEOWATCH_HACK_IMPORT_ORDER` for the old `GEO`-less versions.
 
 ### Modified
 * More documentation with an mlops minimal example.
