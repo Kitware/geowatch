@@ -74,6 +74,7 @@ def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_ke
         # Use kwcoco instead
         from kwcoco.compat_dataset import COCO  # NOQA
         coco_api = COCO(json_file)
+        # coco_api.conform(legacy=True)
         # kwcoco_dset = kwcoco.CocoDataset(json_file)
     else:
         from pycocotools.coco import COCO
@@ -162,6 +163,11 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
     num_instances_without_valid_segmentation = 0
 
+    # TODO: MAKE ACCEPTING KWCOCO STYLE SEGMENTATIONS CONFIGURABLE
+    HANDLE_KWCOCO_FORMATS = True
+    if HANDLE_KWCOCO_FORMATS:
+        import kwimage
+
     for img_dict, anno_dict_list in imgs_anns:
         record = {}
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
@@ -191,6 +197,10 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             segm = anno.get("segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)
+
+                if HANDLE_KWCOCO_FORMATS:
+                    segm = kwimage.Segmentation.coerce(segm).to_coco(style='orig')
+
                 if isinstance(segm, dict):
                     if isinstance(segm["counts"], list):
                         # convert to compressed RLE
@@ -205,7 +215,10 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             keypts = anno.get("keypoints", None)
             if keypts:  # list[int]
+                if HANDLE_KWCOCO_FORMATS:
+                    keypts = kwimage.Points.coerce(keypts).to_coco(style='orig')
                 for idx, v in enumerate(keypts):
+                    # TODO: MAKE APPLYING THIS HACK CONFIGURABLE
                     if idx % 3 != 2:
                         # COCO's segmentation coordinates are floating points in [0, H or W],
                         # but keypoint coordinates are integers in [0, H-1 or W-1]

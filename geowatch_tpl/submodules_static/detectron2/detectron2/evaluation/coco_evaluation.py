@@ -142,8 +142,17 @@ class COCOEvaluator(DatasetEvaluator):
             convert_to_coco_json(dataset_name, cache_path, allow_cached=allow_cached_coco)
 
         json_file = PathManager.get_local_path(self._metadata.json_file)
-        with contextlib.redirect_stdout(io.StringIO()):
+        # with contextlib.redirect_stdout(io.StringIO()):
+        #     self._coco_api = COCO(json_file)
+
+        if os.fspath(json_file).endswith('.zip'):
+            # Use kwcoco instead
+            from kwcoco.compat_dataset import COCO  # NOQA
             self._coco_api = COCO(json_file)
+        else:
+            from pycocotools.coco import COCO
+            with contextlib.redirect_stdout(io.StringIO()):
+                self._coco_api = COCO(json_file)
 
         # Test set json files do not contain annotations (evaluation must be
         # performed using the COCO evaluation server).

@@ -1,4 +1,6 @@
 # POC bloat script with better python interaction
+# See Also:
+#     New standalone version, that might go into git-well? ~/local/git_tools/git_find_bloat.py
 python -c 'if 1:
     import ubelt as ub
     import xdev
