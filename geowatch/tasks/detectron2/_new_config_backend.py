@@ -15,6 +15,7 @@ class Detectron2WrapperNewStyle(Detectron2WrapperBase):
         xdoctest -m geowatch.tasks.detectron2._new_config_backend Detectron2WrapperNewStyle
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:fvcore)
         >>> from geowatch.tasks.detectron2.fit import DetectronFitCLI
         >>> from geowatch.tasks.detectron2._new_config_backend import *  # NOQA
         >>> import geowatch_tpl

@@ -14,6 +14,7 @@ class Detectron2WrapperOldStyle(Detectron2WrapperBase):
         xdoctest -m geowatch.tasks.detectron2._old_config_backend Detectron2WrapperOldStyle
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:fvcore)
         >>> from geowatch.tasks.detectron2._old_config_backend import *  # NOQA
         >>> from geowatch.tasks.detectron2.fit import DetectronFitCLI
         >>> import kwcoco
