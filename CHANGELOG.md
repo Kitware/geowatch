@@ -19,6 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Added detectron2 as a tpl submodule
 
+### Fixed
+* Support latest DETR in transformers library 4.46.2
 
 
 ## Version 0.18.3 - Released 2024-09-10
