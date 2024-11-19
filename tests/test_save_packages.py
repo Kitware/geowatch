@@ -19,9 +19,12 @@ def test_save_channelwise_plain():
 def test_save_channelwise_with_dataloader():
     from geowatch.tasks.fusion import datamodules
     from geowatch.tasks.fusion import methods
+    import kwcoco
+    dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', rng=0)
     datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-        batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
+        train_dataset=dset.fpath,
+        batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10,
+        channels='auto')
     datamodule.setup('fit')
     dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
 
