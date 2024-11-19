@@ -21,7 +21,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             >>> from site_model_associator import *  # NOQA
             >>> from geowatch.geoannots.geomodels import RegionModel
             >>> region1, sites1 = RegionModel.random(with_sites=True)
-            >>> region2, sites2 = RegionModel.random(with_sites=True, region_poly=region1.geometry)
+            >>> region2, sites2 = RegionModel.random(with_sites=True, region_poly=region1.geometry, region_id=region1.region_id)
             >>> dpath = ub.Path.appdir('geowatch/demo/site_association').ensuredir()
             >>> dpath1 = (dpath / 'sites1').delete().ensuredir()
             >>> dpath2 = (dpath / 'sites2').delete().ensuredir()
@@ -63,6 +63,9 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
         from rich.markup import escape
         config = cls.cli(argv=argv, data=kwargs, strict=True)
         rich.print('config = ' + escape(ub.urepr(config, nl=1)))
+
+        out_dpath = ub.Path(config.out_dpath)
+        out_dpath.ensuredir()
 
         import kwarray
         import numpy as np
@@ -152,9 +155,6 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
                 cache1 = site1.header['properties'].get('cache', {})
                 cache2 = site2.header['properties'].get('cache', {})
                 cache1['smqtk_uuid'] = cache2.get('smqtk_uuid', None)
-
-                out_dpath = ub.Path(config.out_dpath)
-                out_dpath.ensuredir()
 
             # Write out the modified sites
             for site in sites1:
