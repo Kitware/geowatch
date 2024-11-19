@@ -2143,11 +2143,14 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries, stri
                     handle_error(f'No sites. Unable to infer {key}.', strict=strict)
                 else:
                     region_props[key] = _rectify_keys(key, site_summary_properties)
-            except ValueError:
+            except ValueError as ex:
                 # Allow MGRS to fail. We can use region geometry to get the
                 # right one.
                 if key != 'mgrs':
-                    raise
+                    if strict:
+                        raise
+                    else:
+                        print(f'Warning: ex = {ub.urepr(ex, nl=1)}')
 
     if region_props.get('start_date', None) is None:
         if len(site_summaries) == 0:
@@ -2201,7 +2204,7 @@ def _rectify_keys(key, properties_list):
     """
     if len(properties_list) == 0:
         raise ValueError(f'No sites. Unable to infer {key}.')
-    unique_values = {p[key] for p in properties_list}
+    unique_values = ub.dict_hist(p[key] for p in properties_list)
     if len(unique_values) > 1:
         msg = (f'More than one key={key!r} in with unique_values={unique_values!r}')
         print(msg)

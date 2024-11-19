@@ -46,9 +46,9 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             from site_model_associator import *  # NOQA
             kwargs = {}
             kwargs['sites1'] = [
-                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8/site_models/NZ_R0*',
-                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8/site_models/CH_R0*',
-                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8/site_models/KR_R0*',
+                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8-v1/site_models/NZ_R0*',
+                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8-v1/site_models/CH_R0*',
+                '/data/joncrall/dvc-repos/smart_phase3_data/annotations/drop8-v1/site_models/KR_R0*',
             ]
             kwargs['sites2'] = [
                 '/home/joncrall/code/smqtk-repos/SMQTK-IQR/docs/tutorials/tutorial_003_geowatch_descriptors/workdir/processed/chips',
@@ -92,7 +92,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             print(f'region_relations = {ub.urepr(region_relations, nl=1)}')
             raise Exception('Regions do not agree')
 
-        region_ids = list(region_to_sites1.keys())
+        region_ids = sorted(region_to_sites1.keys())
 
         assignment_summaries = []
         for region_id in ub.ProgIter(region_ids, desc='compute assignments in regions'):
@@ -101,8 +101,8 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             sites2 = SiteModelCollection(region_to_sites2[region_id])
 
             # Convert to site summaries for quick spatial overlap checks
-            region1 = sites1.as_region_model()
-            region2 = sites2.as_region_model()
+            region1 = sites1.as_region_model(strict=False)
+            region2 = sites2.as_region_model(strict=False)
             region1_df = region1.pandas_summaries()
             region2_df = region2.pandas_summaries()
             overlaps = util_gis.geopandas_pairwise_overlaps(region1_df, region2_df)
@@ -164,16 +164,19 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
 
 
 def site_overlap_score(site1, site2):
+    import numpy as np
     space_isect = site1.geometry.intersection(site2.geometry)
     space_union = site1.geometry.union(site2.geometry)
     space_iou = space_isect.area / space_union.area
     time_iou = site_temporal_overlap(site1, site2)
-    score = space_iou * time_iou
+    score = space_iou * np.sqrt(time_iou)
     return score
 
 
 def site_temporal_overlap(site1, site2):
     import kwutil
+    # Note: the dummy times might cause issues
+    # it isn't clear how to compute overlap for "pending" cases.
     dummy_start = kwutil.datetime.coerce('2014-01-01')
     dummy_end = kwutil.datetime.coerce('2022-01-01')
 
