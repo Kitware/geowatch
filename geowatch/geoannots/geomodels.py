@@ -420,6 +420,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         raise NotImplementedError('abstract')
 
     def body_features(self):
+        """
+        Iterate over non-header items in the geojson feature list
+        """
         for feat in self['features']:
             prop = feat['properties']
             if prop['type'] == self._body_type:
@@ -438,6 +441,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     @property
     def header(self):
+        """
+        Get the single feature representing the header
+        """
         for feat in self['features']:
             prop = feat['properties']
             if prop['type'] == self._header_type:
@@ -754,6 +760,9 @@ class RegionModel(_Model):
     @classmethod
     def random(cls, with_sites=False, **kwargs):
         """
+        Creates a random region model optionally with random sites for use in
+        testing / demos.
+
         Args:
             with_sites (bool):
                 also returns site models if True
@@ -823,6 +832,9 @@ class RegionModel(_Model):
 
     @property
     def region_id(self):
+        """
+        Get the region_id from the geojson header
+        """
         return self.header['properties']['region_id']
 
     def fixup(self):
@@ -971,6 +983,9 @@ class SiteModel(_Model):
                 return feat
 
     def observations(self):
+        """
+        Features containing specific observations with phase labels
+        """
         yield from self.body_features()
 
     def pandas_observations(self):
@@ -2074,6 +2089,17 @@ class SiteModelCollection(ModelCollection):
         points = [s.as_summary().to_point() for s in self]
         point_model = PointModel(points)
         return point_model
+
+    @classmethod
+    def coerce(cls, data):
+        """
+        Create a collection of site models from input - usually a directory
+        containing site model geojson files.
+
+        SeeAlso:
+            :func:`SiteModel.coerce_multiple`.
+        """
+        return cls(SiteModel.coerce_multiple(data))
 
 
 class PointModel(_Model):
