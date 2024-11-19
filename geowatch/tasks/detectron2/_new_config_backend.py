@@ -54,6 +54,10 @@ class Detectron2WrapperNewStyle(Detectron2WrapperBase):
         >>> self.build_trainer()
         >>> self.train()
     """
+
+    def __init__(self, config):
+        super().__init__(config)
+
     def resolve_config(self):
         """
         I really dont like these "new" lazy Python configs.
@@ -132,6 +136,9 @@ class Detectron2WrapperNewStyle(Detectron2WrapperBase):
         from detectron2.config import LazyConfig
         output_dpath = self.output_dpath.ensuredir()
         LazyConfig.save(self.cfg, os.fspath(output_dpath / 'detectron_config.yaml'))
+
+    def build_predictor(self):
+        ...
 
     def build_trainer(self):
         from detectron2.checkpoint import DetectionCheckpointer

@@ -52,7 +52,6 @@ class Detectron2WrapperOldStyle(Detectron2WrapperBase):
         from detectron2.config import CfgNode
         from detectron2 import model_zoo
         import kwutil
-        cfg_final_layer = kwutil.Yaml.coerce(self.config.cfg, backend='pyyaml')
 
         # cfg = get_cfg()
         # base_cfg = model_zoo.get_config_file(config.base)
@@ -86,6 +85,7 @@ class Detectron2WrapperOldStyle(Detectron2WrapperBase):
 
         print(ub.urepr(cfg, nl=-1))
 
+        cfg_final_layer = kwutil.Yaml.coerce(self.config.cfg, backend='pyyaml')
         cfg2 = CfgNode(cfg_final_layer)
         print(ub.urepr(cfg2, nl=-1))
         cfg.merge_from_other_cfg(cfg2)
