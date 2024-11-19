@@ -154,6 +154,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
                 # hack for single case
                 cache1 = site1.header['properties'].get('cache', {})
                 cache2 = site2.header['properties'].get('cache', {})
+                site1.header['properties']['cache'] = cache1
                 cache1['smqtk_uuid'] = cache2.get('smqtk_uuid', None)
 
             # Write out the modified sites
