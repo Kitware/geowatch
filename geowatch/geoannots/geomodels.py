@@ -1168,6 +1168,7 @@ class SiteModel(_Model):
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
+        self.fix_aliased_properties()
         self.ensure_isodates()
         self.fix_current_phase_salient()
         self.fix_backwards_dates()
@@ -1175,6 +1176,18 @@ class SiteModel(_Model):
         self.fix_multipolygons()
         # self.fix_geom()
         return self
+
+    def fix_aliased_properties(self):
+        """
+        Some models are written with aliased properties (e.g. stop_date instead
+        of end_date). This fixes them.
+        """
+        feat = self.header
+        props = feat['properties']
+        end_date = props.get('end_date', None)
+        if end_date is None:
+            if 'stop_date' in props:
+                props['end_date'] = props.pop('stop_date')
 
     def fix_old_schema_properties(self):
         """
@@ -1231,7 +1244,9 @@ class SiteModel(_Model):
     def clamp_scores(self):
         for feat in self.features:
             fprop = feat['properties']
-            fprop['score'] = float(max(min(1, fprop['score']), 0))
+            old_score = fprop.get('score', None)
+            if old_score is not None:
+                fprop['score'] = float(max(min(1.0, fprop['score']), 0.0))
 
     def remove_invalid_properties(self):
         """
