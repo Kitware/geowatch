@@ -102,9 +102,10 @@ class OldStyleConfigBackend:
         backend = cls(cfg, config)
 
         cfg_final_layer = kwutil.Yaml.coerce(config.cfg, backend='pyyaml')
-        cfg2 = CfgNode(cfg_final_layer)
-        print(ub.urepr(cfg2, nl=-1))
-        cfg.merge_from_other_cfg(cfg2)
+        if cfg_final_layer:
+            cfg2 = CfgNode(cfg_final_layer)
+            print(ub.urepr(cfg2, nl=-1))
+            cfg.merge_from_other_cfg(cfg2)
         print(ub.urepr(cfg, nl=-1))
 
         backend.device = backend.cfg.MODEL.DEVICE
@@ -158,11 +159,12 @@ class NewStyleConfigBackend:
 
         # Override config values
         cfg_final_layer = kwutil.Yaml.coerce(config.cfg, backend='pyyaml')
-        walker = ub.IndexableWalker(cfg)
-        to_set_walker = ub.IndexableWalker(cfg_final_layer)
-        for p, v in to_set_walker:
-            if not isinstance(v, dict):
-                walker[p] = v
+        if cfg_final_layer:
+            walker = ub.IndexableWalker(cfg)
+            to_set_walker = ub.IndexableWalker(cfg_final_layer)
+            for p, v in to_set_walker:
+                if not isinstance(v, dict):
+                    walker[p] = v
         return backend
 
 
