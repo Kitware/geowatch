@@ -94,7 +94,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
 
         region_ids = list(region_to_sites1.keys())
 
-        summaries = []
+        assignment_summaries = []
         for region_id in ub.ProgIter(region_ids, desc='compute assignments in regions'):
             # Consider all sites within each region
             sites1 = SiteModelCollection(region_to_sites1[region_id])
@@ -135,7 +135,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             is_assigned2 = ub.boolmask([t[1] for t in assignment], len(region2_df))
             num_assigned1 = sum(is_assigned1)
             num_assigned2 = sum(is_assigned2)
-            summary = {
+            assignment_summary = {
                 'region_id': region_id,
                 'ratio1': num_assigned1 / len(is_assigned1),
                 'ratio2': num_assigned2 / len(is_assigned2),
@@ -145,7 +145,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
                 'total2': len(is_assigned2),
                 'assignment_score': assignment_score,
             }
-            summaries.append(summary)
+            assignment_summaries.append(assignment_summary)
 
             for idx1, idx2 in assignment:
                 site1 = sites1[idx1]
@@ -160,7 +160,7 @@ class SiteModelAssociatorCLI(scfg.DataConfig):
             for site in sites1:
                 fpath = out_dpath / (site.site_id + '.geojson')
                 fpath.write_text(site.dumps())
-        print(f'summaries = {ub.urepr(summaries, nl=1)}')
+        print(f'assignment_summaries = {ub.urepr(assignment_summaries, nl=1)}')
 
 
 def site_overlap_score(site1, site2):
