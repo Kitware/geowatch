@@ -22,6 +22,11 @@ class DetectronPredictCLI(scfg.DataConfig):
         Specify the detectron config that corresponds to the model.
         If "auto" attempts to introspect from the checkpoint fpath, which is
         currently only possible if the model was written as a sidecar file.
+
+        Could be something like:
+            * COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml
+            * COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml
+            * new_baselines/mask_rcnn_regnety_4gf_dds_FPN_400ep_LSJ.py
         '''))
 
     cfg = scfg.Value(ub.codeblock(
@@ -86,19 +91,26 @@ class OldStyleConfigBackend:
 
         # cfg.DATASETS.TRAIN = (dataset_infos['train']['name'],)
         # cfg.DATASETS.TEST = (dataset_infos['vali']['name'],)
-        cfg.DATASETS.TEST = ()
-        cfg.DATALOADER.NUM_WORKERS = 2
+        # cfg.DATASETS.TEST = ()
+        # cfg.DATALOADER.NUM_WORKERS = 2
         # cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url('COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml')  # Let training initialize from model zoo
         # cfg.SOLVER.IMS_PER_BATCH = 2   # This is the real 'batch size' commonly known to deep learning people
         # cfg.SOLVER.BASE_LR = 0.00025   # pick a good LR
         # cfg.SOLVER.MAX_ITER = 120_000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
         # cfg.SOLVER.STEPS = []          # do not decay learning rate
-        cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128   # The 'RoIHead batch size'. 128 is faster, and good enough for this toy dataset (default: 512)
+        # cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128   # The 'RoIHead batch size'. 128 is faster, and good enough for this toy dataset (default: 512)
         # cfg.MODEL.ROI_HEADS.NUM_CLASSES = 46  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+        # cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
         # NOTE: this config means the number of classes, but a few popular unofficial tutorials incorrect uses num_classes+1 here.
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.1  # set threshold for this model
-        cfg.MODEL.WEIGHTS = os.fspath(config.checkpoint_fpath)
+        # cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.1  # set threshold for this model
+
+        ckpt_path = config.checkpoint_fpath
+        if ckpt_path is not None or ckpt_path != 'noop':
+            if not os.path.exists(ckpt_path) and ckpt_path.endswith('yaml'):
+                # Checkpoint is likely given as a model zoo resource
+                ckpt_path = model_zoo.get_checkpoint_url(ckpt_path)
+            cfg.MODEL.WEIGHTS = os.fspath(ckpt_path)
+
         backend = cls(cfg, config)
 
         cfg_final_layer = kwutil.Yaml.coerce(config.cfg, backend='pyyaml')
@@ -140,6 +152,7 @@ class NewStyleConfigBackend:
     @classmethod
     def from_train_dpath(cls, train_dpath, config):
         import kwutil
+        import kwcoco
         yaml_files = list(train_dpath.glob('*.yaml'))
         if len(yaml_files) == 0:
             raise Exception('no yaml files')
@@ -156,6 +169,21 @@ class NewStyleConfigBackend:
         else:
             cfg = kwutil.Yaml.load(config_path)
         backend = cls(cfg, config)
+
+        cat_fpath = train_dpath / 'categories.json'
+
+        # TODO: this should really be handled on a head-by-head basis
+        if 'classes' in backend.cfg:
+            classes = kwcoco.CategoryTree.coerce(backend.cfg['classes'])
+        else:
+            if cat_fpath.exists():
+                print('found categories fpath')
+                categories = kwutil.Json.load(cat_fpath)
+                classes = kwcoco.CategoryTree.from_coco(categories)
+                classes = list(classes)
+            else:
+                raise NotImplementedError('no way to procede')
+        backend.classes = classes
 
         # Override config values
         cfg_final_layer = kwutil.Yaml.coerce(config.cfg, backend='pyyaml')
@@ -187,6 +215,11 @@ class Detectron2Predictor:
             backend = OldStyleConfigBackend.from_config(config)
         predictor.backend = backend
         predictor.backend.load_model()
+
+    @property
+    def classes(self):
+        assert self.backend is not None
+        return self.backend.classes
 
     def prepare_dataset(predictor):
         import kwcoco
@@ -251,19 +284,22 @@ class Detectron2Predictor:
         predictor.writer_queue = writer_queue
 
     def run_prediction(predictor):
-        import kwimage
-        import kwarray
+        """
+        batch prediction on the kwcoco file
+        """
+        # import kwimage
+        # import kwarray
         import torch
-        import einops
+        # import einops
         import numpy as np
         import rich
         # TODO: could be much more efficient
-        torch_impl = kwarray.ArrayAPI.coerce('torch')()
-        config = predictor.config
+        # torch_impl = kwarray.ArrayAPI.coerce('torch')()
+        # config = predictor.config
 
         # FIXME: We need a method to know what classes the detectron2 model was
         # trained with.
-        classes = predictor.dset.object_categories()
+        # predictor.dset.object_categories()
         dset = predictor.dset
         print(f'dset={dset}')
 
@@ -282,56 +318,15 @@ class Detectron2Predictor:
                 batch_item = batch[0]
                 image_id = batch_item['target']['gids'][0]
                 im_chw = batch_item['frames'][0]['modes']['blue|green|red']
-                im_hwc = einops.rearrange(im_chw, 'c h w -> h w c').numpy()
 
-                # Preprocess the inputs
-                height, width = im_chw.shape[1:3]
-                image = predictor.backend.preprocess(im_hwc)
-                image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-                image = image.to(predictor.backend.device)
+                dets = predictor.predict_image(im_chw)
 
-                inputs = {"image": image, "height": height, "width": width}
-                outputs = predictor.backend.model([inputs])[0]
-
-                instances = outputs['instances']
-                if len(instances):
-                    boxes = instances.pred_boxes
-                    scores = instances.scores
-                    boxes = kwimage.Boxes(boxes.tensor, format='ltrb').numpy()
-                    scores = torch_impl.numpy(instances.scores)
-                    # TODO: handle masks
-
-                    if hasattr(instances, 'pred_masks'):
-                        pred_masks = torch_impl.numpy(instances.pred_masks)
-                        segmentations = []
-                        for cmask in pred_masks:
-                            mask = kwimage.Mask.coerce(cmask)
-                            poly = mask.to_multi_polygon()
-                            segmentations.append(poly)
-                    else:
-                        segmentations = None
-
-                    pred_class_indexes = torch_impl.numpy(instances.pred_classes)
-
-                    dets = kwimage.Detections(
-                        boxes=boxes,
-                        scores=scores,
-                        class_idxs=pred_class_indexes,
-                        segmentations=segmentations,
-                        classes=classes,
-                    )
-                    if config.nms_thresh and config.nms_thresh > 0:
-                        dets = dets.non_max_supress(thresh=config.nms_thresh)
-
-                    for ann in dets.to_coco(style='new'):
-                        ann['image_id'] = image_id
-                        catname = ann.pop('category_name')
-                        ann['category_id'] = dset.ensure_category(catname)
-                        ann['role'] = 'prediction'
-                        dset.add_annotation(**ann)
-                else:
-                    dets = kwimage.Detections.random(0)
-                    dets.data['segmentations'] = []
+                for ann in dets.to_coco(style='new'):
+                    ann['image_id'] = image_id
+                    catname = ann.pop('category_name')
+                    ann['category_id'] = dset.ensure_category(catname)
+                    ann['role'] = 'prediction'
+                    dset.add_annotation(**ann)
 
                 if predictor.stitcher is not None:
                     frame_info = batch_item['frames'][0]
@@ -363,6 +358,63 @@ class Detectron2Predictor:
                 predictor.stitcher.submit_finalize_image(gid)
             predictor.writer_queue.wait_until_finished()
 
+    def predict_image(predictor, im_chw):
+        import torch
+        import kwimage
+        import kwarray
+        import einops
+
+        # TODO: ensure references are not costly to access
+        # classes = COCO_CLASSES  # TODO: grab from config
+        classes = predictor.classes
+        config = predictor.config
+        torch_impl = kwarray.ArrayAPI.coerce('torch')()
+
+        im_hwc = einops.rearrange(im_chw, 'c h w -> h w c').numpy()
+
+        # Preprocess the inputs
+        height, width = im_chw.shape[1:3]
+        image = predictor.backend.preprocess(im_hwc)
+        image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+        image = image.to(predictor.backend.device)
+
+        inputs = {"image": image, "height": height, "width": width}
+        outputs = predictor.backend.model([inputs])[0]
+
+        instances = outputs['instances']
+        if len(instances):
+            boxes = instances.pred_boxes
+            scores = instances.scores
+            boxes = kwimage.Boxes(boxes.tensor, format='ltrb').numpy()
+            scores = torch_impl.numpy(instances.scores)
+            pred_class_indexes = torch_impl.numpy(instances.pred_classes)
+
+            detkw = {
+                'boxes': boxes,
+                'scores': scores,
+                'class_idxs': pred_class_indexes,
+                'classes': classes,
+            }
+            if hasattr(instances, 'pred_masks'):
+                pred_masks = torch_impl.numpy(instances.pred_masks)
+                segmentations = []
+                for cmask in pred_masks:
+                    mask = kwimage.Mask.coerce(cmask)
+                    poly = mask.to_multi_polygon()
+                    segmentations.append(poly)
+                detkw['segmentations'] = kwimage.SegmentationList(segmentations)
+            else:
+                # detkw['segmentations'] = None
+                ...
+
+            dets = kwimage.Detections(**detkw)
+            if config.nms_thresh and config.nms_thresh > 0:
+                dets = dets.non_max_supress(thresh=config.nms_thresh)
+        else:
+            dets = kwimage.Detections.random(0)
+            dets.data['segmentations'] = kwimage.SegmentationList([])
+        return dets
+
 
 def detectron_predict(config):
     import geowatch_tpl
@@ -393,6 +445,22 @@ def detectron_predict(config):
     bundle_dpath = predictor.bundle_dpath
     rich.print(f'Wrote to: [link={bundle_dpath}]{bundle_dpath}[/link]')
 
+
+COCO_CLASSES = ['__background__', 'person', 'bicycle', 'car', 'motorcycle',
+                'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+                'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
+                'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear',
+                'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie',
+                'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+                'kite', 'baseball bat', 'baseball glove', 'skateboard',
+                'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
+                'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+                'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+                'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed',
+                'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
+                'keyboard', 'cell phone', 'microwave', 'oven', 'toaster',
+                'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
+                'teddy bear', 'hair drier', 'toothbrush']
 
 if __name__ == '__main__':
     """

@@ -45,6 +45,11 @@ class DetectronFitCLI(scfg.DataConfig):
             This is the neat thing about how scriptconfig handles the nested
             config necessary for full detectron control: it doesn't. It just
             handles something that can be coerced into YAML and merged.
+
+            Could be something like:
+                * COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml
+                * COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml
+                * new_baselines/mask_rcnn_regnety_4gf_dds_FPN_400ep_LSJ.py
             '''))
 
     @classmethod
