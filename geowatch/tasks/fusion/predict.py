@@ -676,8 +676,12 @@ def _prepare_batch(orig_batch, device, input_norms,
                 try:
                     known_sensor_modes = input_norms[sensor]
                 except KeyError:
-                    known_sensor_modes = None
-                    continue
+                    if '*' in input_norms:
+                        # yet another hack to handle generic sensors
+                        known_sensor_modes = input_norms['*']
+                    else:
+                        known_sensor_modes = None
+                        continue
             filtered_modes = {}
             modes = frame['modes']
             for key, mode in modes.items():
