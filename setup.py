@@ -270,7 +270,7 @@ if __name__ == '__main__':
         name=NAME,
         author="GeoWATCH developers",
         author_email='kitware@kitware.com',
-        python_requires='>=3.10',
+        python_requires='>=3.8',
         # https://pypi.org/classifiers/
         classifiers=[
             'Development Status :: 4 - Beta',

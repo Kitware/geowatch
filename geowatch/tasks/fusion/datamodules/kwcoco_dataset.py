@@ -171,7 +171,6 @@ Ignore:
 
 """
 import einops
-import functools
 import kwarray
 import kwcoco
 import kwimage
@@ -206,6 +205,11 @@ from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
+
+try:
+    from functools import cache
+except ImportError:
+    from ubelt import memoize as cache
 
 try:
     import line_profiler
@@ -4404,7 +4408,7 @@ def worker_init_fn(worker_id):
     #     print("DOES NOT HAVE SAMPLER")
 
 
-@functools.cache
+@cache
 def _space_weights(space_shape):
     sigma = (
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
