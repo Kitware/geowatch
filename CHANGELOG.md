@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Added detectron2 as a tpl submodule
+* mlops manager can now accept `expt_pattern`
 
 ### Fixed
 * Support latest DETR in transformers library 4.46.2
