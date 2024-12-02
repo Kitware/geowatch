@@ -6,7 +6,7 @@ __devnotes__ = """
 # We may want to delay actual imports, gdal import time can be excessive
 
 python -X importtime -c "import geowatch"
-WATCH_HACK_IMPORT_ORDER="" python  -X importtime -m geowatch.cli find_dvc
+GEOWATCH_HACK_IMPORT_ORDER="" python  -X importtime -m geowatch.cli find_dvc
 """
 
 
@@ -95,7 +95,7 @@ def main(cmdline=True, **kw):
     import os
     from scriptconfig.modal import ModalCLI
     import geowatch
-    WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
+    GEOWATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '') or os.environ.get('GEOWATCH_LOOSE_CLI', '')
 
     # https://emojiterra.com/time/
     # Not sure how to make this consistent on different terminals
@@ -178,7 +178,7 @@ def main(cmdline=True, **kw):
         cli_config.__alias__ = list(secondary_cmdnames)
         modal.register(cli_config)
 
-    ret = modal.main(strict=not WATCH_LOOSE_CLI)
+    ret = modal.main(strict=not GEOWATCH_LOOSE_CLI)
     return ret
 
 

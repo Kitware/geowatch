@@ -331,7 +331,7 @@ class Initializer(object):
             config['init'] = 'pretrained'
 
         import os
-        init_verbose = int(os.environ.get('WATCH_INIT_VERBOSE', 4))
+        init_verbose = int(os.environ.get('GEOWATCH_INIT_VERBOSE', os.environ.get('WATCH_INIT_VERBOSE', 4)))
 
         # ---
         initializer_ = None

@@ -407,7 +407,7 @@ def main(cmdline=True, **kwargs):
 class StacSearcher:
     r"""
     Example:
-        >>> # xdoctest: +REQUIRES(env:WATCH_ENABLE_NETWORK_TESTS)
+        >>> # xdoctest: +REQUIRES(env:GEOWATCH_ENABLE_NETWORK_TESTS)
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from geowatch.cli.stac_search import *  # NOQA
         >>> import tempfile

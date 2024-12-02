@@ -7,7 +7,7 @@ Derived from netharn/mixins.py for dumping tensorboard plots to disk
 
 CommandLine:
     # cd into training directory
-    WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
+    GEOWATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
 
     python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
         /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
@@ -204,7 +204,7 @@ def _write_helper_scripts(out_dpath, train_dpath):
     refresh_fpath.write_text(ub.codeblock(
         fr'''
         #!/usr/bin/env bash
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        GEOWATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {train_dpath_}
         '''))
     try:
@@ -586,6 +586,6 @@ class TensorboardPlotterCLI(scfg.DataConfig):
 if __name__ == '__main__':
     """
     CommandLine:
-        WATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
+        GEOWATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
     """
     TensorboardPlotterCLI.main()

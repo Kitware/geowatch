@@ -53,8 +53,8 @@ class CropSitesToRegionsConfig(SiteFilterConfig):
         - [ ] Rename this to ClipSitesToRegions?
 
     Example:
-        DVC_DPATH=$(WATCH_PREIMPORT=none python -m geowatch.cli.find_dvc)
-        WATCH_PREIMPORT=none python -m geowatch.cli.crop_sites_to_regions \
+        DVC_DPATH=$(GEOWATCH_PREIMPORT=none python -m geowatch.cli.find_dvc)
+        GEOWATCH_PREIMPORT=none python -m geowatch.cli.crop_sites_to_regions \
             --site_models "$DVC_DPATH/annotations/site_models/KR_R002_*.geojson" \
             --region_models "$DVC_DPATH/annotations/region_models/KR_R002.geojson" \
             --new_site_dpath ./cropped_sites

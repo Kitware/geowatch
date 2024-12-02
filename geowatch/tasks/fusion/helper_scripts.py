@@ -41,7 +41,7 @@ def train_time_helper_scripts(dpath, train_coco_fpath, vali_coco_fpath):
         {autogen_comment}
 
         # Update the main plots and stack them into a nice figure
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        GEOWATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {dpath}
         '''
     ))

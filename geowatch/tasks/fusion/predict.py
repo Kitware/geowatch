@@ -901,7 +901,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                 from kwutil import util_environ
                 # import xdev
                 # xdev.embed()
-                if util_environ.envflag('WATCH_STRICT_PREDICT'):
+                if util_environ.envflag('WATCH_STRICT_PREDICT') or util_environ.envflag('GEOWATCH_STRICT_PREDICT'):
                     raise
                 continue
 

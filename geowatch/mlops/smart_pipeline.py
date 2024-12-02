@@ -7,7 +7,7 @@ used to store results.
 
 CommandLine:
     xdoctest -m geowatch.mlops.smart_pipeline __doc__:0
-    WATCH_DEVCHECK=1 xdoctest -m geowatch.mlops.smart_pipeline __doc__:1
+    GEOWATCH_DEVCHECK=1 xdoctest -m geowatch.mlops.smart_pipeline __doc__:1
 
 Example:
     >>> # xdoctest: +SKIP
@@ -62,7 +62,7 @@ Example:
 
 
 Example:
-    >>> # xdoctest: +REQUIRES(env:WATCH_DEVCHECK)
+    >>> # xdoctest: +REQUIRES(env:GEOWATCH_DEVCHECK)
     >>> from geowatch.mlops.smart_pipeline import *  # NOQA
     >>> import geowatch
     >>> expt_dvc_dpath = geowatch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
