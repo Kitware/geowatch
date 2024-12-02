@@ -3952,7 +3952,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         on the user input.
         """
         config = self.config
-        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+        grid_workers = int(os.environ.get('GEOWATCH_GRID_WORKERS', os.environ.get('WATCH_GRID_WORKERS', 0)))
         common_grid_kw = dict(
             time_dims=config['time_steps'],
             window_dims=config['chip_dims'],
