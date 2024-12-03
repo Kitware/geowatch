@@ -1010,6 +1010,13 @@ class TruthMixin:
 
             missing_poly_flags = [poly is None for poly in ann_polys]
             if any(missing_poly_flags):
+                # Note: this will convert boxes into box-polygons, which is
+                # generally a non-optimial segmentation target objective.  We
+                # might do better by having a "policy" to control implicit
+                # conversion of boxes to segmentation masks.  we could use an
+                # ellipse and downweight edges, which might be more suitable
+                # for general use-cases. We may also want to downweight the
+                # entire polygon itself as it is a weak segmentation.
                 missing_idxs = np.where(missing_poly_flags)[0]
                 _box_polys = ann_boxes[missing_idxs].to_polygons()
                 for idx, _poly in zip(missing_idxs, _box_polys):
