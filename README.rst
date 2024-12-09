@@ -45,6 +45,8 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | Slides                                                   | `Software Overview Slides`_  and `KHQ Demo Slides`_            |
 +----------------------------------------------------------+----------------------------------------------------------------+
+| Blog Post                                                | https://www.kitware.com/geowatch/                              |
++----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GeoWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Phase 2 Internal SMART GeoWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
