@@ -182,7 +182,7 @@ class NewStyleConfigBackend:
                 classes = kwcoco.CategoryTree.from_coco(categories)
                 classes = list(classes)
             else:
-                raise NotImplementedError('no way to procede')
+                raise NotImplementedError('categories.json not found, no way to procede without classes')
         backend.classes = classes
 
         # Override config values

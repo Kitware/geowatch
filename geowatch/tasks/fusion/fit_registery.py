@@ -2,6 +2,17 @@
 Experimental feature where each training run will register itself in a global
 registery. We can then provide a command to make it easy to check which
 training runs were started on this machine and where they are located.
+
+
+Usage
+-----
+
+To See
+
+.. code:: bash
+
+        python -m geowatch.tasks.fusion.fit_registery peek
+
 """
 import ubelt as ub
 import warnings
@@ -343,7 +354,6 @@ class FitRegisteryCLI(scfg.ModalCLI):
 if __name__ == '__main__':
     """
     CommandLine:
-        CommandLine:
-            python -m geowatch.tasks.fusion.fit_registery peek
+        python -m geowatch.tasks.fusion.fit_registery peek
     """
     FitRegisteryCLI.main()
