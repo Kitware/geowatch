@@ -988,9 +988,10 @@ def _write_ann_visualizations2(coco_dset,
         colors = []
         # Determine the color for each annotation
         for ann in role_anns:
-            color = 'kitware_red'
-            cid = ann['category_id']
-            if cid is not None:
+            # color = 'kitware_red'
+            cid = ann.get('category_id', None)
+            color = ann.get('color', None)
+            if color is None and cid is not None:
                 cat = coco_dset.cats[cid]
                 color = cat.get('color', color)
             if 0:

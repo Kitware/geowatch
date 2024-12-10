@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Changed instances of `__config__` to `__cli__`
 * KWCocoVideoDataset will now respect the `"sensor"` field in an image in addition to `"sensor_coarse"` (which still takes priority)
 * Added aliases of `GEOWATCH_PREIMPORT`, `GEOWATCH_HACK_IMPORT_ORDER`, `GEOWATCH_GRID_WORKERS`, `GEOWATCH_LOOSE_CLI` for the old `GEO`-less versions.
+* Respect the annotation color property in coco visualize videos
 
 ### Modified
 * More documentation with an mlops minimal example.
