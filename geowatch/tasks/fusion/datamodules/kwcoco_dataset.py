@@ -3808,16 +3808,24 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self._init_sensorchan()
 
         if self.config['normalize_peritem']:
-            # (this probably should be extended to be a sensorchan...)
+            # (FIXME:this probably should be extended to be a sensorchan...)
             if self.config['normalize_peritem'] is True:
                 # If True, then normalize all known channels
+                # FIXME: input config probably should not be modified outside
+                # of the __post_init__, we can set any resolved config to an
+                # internal variable instead of overwriting the user-specified
+                # value.
                 self.config['normalize_peritem'] = FusedChannelSpec.coerce(
                     '|'.join(sorted(set(ub.flatten([
                         s.chans.to_list()
                         for s in self.input_sensorchan.streams()])))))
             else:
+                normperitem_data = self.config['normalize_peritem']
+                # HACK:
+                if isinstance(normperitem_data, list):
+                    normperitem_data = ','.join(normperitem_data)
                 # Otherwise assume the user specified what channels to normalize
-                self.config['normalize_peritem'] = ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+                self.config['normalize_peritem'] = ChannelSpec.coerce(normperitem_data).fuse()
         else:
             self.config['normalize_peritem'] = None
 
