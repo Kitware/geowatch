@@ -206,6 +206,13 @@ from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
 
+from delayed_image.channel_spec import FusedChannelSpec
+from delayed_image.channel_spec import ChannelSpec
+from delayed_image.sensorchan_spec import SensorChanSpec
+from delayed_image.sensorchan_spec import FusedSensorChanSpec
+from delayed_image.sensorchan_spec import SensorSpec
+
+
 try:
     from functools import cache
 except ImportError:
@@ -1704,8 +1711,6 @@ class GetItemMixin(TruthMixin):
             ]
             new = sum(matching_streams)
             if new == 0:
-                from delayed_image.sensorchan_spec import FusedSensorChanSpec, SensorSpec
-                from delayed_image.channel_spec import FusedChannelSpec
                 new = FusedSensorChanSpec(SensorSpec(sensor), FusedChannelSpec.coerce(''))
             return new
 
@@ -1730,7 +1735,7 @@ class GetItemMixin(TruthMixin):
             return x if isinstance(x, list) else [x]
 
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', self.config['mask_samecolor_method'])
-        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
+        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
         SAMECOLOR_VALUES = target_.get('SAMECOLOR_VALUES', _ensure_list(self.config['mask_samecolor_values']))
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
 
@@ -1740,7 +1745,7 @@ class GetItemMixin(TruthMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
-        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
+        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -2054,7 +2059,7 @@ class GetItemMixin(TruthMixin):
                 sensor = frame_item['sensor']
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
-                    mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
+                    mode_chan = FusedChannelSpec.coerce(mode_key)
                     common_key = mode_chan.intersection(self.config['normalize_peritem'])
                     if common_key:
                         parent_data = frame_modes[mode_key]
@@ -3257,7 +3262,7 @@ class PreprocessMixin:
                 input_stats2 = {}
                 for mode, stats in old_input_stats.items():
                     sensor, channels = mode
-                    sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:{channels}')
+                    sensorchan = SensorChanSpec.coerce(f'{sensor}:{channels}')
                     key = sensorchan.concise().spec
                     inner_stats = {}
                     for statname, arr in stats.items():
@@ -3806,13 +3811,13 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             # (this probably should be extended to be a sensorchan...)
             if self.config['normalize_peritem'] is True:
                 # If True, then normalize all known channels
-                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
+                self.config['normalize_peritem'] = FusedChannelSpec.coerce(
                     '|'.join(sorted(set(ub.flatten([
                         s.chans.to_list()
                         for s in self.input_sensorchan.streams()])))))
             else:
                 # Otherwise assume the user specified what channels to normalize
-                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+                self.config['normalize_peritem'] = ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
         else:
             self.config['normalize_peritem'] = None
 
@@ -3867,10 +3872,10 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
                 for c in chan_hist.keys():
-                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
+                    chancode = ChannelSpec.coerce(c).fuse().spec
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
-            sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            sensorchans = SensorChanSpec.coerce(sensorchans)
             print(f'Automatically determined sensorchans = {ub.urepr(sensorchans, nl=1)}')
             if len(sensorchan_hist) > 0 and channels is None:
                 # Only warn if not explicitly in auto mode
@@ -3883,7 +3888,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             # hack
             sensorchan_hist = None
             sensorchans = channels
-        self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
+        self.sensorchan = SensorChanSpec.coerce(sensorchans).normalize()
 
         # handle generic * sensors, the idea is that we find matches
         # in the dataset that can support the requested channels.
@@ -3902,7 +3907,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     for cand_sensor, cand_chans in sensorchan_hist.items():
                         valid_chan_cands = []
                         for cand_chan_group in cand_chans:
-                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
+                            cand_chan_group = ChannelSpec.coerce(cand_chan_group).fuse()
                             chan_isect = chans & cand_chan_group
                             if chan_isect.spec == chans.spec:
                                 valid_chan_cands.append(valid_chan_cands)
@@ -3915,7 +3920,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
                 raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
 
-            self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(
+            self.sensorchan = SensorChanSpec.coerce(','.join(
                 list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
 
         # TODO: Clean up this code.
@@ -3944,11 +3949,11 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             _sample_channels.append('|'.join(_sample_stream))
 
             #### New: input_sensorchan will replace input_channels
-            self.sample_sensorchan = kwcoco.SensorChanSpec(
+            self.sample_sensorchan = SensorChanSpec(
                 ','.join(_sample_sensorchans)
             )
 
-            self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
+            self.input_sensorchan = SensorChanSpec.coerce(
                 ','.join(_input_sensorchans)
             )
 
@@ -4384,7 +4389,7 @@ def more_demos():
         >>> self.config['resample_invalid_frames'] = 0
         >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
         >>> item1 = self[index]
-        >>> self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+        >>> self.config['normalize_peritem'] = FusedChannelSpec.coerce('red|green|blue|nir')
         >>> item2 = self[index]
         >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
