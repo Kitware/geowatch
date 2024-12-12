@@ -36,7 +36,7 @@ class CliFormatterCLI(scfg.DataConfig):
             input_type = guess_input_type(input_type)
             print(f'Guess: input_type={input_type}')
 
-        config_dict = parse_cli_input(text, input_type)
+        config_dict = parse_cli_config(text, input_type)
 
         if config.output_type == 'all':
             output_types = ['yaml', 'dict', 'argv']
@@ -56,11 +56,16 @@ class CliFormatterCLI(scfg.DataConfig):
         # print(util_yaml.Yaml.coerce(config.input))
 
 
-def parse_cli_input(text, input_type='auto'):
+def parse_cli_config(text, input_type='auto'):
     """
+    Make a best guess about what the CLI config is supposed to be in terms of
+    key/values. It is not possible to get this right in general due to the
+    customization that can happen on an argparse level, but we can get pretty
+    close.
+
     CommandLine:
-        xdoctest -m /home/joncrall/code/geowatch/dev/poc/cli_formatter.py parse_cli_input
-        xdoctest -m cli_formatter parse_cli_input
+        xdoctest -m /home/joncrall/code/geowatch/dev/poc/cli_formatter.py parse_cli_config
+        xdoctest -m cli_formatter parse_cli_config
 
     Example:
         >>> import sys, ubelt
@@ -76,7 +81,7 @@ def parse_cli_input(text, input_type='auto'):
         >>>     print(f' * text = {ub.urepr(text, nl=1)}')
         >>>     input_type = guess_input_type(text)
         >>>     print(f' * input_type = {ub.urepr(input_type, nl=1)}')
-        >>>     config_dict = parse_cli_input(text)
+        >>>     config_dict = parse_cli_config(text)
         >>>     print(f' * config_dict = {ub.urepr(config_dict, nl=1)}')
     """
     import kwutil
