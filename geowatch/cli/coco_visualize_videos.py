@@ -753,7 +753,8 @@ class TrackInfoLookup:
             max_frame_index = None
 
         vid_annots = vid_images.annots
-        track_ids = set(ub.flatten(vid_annots.lookup('track_id')))
+        track_ids = set(ub.flatten(vid_annots.lookup('track_id', None)))
+        track_ids -= {None}
         trails = []
         for track_id in track_ids:
             track_aids = self.dset.index.trackid_to_aids[track_id]

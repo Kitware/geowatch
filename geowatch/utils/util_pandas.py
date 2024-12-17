@@ -281,6 +281,13 @@ class DataFrame(pd.DataFrame):
         else:
             return new
 
+    def _to_dotdict(self):
+        """
+        Experimental, convert a a dotdict (should maybe give useful dotdict
+        methods to this class?)
+        """
+        return DotDictDataFrame(self)
+
 
 def pandas_reorder_columns(df, columns):
     """
@@ -590,6 +597,23 @@ class DotDictDataFrame(pd.DataFrame):
         # except KeyError:
         #     ...
         # return candiates
+
+    def _column_graph(self):
+        import networkx as nx
+        graph = nx.DiGraph()
+        # root = '__root__'
+        # graph.add_node(root)
+        for c in self.columns:
+            parts = c.split('.')
+            # prev_node = root
+            prev_node = None
+            for i in range(1, len(parts)):
+                node = '.'.join(parts[:i + 1])
+                graph.add_node(node, label=f'{parts[i]}')
+                if prev_node is not None:
+                    graph.add_edge(prev_node, node)
+                prev_node = node
+        nx.write_network_text(graph, with_labels=1)
 
     def lookup_suffix_columns(self, col):
         return self._column_suffix_trie.values(col)
