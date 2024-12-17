@@ -2085,7 +2085,7 @@ class GetItemMixin(TruthMixin):
                 valid_mask = np.concatenate([t[1].ravel() for t in norm_items], axis=0)
                 valid_raw_datas = raw_datas[valid_mask]
                 # Compute normalizers over the entire temporal range per-sensor
-                normalizer = kwimage.find_robust_normalizers(valid_raw_datas,
+                normalizer = kwarray.find_robust_normalizers(valid_raw_datas,
                                                              params=peritem_normalizer_params)
                 # Postprocess / regularize the normalizer
                 prior_min = min(0, normalizer['min_val'])
