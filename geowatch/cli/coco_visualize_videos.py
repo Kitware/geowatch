@@ -758,8 +758,6 @@ class TrackInfoLookup:
         else:
             max_frame_index = None
 
-        import xdev
-        xdev.embed()
         vid_annots = vid_images.annots
         track_ids = set(ub.flatten(vid_annots.lookup('track_id', None)))
         track_ids -= {None}
@@ -1663,7 +1661,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     trail_cxy = trail['trail']['drawspace_boxes'].xy_center
                     trail_colors = trail['trail']['track_colors'][1:]
                     ann_canvas = draw_polyline_on_image(
-                        ann_canvas, trail_cxy, color=trail_colors, thickness=10)
+                        ann_canvas, trail_cxy, color=trail_colors, thickness=2)
 
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
