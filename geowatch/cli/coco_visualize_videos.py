@@ -268,12 +268,17 @@ def main(cmdline=True, **kwargs):
         >>> import kwimage
         >>> anchors = np.array([[0.05, 0.05]])
         >>> size = (512, 512)
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=20, num_tracks=10, anchors=anchors, image_size=size)
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=20, num_tracks=20, anchors=anchors, image_size=size)
+        >>> # Make 3 annots not have tracks
+        >>> dset.remove_tracks(dset.tracks()[0:3], keep_annots=True)
         >>> # Give half of the tracks a random color
         >>> for track in dset.dataset['tracks'][::2]:
-        >>>     track['color'] = kwimage.Color.random().as255()
-        >>> # Make one annot not have tracks
-        >>> dset.remove_tracks(dset.tracks()[0:5], keep_annots=True)
+        >>>     track['color'] = kwimage.Color.random().ashex()
+        >>> # Give tracks roles
+        >>> for track in dset.dataset['tracks'][2::2]:
+        ...     track['role'] = 'role1'
+        >>> for track in dset.dataset['tracks'][3::2]:
+        ...     track['role'] = 'role2'
         >>> dpath = ub.Path.appdir('geowatch/tests/viz_video3').ensuredir()
         >>> for r, ds, fs in dpath.walk():
         ...     for f in fs:
@@ -281,10 +286,13 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'src': dset,
         >>>     'viz_dpath': dpath,
-        >>>     'channels': None,
+        >>>     'channels': 'r,b',
         >>>     'draw_track_trails': True,
         >>>     'stack': 'only',
+        >>>     'role_order': ['role1', 'role2'],
+        >>>     'cmap': 'gray',
         >>>     'workers': 0,
+        >>>     'verbose': 101,
         >>> }
         >>> cmdline = False
         >>> main(cmdline=cmdline, **kwargs)
@@ -791,16 +799,20 @@ class TrackInfoLookup:
                 track_gids.append(gid)
             if len(vidspace_boxes):
                 vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
-                trail = {
+                motion_path = {
                     'vidspace_boxes': vidspace_boxes,
                     'track_gids': track_gids,
                     'track_aids': track_aids,
                     'track_colors': track_colors,
                 }
-                trails.append({
+                trail = {
                     'track_id': track_id,
-                    'trail': trail
-                })
+                    'motion_path': motion_path
+                }
+                for k in ['role', 'color', 'thickness']:
+                    if k in track:
+                        trail[k] = track[k]
+                trails.append(trail)
         return trails
 
 
@@ -1094,16 +1106,13 @@ def _write_ann_visualizations2(coco_dset,
             video_id=coco_img.img['video_id'],
             # image_id=coco_img['id']
         )
-        # TODO: proper warping?
-        for trail in trails:
-            trail['trail']['drawspace_boxes'] = trail['trail']['vidspace_boxes']
     else:
         trails = None
 
     role_to_anns = ub.group_items(anns_, lambda ann: ann.get('role', None))
     role_to_anns = {'none' if k is None else k.lower(): v for k, v in role_to_anns.items()}
 
-    role_to_dets = ub.udict()
+    role_to_drawables = ub.udict()
 
     for role, role_anns in role_to_anns.items():
         colors = []
@@ -1137,13 +1146,24 @@ def _write_ann_visualizations2(coco_dset,
             role_dets = role_dets.compress(flags)
 
         role_dets = role_dets.warp(warp_viz_from_img)
-        role_to_dets[role] = role_dets
+        role_to_drawables[role] = {
+            'dets': role_dets,
+        }
+
+    if trails is not None:
+        role_to_trails = ub.group_items(trails, lambda trail: trail.get('role', None))
+        role_to_trails = {'none' if k is None else k.lower(): v for k, v in role_to_trails.items()}
+
+        for role, role_trails in role_to_trails.items():
+            # TODO: proper warping?
+            for trail in role_trails:
+                trail['motion_path']['vizspace_boxes'] = trail['motion_path']['vidspace_boxes']
+            if role not in role_to_drawables:
+                role_to_drawables[role] = {}
+            role_to_drawables[role]['trails'] = role_trails
 
     # TODO: asset space
-
     if vid_crop_box is not None:
-        if trails is not None:
-            raise NotImplementedError('Cant use trails and vid-crop-box yet. Need to implement proper warps')
         # Ensure the crop box is in the proper space
         if space == 'image':
             warp_viz_from_vid = warp_viz_from_space @ warp_vid_from_img.inv()
@@ -1154,8 +1174,13 @@ def _write_ann_visualizations2(coco_dset,
             raise KeyError(space)
         crop_box = vid_crop_box.warp(warp_viz_from_vid).quantize()
         ann_shift = (-crop_box.tl_x.ravel()[0], -crop_box.tl_y.ravel()[0])
-        for role_dets in role_to_dets.values():
-            role_dets.translate(ann_shift, inplace=True)
+        for role_drawables in role_to_drawables.values():
+            role_dets = role_drawables.get('dets', None)
+            role_trails = role_drawables.get('trails', None)
+            if role_trails is not None:
+                raise NotImplementedError('Cant use trails and vid-crop-box yet. Need to implement proper warps')
+            if role_dets is not None:
+                role_dets.translate(ann_shift, inplace=True)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     valid_image_poly = None
@@ -1193,12 +1218,15 @@ def _write_ann_visualizations2(coco_dset,
             viz_scale_factor *= max_dim / chan_max_dim
 
     if viz_scale_factor != 1:
-        if trails is not None:
-            raise NotImplementedError('Cant use trails and vid-crop-box yet. Need to implement proper warps')
         viz_warp = kwimage.Affine.scale(viz_scale_factor)
         delayed = delayed.warp(viz_warp)
-        for role_dets in role_to_dets.values():
-            role_dets.warp(viz_warp, inplace=True)
+        for role_drawables in role_to_drawables.values():
+            role_dets = role_drawables.get('dets', None)
+            role_trails = role_drawables.get('trails', None)
+            if role_trails is not None:
+                raise NotImplementedError('Cant use trails and vid-crop-box yet. Need to implement proper warps')
+            if role_dets is not None:
+                role_dets.warp(viz_warp, inplace=True)
         if valid_image_poly is not None:
             valid_image_poly = valid_image_poly.warp(viz_warp)
         if valid_video_poly is not None:
@@ -1217,7 +1245,7 @@ def _write_ann_visualizations2(coco_dset,
     if role_order is not None:
         # role_order = ['truth', 'none']
         requested_slots = {}
-        for role in role_to_anns.keys():
+        for role in role_to_drawables.keys():
             try:
                 idx = role_order.index(role)
             except ValueError:
@@ -1226,10 +1254,13 @@ def _write_ann_visualizations2(coco_dset,
         stack_idx_to_roles = ub.invert_dict(requested_slots, unique_vals=False)
     else:
         # If unspecified draw all roles on the first part
-        stack_idx_to_roles = {0: list(role_to_anns.keys())}
+        stack_idx_to_roles = {0: list(role_to_drawables.keys())}
 
     if 1 and verbose > 100:
-        rich.print(f'role_to_num_anns={ub.udict(role_to_anns).map_values(len)}')
+        unique_roles = (role_to_drawables.keys())
+        rich.print(f'unique_roles = {ub.urepr(unique_roles, nl=1)}')
+        for role, drawables in role_to_drawables.items():
+            rich.print(f'role={role}, num_drawables={ub.udict(drawables).map_values(len)}')
         rich.print(f'role_order={role_order}')
         rich.print(f'stack_idx_to_roles={stack_idx_to_roles}')
 
@@ -1256,9 +1287,8 @@ def _write_ann_visualizations2(coco_dset,
                 delayed, chan_row, finalize_opts, verbose, skip_missing,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
                 valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_boxes,
-                draw_labels, draw_segmentations, role_to_dets, valid_video_poly, stack,
+                draw_labels, draw_segmentations, role_to_drawables, valid_video_poly, stack,
                 draw_header, stack_idx, request_roles, ann_score_thresh, alpha,
-                trails
             )
             if stack:
                 img_stack.append(stack_img_item)
@@ -1350,9 +1380,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     delayed, chan_row, finalize_opts, verbose, skip_missing,
                     skip_aggressive, chan_to_normalizer, cmap, header_lines,
                     valid_image_poly, draw_imgs, draw_anns, only_boxes,
-                    draw_boxes, draw_labels, draw_segmentations, role_to_dets,
+                    draw_boxes, draw_labels, draw_segmentations, role_to_drawables,
                     valid_video_poly, stack, draw_header, stack_idx,
-                    request_roles, ann_score_thresh, alpha, trails):
+                    request_roles, ann_score_thresh, alpha):
     """
     This draws a single image using selected set of channelse for an intensity,
     color, or false color visualization with annotations optionally drawn.
@@ -1637,10 +1667,10 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             draw_on_kwargs['sseg'] = bool(draw_segmentations)
             draw_on_kwargs['boxes'] = bool(draw_boxes)
 
-        requested_role_to_dets = role_to_dets.intersection(request_roles)
+        requested_role_to_drawables = role_to_drawables.intersection(request_roles)
 
         need_ann_canvas = (
-            bool(requested_role_to_dets) or
+            bool(requested_role_to_drawables) or
             img_canvas is None or
             draw_anns_alone
         )
@@ -1650,33 +1680,37 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         if need_ann_canvas:
             ann_canvas = kwimage.ensure_float01(canvas, copy=True)
 
-            if draw_anns_alone and not requested_role_to_dets:
+            if draw_anns_alone and not requested_role_to_drawables:
                 # fallback to drawing all anns in this weird case
-                requested_role_to_dets = role_to_dets
+                requested_role_to_drawables = role_to_drawables
 
-            if trails is not None:
-                for trail in trails:
-                    # TODO: expand style of trails, for now just draw the
-                    # center.
-                    trail_cxy = trail['trail']['drawspace_boxes'].xy_center
-                    trail_colors = trail['trail']['track_colors'][1:]
-                    ann_canvas = draw_polyline_on_image(
-                        ann_canvas, trail_cxy, color=trail_colors, thickness=2)
-
-            for role_dets in requested_role_to_dets.values():
+            for role_drawables in requested_role_to_drawables.values():
                 # TODO: better role handling
-                colors = [kwimage.Color.coerce(c).as01() for c in role_dets.data['colors']]
-                if verbose > 100:
-                    print('About to draw dets on a canvas')
+                role_dets = role_drawables.get('dets', None)
+                role_trails = role_drawables.get('trails', None)
 
-                ann_canvas = role_dets.draw_on(
-                    ann_canvas,
-                    color=colors,
-                    ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
-                    # color='classes',
-                    **draw_on_kwargs, alpha=alpha)
-                if verbose > 100:
-                    print('That seemed to work')
+                if role_trails is not None:
+                    for trail in role_trails:
+                        thickness = trail.get('thickness', 2)
+                        trail_cxy = trail['motion_path']['vizspace_boxes'].xy_center
+                        trail_colors = trail['motion_path']['track_colors'][1:]
+                        ann_canvas = draw_polyline_on_image(
+                            ann_canvas, trail_cxy, color=trail_colors,
+                            thickness=thickness)
+
+                if role_dets is not None:
+                    colors = [kwimage.Color.coerce(c).as01() for c in role_dets.data['colors']]
+                    if verbose > 100:
+                        print('About to draw dets on a canvas')
+
+                    ann_canvas = role_dets.draw_on(
+                        ann_canvas,
+                        color=colors,
+                        ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
+                        # color='classes',
+                        **draw_on_kwargs, alpha=alpha)
+                    if verbose > 100:
+                        print('That seemed to work')
 
         if stack_anns:
             if ann_canvas is None:
