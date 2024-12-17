@@ -758,6 +758,8 @@ class TrackInfoLookup:
         else:
             max_frame_index = None
 
+        import xdev
+        xdev.embed()
         vid_annots = vid_images.annots
         track_ids = set(ub.flatten(vid_annots.lookup('track_id', None)))
         track_ids -= {None}
@@ -1654,7 +1656,6 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 # fallback to drawing all anns in this weird case
                 requested_role_to_dets = role_to_dets
 
-            print(f'trails = {ub.urepr(trails, nl=1)}')
             if trails is not None:
                 for trail in trails:
                     # TODO: expand style of trails, for now just draw the
