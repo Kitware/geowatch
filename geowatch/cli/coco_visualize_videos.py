@@ -1654,6 +1654,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 # fallback to drawing all anns in this weird case
                 requested_role_to_dets = role_to_dets
 
+            print(f'trails = {ub.urepr(trails, nl=1)}')
             if trails is not None:
                 for trail in trails:
                     # TODO: expand style of trails, for now just draw the
@@ -1661,7 +1662,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     trail_cxy = trail['trail']['drawspace_boxes'].xy_center
                     trail_colors = trail['trail']['track_colors'][1:]
                     ann_canvas = draw_polyline_on_image(
-                        ann_canvas, trail_cxy, color=trail_colors, thickness=2)
+                        ann_canvas, trail_cxy, color=trail_colors, thickness=10)
 
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
