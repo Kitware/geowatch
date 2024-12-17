@@ -774,8 +774,9 @@ class TrackInfoLookup:
                 ann = self.dset.index.anns[aid]
                 gid = ann['image_id']
                 img = self.dset.index.imgs[gid]
-                if img['frame_index'] >= max_frame_index:
-                    continue
+                if max_frame_index is not None:
+                    if img['frame_index'] >= max_frame_index:
+                        continue
                 bbox = ann['bbox']
                 vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
                 imgspace_box = kwimage.Boxes([bbox], 'xywh')
@@ -1087,9 +1088,11 @@ def _write_ann_visualizations2(coco_dset,
         # information between frames, but we may need this logic for drawing
         # single frames independently.
         tilut = TrackInfoLookup(coco_dset)
+        # TODO: do we need to restrict history? How do we expose that option to
+        # a user?
         trails = tilut.get_track_trail_by_video_id(
             video_id=coco_img.img['video_id'],
-            image_id=coco_img['id']
+            # image_id=coco_img['id']
         )
         # TODO: proper warping?
         for trail in trails:
