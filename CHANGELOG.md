@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Added detectron2 as a tpl submodule
 * mlops manager can now accept `expt_pattern`
+* initial experimental ability to draw track trails in coco visualize videos
 
 ### Fixed
 * Support latest DETR in transformers library 4.46.2
