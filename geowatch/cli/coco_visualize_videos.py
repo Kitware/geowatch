@@ -268,12 +268,18 @@ def main(cmdline=True, **kwargs):
         >>> import kwimage
         >>> anchors = np.array([[0.05, 0.05]])
         >>> size = (512, 512)
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=20, num_tracks=5, anchors=anchors, image_size=size)
-        >>> for track in dset.dataset['tracks']:
-        >>>     track['color'] = kwimage.Color.random().as01()
-        >>> dpath = ub.Path.appdir('geowatch/tests/viz_video3').delete().ensuredir()
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=20, num_tracks=10, anchors=anchors, image_size=size)
+        >>> # Give half of the tracks a random color
+        >>> for track in dset.dataset['tracks'][::2]:
+        >>>     track['color'] = kwimage.Color.random().as255()
+        >>> # Make one annot not have tracks
+        >>> dset.remove_tracks(dset.tracks()[0:5], keep_annots=True)
+        >>> dpath = ub.Path.appdir('geowatch/tests/viz_video3').ensuredir()
+        >>> for r, ds, fs in dpath.walk():
+        ...     for f in fs:
+        ...         (r / f).delete()
         >>> kwargs = {
-        >>>     'src': dset.fpath,
+        >>>     'src': dset,
         >>>     'viz_dpath': dpath,
         >>>     'channels': None,
         >>>     'draw_track_trails': True,
