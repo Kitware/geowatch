@@ -86,7 +86,6 @@ def test_dynamic_resolution():
 
 def distance_weights():
     from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-    import geowatch
     import ubelt as ub
     # Demo toy data without augmentation
     import kwcoco
@@ -115,12 +114,12 @@ def distance_weights():
     annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
     self.disable_augmenter = False
     # Summarize batch item in text
-    summary = self.summarize_item(item)
     index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][3]]
     item = self[index]
+    summary = self.summarize_item(item)
     print('item summary: ' + ub.urepr(summary, nl=2))
     # Draw batch item
-    canvas = self.draw_item(item,draw_weights=True)
+    canvas = self.draw_item(item, draw_weights=True)
     # xdoctest: +REQUIRES(--show)
     import kwplot
     kwplot.autompl()
@@ -128,6 +127,67 @@ def distance_weights():
     kwplot.show_if_requested()
 
 
+def test_msi_auto_channels():
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    import kwcoco
+    import ubelt as ub
+
+    coco_msi = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=1)
+    coco_rgb = kwcoco.CocoDataset.demo('vidshapes2', num_frames=1)
+
+    msi_spec = coco_msi.coco_image(1).channels.spec
+    assert 'B1' in msi_spec, 'kwcoco should provide this'
+    assert 'B8' in msi_spec, 'kwcoco should provide this'
+    assert 'B8a' in msi_spec, 'kwcoco should provide this'
+
+    sample_kwargs = {
+        'time_dims': 1,
+        'window_dims': (128, 128)
+    }
+
+    datasets = {}
+    # Check that regular RGB works fine
+    datasets['rgb_auto'] = KWCocoVideoDataset(coco_rgb, **sample_kwargs)
+    datasets['rgb_explicit'] = KWCocoVideoDataset(coco_rgb, **sample_kwargs,
+                                                  channels='r|g|b')
+    datasets['msi_explicit'] = KWCocoVideoDataset(coco_msi, **sample_kwargs,
+                                                  channels='B10,B8a|B1,B8')
+    datasets['msi_auto'] = KWCocoVideoDataset(coco_msi, **sample_kwargs)
+
+    if 0:
+        # First check that the matching sensorchans does what we expect
+        # This was broken in delayed image 0.4.2 and fixed in 0.4.3
+        datasets['msi_explicit'].sample_sensorchan.matching_sensor('sensor1')
+
+    results = []
+    errors = []
+    for key, dataset in datasets.items():
+        row = {'key': key}
+        try:
+            item = dataset.getitem(0)
+        except Exception as ex:
+            row['status'] = 'fail'
+            row['ex'] = str(ex)[0:16]
+            errors.append(row)
+            raise
+        else:
+            row['item'] = str(item)[0:32]
+            row['status'] = 'pass'
+        results.append(row)
+
+    if errors:
+        import pandas as pd
+        import rich
+        df = pd.DataFrame(results)
+        rich.print(df.to_string())
+        for key, dataset in datasets.items():
+            print('----')
+            print(f'key={key}')
+            print(f'dataset.sensorchan        = {ub.urepr(dataset.sensorchan, nl=1)}')
+            print(f'dataset.sample_sensorchan = {ub.urepr(dataset.sample_sensorchan, nl=1)}')
+            print(f'dataset.input_sensorchan  = {ub.urepr(dataset.input_sensorchan, nl=1)}')
+        raise AssertionError('Problems in dataset getitems, maybe something to do with sensorchan configs?')
+
+
 if __name__ == "__main__":
     distance_weights()
-

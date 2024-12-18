@@ -45,9 +45,11 @@ class RecommendSizeAdjustmentsCLI(scfg.DataConfig):
             >>> cls.main(cmdline=cmdline, **kwargs)
         """
         import rich
-        import sympy
+        from rich.markup import escape
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
-        rich.print('config = ' + ub.urepr(config, nl=1, align=":"))
+        rich.print('config = ' + escape(ub.urepr(config, nl=1, align=":")))
+
+        import sympy
 
         assert config.BATCH_SIZE is not None
 

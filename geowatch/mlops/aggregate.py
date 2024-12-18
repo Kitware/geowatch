@@ -161,25 +161,25 @@ class AggregateLoader(DataConfig):
                 eval_type_to_results = build_tables(
                     root_dpath, dag, io_workers, eval_nodes,
                     cache_resolved_results=cache_resolved_results)
-                for type, results in eval_type_to_results.items():
+                for node_type, results in eval_type_to_results.items():
                     table = pd.concat(list(results.values()), axis=1)
-                    eval_type_to_tables[type].append(table)
+                    eval_type_to_tables[node_type].append(table)
             if target.is_file():
                 # Assume CSV file
                 table = pd.read_csv(target, low_memory=False)
                 if len(table):
-                    type = table['node'].iloc[0]
-                    eval_type_to_tables[type].append(table)
+                    node_type = table['node'].iloc[0]
+                    eval_type_to_tables[node_type].append(table)
 
         eval_type_to_aggregator = {}
-        for type, tables in eval_type_to_tables.items():
+        for eval_type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
                              display_metric_cols=config.display_metric_cols,
                              dag=dag)
             agg.build()
-            eval_type_to_aggregator[type] = agg
+            eval_type_to_aggregator[eval_type] = agg
         return eval_type_to_aggregator
 
 
@@ -258,13 +258,21 @@ class AggregateEvluationConfig(AggregateLoader):
                 'enabled': bool(self.plot_params)
             }
 
+    @profile
+    def coerce_aggregators(config):
+        eval_type_to_aggregator = super().coerce_aggregators()
+        output_dpath = ub.Path(config['output_dpath'])
+        for agg in eval_type_to_aggregator.values():
+            agg.output_dpath = output_dpath
+        return eval_type_to_aggregator
+
 
 def main(cmdline=True, **kwargs):
     """
     Aggregate entry point.
 
-    Loads results for each evaluation type, constructs aggregator objects, and
-    then executes user specified commands that could include filtering,
+    Loads results for each evaluation node_type, constructs aggregator objects,
+    and then executes user specified commands that could include filtering,
     macro-averaging, reporting, plotting, etc...
 
     Ignore:
@@ -354,7 +362,7 @@ def run_aggregate(config):
         if embedding_modpath is not None:
 
             print(f'eval_type_to_aggregator = {ub.urepr(eval_type_to_aggregator, nl=1)}')
-            for type, agg in eval_type_to_aggregator.items():
+            for node_type, agg in eval_type_to_aggregator.items():
                 print(f'agg={agg}')
 
             embed_module = ub.import_module_from_name('xdev')
@@ -379,7 +387,7 @@ def run_aggregate(config):
             num_results = len(agg)
             if num_results > 0:
                 agg.output_dpath.ensuredir()
-                fname = f'{agg.type}_{hostname}_{num_results:05d}_{timestamp}.csv.zip'
+                fname = f'{agg.node_type}_{hostname}_{num_results:05d}_{timestamp}.csv.zip'
                 csv_fpath = agg.output_dpath / fname
                 print(f'Exported tables to: {csv_fpath}')
                 agg.table.to_csv(csv_fpath, index_label=False)
@@ -515,10 +523,18 @@ class AggregatorAnalysisMixin:
         """
         Write the varied parameter report to disk
         """
-        from kwutil.util_yaml import Yaml
+        import kwutil
         import rich
         report = agg.varied_parameter_report()
-        yaml_text = Yaml.dumps(report)
+        list(kwutil.Json.find_unserializable(report))
+        fixed_report = kwutil.Json.ensure_serializable(report, verbose=3, normalize_containers=True)
+        # kwutil.Json.dumps(fixed_report)
+        try:
+            yaml_text = kwutil.Yaml.dumps(fixed_report)
+        except Exception:
+            # not sure why ruamel.yaml will cause an error here
+            yaml_text = kwutil.Yaml.dumps(fixed_report, backend='pyyaml')
+
         agg.output_dpath.ensuredir()
         report_fpath = agg.output_dpath / 'varied_param_report.yaml'
         rich.print(f'Write varied parameter report to: {report_fpath}')
@@ -537,11 +553,13 @@ class AggregatorAnalysisMixin:
         concise_value_char_threshold = 80
         report = {}
 
-        varied_counts = util_pandas.DataFrame(agg.effective_params).varied_value_counts()
+        # varied_counts = util_pandas.DataFrame(agg.effective_params).varied_value_counts()
         # on_error='placeholder')
 
         # from geowatch.utils import result_analysis
-        varied_counts = agg.table.varied_value_counts(on_error='placeholder')
+        resolved_params = util_pandas.DataFrame(agg.resolved_params)
+        varied_counts = resolved_params.varied_value_counts(on_error='placeholder')
+        # varied_counts = agg.table.varied_value_counts(on_error='placeholder')
         param_summary = {}
         for key, value_counts in varied_counts.items():
             type_counts = ub.ddict(lambda: 0)
@@ -585,7 +603,7 @@ class AggregatorAnalysisMixin:
             column_summary.append({
                 'top': top,
                 'num_subcolumns': len(parts),
-                'subcolcolumn_depth_hist': length_hist,
+                'subcolumn_depth_hist': length_hist,
             })
 
         report['param_summary'] = param_summary
@@ -599,15 +617,15 @@ class AggregatorAnalysisMixin:
         """
         from geowatch.utils import util_pandas
         from geowatch.utils import result_analysis
-        params = util_pandas.DataFrame(agg.resolved_params)
+        resolved_params = util_pandas.DataFrame(agg.resolved_params)
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
             # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
         metrics = agg.metrics[metrics_of_interest]
-        params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+        resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
-        varied_counts = params.varied_value_counts(dropna=True)
+        varied_counts = resolved_params.varied_value_counts(dropna=True)
 
         if 1:
             # Only look at reasonable groupings
@@ -620,7 +638,7 @@ class AggregatorAnalysisMixin:
             chosen_params = None
 
         results = {
-            'params': params,
+            'params': resolved_params,
             'metrics': metrics,
         }
         analysis = result_analysis.ResultAnalysis(results, params=chosen_params)
@@ -755,9 +773,10 @@ class AggregatorAnalysisMixin:
                 ranking = ranking[np.isfinite(ranking)]
                 ranked_locs = ranking.sort_values().index
 
+            # Note: this report will only display requested params, but there
+            # might be more detailed variations of interest.
             ranked_group = group.loc[ranked_locs]
-
-            param_lut = _agg.hashid_to_params.subdict(ranked_group['param_hashid'])
+            param_lut = _agg.hashid_to_effective_params.subdict(ranked_group['param_hashid'])
             big_param_lut.update(param_lut)
 
             have_metric_display_cols = list(ub.oset(metric_display_cols) & list(ranked_group.columns))
@@ -814,6 +833,8 @@ class AggregatorAnalysisMixin:
                 rich.print('Varied Basis: = {}'.format(ub.urepr(varied, nl=2)))
                 rich.print('Constant Params: {}'.format(ub.urepr(non_varied_params, nl=2)))
                 rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
+            else:
+                raise KeyError(PARAMTER_DISPLAY_MODE)
 
             if show_csv:
                 ub.schedule_deprecation(
@@ -871,9 +892,9 @@ class AggregatorAnalysisMixin:
 
                     if region_id in _agg.macro_key_to_regions:
                         macro_regions = _agg.macro_key_to_regions[region_id]
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id} = {macro_regions}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.node_type}, {region_id} = {macro_regions}{ref_text}')
                     else:
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.node_type}, {region_id}{ref_text}')
 
                     _summary_table = util_pandas.DataFrame(summary_table)
                     _summary_table_csv = _summary_table
@@ -1009,21 +1030,36 @@ class AggregatorAnalysisMixin:
             a, b, c = duration_key.split('.')
             uuid_key = f'context.{b}.uuid'
 
+            # Later stages in the pipeline may be based on the same earlier
+            # result. We deduplicate to avoid double-counting resource usage
             chosen = []
             for _, group in table.groupby(uuid_key):
-                idx = group[duration_key].idxmax()
+                try:
+                    idx = group[duration_key].idxmax()
+                except TypeError:
+                    idx = 0
                 chosen.append(idx)
 
-            asec = util_time.coerce_timedelta('1second')
+            asec = util_time.timedelta(seconds=1)
 
             unique_rows = table.loc[chosen]
             row = {
                 'node': b,
                 'resource': c,
-                'total': unique_rows[duration_key].sum().round(asec),
-                'mean': unique_rows[duration_key].mean().round(asec),
                 'num': len(chosen),
             }
+            row['total'] = unique_rows[duration_key].sum()
+            row['mean'] = unique_rows[duration_key].mean()
+
+            try:
+                row['total'] = row['total'].round(asec)
+            except AttributeError:
+                ...
+            try:
+                row['mean'] = row['mean'].round(asec)
+            except AttributeError:
+                ...
+
             resource_summary.append(row)
 
             co2_key = f'{a}.{b}.co2_kg'
@@ -1052,9 +1088,60 @@ class AggregatorAnalysisMixin:
         resource_summary_df = pd.DataFrame(resource_summary)
         return resource_summary_df
 
+    def resource_summary_table_friendly(agg):
+        resource_summary_df = agg.resource_summary_table()
+        # TODO: nicer report
+        import kwutil
+        import pandas as pd
+        def format_kwh(v):
+            return str(round(v, 2)) + ' kWh'
+
+        def format_co2(v):
+            return str(round(v, 2)) + ' CO2Kg'
+
+        def format_duration(v):
+            v = kwutil.timedelta.coerce(v, nan_policy='return-nan', none_policy='return-nan')
+            if pd.isnull(v):
+                return v
+            return v.format(unit={'value': 'auto', 'min_unit': 'hour', 'exclude_units': ['week', 'month', 'min']}, precision=2)
+            # return v.format(unit='hour', precision=2)
+
+        # Make more human friendly
+        new_groups = []
+        for resource, group in resource_summary_df.groupby('resource'):
+            if resource == 'kwh':
+                group['total'] = group['total'].apply(format_kwh)
+                group['mean'] = group['mean'].apply(format_kwh)
+            elif resource == 'duration':
+                group['total'] = group['total'].apply(format_duration)
+                group['mean'] = group['mean'].apply(format_duration)
+            elif resource == 'co2_kg':
+                group['total'] = group['total'].apply(format_co2)
+                group['mean'] = group['mean'].apply(format_co2)
+            else:
+                raise NotImplementedError(resource)
+            new_groups.append(group)
+        friendly = pd.concat(new_groups).loc[resource_summary_df.index]
+
+        # Better column names when we include units in the value
+        mapper = {
+            'duration': 'time',
+            'kwh': 'electricity',
+            'co2_kg': 'emissions',
+        }
+        friendly['resource'] = friendly['resource'].map(lambda x: mapper.get(x, x))
+        return friendly
+
     def report_resources(agg):
         import rich
         resource_summary_df = agg.resource_summary_table()
+
+        if 1:
+            friendly = agg.resource_summary_table_friendly()
+            rich.print(friendly.to_string())
+            print(friendly.to_csv())
+            print(friendly.to_latex(index=False, escape=False))
+
         rich.print(resource_summary_df.to_string())
 
     def make_summary_analysis(subagg, config):
@@ -1080,8 +1167,8 @@ class AggregatorAnalysisMixin:
         hashids.
         """
         assert agg.output_dpath is not None
-        assert agg.type is not None
-        base_dpath = (agg.output_dpath / 'param_links' / agg.type)
+        assert agg.node_type is not None
+        base_dpath = (agg.output_dpath / 'param_links' / agg.node_type)
         byregion_dpath = (base_dpath / 'by_region').ensuredir()
         byparamid_dpath = (base_dpath / 'by_param_hashid').ensuredir()
         print('base_dpath = {}'.format(ub.urepr(base_dpath, nl=1)))
@@ -1192,7 +1279,41 @@ class AggregatorAnalysisMixin:
         return all_metric_table
 
 
-class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
+class _AggregatorDeprecatedMixin:
+    """
+    Old property names for backwards compatability
+    """
+
+    @property
+    def params(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='params', type='property',
+            migration='use requested_params instead',
+            deprecate='0.15.0', error='1.0.0', remove='1.1.0',
+        )
+        return self.subtables['params']
+
+    @property
+    def hashid_to_params(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='hashid_to_params', type='property',
+            migration='use hashid_to_effective_params instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+        )
+        return self.hashid_to_effective_params
+
+    @property
+    def type(self):
+        ub.schedule_deprecation(
+            modname='geowatch', name='type', type='property',
+            migration='use node_type instead',
+            deprecate='0.18.4', error='1.0.0', remove='1.1.0',
+            stacklevel=2,
+        )
+        return self.node_type
+
+
+class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixin):
     """
     Stores multiple data frames that separate metrics, parameters, and other
     information using consistent pandas indexing. Can be filtered to a
@@ -1202,7 +1323,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     Set config based on your problem
     """
     def __init__(agg, table, output_dpath=None,
-                 type=None,
+                 node_type=None,
                  primary_metric_cols='auto',
                  display_metric_cols='auto',
                  dag=None):
@@ -1216,17 +1337,17 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             output_dpath (None | PathLike):
                 Path where output aggregate results should be written
 
-            type (str | None):
+            node_type (str | None):
                 should not need to specify this anymore. This should just be
                 the "node" column in the table.
 
             primary_metric_cols (List[str] | Literal['auto']):
-                if "auto", then the "type" must be known by the global helpers.
+                if "auto", then the "node_type" must be known by the global helpers.
                 Otherwise list the metric columns in the priority that should
                 be used to rank the rows.
 
             display_metric_cols (List[str] | Literal['auto']):
-                if "auto", then the "type" must be known by the global helpers.
+                if "auto", then the "node_type" must be known by the global helpers.
                 Otherwise list the metric columns in the order they should be
                 displayed (after the primary metrics).
 
@@ -1242,7 +1363,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             table = util_pandas.DataFrame(table)
 
         agg.table = table
-        agg.type = type
+        agg.node_type = node_type
         agg.dag = dag
         agg.subtables = None
         agg.config = {
@@ -1256,7 +1377,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # This attribute will hold columns that store paths test datasets
         agg.test_dset_cols = None
 
-        agg.hashid_to_params = None
+        agg.hashid_to_effective_params = None
         agg.mappings = None
         agg.effective_params = None
         agg.macro_key_to_regions = None
@@ -1373,7 +1494,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     # def __export(agg):
     #     ...
     #     agg.table
-    #     fname = f'{agg.type}_{agg.output_dpath.parent.name}.csv'
+    #     fname = f'{agg.node_type}_{agg.output_dpath.parent.name}.csv'
     #     agg.table.to_csv(fpath, index_label=False)
     #     fpath = 'bas_results_2023-01.csv.zip'
     #     agg.table.to_csv(fpath, index_label=False)
@@ -1387,7 +1508,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.__dict__.update(**agg.config)
 
         if len(agg.table) == 0:
-            agg.type = 'unknown-type-empty-table'
+            agg.node_type = 'unknown-node_type-empty-table'
             return
 
         _table = util_pandas.DotDictDataFrame(agg.table)
@@ -1411,16 +1532,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             raise Exception(str(unknown_cols))
         agg.subtables = subtables
 
-        if agg.type is None:
-            agg.type = agg.table['node'].iloc[0]
+        if agg.node_type is None:
+            agg.node_type = agg.table['node'].iloc[0]
 
-        metrics_prefix = f'metrics.{agg.type}'
-        # params_prefix = f'params.{agg.type}'
+        metrics_prefix = f'metrics.{agg.node_type}'
+        # params_prefix = f'params.{agg.node_type}'
         if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
             try:
                 _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
             except Exception:
-                node = agg.dag.nodes[agg.type]
+                node = agg.dag.nodes[agg.node_type]
                 if hasattr(node, '_default_metrics'):
                     _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
                     # should we prevent double prefixes?
@@ -1465,10 +1586,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # util_pandas.pandas_suffix_columns(agg.resolved_params, _testdset_suffixes)
 
         agg.build_effective_params()
-        # effective_params, mappings, hashid_to_params = agg.build_effective_params()
-        # agg.hashid_to_params = ub.udict(hashid_to_params)
-        # agg.mappings = mappings
-        # agg.effective_params = effective_params
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
@@ -1478,7 +1595,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.macro_compatible = agg.find_macro_comparable()
 
     def __nice__(self):
-        return f'{self.type}, n={len(self)}'
+        return f'{self.node_type}, n={len(self)}'
 
     def __len__(self):
         return len(self.table)
@@ -1600,7 +1717,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
     def compress(agg, flags):
         new_table = agg.table[flags].copy()
-        new_agg = Aggregator(new_table, type=agg.type,
+        new_agg = Aggregator(new_table, node_type=agg.node_type,
                              dag=agg.dag, output_dpath=agg.output_dpath,
                              **agg.config)
         new_agg.build()
@@ -1619,11 +1736,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         return self.subtables['index']
 
     @property
-    def params(self):
-        ub.schedule_deprecation(None, migration='use requested_params instead')
-        return self.subtables['params']
-
-    @property
     def requested_params(self):
         return self.subtables['params']
 
@@ -1640,10 +1752,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         try:
             if self.dag is not None:
-                node = self.dag.nodes[self.type]
+                node = self.dag.nodes[self.node_type]
                 vantage_points = node.default_vantage_points
         except Exception:
-            vantage_points = SMART_HELPER.default_vantage_points(self.type)
+            vantage_points = SMART_HELPER.default_vantage_points(self.node_type)
         return vantage_points
 
     def build_effective_params(self):
@@ -1659,7 +1771,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         Populates:
 
-            * ``self.hashid_to_params``
+            * ``self.hashid_to_effective_params`` : Dict[str, Dict[str, Any]]
 
             * ``self.mappings``
 
@@ -1669,8 +1781,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         import pandas as pd
         from geowatch.utils import util_pandas
         from geowatch.mlops.smart_global_helper import SMART_HELPER
-        params = self.requested_params
-        effective_params = params.copy()
+        requested_params = self.requested_params
+        effective_params = requested_params.copy()
 
         HACK_FIX_JUNK_PARAMS = True
         if HACK_FIX_JUNK_PARAMS:
@@ -1685,10 +1797,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         mappings : Dict[str, Dict[Any, str]] = {}
         path_colnames = model_cols + test_dset_cols
         path_colnames = path_colnames + SMART_HELPER.EXTRA_PATH_COLUMNS
-        existing_path_colnames = params.columns.intersection(path_colnames)
+        existing_path_colnames = requested_params.columns.intersection(path_colnames)
 
         for colname in existing_path_colnames:
-            colvals = params[colname]
+            colvals = requested_params[colname]
             condensed, mapper = util_pandas.pandas_condense_paths(colvals)
             mappings[colname] = mapper
             effective_params[colname] = condensed
@@ -1738,7 +1850,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
@@ -1767,7 +1879,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
-        hashid_to_params = {}
+        hashid_to_effective_params = {}
         # import xdev
         # with xdev.embed_on_exception_context:
         if len(param_cols) > 0:
@@ -1788,26 +1900,27 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             unique_params = group.iloc[0][param_cols]
 
             if len(param_cols) > 0:
+                # TODO: Used the fixed groupby to avoid the need to ensure
+                # param_flags is a list.
                 param_subgroups = is_group_included.groupby(param_cols, dropna=False)
             else:
                 # fallback case, something is probably wrong if we are here
                 param_subgroups = {tuple(): is_group_included}.items()
 
             for param_flags, subgroup in param_subgroups:
-                # valid_param_cols = list(ub.compress(param_cols, param_flags))
-                # valid_param_vals = list(ub.compress(param_vals, param_flags))
-                # valid_unique_params = ub.dzip(valid_param_cols, valid_param_vals)
-
-                valid_unique_params = unique_params[list(param_flags)].to_dict()
+                if not ub.iterable(param_flags):
+                    param_flags = [param_flags]
+                _flags = list(param_flags)
+                valid_unique_params = unique_params[_flags].to_dict()
 
                 hashid = hash_param(valid_unique_params, version=1)
-                hashid_to_params[hashid] = valid_unique_params
+                hashid_to_effective_params[hashid] = valid_unique_params
                 hashids_v1.loc[subgroup.index] = hashid
 
         # Update the index with an effective parameter hashid
         self.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         self.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-        self.hashid_to_params = ub.udict(hashid_to_params)
+        self.hashid_to_effective_params = ub.udict(hashid_to_effective_params)
         self.mappings = mappings
         self.effective_params = effective_params
 
@@ -2244,8 +2357,8 @@ def nan_eq(a, b):
         return a == b
 
 
-__config__ = AggregateEvluationConfig
-__config__.main = main
+__cli__ = AggregateEvluationConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

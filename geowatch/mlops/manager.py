@@ -134,6 +134,8 @@ class ManagerConfig(scfg.DataConfig):
 
     model_pattern = scfg.Value('*', help='if specified restrict to models matching this name pattern')
 
+    expt_pattern = scfg.Value('*', help='if specified restrict to experiment paths matching this name pattern (for gathering checkpoints)')
+
     dataset_codes = scfg.Value('*', nargs='+', help=ub.paragraph(
         '''
         if unset, will use the defaults, otherwise this should be a list of
@@ -206,7 +208,9 @@ def main(cmdline=True, **kwargs):
 
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
-        model_pattern=config['model_pattern'])
+        model_pattern=config['model_pattern'],
+        expt_pattern=config['expt_pattern'],
+    )
 
     if 'pull' in actions:
         manager.pull(targets, yes=config.yes)
@@ -279,9 +283,10 @@ class DVCExptManager(ub.NiceRepr):
         return str(manager.dvc)
 
     def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes='*',
-                 model_pattern='*'):
-        from geowatch.utils import simple_dvc
+                 model_pattern='*', expt_pattern='*'):
+        from geowatch.utils import simple_dvc  # TODO: use real simpledvc
         manager.model_pattern = model_pattern
+        manager.expt_pattern = expt_pattern
         manager.expt_dvc_dpath = expt_dvc_dpath
         manager.dvc_remote = dvc_remote
         manager.dataset_codes = dataset_codes
@@ -311,7 +316,8 @@ class DVCExptManager(ub.NiceRepr):
         for dataset_code in manager.dataset_codes:
             state = ExperimentState(
                 manager.expt_dvc_dpath, dataset_code, dvc_remote=manager.dvc_remote,
-                model_pattern=manager.model_pattern)
+                model_pattern=manager.model_pattern,
+                expt_pattern=manager.expt_pattern)
             states.append(state)
         manager.states = states
 
@@ -341,7 +347,7 @@ class DVCExptManager(ub.NiceRepr):
         # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.add_packages(yes=yes)
+            state.gather_packages(yes=yes)
 
     add_packages = gather_packages
 
@@ -413,7 +419,8 @@ class ExperimentState(ub.NiceRepr):
         'ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']
 
     def __init__(self, expt_dvc_dpath, dataset_code='*', dvc_remote=None,
-                 data_dvc_dpath=None, model_pattern='*', storage_dpath=None):
+                 data_dvc_dpath=None, model_pattern='*', expt_pattern='*',
+                 storage_dpath=None):
 
         if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():
             model_pattern = [
@@ -462,7 +469,7 @@ class ExperimentState(ub.NiceRepr):
             'model': model_pattern,  # hack, should have ext
             'imodel': model_pattern,
             'smodel': model_pattern,
-            'expt': '*',
+            'expt': expt_pattern,
         }
 
         self.staging_templates = {
@@ -1135,8 +1142,8 @@ class UserAbort(Exception):
     pass
 
 
-__config__ = ManagerConfig
-__config__.main = main
+__cli__ = ManagerConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

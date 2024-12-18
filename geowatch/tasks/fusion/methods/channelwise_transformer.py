@@ -312,12 +312,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         kwplot.autompl()
         kwplot.imshow(dataset.draw_item(batch[0]))
     """
-    _HANDLES_NANS = True
-
-    def get_cfgstr(self):
-        cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}'
-        return cfgstr
-
+    # Used by our jsonargparse_fork to introspect values for kwargs
     __scriptconfig__ = MultimodalTransformerConfig
 
     def __init__(self, classes=10, dataset_stats=None, input_sensorchan=None,
@@ -333,17 +328,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "tokenizer" in model.hparams
         """
         import kwutil
-        assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
+        assert kwargs.pop('config', None) is None, 'should not have a config opt'  # not sure why this is in the kwargs
         VERBOSE = 1
         if VERBOSE:
             print('Init {}, with kwargs = {}'.format(self.__class__, ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
-        assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
-        assert _config.token_norm in ['none', 'auto', 'group', 'batch']
-        assert _config.arch_name in available_encoders
-        assert _config.decoder in ['mlp', 'segmenter']
-        assert _config.attention_impl in ["exact", "performer", "reformer"]
+        assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv'], 'bad tokenizer'
+        assert _config.token_norm in ['none', 'auto', 'group', 'batch'], 'bad token norm'
+        assert _config.arch_name in available_encoders, f'bad arch name, {_config.arch_name}'
+        assert _config.decoder in ['mlp', 'segmenter'], f'bad decoder, {_config.decoder}'
+        assert _config.attention_impl in ["exact", "performer", "reformer"], 'bad attention impl'
+        if VERBOSE:
+            print(f'classes={classes}')
+            print(f'dataset_stats={dataset_stats}')
+            print(f'input_channels={input_channels}')
+            print(f'input_sensorchan={input_sensorchan}')
 
         super().__init__()
         self.save_hyperparameters()
@@ -472,9 +472,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             raise KeyError(f'Unknown: {self.rescale_nan_method}')
 
-        self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
-
         # Unique sensor modes obviously isn't very correct here.
         # We should fix that, but let's hack it so it at least
         # includes all sensor modes we probably will need.
@@ -2137,6 +2135,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         with_loss = self.training
         return self.forward_step(batch, with_loss=with_loss)
         # raise NotImplementedError('see forward_step instad')
+
+    def get_cfgstr(self):
+        # used by plotter plugins, but I'm not in love with the name.
+        cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}'
+        return cfgstr
 
 
 def slice_to_agree(a1, a2, axes=None):

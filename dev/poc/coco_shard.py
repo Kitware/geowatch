@@ -88,7 +88,7 @@ def main(cmdline=True, **kw):
     print('Wrote shards: {}'.format(ub.urepr(dest_fpaths, nl=1)))
 
 
-__config__ = CocoShardConfig
+__cli__ = CocoShardConfig
 
 if __name__ == '__main__':
     main()

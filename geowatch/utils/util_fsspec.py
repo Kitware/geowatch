@@ -15,7 +15,7 @@ import pathlib
 import ubelt as ub
 import os
 import fsspec
-import types
+# import types
 
 NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
@@ -41,7 +41,8 @@ class FSPath(str):
     """
     # Final subclasses must define this as a string to be passed to
     # fsspec.filesystem(__protocol__)
-    __protocol__ : str | types.NotImplementedType = NotImplemented
+    # __protocol__ : str | types.NotImplementedType = NotImplemented
+    __protocol__ = NotImplemented
 
     @classmethod
     def _new_fs(cls, **kwargs):

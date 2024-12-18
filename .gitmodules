@@ -13,3 +13,9 @@
 [submodule "geowatch_tpl/submodules/scale-mae"]
 	path = geowatch_tpl/submodules/scale-mae
 	url = git@github.com:bair-climate-initiative/scale-mae.git
+[submodule "geowatch_tpl/submodules/jsonargparse"]
+	path = geowatch_tpl/submodules/jsonargparse
+	url = git@github.com:Erotemic/jsonargparse.git
+[submodule "geowatch_tpl/submodules/detectron2"]
+	path = geowatch_tpl/submodules/detectron2
+	url = git@github.com:Erotemic/detectron2.git

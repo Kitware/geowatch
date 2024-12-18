@@ -273,7 +273,7 @@ def ensure_false_color(canvas, method='ortho'):
             seedmat = rng.rand(canvas.shape[2], 3).T
             h, tau = np.linalg.qr(seedmat, mode='raw')
             false_colored = (canvas @ h)
-            rgb_canvas = kwimage.normalize(false_colored)
+            rgb_canvas = kwarray.normalize(false_colored)
         elif method.lower() == 'pca':
             import sklearn
             ndim = canvas.ndim
@@ -1216,9 +1216,9 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
     from geowatch.utils import util_kwimage
     space_shape = (380, 380)
     weights1 = util_kwimage.upweight_center_mask(space_shape)
-    weights2 = kwimage.normalize(kwimage.gaussian_patch(space_shape))
+    weights2 = kwarray.normalize(kwimage.gaussian_patch(space_shape))
     sigma3 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
-    weights3 = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma3))
+    weights3 = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma3))
 
     min_spacetime_weight = 0.5
 
@@ -1263,7 +1263,7 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
     min_spacetime_weight = 0.5
     frame_poly_weights = frame_poly_weights_v2
     frame_poly_weights = np.maximum(frame_poly_weights, min_spacetime_weight)
-    space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+    space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
     import kwplot
     kwplot.autompl()
     kwplot.imshow(frame_poly_weights_v1, pnum=(1, 3, 1))

@@ -420,6 +420,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         raise NotImplementedError('abstract')
 
     def body_features(self):
+        """
+        Iterate over non-header items in the geojson feature list
+        """
         for feat in self['features']:
             prop = feat['properties']
             if prop['type'] == self._body_type:
@@ -438,6 +441,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     @property
     def header(self):
+        """
+        Get the single feature representing the header
+        """
         for feat in self['features']:
             prop = feat['properties']
             if prop['type'] == self._header_type:
@@ -754,6 +760,9 @@ class RegionModel(_Model):
     @classmethod
     def random(cls, with_sites=False, **kwargs):
         """
+        Creates a random region model optionally with random sites for use in
+        testing / demos.
+
         Args:
             with_sites (bool):
                 also returns site models if True
@@ -823,6 +832,9 @@ class RegionModel(_Model):
 
     @property
     def region_id(self):
+        """
+        Get the region_id from the geojson header
+        """
         return self.header['properties']['region_id']
 
     def fixup(self):
@@ -971,6 +983,9 @@ class SiteModel(_Model):
                 return feat
 
     def observations(self):
+        """
+        Features containing specific observations with phase labels
+        """
         yield from self.body_features()
 
     def pandas_observations(self):
@@ -1153,6 +1168,7 @@ class SiteModel(_Model):
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
+        self.fix_aliased_properties()
         self.ensure_isodates()
         self.fix_current_phase_salient()
         self.fix_backwards_dates()
@@ -1160,6 +1176,18 @@ class SiteModel(_Model):
         self.fix_multipolygons()
         # self.fix_geom()
         return self
+
+    def fix_aliased_properties(self):
+        """
+        Some models are written with aliased properties (e.g. stop_date instead
+        of end_date). This fixes them.
+        """
+        feat = self.header
+        props = feat['properties']
+        end_date = props.get('end_date', None)
+        if end_date is None:
+            if 'stop_date' in props:
+                props['end_date'] = props.pop('stop_date')
 
     def fix_old_schema_properties(self):
         """
@@ -1216,7 +1244,9 @@ class SiteModel(_Model):
     def clamp_scores(self):
         for feat in self.features:
             fprop = feat['properties']
-            fprop['score'] = float(max(min(1, fprop['score']), 0))
+            old_score = fprop.get('score', None)
+            if old_score is not None:
+                fprop['score'] = float(max(min(1.0, fprop['score']), 0.0))
 
     def remove_invalid_properties(self):
         """
@@ -1433,6 +1463,15 @@ class _Feature(ub.NiceRepr, geojson.Feature):
             mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
             self.properties['mgrs'] = mgrs_code
         return self
+
+    def _fix_geojson_geometry(self):
+        """
+        Turn any shapely objects into serializable geojson
+        """
+        geometry =  self['geometry']
+        if not isinstance(geometry, dict):
+            import geojson
+            self['geometry'] = geojson.loads(geojson.dumps(geometry))
 
 
 class Point(_Feature):
@@ -1814,10 +1853,41 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
             raise TypeError(type(data))
         return self
 
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site header in this region model.
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry
+
+            **kwargs :
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteHeader
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> site_header = SiteHeader.random(rng=0)
+            >>> print('site_header = {}'.format(ub.urepr(site_header, nl=2)))
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return site.header
+
 
 class Observation(_Feature):
     """
     The observation body feature of a site model.
+
+    Example:
+        >>> from geowatch.geoannots.geomodels import *  # NOQA
+        >>> Observation()
     """
     _model_cls = SiteModel
     _feat_type = SiteModel._body_type
@@ -1837,6 +1907,58 @@ class Observation(_Feature):
     @property
     def observation_date(self):
         return util_time.coerce_datetime(self['properties']['observation_date'])
+
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new observation in this region model.
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new observation
+
+            **kwargs :
+                passed to :func:`geowatch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            Observation
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> obs = Observation.random(rng=0)
+            >>> print(f'obs={obs}')
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return list(site.observations())[0]
+
+    @classmethod
+    def empty(cls):
+        """
+        Create an empty observation
+
+        Example:
+            >>> from geowatch.geoannots.geomodels import *  # NOQA
+            >>> self = Observation.empty()
+            >>> print(f'self = {ub.urepr(self, nl=2)}')
+        """
+        self = cls(
+            properties={
+                'type': 'observation',
+                'observation_date': None,  # e.g. '2011-05-28',
+                'source': None,  # e.g. 'demosat-220110528T132754',
+                'sensor_name': None,  # e.g. 'demosat-2',
+                'current_phase': None,  # e.g. "No Activity".
+                'is_occluded': None,  # quirk / note: bool should be a string
+                'is_site_boundary': None,  # quirk / note: bool should be a string
+                'score': None,
+            },
+            geometry=None,
+        )
+        return self
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
@@ -1983,6 +2105,17 @@ class SiteModelCollection(ModelCollection):
         point_model = PointModel(points)
         return point_model
 
+    @classmethod
+    def coerce(cls, data):
+        """
+        Create a collection of site models from input - usually a directory
+        containing site model geojson files.
+
+        SeeAlso:
+            :func:`SiteModel.coerce_multiple`.
+        """
+        return cls(SiteModel.coerce_multiple(data))
+
 
 class PointModel(_Model):
     ...
@@ -2010,11 +2143,14 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries, stri
                     handle_error(f'No sites. Unable to infer {key}.', strict=strict)
                 else:
                     region_props[key] = _rectify_keys(key, site_summary_properties)
-            except ValueError:
+            except ValueError as ex:
                 # Allow MGRS to fail. We can use region geometry to get the
                 # right one.
                 if key != 'mgrs':
-                    raise
+                    if strict:
+                        raise
+                    else:
+                        print(f'Warning: ex = {ub.urepr(ex, nl=1)}')
 
     if region_props.get('start_date', None) is None:
         if len(site_summaries) == 0:
@@ -2068,7 +2204,7 @@ def _rectify_keys(key, properties_list):
     """
     if len(properties_list) == 0:
         raise ValueError(f'No sites. Unable to infer {key}.')
-    unique_values = {p[key] for p in properties_list}
+    unique_values = ub.dict_hist(p[key] for p in properties_list)
     if len(unique_values) > 1:
         msg = (f'More than one key={key!r} in with unique_values={unique_values!r}')
         print(msg)

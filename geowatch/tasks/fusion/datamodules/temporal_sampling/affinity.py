@@ -918,17 +918,17 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         >>> kwplot.autoplt()
         >>> pnum_ = kwplot.PlotNums(nCols=5)
         >>> kwplot.figure(fnum=1, doclf=True)
-        >>> # kwplot.imshow(kwimage.normalize(daylight_weights))
-        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=pnum_(), title='no missing dates')
-        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_1['final']), pnum=pnum_(), title='any missing dates (0.1)')
-        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_2['final']), pnum=pnum_(), title='any missing dates (0.5)')
-        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_3['final']), pnum=pnum_(), title='any missing dates (0.9)')
-        >>> kwplot.imshow(kwimage.normalize(allmiss_weights['final']), pnum=pnum_(), title='all missing dates')
+        >>> # kwplot.imshow(kwarray.normalize(daylight_weights))
+        >>> kwplot.imshow(kwarray.normalize(allhave_weights['final']), pnum=pnum_(), title='no missing dates')
+        >>> kwplot.imshow(kwarray.normalize(anymiss_weights_1['final']), pnum=pnum_(), title='any missing dates (0.1)')
+        >>> kwplot.imshow(kwarray.normalize(anymiss_weights_2['final']), pnum=pnum_(), title='any missing dates (0.5)')
+        >>> kwplot.imshow(kwarray.normalize(anymiss_weights_3['final']), pnum=pnum_(), title='any missing dates (0.9)')
+        >>> kwplot.imshow(kwarray.normalize(allmiss_weights['final']), pnum=pnum_(), title='all missing dates')
 
         >>> import pandas as pd
         >>> sns = kwplot.autosns()
         >>> fig = kwplot.figure(fnum=2, doclf=True)
-        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
+        >>> kwplot.imshow(kwarray.normalize(allhave_weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
         >>> row_idx = 5
         >>> df = pd.DataFrame({k: v[row_idx] for k, v in allhave_weights.items()})
         >>> df['index'] = np.arange(df.shape[0])
@@ -962,7 +962,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         >>> kwplot.autoplt()
         >>> pnum_ = kwplot.PlotNums(nCols=5)
         >>> kwplot.figure(fnum=1, doclf=True)
-        >>> kwplot.imshow(kwimage.normalize(weights['final']), pnum=pnum_(), title='all missing dates')
+        >>> kwplot.imshow(kwarray.normalize(weights['final']), pnum=pnum_(), title='all missing dates')
 
         >>> import pandas as pd
         >>> sns = kwplot.autosns()

@@ -16,8 +16,12 @@ def distributed_subitems(items, max_num):
         List | Dict: a subset of the input with a length at most ``max_num``.
 
     TODO:
-        - [ ] Find a better name
-        - [ ] Figure out where this lives
+        - [ ] Find a better name. ChatGPT suggests using "spread", which I
+              like. Maybe spreadsort, spreadshuffle, spredtraverse?
+              spreadtake, takespread?
+        - [ ] Figure out where this lives, probably kwutil.
+        - [ ] maybe we should force this to be a generator? Or make a generator variant?
+
 
     Example:
         >>> from geowatch.utils.util_kwutil import *  # NOQA
@@ -59,7 +63,14 @@ def farthest_from_previous(start, stop):
         int: the next chosen index in the series
 
     TODO:
-        - [ ] Find a Better Name
+        - [ ] Find a Better Name,
+                spread_indices?
+                farthest_index_traversal
+                spread_index_traversal
+
+        - [ ] Allow the user to specify which point is first?
+              Do we start at the beginning, end, or middle?
+              Currently we default to the end.
 
     Notes:
         * This is an instance of farthest-point traversal in 1D.

@@ -7,7 +7,7 @@ Derived from netharn/mixins.py for dumping tensorboard plots to disk
 
 CommandLine:
     # cd into training directory
-    WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
+    GEOWATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
 
     python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
         /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
@@ -204,7 +204,7 @@ def _write_helper_scripts(out_dpath, train_dpath):
     refresh_fpath.write_text(ub.codeblock(
         fr'''
         #!/usr/bin/env bash
-        WATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        GEOWATCH_PREIMPORT=0 python -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {train_dpath_}
         '''))
     try:
@@ -218,13 +218,15 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     This is its own function in case we need to modify formatting
     """
     import kwplot
+    import kwutil
     from kwplot.auto_backends import BackendContext
     import pandas as pd
-    import numpy as np
+    import numpy as np  # NOQA
 
     train_dpath = ub.Path(train_dpath).resolve()
     if not train_dpath.name.startswith('version_'):
-        # hack
+        # hack: use knowledge of common directory structures to find
+        # the root directory of training output for a specific training run
         if not (train_dpath / 'monitor').exists():
             if (train_dpath / '../monitor').exists():
                 train_dpath = (train_dpath / '..')
@@ -244,42 +246,101 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
         smoothing_values = [smoothing]
 
     plot_keys = [k for k in tb_data.keys() if '/' not in k]
-    # print(f'plot_keys={plot_keys}')
-    y01_measures = [
-        '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
-        '_f1', '_iou',
-    ]
-    y0_measures = ['error', 'loss']
-
     keys = set(tb_data.keys()).intersection(set(plot_keys))
-    # print(f'keys={keys}')
-    # unused = set(tb_data.keys()) - set(keys)
-
     # no idea what hp metric is, but it doesn't seem important
-    keys = keys - {'hp_metric'}
-
-    HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
+    # keys = keys - {'hp_metric'}
 
     if len(keys) == 0:
         print('warning: no known keys to plot')
         print(f'available keys: {list(tb_data.keys())}')
 
+    USE_NEW_PLOT_PREF = 0
+    if USE_NEW_PLOT_PREF:
+        # TODO: finish this
+        default_plot_preferences = kwutil.Yaml.loads(ub.codeblock(
+            '''
+            attributes:
+              - pattern: [
+                    '*_acc*', '*_ap*', '*_mAP*', '*_auc*', '*_mcc*', '*_brier*', '*_mauc*',
+                    '*_f1*', '*_iou*',
+                  ]
+                ymax: 1
+                ymin: 0
+
+              - pattern: ['*error*', '*loss*']
+                ymin: 0
+
+              - pattern: ['*lr*', '*momentum*', '*epoch*']
+                smoothing: null
+
+              - pattern: ['hp_metric']
+                ignore: true
+            '''))
+        plot_preferences_fpath = train_dpath / 'plot_preferences.yaml'
+        if plot_preferences_fpath.exists():
+            user_plot_preferences = kwutil.Yaml.coerce(plot_preferences_fpath)
+            plot_preferences = default_plot_preferences.copy()
+            plot_preferences.update(user_plot_preferences)
+        else:
+            plot_preferences = default_plot_preferences
+        print(f'plot_preferences = {ub.urepr(plot_preferences, nl=3)}')
+
+        for item in plot_preferences['attributes']:
+            item['pattern_'] = kwutil.util_pattern.MultiPattern.coerce(item['pattern'])
+
+        key_table = []
+        for plot_key in keys:
+            row = {'key': plot_key}
+            row['smoothing'] = smoothing_values
+            for item in plot_preferences['attributes']:
+                if item['pattern_'].match(plot_key.lower()):
+                    row.update(item)
+            row.pop('pattern', None)
+            row.pop('pattern_', None)
+            key_table.append(row)
+    else:
+        y01_measures = [
+            '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
+            '_f1', '_iou',
+        ]
+        y0_measures = ['error', 'loss']
+        HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
+        key_table = []
+        for plot_key in tb_data.keys():
+            row = {'key': plot_key}
+            if plot_key == 'hp_metric' or '/' in plot_key:
+                row['ignore'] = True
+                continue
+            if plot_key in y01_measures:
+                row['ymax'] = 1
+                row['ymin'] = 0
+            if plot_key in y0_measures:
+                if ignore_outliers:
+                    row['ymax'] = 'ignore_outliers'
+                row['ymin'] = 0
+            if plot_key in HACK_NO_SMOOTH:
+                row['smoothing'] = None
+            else:
+                row['smoothing'] = smoothing_values
+            key_table.append(row)
+
+    if 0:
+        print(f'key_table = {ub.urepr(key_table, nl=1)}')
+        print(pd.DataFrame(key_table))
+    key_table = [r for r in key_table if not r.get('ignore', False)]
+
     with BackendContext('agg'):
         import seaborn as sns
         sns.set()
-        # meta = tb_data.get('meta', {})
-        # nice = meta.get('name', '?name?')
         nice = title
         fig = kwplot.figure(fnum=1)
         fig.clf()
         ax = fig.gca()
 
-        # import kwimage
-        # color1 = kwimage.Color('kw_green').as01()
-        # color2 = kwimage.Color('kw_green').as01()
-        prog = ub.ProgIter(keys, desc='dump plots', verbose=verbose * 3)
-        for key in prog:
-            prog.set_extra(key)
+        key_iter = ub.ProgIter(key_table, desc='dump plots', verbose=verbose * 3)
+        for key_row in key_iter:
+            key = key_row['key']
+            key_iter.set_extra(key)
             snskw = {
                 'y': key,
                 'x': 'step',
@@ -291,22 +352,22 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             num_nan = (df_orig[key].isnull()).sum()
             df_orig['smoothing'] = 0.0
             variants = [df_orig]
-            if key not in HACK_NO_SMOOTH and smoothing_values:
+            smoothing_values = key_row['smoothing']
+            if smoothing_values:
                 for _smoothing_value in smoothing_values:
-                    if 0:
-                        # TODO: can we get a hueristic for how much smoothing
-                        # we might want? Look at the entropy of the derivative
-                        # curve?
-                        import scipy.stats
-                        deriv = np.diff(df_orig[key])
-                        counts1, bins1 = np.histogram(deriv[deriv < 0], bins=25)
-                        counts2, bins2 = np.histogram(deriv[deriv >= 0], bins=25)
-                        counts = np.hstack([counts1, counts2])
-                        # bins = np.hstack([bins1, bins2])
-                        # dict(zip(bins, counts))
-                        entropy = scipy.stats.entropy(counts)
-                        print(f'entropy={entropy}')
-
+                    # if 0:
+                    #     # TODO: can we get a hueristic for how much smoothing
+                    #     # we might want? Look at the entropy of the derivative
+                    #     # curve?
+                    #     import scipy.stats
+                    #     deriv = np.diff(df_orig[key])
+                    #     counts1, bins1 = np.histogram(deriv[deriv < 0], bins=25)
+                    #     counts2, bins2 = np.histogram(deriv[deriv >= 0], bins=25)
+                    #     counts = np.hstack([counts1, counts2])
+                    #     # bins = np.hstack([bins1, bins2])
+                    #     # dict(zip(bins, counts))
+                    #     entropy = scipy.stats.entropy(counts)
+                    #     print(f'entropy={entropy}')
                     if _smoothing_value > 0:
                         df_smooth = df_orig.copy()
                         beta = _smoothing_value
@@ -324,25 +385,31 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                 snskw['hue'] = 'smoothing'
 
             kw = {}
-            if any(m.lower() in key.lower() for m in y01_measures):
-                kw['ymin'] = 0.0
-                kw['ymax'] = 1.0
-            elif any(m.lower() in key.lower() for m in y0_measures):
-                ydata = df[key]
-                kw['ymin'] = min(0.0, ydata.min())
-                if ignore_outliers and num_non_nan > 3:
-                    if verbose:
-                        print('Finding outliers')
-                    low, kw['ymax'] = tensorboard_inlier_ylim(ydata)
+
+            ymin = key_row.get('ymin', None)
+            ymax = key_row.get('max', None)
+            if ymin is not None:
+                kw['ymin'] = float(ymin)
+            if ymax is not None:
+                if ymax == 'ignore_outliers':
+                    if num_non_nan > 3:
+                        if verbose:
+                            print('Finding outliers')
+                        low, kw['ymax'] = tensorboard_inlier_ylim(ydata)
+                else:
+                    kw['ymax'] = float(ymax)
 
             if verbose:
                 print('Begin plot')
             # NOTE: this is actually pretty slow
+            # TODO: port title buidler to kwplot and use it
             ax.cla()
             try:
                 if num_non_nan <= 1:
                     sns.scatterplot(data=df, **snskw)
                 else:
+                    # todo: we have an alternative in kwplot can
+                    # handle nans, use that instead.
                     sns.lineplot(data=df, **snskw)
             except Exception as ex:
                 title = nice + '\n' + key + str(ex)
@@ -519,8 +586,6 @@ class TensorboardPlotterCLI(scfg.DataConfig):
 if __name__ == '__main__':
     """
     CommandLine:
-        WATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
+        GEOWATCH_PREIMPORT=0 python -X importtime -m geowatch.utils.lightning_ext.callbacks.tensorboard_plotter .
     """
     TensorboardPlotterCLI.main()
-    # import fire
-    # fire.Fire(redraw_cli)

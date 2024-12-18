@@ -157,7 +157,7 @@ def main(cmdline=True, **kwargs):
         print('[coco_add_watch_fields] not writing')
 
 
-__config__ = AddWatchFieldsConfig
+__cli__ = AddWatchFieldsConfig
 
 if __name__ == '__main__':
     """

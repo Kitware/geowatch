@@ -549,7 +549,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> #value = kwimage.normalize_intensity(coco_img.imdelay('red|green|blue').finalize())
         >>> #kwplot.imshow(value, title='red|green|blue', pnum=pnum_())
         >>> for key, value in indexes.items():
-        >>>     kwplot.imshow(kwimage.normalize(value), title=key, pnum=pnum_())
+        >>>     kwplot.imshow(kwarray.normalize(value), title=key, pnum=pnum_())
 
 
     # Example:
@@ -875,7 +875,7 @@ def specialized_index_bands2(delayed=None):
         >>> indexes['MaskValid'] = indexes['MaskValid'].astype(np.float32)
         >>> for key, value in indexes.items():
         >>>     value = value.astype(np.float32)
-        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     #value = kwarray.normalize(value.astype(np.float32))
         >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
 
     Ignore:
@@ -895,7 +895,7 @@ def specialized_index_bands2(delayed=None):
         >>> indexes['MaskValid'] = indexes['MaskValid'].astype(np.float32)
         >>> for key, value in indexes.items():
         >>>     value = value.astype(np.float32)
-        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     #value = kwarray.normalize(value.astype(np.float32))
         >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
 
 
@@ -925,7 +925,7 @@ def specialized_index_bands2(delayed=None):
         >>> }
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(raw))
         >>> for key, value in raw.items():
-        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     #value = kwarray.normalize(value.astype(np.float32))
         >>>     value = value.astype(np.float32)
         >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap='viridis', data_colorbar=True)
     """

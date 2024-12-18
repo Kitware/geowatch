@@ -158,7 +158,7 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
     from kwutil import util_json
     fpath = ub.Path(fpath)
 
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v011.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v012.json'
 
     if use_cache and resolved_json_fpath.exists():
         # Load the cached row data
@@ -339,7 +339,7 @@ def load_result_resolved(node_dpath, node=None, dag=None):
         >>> # eval nodes grouped in eval/flat, so enumerate those
         >>> node_type_dpaths = list(mlops_dpath.glob('eval/flat/*'))
         >>> node_type_dpaths += list(mlops_dpath.glob('pred/flat/*'))
-        >>> # For each eval type, choose a node in it.
+        >>> # For each eval node_type, choose a node in it.
         >>> for node_type_dpath in node_type_dpaths:
         >>>     for node_dpath in node_type_dpath.ls():
         >>>         if len(node_dpath.ls()) > 2:
@@ -350,7 +350,7 @@ def load_result_resolved(node_dpath, node=None, dag=None):
         >>>     rich.print(f'flat_resolved = {ub.urepr(flat_resolved, nl=1)}')
 
     Ignore:
-        ## OR If you know the type of node you want
+        ## OR If you know the node_type of node you want
         from geowatch.mlops.aggregate_loader import *  # NOQA
         import geowatch
         import rich
@@ -384,7 +384,13 @@ def load_result_resolved(node_dpath, node=None, dag=None):
 
     if dag is not None:
         if node is None:
-            node = dag.nodes[node_type]
+            try:
+                node = dag.nodes[node_type]
+            except KeyError:
+                print(f'node_dpath = {ub.urepr(node_dpath, nl=1)}')
+                print(f'node_type = {ub.urepr(node_type, nl=1)}')
+                print(f'dag.nodes = {ub.urepr(dag.nodes, nl=1)}')
+                raise
 
     if node is not None and hasattr(node, 'load_result'):
         flat_resolved = node.load_result(node_dpath)

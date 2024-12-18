@@ -231,7 +231,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
         '''))
 
 
-__config__ = KWCocoToGeoJSONConfig
+__cli__ = KWCocoToGeoJSONConfig
 
 
 def _single_geometry(geom):

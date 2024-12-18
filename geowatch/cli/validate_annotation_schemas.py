@@ -390,8 +390,8 @@ def validate_site_content(site_df, site_fpath):
     return site_report
 
 
-__config__ = ValidateAnnotationConfig
-__config__.main = main
+__cli__ = ValidateAnnotationConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

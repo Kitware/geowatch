@@ -1,7 +1,20 @@
-from transformers.models.detr.modeling_detr import (
-    DetrObjectDetectionOutput, build_position_encoding, DetrDecoder,
-    DetrMLPPredictionHead, DetrHungarianMatcher, DetrLoss
-)
+from transformers.models.detr.modeling_detr import DetrObjectDetectionOutput
+from transformers.models.detr.modeling_detr import build_position_encoding
+from transformers.models.detr.modeling_detr import DetrDecoder
+from transformers.models.detr.modeling_detr import DetrMLPPredictionHead
+
+""""
+transformers library changed the way detr loss was handled in 4.46.2, which was
+originally working in 4.37.2
+"""
+
+try:
+    from transformers.models.detr.modeling_detr import DetrHungarianMatcher
+    from transformers.models.detr.modeling_detr import DetrLoss
+except ImportError:
+    from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrHungarianMatcher
+    from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrLoss
+
 from transformers import DetrConfig
 import torch
 import torch.nn as nn

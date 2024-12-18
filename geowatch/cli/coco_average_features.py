@@ -658,7 +658,7 @@ def main(cmdline=True, **kw):
     )
 
 
-__config__ = CocoAverageFeaturesConfig
+__cli__ = CocoAverageFeaturesConfig
 
 
 if __name__ == "__main__":

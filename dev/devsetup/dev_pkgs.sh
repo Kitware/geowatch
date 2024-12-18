@@ -62,6 +62,9 @@ DO_CLONE=1
 
 
 if [[ "$DO_FETCH" == "1" ]]; then
+    echo "====================="
+    echo "Start Pull and Update"
+    echo "====================="
     ### Pull and update
     for name in "${mylibs[@]}"
     do
@@ -85,11 +88,18 @@ if [[ "$DO_FETCH" == "1" ]]; then
             fi
         fi
     done
+else
+    echo "Skip Fetching"
 fi
 
 echo "
 My Libs:"
 bash_array_repr "${mylibs[@]}"
+
+
+echo "====================="
+echo "Check for tasks to do"
+echo "====================="
 
 needs_uninstall=()
 needs_install=()
@@ -99,7 +109,7 @@ do
     REPO_DPATH=$CODE_DPATH/$name
     if [[ -d $REPO_DPATH ]]; then
         #base_fpath=$(python -c "import $name; print($name.__file__)")
-        if python -c "import sys, $name; sys.exit(1 if 'site-packages' in $name.__file__ else 0)"; then
+        if python -c "import sys, $name; sys.exit(1 if 'site-packages' in $name.__file__ else 0)" 2> /dev/null; then
             echo " * already have REPO_DPATH = $REPO_DPATH"
         else
             echo " * will ensure REPO_DPATH = $REPO_DPATH"
@@ -126,6 +136,10 @@ bash_array_repr "${needs_install[@]}"
 
 
 if [[ "$DO_INSTALL" == "1" ]]; then
+    echo "===================="
+    echo "Do Developer Install"
+    echo "===================="
+
 
     echo "
     Uninstalling:
@@ -142,15 +156,26 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     if [[ ${#needs_install[@]} -gt 0 ]]; then
         # * Disable build isolation because it is faster and we usually wont need it.
         # * Note the -e needs to be before every package, this is handled earlier
-        pip install --no-build-isolation "${needs_install[@]}"
+        #echo pip install --no-build-isolation "${needs_install[@]}"
+        #pip install --no-build-isolation "${needs_install[@]}"
+        # Looks like build isolation is probably important
+        echo pip install "${needs_install[@]}"
+        pip install "${needs_install[@]}"
     fi
 
     echo "
     Finished Installing
     "
+else
+    echo "======================"
+    echo "Skip Developer Install"
+    echo "======================"
 fi
 
 
+echo "===================="
+echo "Check Installed Libs"
+echo "===================="
 echo "
 Check that the installed versions / paths are what you expect:
 "

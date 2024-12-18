@@ -1346,7 +1346,7 @@ class VanillaTransformerEncoder(nn.Module, BackboneEncoderDecoder):
         mask=None,
         queries=None
     ):
-        assert queries is None
+        assert queries is None, 'should have queries'
         return self.encoder(x, src_key_padding_mask=(mask == 0))
 
 

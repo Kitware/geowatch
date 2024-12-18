@@ -305,7 +305,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     return bad_gids
 
 
-__config__ = CocoRemoveBadImagesConfig
+__cli__ = CocoRemoveBadImagesConfig
 
 
 if __name__ == '__main__':

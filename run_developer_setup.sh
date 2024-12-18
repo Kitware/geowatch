@@ -60,38 +60,40 @@ apt_ensure(){
     Args:
         *ARGS : one or more requested packages
 
+    Environment:
+        UPDATE : if this is populated also runs and apt update
+
     Example:
         apt_ensure git curl htop
-
-    Ignore:
-        REQUESTED_PKGS=(git curl htop)
     "
     # Note the $@ is not actually an array, but we can convert it to one
     # https://linuxize.com/post/bash-functions/#passing-arguments-to-bash-functions
     ARGS=("$@")
     MISS_PKGS=()
     HIT_PKGS=()
+    _SUDO=""
+    if [ "$(whoami)" != "root" ]; then
+        # Only use the sudo command if we need it (i.e. we are not root)
+        _SUDO="sudo "
+    fi
     for PKG_NAME in "${ARGS[@]}"
     do
-        #apt_ensure_single $EXE_NAME
-        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" || true)
-        if [ "$RESULT" == "" ]; then
-            echo "Do not have PKG_NAME='$PKG_NAME'"
-            # shellcheck disable=SC2268,SC2206
-            MISS_PKGS=(${MISS_PKGS[@]} "$PKG_NAME")
-        else
+        # Check if the package is already installed or not
+        if dpkg-query -W -f='${Status}' "$PKG_NAME" 2>/dev/null | grep -q "install ok installed"; then
             echo "Already have PKG_NAME='$PKG_NAME'"
-            # shellcheck disable=SC2268,SC2206
-            HIT_PKGS=(${HIT_PKGS[@]} "$PKG_NAME")
+            HIT_PKGS+=("$PKG_NAME")
+        else
+            echo "Do not have PKG_NAME='$PKG_NAME'"
+            MISS_PKGS+=("$PKG_NAME")
         fi
     done
 
-    if [ "${#MISS_PKGS}" -gt 0 ]; then
-        if type sudo ; then
-            sudo apt install -y "${MISS_PKGS[@]}"
-        else
-            apt install -y "${MISS_PKGS[@]}"
+    # Install the packages if any are missing
+    if [ "${#MISS_PKGS[@]}" -gt 0 ]; then
+        if [ "${UPDATE}" != "" ]; then
+            $_SUDO apt update -y
         fi
+        DEBIAN_FRONTEND=noninteractive $_SUDO apt install -y "${MISS_PKGS[@]}"
     else
         echo "No missing packages"
     fi
@@ -430,6 +432,27 @@ main(){
         ")
 
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
+
+    # Note: on aarch64 / arm64, we need to install gdal before we can install
+    # rasterio because it does not ship with arm64 binaries.
+    if [[ "$(arch)" == "aarch64" ]]; then
+        python -m pip install --no-deps .
+        echo "
+        # FIXME: we are very likely going to have to build some things to make
+        # arm64 builds work.
+        sudo apt install libgdal-dev  # probably require at least 3.4.1 from 22.04
+        pip install 'gdal==3.4.1'
+        pip install rasterio==1.3.5
+        WATCH_PREIMPORT=none python -m geowatch.cli.special.finish_install
+        https://rustup.rs/
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        "
+        echo '
+        sudo apt install gdal-bin
+        pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="-I/usr/include/gdal"
+        pip install rasterio==1.3.5 --global-option=build_ext --global-option="-I/usr/include/gdal"
+        '
+    fi
 
     # Install the geowatch module in development mode
     python -m pip install --prefer-binary -e ".$EXTRAS"

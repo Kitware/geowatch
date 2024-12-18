@@ -244,7 +244,9 @@ if __name__ == '__main__':
         'geowatch_tpl/submodules_static/torchview',
         'geowatch_tpl/submodules_static/segment-anything',
         'geowatch_tpl/submodules_static/scale-mae',
+        'geowatch_tpl/submodules_static/jsonargparse',
         'geowatch_tpl/submodules_static/loss-of-plasticity',
+        'geowatch_tpl/submodules_static/detectron2',
         'geowatch_tpl/modules',
     ]
     tpl_packages = []
@@ -268,7 +270,7 @@ if __name__ == '__main__':
         name=NAME,
         author="GeoWATCH developers",
         author_email='kitware@kitware.com',
-        python_requires='>=3.10',
+        python_requires='>=3.8',
         # https://pypi.org/classifiers/
         classifiers=[
             'Development Status :: 4 - Beta',
@@ -283,6 +285,7 @@ if __name__ == '__main__':
         entry_points={
             'console_scripts': [
                 'geowatch= geowatch.cli.__main__:main',
+                # DEPRECATED: Use simple_dvc instead
                 'geowatch_dvc= geowatch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
             ],

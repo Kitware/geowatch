@@ -194,7 +194,7 @@ def main(cmdline=1, **kwargs):
     dset.dump(out_path)
     rich.print(f"Wrote modified kwcoco to: [link={out_path}]{out_path}[/link]")
 
-__config__ = CocoAddIgnoreBufferConfig
+__cli__ = CocoAddIgnoreBufferConfig
 
 
 if __name__ == "__main__":

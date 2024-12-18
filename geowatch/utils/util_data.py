@@ -301,7 +301,7 @@ def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     NOTE: other team members can add their "standard" locations if they want.
 
     SeeAlso:
-        WATCH_DATA_DPATH=$(geowatch_dvc)
+        GEOWATCH_DATA_DPATH=$(geowatch_dvc)
 
         python -m geowatch.cli.find_dvc --hardware=hdd
         python -m geowatch.cli.find_dvc --hardware=ssd

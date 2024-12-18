@@ -4,7 +4,29 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.18.3 - Unreleased
+## Version 0.18.4 - Unreleased
+
+### Changed
+
+* Vendored a fork of jsonargparse in geowatch-tpl to maintain compatibility with scriptconfig
+* Changed instances of `__config__` to `__cli__`
+* KWCocoVideoDataset will now respect the `"sensor"` field in an image in addition to `"sensor_coarse"` (which still takes priority)
+* Added aliases of `GEOWATCH_PREIMPORT`, `GEOWATCH_HACK_IMPORT_ORDER`, `GEOWATCH_GRID_WORKERS`, `GEOWATCH_LOOSE_CLI` for the old `GEO`-less versions.
+* Respect the annotation color property in coco visualize videos
+
+### Modified
+* More documentation with an mlops minimal example.
+
+### Added
+* Added detectron2 as a tpl submodule
+* mlops manager can now accept `expt_pattern`
+* initial experimental ability to draw track trails in coco visualize videos
+
+### Fixed
+* Support latest DETR in transformers library 4.46.2
+
+
+## Version 0.18.3 - Released 2024-09-10
 
 ### Added
 * Add top-level matrices argument to param_grid.

@@ -331,7 +331,7 @@ class Initializer(object):
             config['init'] = 'pretrained'
 
         import os
-        init_verbose = int(os.environ.get('WATCH_INIT_VERBOSE', 4))
+        init_verbose = int(os.environ.get('GEOWATCH_INIT_VERBOSE', os.environ.get('WATCH_INIT_VERBOSE', 4)))
 
         # ---
         initializer_ = None
@@ -754,6 +754,8 @@ class InputNorm(torch.nn.Module):
         if std is not None:
             std = std if ub.iterable(std) else [std]
             std = torch.FloatTensor(std)
+        # Buffers are not returned by .parameters, so they are not modified by
+        # optimization, but they are stored in the state_dict
         self.register_buffer('mean', mean)
         self.register_buffer('std', std)
 

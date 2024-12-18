@@ -3,7 +3,9 @@
 
 PyQt5 >= 5.15
 
-ipython >= 8.18.1
+ipython>=8.13.1    ; python_version < '4.0'  and python_version >= '3.9'     # Python 3.9+
+ipython>=8.0.0     ; python_version < '3.9'  and python_version >= '3.8'     # Python 3.8
+
 flake8 >= 5.0.0
 autopep8 >= 2.0.0
 mkinit >= 0.3.3

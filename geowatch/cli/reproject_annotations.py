@@ -1911,7 +1911,7 @@ def is_nonish(x):
     return x is None or isinstance(x, float) and math.isnan(x)
 
 
-__config__ = ReprojectAnnotationsConfig
+__cli__ = ReprojectAnnotationsConfig
 
 __cli__ = ReprojectAnnotationsConfig
 __cli__.main = main

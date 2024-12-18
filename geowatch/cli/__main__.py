@@ -6,7 +6,7 @@ __devnotes__ = """
 # We may want to delay actual imports, gdal import time can be excessive
 
 python -X importtime -c "import geowatch"
-WATCH_HACK_IMPORT_ORDER="" python  -X importtime -m geowatch.cli find_dvc
+GEOWATCH_HACK_IMPORT_ORDER="" python  -X importtime -m geowatch.cli find_dvc
 """
 
 
@@ -95,7 +95,7 @@ def main(cmdline=True, **kw):
     import os
     from scriptconfig.modal import ModalCLI
     import geowatch
-    WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
+    GEOWATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '') or os.environ.get('GEOWATCH_LOOSE_CLI', '')
 
     # https://emojiterra.com/time/
     # Not sure how to make this consistent on different terminals
@@ -137,16 +137,14 @@ def main(cmdline=True, **kw):
 
         cli_config = None
 
-        if hasattr(cli_module, '__config__'):
-            # New way
-            cli_config = cli_module.__config__
-        elif hasattr(cli_module, '__cli__'):
+        if hasattr(cli_module, '__cli__'):
             # New way
             cli_config = cli_module.__cli__
         else:
             if hasattr(cli_module, 'modal'):
                 continue
-            raise AssertionError(f'We are only supporting scriptconfig CLIs. {cli_module} does not have __config__ attr')
+            else:
+                raise NotImplementedError(f'modules must define the __cli__ attribute to be registered. Failed on {cli_module}')
 
         if not hasattr(cli_config, 'main'):
             if hasattr(cli_module, 'main'):
@@ -180,63 +178,8 @@ def main(cmdline=True, **kw):
         cli_config.__alias__ = list(secondary_cmdnames)
         modal.register(cli_config)
 
-    ret = modal.main(strict=not WATCH_LOOSE_CLI)
+    ret = modal.main(strict=not GEOWATCH_LOOSE_CLI)
     return ret
-
-
-# def modal_main(self, argv=None, strict=True, autocomplete='auto'):
-#     """
-#     Overwrite modal main to support Lightning CLI
-#     """
-#     if isinstance(self, type):
-#         self = self()
-
-#     parser = self.argparse()
-
-#     if autocomplete:
-#         try:
-#             import argcomplete
-#             # Need to run: "$(register-python-argcomplete xdev)"
-#             # or activate-global-python-argcomplete --dest=-
-#             # activate-global-python-argcomplete --dest ~/.bash_completion.d
-#             # To enable this.
-#         except ImportError:
-#             argcomplete = None
-#             if autocomplete != 'auto':
-#                 raise
-#     else:
-#         argcomplete = None
-
-#     if argcomplete is not None:
-#         argcomplete.autocomplete(parser)
-
-#     if strict:
-#         ns = parser.parse_args(args=argv)
-#     else:
-#         ns, _ = parser.parse_known_args(args=argv)
-
-#     kw = ns.__dict__
-
-#     if kw.pop('version', None):
-#         print(self.version)
-#         return 0
-
-#     sub_main = kw.pop('main', None)
-#     if sub_main is None:
-#         parser.print_help()
-#         raise ValueError('no command given')
-#         return 1
-
-#     try:
-#         ret = sub_main(cmdline=False, **kw)
-#     except Exception as ex:
-#         print('ERROR ex = {!r}'.format(ex))
-#         raise
-#         return 1
-#     else:
-#         if ret is None:
-#             ret = 0
-#         return ret
 
 
 if __name__ == '__main__':

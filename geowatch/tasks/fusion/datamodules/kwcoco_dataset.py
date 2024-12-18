@@ -1,18 +1,21 @@
 """
-Defines a torch Dataset for kwcoco video data.
+Defines :class:`KWCocoVideoDataset`, a torch Dataset for kwcoco image and video
+data.
 
-The parameters to each are handled by scriptconfig objects, which prevents us
-from needing to specify what the available options are in multiple places.
+The configurable input parameters are defined in the
+:class:`KWCocoVideoDatasetConfig`, which is used to resolve kwargs passed to
+the main :class:`KWCocoVideoDataset` class. These parameters give the developer
+fine grined control over how sampling is done. At the most basic level the
+developer should specify:
 
-# import liberator
-# lib = liberator.Liberator()
-# lib.add_dynamic(KWCocoVideoDataset)
-# lib.expand(['geowatch'])
-# print(lib.current_sourcecode())
+    * window_space_scale - the size of the window (possibly in a virtual sample space) used to build the virtual sample grid.
 
+    * input_space_scale - the scale of the inputs (default to the window space scale, but could be different).
 
-For notes on Spaces, see
-    ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
+    * time_kernel - or (time_sampling / time_dims) to indicate how many / distribution of frames sampled over time.
+
+The following doctests provide a crash course on what sort of sampling
+parameters are available.
 
 CommandLine:
     xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset __doc__:0 --show
@@ -28,6 +31,29 @@ Example:
     >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
     >>>                           channels='r|g|b')
+    >>> self.disable_augmenter = True
+    >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
+    >>> item = self[index]
+    >>> # Summarize batch item in text
+    >>> summary = self.summarize_item(item)
+    >>> print('item summary: ' + ub.urepr(summary, nl=2))
+    >>> # Draw batch item
+    >>> canvas = self.draw_item(item)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
+Example:
+    >>> # Basic Data Sampling
+    >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> import geowatch
+    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> self = KWCocoVideoDataset(sampler, window_dims='full', channels='r|g|b')
     >>> self.disable_augmenter = True
     >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][0]]
     >>> item = self[index]
@@ -107,13 +133,44 @@ Example:
     >>> kwplot.imshow(canvas)
     >>> kwplot.show_if_requested()
 
+
+SeeAlso:
+
+    * For notes on spaces, see: ~/code/geowatch/docs/source/manual/development/coding_conventions.rst
+
 Known Issues
 ------------
 - [ ] FIXME: sensorchan codes should exclude non-specified sensors immediately before temporal sampling. Currently temporal sampling is given everything. E.g. (L8,S2):red|green|blue should not allow WV to be included in sampling.
 
+
+Roadmap
+-------
+
+- [ ] Get external feedback and suggestions.
+- [ ] Accept albumentations json or more concise spec for custom augmentation
+- [ ] Optimize fixed channel case.
+- [ ] Optimize fixed image size case.
+- [ ] Optimize fixed video size case.
+- [ ] Optimize the spacetime grid sampler.
+- [ ] Allow input resolution to be specified as a fixed pixel size.
+- [ ] Don't force compute of width / height if the window_space_dims is "full".
+
+
+Ignore:
+    # For developers, to extract a copy of this dataloader that does not depend
+    # on the rest of geowatch, you can attempt to "liberate" it:
+    from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    import liberator
+    lib = liberator.Liberator()
+    lib.add_dynamic(KWCocoVideoDataset)
+    lib.expand(['geowatch'])
+    text = lib.current_sourcecode()
+    print(ub.highlight_code(text))
+    num_lines = text.count(chr(10))
+    print(f'num_lines={num_lines}')
+
 """
 import einops
-import functools
 import kwarray
 import kwcoco
 import kwimage
@@ -146,6 +203,20 @@ from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
 from geowatch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
+from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
+
+from delayed_image.channel_spec import FusedChannelSpec
+from delayed_image.channel_spec import ChannelSpec
+from delayed_image.sensorchan_spec import SensorChanSpec
+from delayed_image.sensorchan_spec import FusedSensorChanSpec
+from delayed_image.sensorchan_spec import SensorSpec
+
+
+try:
+    from functools import cache
+except ImportError:
+    from ubelt import memoize as cache
 
 try:
     import line_profiler
@@ -174,7 +245,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     This is the configuration for a single dataset that could be used for
     train, test, or validation.
 
-    In the future this might be convertable to, or handled by omegaconfig
+    In the future this might be convertible to, or handled by omegaconfig
 
     The core spacetime parameters are:
 
@@ -184,12 +255,23 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         * time_steps
         * time_sampling
         * chip_dims / window_space_dims
-    """
 
+    This dataset defines an implicit grid of where it will sample, and it uses
+    these "targets" to request data from ndsampler, which is what gives us
+    amortized random access to the dataset.
+
+    The logic contained in this class concerns:
+        * interacting with the spacetime grids sampler to build a grid
+        * target-level augmentations
+        * data-level augmentations (need more of these)
+        * interacting with ndsampler to read data associated with a grid point
+        * balanced sampling over the targets
+        * mapping targets to a HeterogeneousBatchItem in the most general case.
+    """
     # TODO:
     # 'positive_labels': scfg.Value(None, help=ub.paragraph(
     #     '''
-    #     Labels to consider positive (in addition to infered labels)
+    #     Labels to consider positive (in addition to inferred labels)
     #     ''')),
 
     sampler_backend = scfg.Value(None, help="Can be None, 'npy', or 'cog'.")
@@ -204,11 +286,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     chip_dims = scfg.Value(128, alias=['window_space_dims', 'window_dims', 'chip_size'], group=SPACE_GROUP, help=ub.paragraph(
         '''
-        Spatial height/width per batch. If given as a single number,
-        used as both width and height.
+        The spatial window dimension (i.e. width and height) used to sample
+        from the images. This is the window that is "slid over" images in the
+        dataset when building the spacetime grid.  If given as a number it is
+        used as both width and height. Can also be a width, height tuple.  Can
+        also be a string code. Valid codes are "full", which always read the
+        entire image.
+
+        NOTE: The main key will change to window_space_dims in the future.
         '''), nargs='+')
     fixed_resolution = scfg.Value(None, group=SPACE_GROUP, help=ub.paragraph(
         '''
+        Convenience argument.
         If specified, fixes resolution of window, output, and input space.
         '''))
     window_space_scale = scfg.Value(None, alias=['window_resolution'], group=SPACE_GROUP, help=ub.paragraph(
@@ -258,7 +347,11 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     # TIME OPTIONS
     ##############
 
-    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help='number of temporal samples (i.e. frames) per batch')
+    time_steps = scfg.Value(2, alias=['time_dims'], group=TIME_GROUP, help=ub.paragraph(
+        '''
+        number of temporal samples (i.e. frames) per batch.
+        NOTE: The default of this will change to 1 in the future.
+        '''))
     time_sampling = scfg.Value('contiguous', type=str, group=TIME_GROUP, help=ub.paragraph(
         '''
         Strategy for expanding the time window across non-contiguous
@@ -278,7 +371,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
     channels = scfg.Value(None, type=str, group='sensorchan', help=ub.paragraph(
         '''
-        channels to use should be SensorChanSpec coercable
+        channels to use should be SensorChanSpec coercible
         '''))
     include_sensors = scfg.Value(None, group='sensorchan', help=ub.paragraph(
         '''
@@ -308,7 +401,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         only image dictionaries where the value of myattr is "foo". '.id < 3
         and (.file_name | test(".*png"))' will select only images with id less
         than 3 that are also pngs. .myattr | in({"val1": 1, "val4": 1}) will
-        take images where myattr is either val1 or val4. Requries the "jq"
+        take images where myattr is either val1 or val4. Requires the "jq"
         python library is installed.
         '''))
     select_videos = scfg.Value(None, group=SELECTION_GROUP, help=ub.paragraph(
@@ -319,7 +412,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         select({select_images}) | .id'. Examples for this argument are as
         follows: '.name | startswith("foo")' will select only videos where the
         name starts with foo. Only applicable for dataset that contain videos.
-        Requries the "jq" python library is installed.
+        Requires the "jq" python library is installed.
         '''))
 
     # FIXME:
@@ -517,7 +610,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         '''))
     mask_nan_bands = scfg.Value('', group=FILTER_GROUP, help=ub.paragraph(
         '''
-        Channels that propogate their nans to other bands / streams.
+        Channels that propagate their nans to other bands / streams.
         This should be FusedChannelSpec coercible.
         '''))
     mask_samecolor_method = scfg.Value(None, group=FILTER_GROUP, help=ub.paragraph(
@@ -533,7 +626,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
     mask_samecolor_values = scfg.Value(0, group=FILTER_GROUP, help=ub.paragraph(
         '''
         List of values to use for SAMECOLOR_QUALITY_HEURISTIC.
-        Can be an integer or list of intergers
+        Can be an integer or list of integers
         '''))
     force_bad_frames = scfg.Value(False, group=FILTER_GROUP, help=ub.paragraph(
         '''
@@ -635,7 +728,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         itself, effectively ignoring any global seed in non- test mode. In test
         mode, this has no effect. The reason this defaults to True is because
         of our balanced sampling approach, where the index of a sample passed
-        to getitem is ignored and we randomly return an item acording to the
+        to getitem is ignored and we randomly return an item according to the
         balanced distribution. This relies on randomness and if this was set to
         False dataloader clones for ddp or multiple workers would generate the
         same sequence of data regardless of split indexes.
@@ -653,6 +746,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         enriched variant.
         '''))
 
+    output_type = scfg.Value('heterogeneous', help=ub.paragraph(
+        '''
+        Can be heterogeneous, homogeneous, or rgb. This is a performance
+        parameter that allows implementation assumptions to be made.
+        Experimental in 0.18.4
+        '''))
+
     def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
@@ -665,7 +765,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                     p1, p2 = arg.split(',')
                     arg = [int(p1), int(p2)]
             if isinstance(arg, list):
-                assert len(arg) == 2
+                assert len(arg) == 2, 'arglist should be len 2'
                 arg = [int(arg[0]), int(arg[1])]
             if isinstance(arg, int):
                 arg = [arg, arg]
@@ -917,6 +1017,13 @@ class TruthMixin:
 
             missing_poly_flags = [poly is None for poly in ann_polys]
             if any(missing_poly_flags):
+                # Note: this will convert boxes into box-polygons, which is
+                # generally a non-optimial segmentation target objective.  We
+                # might do better by having a "policy" to control implicit
+                # conversion of boxes to segmentation masks.  we could use an
+                # ellipse and downweight edges, which might be more suitable
+                # for general use-cases. We may also want to downweight the
+                # entire polygon itself as it is a weak segmentation.
                 missing_idxs = np.where(missing_poly_flags)[0]
                 _box_polys = ann_boxes[missing_idxs].to_polygons()
                 for idx, _poly in zip(missing_idxs, _box_polys):
@@ -1255,7 +1362,7 @@ class GetItemMixin(TruthMixin):
             img = coco_dset.index.imgs[gid]
 
             stream_sample = gid_to_sample[gid]
-            assert len(stream_sample) > 0
+            assert len(stream_sample) > 0, 'should have at least one stream'
 
             # Collect image data from all modes within this frame
             mode_to_imdata = {}
@@ -1279,7 +1386,7 @@ class GetItemMixin(TruthMixin):
                 mode_to_dsize[mode_key] = (w, h)
 
             # For each frame we need to choose a resolution for the truth.
-            # Using the maximum resolution mode should be decent choise.
+            # Using the maximum resolution mode should be decent choice.
             # We could choose this to be arbitrary or independent of the input
             # dimensions, but it makes sense to pin it to the input data
             # in most cases.
@@ -1303,7 +1410,7 @@ class GetItemMixin(TruthMixin):
             else:
                 timestamp = np.nan
 
-            sensor = img.get('sensor_coarse', '*')
+            sensor = img.get('sensor_coarse', img.get('sensor', '*'))
 
             frame_item = {
                 'gid': gid,
@@ -1530,7 +1637,7 @@ class GetItemMixin(TruthMixin):
                     resolved_index = requested_index
                 else:
                     # In non-test-mode we discard the user index and randomly
-                    # sample a grid location to achive balanced sampling.
+                    # sample a grid location to achieve balanced sampling.
                     try:
                         resolved_index = self.balanced_sampler.sample()
                     except Exception as ex:
@@ -1572,7 +1679,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.videos[vidid]
         except KeyError:
             # hack for single image datasets
-            assert len(target_['gids']) == 1
+            assert len(target_['gids']) == 1, 'should have only 1 image id'
             gid = target_['gids'][0]
             video = coco_dset.index.imgs[gid]
 
@@ -1593,7 +1700,22 @@ class GetItemMixin(TruthMixin):
 
     @ub.memoize_method
     def _cached_sample_sensorchan_matching_sensor(self, sensor_coarse):
-        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+
+        def matching_sensor(self, sensor):
+            # HACK: port the fix to delayed image in 0.4.3
+            if sensor == '*':
+                return self
+            matching_streams = [
+                s for s in self.streams()
+                if s.sensor.spec == sensor or s.sensor.spec == '*'
+            ]
+            new = sum(matching_streams)
+            if new == 0:
+                new = FusedSensorChanSpec(SensorSpec(sensor), FusedChannelSpec.coerce(''))
+            return new
+
+        # matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+        matching_sensorchan = matching_sensor(self.sample_sensorchan, sensor_coarse)
         return matching_sensorchan
 
     @profile
@@ -1605,8 +1727,7 @@ class GetItemMixin(TruthMixin):
         """
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
-        sensor_coarse = coco_img.img.get('sensor_coarse', '*')
-
+        sensor_coarse = coco_img.img.get('sensor_coarse', coco_img.img.get('sensor', '*'))
         matching_sensorchan = self._cached_sample_sensorchan_matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
 
@@ -1614,7 +1735,7 @@ class GetItemMixin(TruthMixin):
             return x if isinstance(x, list) else [x]
 
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', self.config['mask_samecolor_method'])
-        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
+        SAMECOLOR_BANDS = target_.get('SAMECOLOR_BANDS', FusedChannelSpec.coerce(self.config['mask_samecolor_bands']).as_set())
         SAMECOLOR_VALUES = target_.get('SAMECOLOR_VALUES', _ensure_list(self.config['mask_samecolor_values']))
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
 
@@ -1624,7 +1745,7 @@ class GetItemMixin(TruthMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
-        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', kwcoco.FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
+        PROPAGATE_NAN_BANDS = target_.get('PROPAGATE_NAN_BANDS', FusedChannelSpec.coerce(self.config['mask_nan_bands']).as_set())
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -1660,7 +1781,7 @@ class GetItemMixin(TruthMixin):
             is_low_quality = None
 
         if sensor_channels.numel() == 0:
-            force_bad = 'Missing requested channels'
+            force_bad = f'Missing requested channels. {sensor_coarse=}, {matching_sensorchan=}, {self.sample_sensorchan=}'
 
         modality_streams = sensor_channels.streams()
         if target_['allow_augment'] and self.config['modality_dropout_rate']:
@@ -1938,7 +2059,7 @@ class GetItemMixin(TruthMixin):
                 sensor = frame_item['sensor']
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
-                    mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
+                    mode_chan = FusedChannelSpec.coerce(mode_key)
                     common_key = mode_chan.intersection(self.config['normalize_peritem'])
                     if common_key:
                         parent_data = frame_modes[mode_key]
@@ -1964,7 +2085,7 @@ class GetItemMixin(TruthMixin):
                 valid_mask = np.concatenate([t[1].ravel() for t in norm_items], axis=0)
                 valid_raw_datas = raw_datas[valid_mask]
                 # Compute normalizers over the entire temporal range per-sensor
-                normalizer = kwimage.find_robust_normalizers(valid_raw_datas,
+                normalizer = kwarray.find_robust_normalizers(valid_raw_datas,
                                                              params=peritem_normalizer_params)
                 # Postprocess / regularize the normalizer
                 prior_min = min(0, normalizer['min_val'])
@@ -2118,6 +2239,11 @@ class GetItemMixin(TruthMixin):
             # a helper class.
             item['predictable_classes'] = self.predictable_classes
             item['requested_tasks'] = self.requested_tasks
+        else:
+            # overhead should be small to at least return context by default
+            item.update({
+                'target': resolved_target_subset,
+            })
 
         if self.config['reduce_item_size']:
             nonessential_frame_keys = [
@@ -2144,7 +2270,15 @@ class GetItemMixin(TruthMixin):
                     frame.pop(k, None)
 
         if True:
-            item = HeterogeneousBatchItem(item)
+            # Wrap the dictionary item in a convinience class
+            if self.config['output_type'] == 'heterogeneous':
+                item = HeterogeneousBatchItem(item)
+            elif self.config['output_type'] == 'homogeneous':
+                item = HomogeneousBatchItem(item)
+            elif self.config['output_type'] == 'rgb':
+                item = RGBImageBatchItem(item)
+            else:
+                raise KeyError(self.config['output_type'])
 
         return item
 
@@ -2169,7 +2303,7 @@ class GetItemMixin(TruthMixin):
             video = coco_dset.index.videos[vidid]
         except KeyError:
             # Hack for loose images
-            assert len(target_['gids']) == 1
+            assert len(target_['gids']) == 1, 'should have only 1 image id'
             gid = target_['gids'][0]
             video = coco_dset.index.imgs[gid]
             is_loose_img = True
@@ -2413,6 +2547,11 @@ class IntrospectMixin:
             The ``self.requested_tasks`` controls the task labels returned by
             getitem, and hence what can be visualized here.
 
+        Note:
+            In the future, the returned :class:`HeterogeneousBatchItem` will
+            control how it is drawn, removing this responsibility from the
+            dataset itself.
+
         Example:
             >>> # Basic Data Sampling with lots of small objects
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -2556,7 +2695,7 @@ class IntrospectMixin:
 
         Args:
             item (dict): an item returned by __getitem__
-            stats (bool): if True, include statistics on input datas.
+            stats (bool): if True, include statistics on input data.
 
         Returns:
             dict : a summary of the item
@@ -2746,7 +2885,7 @@ class BalanceMixin:
             column_attrs['phases'] = observed_phases
 
         if BACKWARDS_COMPAT_NEG_TO_POS:
-            # To maintain compatability with old neg_to_pos_ratio build an
+            # To maintain compatibility with old neg_to_pos_ratio build an
             # indicator array that flags the samples the prev v0.17 code
             # considered as positive / negative. We will eventually remove
             # this logic. Samples were previously considered as negative if
@@ -2903,7 +3042,7 @@ class PreprocessMixin:
             - [ ] Cacher needs to depend on any part of the config of this
                   dataset that could impact the pixel intensity distribution.
         """
-        # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
+        # Get stats on the dataset (todo: nice way to disable augmentation temporarily for this)
         depends = ub.odict([
             ('num', num),
             ('hashid', self.sampler.dset._cached_hashid()),
@@ -2917,13 +3056,14 @@ class PreprocessMixin:
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem'].concise().spec
         workdir = None
-        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
-        dataset_stats = cacher.tryload()
         print('📊 Gather dataset stats')
+        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends, verbose=3)
+        dataset_stats = cacher.tryload()
         if dataset_stats is None or ub.argflag('--force-recompute-stats'):
             dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(dataset_stats)
+        print(f'dataset_stats = {ub.urepr(dataset_stats, nl=1)}')
         return dataset_stats
 
     def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
@@ -3085,7 +3225,7 @@ class PreprocessMixin:
                 }
 
             # We are now computing input stats across a finer set of modality
-            # variables. For backwards compatability also return the old-style
+            # variables. For backwards compatibility also return the old-style
             # input stats that are only over sensor/channel
             grouped_stats = ub.group_items(modality_input_stats.values(), [
                 (u.sensor, u.channels) for u in modality_input_stats.keys()])
@@ -3122,7 +3262,7 @@ class PreprocessMixin:
                 input_stats2 = {}
                 for mode, stats in old_input_stats.items():
                     sensor, channels = mode
-                    sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:{channels}')
+                    sensorchan = SensorChanSpec.coerce(f'{sensor}:{channels}')
                     key = sensorchan.concise().spec
                     inner_stats = {}
                     for statname, arr in stats.items():
@@ -3238,7 +3378,10 @@ class PreprocessMixin:
                     print(f'Warning: we are missing stats for {missing_sensor_modes}. '
                           'We will try to force something for them')
                     coco_images = self.sampler.dset.images().coco_images
-                    sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                    sensor_to_images = ub.group_items(
+                        coco_images,
+                        key=lambda x: x.img.get('sensor_coarse', x.img.get('sensor', None))
+                    )
                     extra_sample_groups = []
                     for sensor, mode in missing_sensor_modes:
                         candidate_images = sensor_to_images.get(sensor, [])
@@ -3366,7 +3509,7 @@ class MiscMixin:
         visualizations cleaner).
         """
         if model is not None:
-            assert requested_tasks is None
+            assert requested_tasks is None, 'requested tasks should be none'
             if hasattr(model, 'global_head_weights'):
                 requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
             if hasattr(model, 'predictable_classes'):
@@ -3437,7 +3580,7 @@ class MiscMixin:
         return item_output
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
-                    pin_memory=False):
+                    pin_memory=False, collate_fn='identity'):
         """
         Use this to make the dataloader so we ensure that we have the right
         worker init function.
@@ -3445,6 +3588,11 @@ class MiscMixin:
         Args:
             subset (None | Dataset): if specified, the loader is made for
                 this dataset instead of ``self``.
+
+            collate_fn (callable | str):
+                Can be 'identity' or 'stack' or a callable.
+                The normal torch default is 'stack', but for heterogeneous
+                batch item support, we defaults to 'identity'.
 
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -3458,18 +3606,30 @@ class MiscMixin:
             dataset = self
         else:
             dataset = subset
+
+        if collate_fn is None:
+            collate_fn = ub.identity
+        elif isinstance(collate_fn, str):
+            if collate_fn == 'identity':
+                collate_fn = ub.identity
+            elif collate_fn in {'stack', 'torch-default'}:
+                import torch.utils.data as torch_data
+                collate_fn = torch_data.dataloader.default_collate
+            else:
+                raise KeyError(collate_fn)
+
         loader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory,
             worker_init_fn=worker_init_fn,
-            collate_fn=ub.identity,  # disable collation
+            collate_fn=collate_fn,
         )
         return loader
 
 
 class BackwardCompatMixin:
     """
-    Backwards compatability for modified properties.
+    Backwards compatibility for modified properties.
     (These may eventually be deprecated).
     """
 
@@ -3542,6 +3702,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
     """
+    __scriptconfig__ = KWCocoVideoDatasetConfig
 
     @profile
     def __init__(self, sampler, mode='fit', test_with_annot_info=False, autobuild=True, **kwargs):
@@ -3588,7 +3749,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self.__dict__.update(_cfgdict)
 
         # Make config a normal dictionary to reduce attribute lookup overhead
-        #
         self.config = _cfgdict
 
         self.sampler = sampler
@@ -3645,7 +3805,73 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # dataset and model first.
         self.ignore_index = -100
 
-        channels = config['channels']
+        self._init_sensorchan()
+
+        if self.config['normalize_peritem']:
+            # (FIXME:this probably should be extended to be a sensorchan...)
+            if self.config['normalize_peritem'] is True:
+                # If True, then normalize all known channels
+                # FIXME: input config probably should not be modified outside
+                # of the __post_init__, we can set any resolved config to an
+                # internal variable instead of overwriting the user-specified
+                # value.
+                self.config['normalize_peritem'] = FusedChannelSpec.coerce(
+                    '|'.join(sorted(set(ub.flatten([
+                        s.chans.to_list()
+                        for s in self.input_sensorchan.streams()])))))
+            else:
+                normperitem_data = self.config['normalize_peritem']
+                # HACK:
+                if isinstance(normperitem_data, list):
+                    normperitem_data = ','.join(normperitem_data)
+                # Otherwise assume the user specified what channels to normalize
+                self.config['normalize_peritem'] = ChannelSpec.coerce(normperitem_data).fuse()
+        else:
+            self.config['normalize_peritem'] = None
+
+        # hidden option for now (todo: expose this)
+        self.inference_only = False
+
+        # TODO: better "notification of heads" specification and implementation
+        # TODO: modify these names to be less ambiguous.
+        self.requested_tasks = {
+            'change': True,  # Note: this is sequential frame change segmentation.
+
+            'class': True,     # Note: this is per-frame class segmentation.
+            'saliency': True,  # Note: this is per-frame saliency segmentation.
+            'boxes': True,     # Note: this is per-frame bbox detection.
+
+            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
+
+            # outputs is not really a task, it requests the weights needed for
+            # predict-time stitching.
+            'outputs': mode != 'fit',
+        }
+
+        # Hacks: combinable channels can be visualized as RGB images.
+        # The only reason this is a hack is because of the hardcoded names
+        # otherwise it is a cool feature.
+        self.default_combinable_channels = [
+            ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['impervious', 'forest', 'water']),
+            ub.oset(['baren', 'field', 'water']),
+            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
+        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+        if autobuild:
+            self._init()
+
+    @profile
+    def _init_sensorchan(self):
+        """
+        Part of initialization that coerces sensorchannel information if it is
+        not provided.
+        """
+        channels = self.config['channels']
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
@@ -3654,10 +3880,10 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             parts = []
             for sensor, chan_hist in sensorchan_hist.items():
                 for c in chan_hist.keys():
-                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
+                    chancode = ChannelSpec.coerce(c).fuse().spec
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
-            sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            sensorchans = SensorChanSpec.coerce(sensorchans)
             print(f'Automatically determined sensorchans = {ub.urepr(sensorchans, nl=1)}')
             if len(sensorchan_hist) > 0 and channels is None:
                 # Only warn if not explicitly in auto mode
@@ -3670,7 +3896,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             # hack
             sensorchan_hist = None
             sensorchans = channels
-        self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
+        self.sensorchan = SensorChanSpec.coerce(sensorchans).normalize()
 
         # handle generic * sensors, the idea is that we find matches
         # in the dataset that can support the requested channels.
@@ -3689,7 +3915,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                     for cand_sensor, cand_chans in sensorchan_hist.items():
                         valid_chan_cands = []
                         for cand_chan_group in cand_chans:
-                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
+                            cand_chan_group = ChannelSpec.coerce(cand_chan_group).fuse()
                             chan_isect = chans & cand_chan_group
                             if chan_isect.spec == chans.spec:
                                 valid_chan_cands.append(valid_chan_cands)
@@ -3702,7 +3928,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
                 raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
 
-            self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(
+            self.sensorchan = SensorChanSpec.coerce(','.join(
                 list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
 
         # TODO: Clean up this code.
@@ -3731,72 +3957,22 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             _sample_channels.append('|'.join(_sample_stream))
 
             #### New: input_sensorchan will replace input_channels
-            self.sample_sensorchan = kwcoco.SensorChanSpec(
+            self.sample_sensorchan = SensorChanSpec(
                 ','.join(_sample_sensorchans)
             )
 
-            self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
+            self.input_sensorchan = SensorChanSpec.coerce(
                 ','.join(_input_sensorchans)
             )
-
-        if self.config['normalize_peritem']:
-            # (this probably should be extended to be a sensorchan...)
-            if self.config['normalize_peritem'] is True:
-                # If True, then normalize all known channels
-                self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce(
-                    '|'.join(sorted(set(ub.flatten([
-                        s.chans.to_list()
-                        for s in self.input_sensorchan.streams()])))))
-            else:
-                # Otherwise assume the user specified what channels to normalize
-                self.config['normalize_peritem'] = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
-        else:
-            self.config['normalize_peritem'] = None
-
-        # hidden option for now (todo: expose this)
-        self.inference_only = False
-
-        # TODO: better "notification of heads" specification and implementation
-        # TODO: modify these names to be less ambiguous.
-        self.requested_tasks = {
-
-            'change': True,  # Note: this is sequential frame change segmentation.
-
-            'class': True,     # Note: this is per-frame class segmentation.
-            'saliency': True,  # Note: this is per-frame saliency segmentation.
-            'boxes': True,     # Note: this is per-frame bbox detection.
-
-            'nonlocal_class': False,  # each frame is assigned non-localized class labels.
-
-            # ouputs is not really a task, it requests the weights needed for
-            # predict-time stitching.
-            'outputs': mode != 'fit',
-        }
-
-        # Hacks: combinable channels can be visualized as RGB images.
-        # The only reason this is a hack is because of the hardcoded names
-        # otherwise it is a cool feature.
-        self.default_combinable_channels = [
-            ub.oset(['red', 'green', 'blue']),
-            ub.oset(['Dred', 'Dgreen', 'Dblue']),
-            ub.oset(['r', 'g', 'b']),
-            ub.oset(['impervious', 'forest', 'water']),
-            ub.oset(['baren', 'field', 'water']),
-            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
-            ub.oset(['sam.0', 'sam.1', 'sam.2']),
-            ub.oset(['sam.3', 'sam.4', 'sam.5']),
-        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
-
-        if autobuild:
-            self._init()
 
     @profile
     def _init(self):
         """
-        The expensive part of initialization.
+        The expensive part of initialization that builds the sample grid based
+        on the user input.
         """
         config = self.config
-        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+        grid_workers = int(os.environ.get('GEOWATCH_GRID_WORKERS', os.environ.get('WATCH_GRID_WORKERS', 0)))
         common_grid_kw = dict(
             time_dims=config['time_steps'],
             window_dims=config['chip_dims'],
@@ -4221,7 +4397,7 @@ def more_demos():
         >>> self.config['resample_invalid_frames'] = 0
         >>> index = self.sample_grid['targets'][self.sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
         >>> item1 = self[index]
-        >>> self.config['normalize_peritem'] = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+        >>> self.config['normalize_peritem'] = FusedChannelSpec.coerce('red|green|blue|nir')
         >>> item2 = self[index]
         >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
         >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
@@ -4252,7 +4428,7 @@ def worker_init_fn(worker_id):
     #     print("DOES NOT HAVE SAMPLER")
 
 
-@functools.cache
+@cache
 def _space_weights(space_shape):
     sigma = (
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),

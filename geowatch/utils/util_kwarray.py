@@ -1,11 +1,15 @@
 """
 Functions that may eventually be moved to kwarray
 """
-import functools
 import math
 import numpy as np
 import ubelt as ub
 import warnings
+
+try:
+    from functools import cache
+except ImportError:
+    from ubelt import memoize as cache
 
 try:
     from packaging.version import parse as Version
@@ -850,7 +854,7 @@ def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=
     return imdata_normalized
 
 
-@functools.cache
+@cache
 def biased_1d_weights(upweight_time, num_frames):
     """
     import kwplot
