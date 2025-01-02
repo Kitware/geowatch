@@ -288,6 +288,63 @@ class DataFrame(pd.DataFrame):
         """
         return DotDictDataFrame(self)
 
+    def argextrema(self, columns, objective='maximize', k=1):
+        """
+        Finds the top K indexes (locs) for given columns.
+
+        Args:
+            columns (str | List[str]) : columns to find extrema of.
+                If multiple are given, then secondary columns are used as
+                tiebreakers.
+
+            objective (str | List[str]) :
+                Either maximize or minimize (max and min are also accepted).
+                If given as a list, it specifies the criteria for each column,
+                which allows for a mix of maximization and minimization.
+
+            k : number of top entries
+
+        Returns:
+            List: indexes into subset of data that are in the top k for any of the
+                requested columns.
+
+        Example:
+            >>> from geowatch.utils.util_pandas import DataFrame
+            >>> # If all suffixes are unique, then they are used.
+            >>> self = DataFrame.random(columns=['id', 'f1', 'loss'], rows=10)
+            >>> self.loc[3, 'f1'] = 1.0
+            >>> self.loc[4, 'f1'] = 1.0
+            >>> self.loc[5, 'f1'] = 1.0
+            >>> self.loc[3, 'loss'] = 0.2
+            >>> self.loc[4, 'loss'] = 0.3
+            >>> self.loc[5, 'loss'] = 0.1
+            >>> columns = ['f1', 'loss']
+            >>> k = 4
+            >>> top_indexes = self.argextrema(columns=columns, k=k, objective=['max', 'min'])
+            >>> assert len(top_indexes) == k
+            >>> print(self.loc[top_indexes])
+        """
+        ascending = None
+        def rectify_ascending(objective_str):
+            if objective_str in {'max', 'maximize'}:
+                ascending = False
+            elif objective_str in {'min', 'minimize'}:
+                ascending = True
+            else:
+                raise KeyError(objective)
+            return ascending
+
+        if isinstance(objective, str):
+            ascending = rectify_ascending(objective)
+        else:
+            ascending = [rectify_ascending(o) for o in objective]
+
+        ranked_data = self.sort_values(columns, ascending=ascending)
+        if isinstance(k, float) and math.isinf(k):
+            k = None
+        top_locs = ranked_data.index[0:k]
+        return top_locs
+
 
 def pandas_reorder_columns(df, columns):
     """

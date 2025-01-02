@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.19.0 - Unreleased
 
+### Added
+* Add `DataFrame.argextrema`
+
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 
 

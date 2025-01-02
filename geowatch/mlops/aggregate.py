@@ -58,6 +58,14 @@ Ignore:
         --target ./my_aggregate/bas_pxl_eval_2023-02-22T215702-5.csv.zip \
         --plot_params=True --rois KR_R001,KR_R002
 
+
+
+TODO:
+    - [ ] The package_fpath (i.e. model_cols) reporting does heuristics to
+          shorten the path to the package, but we shouldn't do this. We should
+          make a new column that indicates it is a shortened name for the
+          model, otherwise it is confusing.
+
 """
 import math
 import ubelt as ub
@@ -682,6 +690,11 @@ class AggregatorAnalysisMixin:
                     mapping from region_id to top k results
                 top_param_lut (T2=Dict[str, DataFrame]):
                     mapping from param hash to invocation details
+
+        Example:
+            >>> from geowatch.mlops.aggregate import *  # NOQA
+            >>> agg = Aggregator.demo(rng=0, num=100).build()
+            >>> agg.report_best(print_models=True, top_k=10)
         """
         import rich
         import pandas as pd
@@ -713,6 +726,8 @@ class AggregatorAnalysisMixin:
             metric_cols = group.columns.intersection(agg.metrics.columns)
             metric_group = group[metric_cols]
             try:
+                # FIXME: need to know if the metrics should be minimized or
+                # maximized. We cant just assume maximized.
                 top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
             except Exception:
                 print("FIXME: Something when wrong when sorting the reference region")
@@ -761,8 +776,24 @@ class AggregatorAnalysisMixin:
 
             if reference_hashids is None:
                 # Rank the rows for this region individually
+
+                if 0:
+                    suboptimize_columns = ':model:'
+                    if suboptimize_columns == ':model:':
+                        suboptimize_columns = _agg.model_cols
+                    if isinstance(suboptimize_columns, str):
+                        suboptimize_columns = [suboptimize_columns]
+
+                for subkey, subgroup in group.groupby(suboptimize_columns):
+                    print(subkey)
+
+                # FIXME: need to know if the metrics should be minimized or
+                # maximized.  We cant just assume maximized.
                 ranked_locs = util_pandas.pandas_argmaxima(
                     group, _agg.primary_metric_cols, k=top_k)
+
+                import xdev
+                xdev.embed()
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)
@@ -1593,6 +1624,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         for region_id, idx_group in agg.index.groupby('region_id'):
             agg.region_to_tables[region_id] = agg.table.loc[idx_group.index]
         agg.macro_compatible = agg.find_macro_comparable()
+        return agg
 
     def __nice__(self):
         return f'{self.node_type}, n={len(self)}'
