@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.19.0 - Unreleased
 
+### Changed
+* mlops manager package list command now sorts the package name in a reasonable way. 
 
 ## Version 0.18.4 - Released 2024-12-18
 
