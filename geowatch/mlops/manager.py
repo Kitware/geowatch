@@ -870,7 +870,7 @@ class ExperimentState(ub.NiceRepr):
                     result = heuristic_pattern.parse(pkg_fpath)
                     if result is None:
                         # pattern doesn't match, so use the entire string as the sort value prefix
-                        sort_value = (str(pkg_fpath), -1, -1, '')
+                        sort_value = (pkg_fpath, -1, -1, '')
                     else:
                         sort_value = tuple(result.named.values())
                     return sort_value
