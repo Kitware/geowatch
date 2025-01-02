@@ -793,12 +793,12 @@ class AggregatorAnalysisMixin:
                     if suboptimize_columns == 'special:model':
                         suboptimize_columns = _agg.model_cols
                     else:
-                        raise NotImplementedError(f'subopt value: {suboptimize}')
+                        raise NotImplementedError(f'subopt value: {suboptimize_columns}')
 
                     if isinstance(suboptimize_columns, str):
                         suboptimize_columns = [suboptimize_columns]
                     else:
-                        raise NotImplementedError(f'subopt type: {type(suboptimize)}')
+                        raise NotImplementedError(f'subopt type: {type(suboptimize_columns)}')
 
                     sublocs = []
                     for subkey, subgroup in group.groupby(suboptimize_columns):
