@@ -797,8 +797,8 @@ class AggregatorAnalysisMixin:
 
                     if isinstance(suboptimize_columns, str):
                         suboptimize_columns = [suboptimize_columns]
-                    else:
-                        raise NotImplementedError(f'subopt type: {type(suboptimize_columns)}')
+                    # else:
+                    #     raise NotImplementedError(f'subopt type: {type(suboptimize_columns)}')
 
                     sublocs = []
                     for subkey, subgroup in group.groupby(suboptimize_columns):
