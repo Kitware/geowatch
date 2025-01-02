@@ -655,7 +655,7 @@ class AggregatorAnalysisMixin:
 
     def report_best(agg, top_k=100, shorten=True, per_group=None, verbose=1,
                     reference_region=None, print_models=False, concise=False,
-                    show_csv=False) -> TopResultsReport:
+                    show_csv=False, suboptimize=None) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -683,6 +683,14 @@ class AggregatorAnalysisMixin:
             show_csv (bool):
                 also print as a CSV suitable for copy/paste into google sheets.
 
+            suboptimize (str | List[str]):
+                if specified, these are a list of columns that a
+                "suboptimized", which means that we group the table by these
+                columns (e.g. the model column) and then only consider the
+                "best" scoring results within these groups. This can help
+                remove clutter if attempting to choose between a specific
+                parameter.
+
         Returns:
             TopResultsReport:
                 contains:
@@ -694,7 +702,8 @@ class AggregatorAnalysisMixin:
         Example:
             >>> from geowatch.mlops.aggregate import *  # NOQA
             >>> agg = Aggregator.demo(rng=0, num=100).build()
-            >>> agg.report_best(print_models=True, top_k=10)
+            >>> agg.report_best(print_models=True, top_k=3)
+            >>> agg.report_best(print_models=True, top_k=3, suboptimize='special:model')
         """
         import rich
         import pandas as pd
@@ -721,6 +730,8 @@ class AggregatorAnalysisMixin:
                 region_to_len = ub.udict(agg.region_to_tables).map_values(len)
                 print('region_to_len = {}'.format(ub.urepr(region_to_len, nl=1)))
                 raise Exception(f'reference {region_id=} group is empty')
+
+            # TODO: do we need to add suboptimize logic here too?
 
             # Rank reference region param_hashids of the primary metrics
             metric_cols = group.columns.intersection(agg.metrics.columns)
@@ -777,23 +788,29 @@ class AggregatorAnalysisMixin:
             if reference_hashids is None:
                 # Rank the rows for this region individually
 
-                if 0:
-                    suboptimize_columns = ':model:'
-                    if suboptimize_columns == ':model:':
+                if suboptimize is not None:
+                    suboptimize_columns = suboptimize
+                    if suboptimize_columns == 'special:model':
                         suboptimize_columns = _agg.model_cols
                     if isinstance(suboptimize_columns, str):
                         suboptimize_columns = [suboptimize_columns]
 
-                for subkey, subgroup in group.groupby(suboptimize_columns):
-                    print(subkey)
+                    sublocs = []
+                    for subkey, subgroup in group.groupby(suboptimize_columns):
+                        locs = subgroup.argextrema(
+                            _agg.primary_metric_cols, objective='maximize',
+                            k=1)
+                        sublocs.extend(locs)
 
-                # FIXME: need to know if the metrics should be minimized or
-                # maximized.  We cant just assume maximized.
-                ranked_locs = util_pandas.pandas_argmaxima(
-                    group, _agg.primary_metric_cols, k=top_k)
+                    ranked_locs = group.loc[sublocs].argextrema(
+                        _agg.primary_metric_cols, objective='maximize', k=top_k)
 
-                import xdev
-                xdev.embed()
+                else:
+                    # FIXME: need to know if the metrics should be minimized or
+                    # maximized.  We cant just assume maximized.
+                    ranked_locs = group.argextrema(
+                        _agg.primary_metric_cols, objective='maximize',
+                        k=top_k)
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)

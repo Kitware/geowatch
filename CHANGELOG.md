@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add `DataFrame.argextrema`
+* Add suboptimize to `Aggregator.report_best`
 
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 
