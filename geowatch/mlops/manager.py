@@ -866,6 +866,7 @@ class ExperimentState(ub.NiceRepr):
                     common naming heuristic, that should fallback on regular
                     lexigraphical sorting if the heuristic pattern doesnt match.
                     """
+                    pkg_fpath = str(pkg_fpath)
                     result = heuristic_pattern.parse(pkg_fpath)
                     if result is None:
                         # pattern doesn't match, so use the entire string as the sort value prefix
