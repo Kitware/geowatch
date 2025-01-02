@@ -792,8 +792,8 @@ class AggregatorAnalysisMixin:
                     suboptimize_columns = suboptimize
                     if suboptimize_columns == 'special:model':
                         suboptimize_columns = _agg.model_cols
-                    else:
-                        raise NotImplementedError(f'subopt value: {suboptimize_columns}')
+                    # else:
+                    #     raise NotImplementedError(f'subopt value: {suboptimize_columns}')
 
                     if isinstance(suboptimize_columns, str):
                         suboptimize_columns = [suboptimize_columns]
