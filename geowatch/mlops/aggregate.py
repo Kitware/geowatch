@@ -670,6 +670,10 @@ class AggregatorAnalysisMixin:
                 remove clutter if attempting to choose between a specific
                 parameter.
 
+        TODO:
+            This might need to become a class that builds the TopResultsReport
+            as it is getting somewhat complex.
+
         Returns:
             TopResultsReport:
                 contains:
