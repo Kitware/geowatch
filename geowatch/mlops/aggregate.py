@@ -405,6 +405,7 @@ def run_aggregate(config):
             report_config = Yaml.coerce(config.stdout_report)
         else:
             report_config = {}
+        print(f'report_config = {ub.urepr(report_config, nl=1)}')
         for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
 
