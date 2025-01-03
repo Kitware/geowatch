@@ -215,7 +215,7 @@ class AggregateEvluationConfig(AggregateLoader):
         "resolved_params.bas_pxl.channels"]}``
         '''))
 
-    stdout_report = Value(True, isflag=True, help=ub.paragraph(
+    stdout_report = Value(True, type=str, isflag=True, help=ub.paragraph(
         '''
         if True, print a report to stdout. This can also be a YAML dictionary.
         An example set if items might look like:
@@ -265,6 +265,7 @@ class AggregateEvluationConfig(AggregateLoader):
             self.plot_params = {
                 'enabled': bool(self.plot_params)
             }
+        self.stdout_report = Yaml.coerce(self.stdout_report)
 
     @profile
     def coerce_aggregators(config):
