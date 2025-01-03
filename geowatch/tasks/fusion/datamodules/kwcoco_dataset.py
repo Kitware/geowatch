@@ -2042,6 +2042,10 @@ class GetItemMixin(TruthMixin):
                         # TODO: use real nodata values? Ideally they have
                         # already been converted into nans
                         mask = (item != 0) & np.isfinite(item)
+
+                        # FIXME: The normalizer defaults are not the same
+                        # between perframe and peritem. Should they be? In
+                        # either case we need to let the user specify them.
                         norm_item = kwimage.normalize_intensity(item, params={
                             'high': 0.90,
                             'mid': 0.5,
@@ -2088,6 +2092,9 @@ class GetItemMixin(TruthMixin):
                 normalizer = kwarray.find_robust_normalizers(valid_raw_datas,
                                                              params=peritem_normalizer_params)
                 # Postprocess / regularize the normalizer
+                # FIXME: This postprocess step unintuitive and not easy to
+                # explain, we should mark this as legacy behavior and introduce
+                # a new more reasonable default for peritem normalization.
                 prior_min = min(0, normalizer['min_val'])
                 alpha = 0.5
                 normalizer['min_val'] * alpha + (1 - alpha) * prior_min
@@ -2321,6 +2328,8 @@ class GetItemMixin(TruthMixin):
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
                                    gid_to_isbad, gid_to_sample)
 
+        # TODO: remove the need to access sample_grid if the target is already
+        # resolved and we don't need to do any resampling.
         time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
 
@@ -2671,6 +2680,7 @@ class IntrospectMixin:
         heuristics.ensure_heuristic_category_tree_colors(self.predictable_classes, force=True)
 
         from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
+        # FIXME: requested_tasks from user input is not respected
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
             default_combinable_channels=default_combinable_channels,
@@ -3794,6 +3804,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
         self.disable_augmenter = False
+        self.prenormalizers = None
         self.augment_rng = kwarray.ensure_rng(None)
         self.mode = mode
         self.test_with_annot_info = test_with_annot_info
@@ -4045,8 +4056,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 self.length = min(self.length, config['max_epoch_length'])
 
         self.sample_grid = sample_grid
-
-        self.prenormalizers = None
 
         if self.config['prenormalize_inputs'] is not None:
             prenormalizers = None

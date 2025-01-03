@@ -146,6 +146,7 @@ class HeterogeneousBatchItem(BatchItem):
 
         # Hack to force the categories to draw right for SMART
         # FIXME: Use the correct class colors in visualization.
+        # FIXME: requested_tasks from user input is not respected
         requested_tasks = item['requested_tasks']
         predictable_classes = item['predictable_classes']
         if predictable_classes is not None:

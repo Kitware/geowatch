@@ -283,6 +283,15 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     return row
 
 
+def fallback(fpath):
+    import zipfile
+    zfile = zipfile.ZipFile(fpath)
+    for internal_path in zfile.namelist():
+        if internal_path.endswith('.yaml'):
+            data = zfile.read(internal_path)
+            print(data.decode('utf8'))
+
+
 __cli__ = TorchModelStatsConfig
 
 if __name__ == '__main__':
