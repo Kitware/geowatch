@@ -501,22 +501,6 @@ class AggregatorAnalysisMixin:
         # self = analysis
         analysis.analysis()
         analysis.report()
-        if 0:
-            model_cols = agg.model_cols
-            import kwplot
-            sns = kwplot.autosns()
-            sns = kwplot.autosns()
-            plt = kwplot.autoplt()
-            kwplot.figure()
-            x = 'bas_poly_eval.params.bas_poly.thresh'
-            sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
-            ax = plt.gca()
-            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
-
-            x = 'bas_poly_eval.params.bas_pxl.output_space_scale'
-            sns.boxplot(data=table, x=x, y=main_metric)
-            ax = plt.gca()
-            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
         return analysis, table
 
     def varied_param_counts(agg, min_variations=2, dropna=False):
@@ -592,11 +576,6 @@ class AggregatorAnalysisMixin:
             param_summary[key] = summary
 
         param_summary = ub.udict(param_summary).sorted_values(lambda x: x['num_variations'])
-
-        # if 0:
-        #     from geowatch.utils import util_dotdict
-        #     nested = util_dotdict.dotdict_to_nested(varied_counts)
-        #     graph = util_dotdict.indexable_to_graph(nested)
 
         top_level_descendants = ub.ddict(set)
         for key in list(varied_counts.keys()):
@@ -1028,8 +1007,6 @@ class AggregatorAnalysisMixin:
                 # models together in a folder, but this is not robust, so we Only
                 # do this grouping if the parent folder has a special name
 
-                # import xdev
-                # with xdev.embed_on_exception_context:
                 model_paths = [
                     ub.Path(p)
                     if not pd.isnull(p) else None
@@ -1059,13 +1036,6 @@ class AggregatorAnalysisMixin:
                     rank = chosen_row['rank']
                     rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
                     print(Yaml.dumps([model_fpath]).strip())
-
-                # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-                # known_models = Yaml.coerce(all_models_fpath)
-                # set(known_models).issuperset(set(chosen_models))
-                # if 0:
-                #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
-                # new_models_fpath.write_text(shortlist_text)
 
         report = TopResultsReport(region_id_to_summary, top_param_lut)
         return report
@@ -1573,14 +1543,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
                   display_metric_cols=display_metric_cols)
         return agg
 
-    # def __export(agg):
-    #     ...
-    #     agg.table
-    #     fname = f'{agg.node_type}_{agg.output_dpath.parent.name}.csv'
-    #     agg.table.to_csv(fpath, index_label=False)
-    #     fpath = 'bas_results_2023-01.csv.zip'
-    #     agg.table.to_csv(fpath, index_label=False)
-
     def build(agg):
         """
         Inspect the aggregator's table and build supporting information
@@ -1894,33 +1856,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             mappings[colname] = mapper
             effective_params[colname] = condensed
 
-        # TODO: Give the user more customization and control over how effective
-        # params are built. I'm going to hard code my use-case for now,
-        # refactor later.
-        # Q: Do we need to be using "resolved parameters" here?
-        if 0:
-            resolved_params = util_pandas.DataFrame(self.subtables['resolved_params'])
-            channel_cols = resolved_params.match_columns('*.channels')
-            unique_channels = sorted(set(ub.flatten(resolved_params[channel_cols].value_counts().index)))
-
-            CHANNEL_LUT = {
-                'blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse': 'COLD.0:18',
-            }
-            import delayed_image
-            channel_mapping = {}
-            for orig_c in unique_channels:
-                c = orig_c
-                for k, v in CHANNEL_LUT.items():
-                    c = c.replace(k, v)
-                c = delayed_image.sensorchan_spec.SensorChanSpec.coerce(c)
-                print(c.normalize().concise())
-                channel_mapping[orig_c] = c
-
-            for col in channel_cols:
-                self.subtables['resolved_params'][col] = self.subtables['resolved_params'][col].apply(channel_mapping.get)
-
-            effective_params = util_pandas.DataFrame(effective_params)
-
         for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
             effective_params[colname] = 'ignore'
 
@@ -1969,8 +1904,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
         hashid_to_effective_params = {}
-        # import xdev
-        # with xdev.embed_on_exception_context:
+
         if len(param_cols) > 0:
             param_groups = effective_params.groupby(param_cols, dropna=False)
         else:
@@ -2208,6 +2142,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
+    # FIXME: SMART specific
     from geowatch.utils import util_pandas
     # eval_fpath = group_agg.fpaths[id]
     eval_fpath = ub.Path(group_agg.table['fpath'].loc[id])
@@ -2252,9 +2187,6 @@ def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
                 true_site_dpath=true_site_dpath,
                 true_region_dpath=true_region_dpath,
             )
-            # rich.print(ub.urepr(confusor_config))
-            # cmdline = 0
-            # kwargs = confusor_config
             confusor_analysis.main(cmdline=0, **confusor_config)
 
         confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
