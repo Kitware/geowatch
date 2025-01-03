@@ -113,6 +113,7 @@ COPY run_developer_setup.sh /root/code/geowatch/
 COPY dev/make_strict_req.sh /root/code/geowatch/dev/make_strict_req.sh
 COPY requirements           /root/code/geowatch/requirements
 COPY geowatch               /root/code/geowatch/geowatch
+COPY geowatch_tpl           /root/code/geowatch/geowatch_tpl
 
 #RUN echo $(pwd)
 
