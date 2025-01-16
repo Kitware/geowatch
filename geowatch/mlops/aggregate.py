@@ -739,6 +739,9 @@ class AggregatorAnalysisMixin:
             else:
                 group_to_rank = group
 
+            # Ensure argextrema method exists
+            group_to_rank = util_pandas.DataFrame(group_to_rank)
+
             try:
                 # FIXME: need to know if the metrics should be minimized or
                 # maximized. We cant just assume maximized.
