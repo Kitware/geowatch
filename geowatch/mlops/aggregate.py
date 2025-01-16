@@ -475,7 +475,7 @@ class AggregatorAnalysisMixin:
         if len(macro_keys) == 0:
             raise Exception('Build a macro result first')
 
-        regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
+        # regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
         tables = util_pandas.DotDictDataFrame(agg.region_to_tables[agg.primary_macro_region])
 
         resolved_params = tables['resolved_params']
