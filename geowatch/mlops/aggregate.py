@@ -729,9 +729,9 @@ class AggregatorAnalysisMixin:
                 # Find the top k results per group.
                 sublocs = []
                 for subkey, subgroup in group.groupby(grouptop['params']):
-                    locs = subgroup.argextrema(
-                        agg.primary_metric_cols, objective='maximize',
-                        k=grouptop['top_k'])
+                    locs = util_pandas.DataFrame.argextrema(
+                        subgroup, agg.primary_metric_cols,
+                        objective='maximize', k=grouptop['top_k'])
                     sublocs.extend(locs)
                 group_to_rank = group.loc[sublocs]
                 if verbose > 3:
@@ -739,13 +739,12 @@ class AggregatorAnalysisMixin:
             else:
                 group_to_rank = group
 
-            # Ensure argextrema method exists
-            group_to_rank = util_pandas.DataFrame(group_to_rank)
-
             try:
                 # FIXME: need to know if the metrics should be minimized or
                 # maximized. We cant just assume maximized.
-                top_locs = group_to_rank.argextrema(agg.primary_metric_cols, objective='maximize', k=top_k)
+                top_locs = util_pandas.DataFrame.argextrema(
+                    group_to_rank, agg.primary_metric_cols,
+                    objective='maximize', k=top_k)
             except Exception:
                 print("FIXME: Something when wrong when sorting the reference region")
                 raise
@@ -801,9 +800,9 @@ class AggregatorAnalysisMixin:
                     # Find the top k results per group.
                     sublocs = []
                     for subkey, subgroup in group.groupby(grouptop['params']):
-                        locs = subgroup.argextrema(
-                            _agg.primary_metric_cols, objective='maximize',
-                            k=grouptop['top_k'])
+                        locs = util_pandas.DataFrame.argextrema(
+                            subgroup, _agg.primary_metric_cols,
+                            objective='maximize', k=grouptop['top_k'])
                         sublocs.extend(locs)
                     group_to_rank = group.loc[sublocs]
                 else:
@@ -811,8 +810,9 @@ class AggregatorAnalysisMixin:
 
                 # FIXME: need to know if the metrics should be minimized or
                 # maximized.  We cant just assume maximized.
-                ranked_locs = group_to_rank.argextrema(
-                    _agg.primary_metric_cols, objective='maximize', k=top_k)
+                ranked_locs = util_pandas.DataFrame.argextrema(
+                    group_to_rank, _agg.primary_metric_cols,
+                    objective='maximize', k=top_k)
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)

@@ -52,6 +52,50 @@ class DataFrame(pd.DataFrame):
         self = cls(random_data, index=index, columns=columns)
         return self
 
+    @classmethod
+    def coerce(cls, data):
+        """
+        Ensures that the input is an instance of our extended DataFrame.
+
+        Pandas is generally good about input coercion via its normal
+        constructors, the purpose of this classmethod is to quickly ensure that
+        a DataFrame has all of the extended methods defined by this class
+        without incurring a copy. In this sense it is more similar to
+        :func:numpy.asarray`.
+
+        Args:
+            data (DataFrame | ndarray | Iterable | dict):
+                generally another dataframe, otherwise normal inputs that would
+                be given to the regular pandas dataframe constructor
+
+        Returns:
+            DataFrame:
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--benchmark)
+            >>> # This example demonstrates the speed difference between
+            >>> # recasting as a DataFrame versus using coerce
+            >>> from geowatch.utils.util_pandas import DataFrame
+            >>> data = DataFrame.random(rows=10_000)
+            >>> import timerit
+            >>> ti = timerit.Timerit(100, bestof=10, verbose=2)
+            >>> for timer in ti.reset('constructor'):
+            >>>     with timer:
+            >>>         DataFrame(data)
+            >>> for timer in ti.reset('coerce'):
+            >>>     with timer:
+            >>>         DataFrame.coerce(data)
+            >>> # xdoctest: +IGNORE_WANT
+            Timed constructor for: 100 loops, best of 10
+                time per loop: best=2.594 µs, mean=2.783 ± 0.1 µs
+            Timed coerce for: 100 loops, best of 10
+                time per loop: best=246.000 ns, mean=283.000 ± 32.4 ns
+        """
+        if isinstance(data, cls):
+            return data
+        else:
+            return cls(data)
+
     def safe_drop(self, labels, axis=0):
         """
         Like :func:`self.drop`, but does not error if the specified labels do
