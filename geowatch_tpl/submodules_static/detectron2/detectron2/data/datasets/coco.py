@@ -199,13 +199,22 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             if segm:  # either list[list[float]] or dict(RLE)
 
                 if HANDLE_KWCOCO_FORMATS:
-                    segm = kwimage.Segmentation.coerce(segm).to_coco(style='orig')
+                    try:
+                        segm = kwimage.Segmentation.coerce(segm).to_coco(style='orig')
+                    except Exception:
+                        # undo bad hack
+                        segm = kwimage.Segmentation.coerce(segm[0]).to_coco(style='orig')
 
                 if isinstance(segm, dict):
                     if isinstance(segm["counts"], list):
                         # convert to compressed RLE
                         segm = mask_util.frPyObjects(segm, *segm["size"])
                 else:
+                    # Subsequent code seems to assume multipolygons
+                    from numbers import Number
+                    if len(segm) and isinstance(segm[0], Number):
+                        segm = [segm]
+
                     # filter out invalid polygons (< 3 points)
                     segm = [poly for poly in segm if len(poly) % 2 == 0 and len(poly) >= 6]
                     if len(segm) == 0:
