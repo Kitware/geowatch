@@ -1019,6 +1019,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                             rich.print(f'output_weights.shape    = {output_weights.shape}')
                             rich.print(f'output_image_dsize      = {output_image_dsize}')
                             rich.print(f'scale_outspace_from_vid = {scale_outspace_from_vid}')
+                            item = fixed_batch[bx]
                             item_summary = test_dataloader.dataset.summarize_item(item)
                             print(f'item_summary = {ub.urepr(item_summary, nl=-1)}')
                             raise
