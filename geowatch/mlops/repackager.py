@@ -205,6 +205,21 @@ def parse_and_init_config(config):
     }
 
 
+def torch_load_cpu(checkpoint_fpath):
+    from packaging.version import parse as LooseVersion
+    import torch
+    def _cpu_map_location(storage, location):
+        return storage
+    loadkw = {
+        'map_location': _cpu_map_location,
+    }
+    _TORCH_IS_GE_2_4_0 = LooseVersion(torch.__version__) >= LooseVersion('2.4.0')
+    if _TORCH_IS_GE_2_4_0:
+        loadkw['weights_only'] = False
+    checkpoint = torch.load(checkpoint_fpath, **loadkw)
+    return checkpoint
+
+
 def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                                 train_dpath_hint=None, model_config_fpath=None):
     """
@@ -264,9 +279,11 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         >>> row = torch_model_stats.torch_model_stats(package_fpath)
         >>> print(f'row = {ub.urepr(row, nl=2)}')
     """
-    from torch_liberator.xpu_device import XPU
-    xpu = XPU.coerce('cpu')
-    checkpoint = xpu.load(checkpoint_fpath)
+    checkpoint = torch_load_cpu(checkpoint_fpath)
+    # Can use this if we update torch liberator.
+    # from torch_liberator.xpu_device import XPU
+    # xpu = XPU.coerce('cpu')
+    # checkpoint = xpu.load(checkpoint_fpath)
 
     context = inspect_checkpoint_context(checkpoint_fpath)
 
