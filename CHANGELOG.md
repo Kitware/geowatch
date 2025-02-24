@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * Bug in prediction error reporting
 * Issue in visualize if video names were not strings
+* Issue with video names that contain invalid path characters.
 
 ## Version 0.18.4 - Released 2024-12-18
 

@@ -905,7 +905,8 @@ def _sample_single_video_spacetime_targets(
     probably_slow = rough_num_cells > (16 * 30)
 
     cache_dpath = ub.Path.appdir('geowatch', 'grid_cache').ensuredir()
-    cacher = ub.Cacher('sliding-window-cache-' + video_name,
+    safe_video_name = kwutil.util_path.sanitize_path_name(video_name)
+    cacher = ub.Cacher('sliding-window-cache-' + safe_video_name,
                        dpath=cache_dpath, depends=depends,
                        enabled=(use_cache and probably_slow))
     _cached = cacher.tryload()
