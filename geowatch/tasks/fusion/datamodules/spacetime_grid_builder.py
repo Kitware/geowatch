@@ -757,6 +757,7 @@ def _sample_single_video_spacetime_targets(
     """
     from geowatch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     from geowatch.tasks.fusion.datamodules import data_utils
+    import kwutil
 
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
@@ -773,9 +774,14 @@ def _sample_single_video_spacetime_targets(
             'height': dset.index.imgs[video_gids[0]]['height'],
         }
 
-    video_name = video_info['name']
-    vidspace_video_height = video_info['height']
-    vidspace_video_width = video_info['width']
+    try:
+        video_name = video_info['name']
+        vidspace_video_height = video_info['height']
+        vidspace_video_width = video_info['width']
+    except KeyError as ex:
+        from kwutil.util_exception import add_exception_note
+        raise add_exception_note(ex, 'KWCoco videos must contain: name, height, and width')
+
     vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
 
     # Create a box to represent the "window-space" extent, and determine how we
@@ -792,7 +798,6 @@ def _sample_single_video_spacetime_targets(
 
     # Hack: modify the window resolution if the dynamic fixed resolution
     # behavior is on.
-    import kwutil
     dynamic_fixed_resolution = kwutil.util_yaml.Yaml.coerce(dynamic_fixed_resolution)
     """
     dynamic_fixed_resolution = {'max_winspace_full_dims': [1000, 1000]}
