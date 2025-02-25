@@ -193,7 +193,6 @@ from typing import NamedTuple
 
 from geowatch import heuristics
 from geowatch.utils import kwcoco_extensions
-from geowatch.utils import util_bands
 from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
 from geowatch.tasks.fusion import utils
@@ -3953,15 +3952,17 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             chans = fused_sensorchan.chans
             _stream = chans.as_oset()
             _sample_stream = _stream.copy()
-            special_bands = _stream & util_bands.SPECIALIZED_BANDS
-            if special_bands:
-                raise NotImplementedError('This is broken ATM')
-                # TODO: introspect which extra bands are needed for to compute
-                # the sample, but hard code for now
-                # _sample_stream -= special_bands
-                # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                # self.special_inputs[key] = special_bands
-                # _stream = [s + p for p in _stream for s in ['', 'D']]
+            # TODO: Might be interesting to have a feature to compute
+            # specialized bands on the fly.
+            # special_bands = _stream & util_bands.SPECIALIZED_BANDS
+            # if special_bands:
+            #     raise NotImplementedError('This is broken ATM')
+            #     # TODO: introspect which extra bands are needed for to compute
+            #     # the sample, but hard code for now
+            #     # _sample_stream -= special_bands
+            #     # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+            #     # self.special_inputs[key] = special_bands
+            #     # _stream = [s + p for p in _stream for s in ['', 'D']]
             _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
             _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
             _input_channels.append('|'.join(_stream))

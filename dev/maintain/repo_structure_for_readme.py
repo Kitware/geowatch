@@ -18,8 +18,6 @@ def main():
     #     '_*',
     #     '.*',
     # ])
-
-    from cmd_queue import util
     base = watch_repo_dpath
     path_to_info = ub.ddict(dict)
     g = nx.DiGraph()
@@ -50,8 +48,7 @@ def main():
         root_info = path_to_info[p]
         node_data['label'] = ub.color_text(node_data['label'], 'green') + ' ' + ub.urepr(root_info['ext_hist'], nl=0)
 
-    # nx.write_network_text
-    print(util.util_networkx.write_network_text(g, sources=[base]))
+    print(nx.write_network_text(g, sources=[base]))
 
     #### NEW ALTERNATIVE
     #### TODO: adapt to work similarly to above.

@@ -7,6 +7,19 @@ import pathlib
 from glob import glob
 
 
+def bands_sentinel2(entry):
+    """
+    Get only the band files from a Sentinel-2 RasterMetaEntry downloaded from RGD.
+
+    Args:
+        entry: RasterMetaEntry, the output type of rgdc.download_raster
+
+    Returns:
+        list of pathlib paths to band files
+    """
+    return [str(p) for p in entry.images if p.match('*_B*.jp2')]
+
+
 def grab_sentinel2_product(index=0, overwrite=False):
     """
     Download and cache all items for a Sentinel-2 product.
@@ -28,12 +41,8 @@ def grab_sentinel2_product(index=0, overwrite=False):
         >>> # xdoctest: +SKIP("too many https errors")
         >>> # xdoctest: +REQUIRES(--network)
         >>> from geowatch.demo.sentinel2_demodata import *  # NOQA
-        >>> from geowatch.utils.util_rgdc import bands_sentinel2
         >>> product = grab_sentinel2_product()
         >>> assert len(bands_sentinel2(product)) == 13
-
-    SeeAlso:
-        geowatch.util.util_rgdc.bands_sentinel2
     """
     try:
         from rgd_imagery_client import RasterDownload

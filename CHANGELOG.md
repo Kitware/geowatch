@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 
+* refactored utilities to reduce inter-dependencies and allow for easier porting
 
 ### Fixed
 * Bug in prediction error reporting

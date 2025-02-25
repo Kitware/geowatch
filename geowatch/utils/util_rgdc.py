@@ -1,3 +1,6 @@
+"""
+Deprecate: this is unused.
+"""
 import numpy as np
 from dateutil.parser import isoparse
 
@@ -72,16 +75,3 @@ def bands_landsat(entry):
         list of pathlib paths to band files
     """
     return [str(p) for p in entry.images if 'BQA' not in p.stem]
-
-
-def bands_sentinel2(entry):
-    """
-    Get only the band files from a Sentinel-2 RasterMetaEntry downloaded from RGD.
-
-    Args:
-        entry: RasterMetaEntry, the output type of rgdc.download_raster
-
-    Returns:
-        list of pathlib paths to band files
-    """
-    return [str(p) for p in entry.images if p.match('*_B*.jp2')]
