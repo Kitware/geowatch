@@ -260,7 +260,6 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
     """
     import os
-    import geowatch
     from os.path import basename
     from kwgis.gis.geotiff import walk_geotiff_products
     dpath_list = list(walk_geotiff_products(geotiff_dpath))

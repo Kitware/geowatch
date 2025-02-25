@@ -2138,7 +2138,6 @@ def _aligncrop(obj_group,
             Note: the hack_lazy argument makes this function returns gdal
             commands that would be executed.
     """
-    import geowatch
     import json
     import kwcoco
     from kwgis.utils import util_gdal

@@ -7,7 +7,6 @@ import kwcoco
 import kwimage
 import numpy as np
 import ubelt as ub
-import geowatch
 
 
 def coerce_kwcoco(data='geowatch-msi', **kwargs):

@@ -1,4 +1,3 @@
-import geowatch
 import json
 import geojson
 import ubelt as ub
