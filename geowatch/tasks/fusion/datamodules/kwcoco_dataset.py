@@ -26,8 +26,7 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import ndsampler
     >>> import kwcoco
-    >>> import geowatch
-    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
     >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
     >>>                           channels='r|g|b')
@@ -50,8 +49,7 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import ndsampler
     >>> import kwcoco
-    >>> import geowatch
-    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
     >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(sampler, window_dims='full', channels='r|g|b')
     >>> self.disable_augmenter = True
@@ -808,7 +806,7 @@ class TruthMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
         >>>                           channels='r|g|b', neg_to_pos_ratio=0)
@@ -1484,7 +1482,7 @@ class GetItemMixin(TruthMixin):
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
             >>> import ndsampler
             >>> import geowatch
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
             >>>                           channels='r|g|b', neg_to_pos_ratio=0, autobuild=False, upweight_centers=True)
@@ -2567,7 +2565,7 @@ class IntrospectMixin:
             >>> import geowatch
             >>> anchors = np.array([[0.1, 0.1]])
             >>> size = (96, 96)
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors, image_size=size)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors, image_size=size)
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=size, default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
@@ -2714,7 +2712,7 @@ class IntrospectMixin:
             >>> from geowatch.tasks.fusion.datamodules import kwcoco_dataset
             >>> import kwcoco
             >>> import geowatch
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
             >>> self = kwcoco_dataset.KWCocoVideoDataset(
             >>>     coco_dset, time_dims=4, window_dims=(300, 300),
             >>>     channels='r|g|b')
@@ -2743,7 +2741,7 @@ class BalanceMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10, rng=0)
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10, rng=0)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> num_samples = 50
         >>> neg_to_pos_ratio = 0
