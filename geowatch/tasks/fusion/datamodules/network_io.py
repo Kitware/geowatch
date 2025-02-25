@@ -513,8 +513,18 @@ class NetworkOutputs(dict):
     """
 
     def _debug_shape(self):
-        from geowatch.utils.util_netharn import _debug_inbatch_shapes
-        _debug_inbatch_shapes(self)
+        # from geowatch.utils.util_netharn import _debug_inbatch_shapes
+        # _debug_inbatch_shapes(self)
+        import torch
+        import ubelt as ub
+        inbatch = self
+        print('len(inbatch) = {}'.format(len(inbatch)))
+        extensions = ub.util_format.FormatterExtensions()
+        #
+        @extensions.register((torch.Tensor, np.ndarray))
+        def format_shape(data, **kwargs):
+            return ub.repr2(dict(type=str(type(data)), shape=data.shape), nl=1, sv=1)
+        print('inbatch = ' + ub.repr2(inbatch, extensions=extensions, nl=True))
 
 
 # ------------------------------------

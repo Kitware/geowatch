@@ -1948,6 +1948,9 @@ class GetItemMixin(TruthMixin):
         CommandLine:
             LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem
 
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem --show
+
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -1969,13 +1972,12 @@ class GetItemMixin(TruthMixin):
             >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = True
             >>> # Pretend that some external object has given us information about desired class weights
-            >>> from geowatch.tasks.fusion.methods import watch_module_mixins
+            >>> # this could be frequency based, but we will use random weights here.
             >>> dataset_stats = self.cached_dataset_stats()
-            >>> from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+            >>> import kwarray
+            >>> rng = kwarray.ensure_rng(0)
             >>> class_keys = dataset_stats['class_freq']
-            >>> total_freq = np.array(list(dataset_stats['class_freq'].values()))
-            >>> class_importance_weights = _class_weights_from_freq(total_freq)
-            >>> catname_to_weight = ub.dzip(class_keys, class_importance_weights)
+            >>> catname_to_weight = {c: rng.rand() for c in class_keys}
             >>> catname_to_weight['star'] = 2.0
             >>> self.catname_to_weight = catname_to_weight
             >>> #
@@ -1999,7 +2001,7 @@ class GetItemMixin(TruthMixin):
         try:
             final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
         except FailedSample as ex:
-            from geowatch.utils.util_exception import add_exception_note
+            from kwutil.utils.util_exception import add_exception_note
             raise add_exception_note(ex, f'target_ = {ub.urepr(target_, nl=1)}')
         except Exception as ex:
             print(f'target_ = {ub.urepr(target_, nl=1)}')
