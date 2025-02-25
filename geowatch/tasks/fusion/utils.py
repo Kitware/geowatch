@@ -394,37 +394,3 @@ def model_json(model, max_depth=float('inf'), depth=0):
             }
             info['children'] = children
     return info
-
-
-@ub.memoize
-def _memo_legend(label_to_color):
-    import kwplot
-    legend_img = kwplot.make_legend_img(label_to_color)
-    return legend_img
-
-
-def category_tree_ensure_color(classes):
-    """
-    Ensures that each category in a CategoryTree has a color
-
-    TODO:
-        - [ ] Add to CategoryTree
-        - [ ] TODO: better function
-        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
-
-    Example:
-        >>> import kwcoco
-        >>> classes = kwcoco.CategoryTree.demo()
-        >>> assert not any('color' in data for data in classes.graph.nodes.values())
-        >>> category_tree_ensure_color(classes)
-        >>> assert all('color' in data for data in classes.graph.nodes.values())
-    """
-    backup_colors = iter(kwimage.Color.distinct(len(classes)))
-    for node in classes.graph.nodes:
-        color = classes.graph.nodes[node].get('color', None)
-        if color is None:
-            color = next(backup_colors)
-            classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()

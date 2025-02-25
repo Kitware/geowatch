@@ -1040,7 +1040,7 @@ def assign_sites_to_images(coco_dset,
     # hack in heuristic colors
     heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
-    kwcoco_extensions.category_category_colors(coco_dset)
+    heuristics.category_category_colors(coco_dset)
     # print('coco_dset categories = {}'.format(ub.urepr(coco_dset.dataset['categories'], nl=2)))
 
     all_drawable_infos = []  # helper if we are going to draw

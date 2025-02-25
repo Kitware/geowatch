@@ -2829,28 +2829,6 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 #     return new_poly
 
 
-def category_category_colors(coco_dset):
-    """
-    Ensures that each category in a CategoryTree has a color
-
-    TODO:
-        - [ ] Add to CategoryTree
-        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
-    """
-    cats = coco_dset.dataset['categories']
-    # backup_colors = iter(kwimage.Color.distinct(len(cats)))
-    for cat in cats:
-        color = cat.get('color', None)
-        if color is None:
-            # color = next(backup_colors)
-            # cat['color'] = kwimage.Color(color).as01()
-            color = kwimage.Color.random()
-            cat['color'] = color.as01()
-
-
 @profile
 def associate_images(dset1, dset2, key_fallback=None):
     """

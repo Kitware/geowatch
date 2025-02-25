@@ -195,7 +195,7 @@ from geowatch import heuristics
 from geowatch.utils import kwcoco_extensions
 from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
-from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion.datamodules import util_positional_encoding
 from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import balanced_sampling
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
@@ -204,6 +204,7 @@ from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
+from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
 
 from delayed_image.channel_spec import FusedChannelSpec
 from delayed_image.channel_spec import ChannelSpec
@@ -1562,7 +1563,7 @@ class GetItemMixin(TruthMixin):
         # TODO: this should be part of the model.
         # The dataloader should know nothing about positional encodings
         # except what is needed in order to pass the data to the model.
-        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
+        time_index_encoding = util_positional_encoding.ordinal_position_encoding(len(frame_items), 8).numpy()
 
         for frame_item in frame_items:
 
@@ -2580,7 +2581,7 @@ class IntrospectMixin:
             >>>     node: data['color']
             >>>     for node, data in self.predictable_classes.graph.nodes.items()}
             >>> label_to_color = ub.sorted_keys(label_to_color)
-            >>> legend_img = utils._memo_legend(label_to_color)
+            >>> legend_img = kwplot.make_legend_img(label_to_color)
             >>> legend_img = kwimage.imresize(legend_img, scale=4.0)
             >>> show_canvas = kwimage.stack_images([canvas, legend_img], axis=1)
             >>> kwplot.imshow(show_canvas)
@@ -2678,7 +2679,6 @@ class IntrospectMixin:
         from geowatch import heuristics
         heuristics.ensure_heuristic_category_tree_colors(self.predictable_classes, force=True)
 
-        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         # FIXME: requested_tasks from user input is not respected
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
@@ -3509,7 +3509,7 @@ class MiscMixin:
             bg_catname = ub.peek(sorted(predictable_bg_classes))
             self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
 
-        utils.category_tree_ensure_color(self.predictable_classes)
+        heuristics.category_tree_ensure_color(self.predictable_classes)
 
     def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
@@ -3779,7 +3779,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
 
         self.classes = kwcoco.CategoryTree(graph)
-        utils.category_tree_ensure_color(self.classes)
+        heuristics.category_tree_ensure_color(self.classes)
 
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)

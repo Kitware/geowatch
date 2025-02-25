@@ -174,11 +174,11 @@ class HeterogeneousBatchItem(BatchItem):
             canvas = kwimage.stack_images([canvas, header])
 
         if legend:
-            from geowatch.tasks.fusion import utils
+            from geowatch.tasks.fusion.datamodules.batch_visualization import _memo_legend
             label_to_color = {
                 node: data['color']
                 for node, data in self['predictable_classes'].graph.nodes.items()}
-            legend_img = utils._memo_legend(label_to_color)
+            legend_img = _memo_legend(label_to_color)
             legend_img = kwimage.imresize(legend_img, scale=4.0)
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)
 
