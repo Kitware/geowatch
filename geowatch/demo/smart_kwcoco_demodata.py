@@ -768,6 +768,7 @@ def _random_utm_box(rng=None):
     from kwarray.distributions import Uniform
     import kwarray
     from kwgis.utils import util_gis
+    from kwgis.gis.geotiff import make_crs_info_object
     from osgeo import osr
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
@@ -788,7 +789,7 @@ def _random_utm_box(rng=None):
     utm_crs.ImportFromEPSG(utm_epsg_int)
     utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
 
-    utm_crs_info = geowatch.gis.geotiff.make_crs_info_object(utm_crs)
+    utm_crs_info = make_crs_info_object(utm_crs)
 
     utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
     # keep the aspect ratio more or less squareish

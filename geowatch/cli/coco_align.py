@@ -483,7 +483,7 @@ def main(cmdline=True, **kw):
     Example:
         >>> from geowatch.cli.coco_align import *  # NOQA
         >>> from geowatch.demo.landsat_demodata import grab_landsat_product
-        >>> from geowatch.gis.geotiff import geotiff_metadata
+        >>> from kwgis.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
         >>> import dateutil.parser
         >>> import kwcoco
@@ -531,7 +531,7 @@ def main(cmdline=True, **kw):
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTESTS)
         >>> from geowatch.cli.coco_align import *  # NOQA
         >>> from geowatch.demo.landsat_demodata import grab_landsat_product
-        >>> from geowatch.gis.geotiff import geotiff_metadata
+        >>> from kwgis.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
         >>> import dateutil.parser
         >>> import kwcoco
@@ -576,7 +576,8 @@ def main(cmdline=True, **kw):
         >>> # Confirm expected behavior of `force_min_gsd` keyword argument
         >>> from geowatch.cli.coco_align import *  # NOQA
         >>> from geowatch.demo.landsat_demodata import grab_landsat_product
-        >>> from geowatch.gis.geotiff import geotiff_metadata, geotiff_crs_info
+        >>> from kwgis.gis.geotiff import geotiff_metadata
+        >>> from kwgis.gis.geotiff import geotiff_crs_info
         >>> # Create a dead simple coco dataset with one image
         >>> import kwcoco
         >>> import kwimage
@@ -1041,7 +1042,7 @@ class SimpleDataCube:
     @classmethod
     def demo(SimpleDataCube, with_region=False, extra=0):
         from geowatch.demo.landsat_demodata import grab_landsat_product
-        from geowatch.gis.geotiff import geotiff_metadata
+        from kwgis.gis.geotiff import geotiff_metadata
         # Create a dead simple coco dataset with one image
         import geopandas as gpd
         import kwcoco
@@ -2218,7 +2219,7 @@ def _aligncrop(obj_group,
             else:
                 # Do resolution checks
                 if 0:
-                    from geowatch.gis.geotiff import geotiff_crs_info
+                    from kwgis.gis.geotiff import geotiff_crs_info
                     info = geotiff_crs_info(ref)
                     info['approx_meter_gsd']
                 ref = None
@@ -2242,7 +2243,8 @@ def _aligncrop(obj_group,
         if 'geotiff_metadata' in first_obj:
             info = first_obj['geotiff_metadata']
         else:
-            info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+            from kwgis.gis.geotiff import geotiff_crs_info
+            info = geotiff_crs_info(input_gpaths[0])
         # No RPCS exist, use affine-warp instead
         rpcs = info['rpc_transform']
     elif align_method == 'affine_warp':
@@ -2309,7 +2311,8 @@ def _aligncrop(obj_group,
                         done.  To ensure pre-population use the '--geo_preprop=True'
                         argument.
                         '''))
-                    info = geowatch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+                    from kwgis.gis.geotiff import geotiff_crs_info
+                    info = geotiff_crs_info(input_gpaths[0])
                 approx_meter_gsd = info.get('approx_meter_gsd', None)
             if approx_meter_gsd is not None:
                 obj_approx_gsds.append(approx_meter_gsd)

@@ -70,8 +70,8 @@ def filter_band_files(fpaths, band_list, with_tci=True):
 
 
 def ingest_landsat_directory(lc_dpath):
-    import geowatch
     from geowatch.utils import util_bands
+    from kwgis.gis.geotiff import geotiff_filepath_info
     from dateutil.parser import isoparse
     from os.path import join, basename, normpath
     import glob
@@ -79,7 +79,7 @@ def ingest_landsat_directory(lc_dpath):
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
     if len(tiffs) == 0:
         tiffs = sorted(glob.glob(join(lc_dpath, '**', '*.TIF'), recursive=True))
-    baseinfo = geowatch.gis.geotiff.geotiff_filepath_info(name)
+    baseinfo = geotiff_filepath_info(name)
     capture_time = isoparse(baseinfo['filename_meta']['acquisition_date']).isoformat()
     sensor_coarse = 'LS'
     if baseinfo['filename_meta']['sensor_code'] == 'C':
@@ -98,11 +98,11 @@ def ingest_sentinel2_directory(s2_dpath):
     # Are we in the safedir, the granuledir or some arbitrary dir?
     # Try to use the granuledir as name if available;
     # it's a better unique ID.
-    import geowatch
-    from geowatch.utils import util_bands
-    import datetime as datetime_mod
     from dateutil.parser import isoparse
+    from geowatch.utils import util_bands
+    from kwgis.gis.geotiff import geotiff_filepath_info
     from os.path import join, basename, normpath
+    import datetime as datetime_mod
     import glob
     granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
     if len(granules) == 1:
@@ -118,7 +118,7 @@ def ingest_sentinel2_directory(s2_dpath):
     tiffs = filter_band_files(tiffs, util_bands.SENTINEL2)
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
-    baseinfo = geowatch.gis.geotiff.geotiff_filepath_info(s2_dpath)
+    baseinfo = geotiff_filepath_info(s2_dpath)
     capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
     img['date_captured'] = datetime_mod.datetime.isoformat(capture_time)
     img['sensor_coarse'] = 'S2'
@@ -139,17 +139,18 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         >>> img = make_coco_img_from_geotiff(tiff_fpath)
         >>> print('img = {}'.format(ub.urepr(img, nl=1)))
     """
-    import geowatch
+    from kwgis.gis.geotiff import geotiff_metadata
+    from kwgis.gis.geotiff import geotiff_crs_info
     from geowatch.utils import util_bands
     import kwimage
     img = {}
     if name is not None:
         img['name'] = name
 
-    info = geowatch.gis.geotiff.geotiff_metadata(tiff_fpath)
+    info = geotiff_metadata(tiff_fpath)
     # only affine transformations are supported in auxiliary channels
     # TODO support RPC
-    info.update(**geowatch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
+    info.update(**geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
     warp_pxl_from_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
@@ -261,7 +262,8 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     import os
     import geowatch
     from os.path import basename
-    dpath_list = list(geowatch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
+    from kwgis.gis.geotiff import walk_geotiff_products
+    dpath_list = list(walk_geotiff_products(geotiff_dpath))
 
     print(f'Found candidate {len(dpath_list)} geotiff products')
 
@@ -308,11 +310,12 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
 
     if loose_files:
         # Handle loose files (try grouping them by spacetime)
+        from kwgis.gis.geotiff import geotiff_filepath_info
         groups = ub.ddict(list)
 
         # jobs = ub.JobPool(mode='thread', max_workers=workers)
         for fpath in ub.ProgIter(loose_files, desc='process loose files'):
-            info = geowatch.gis.geotiff.geotiff_filepath_info(fpath, fast=True)
+            info = geotiff_filepath_info(fpath, fast=True)
             file_meta = info['filename_meta']
             file_meta.get('tile_number', None)
             date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)

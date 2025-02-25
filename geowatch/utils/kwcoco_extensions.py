@@ -17,7 +17,6 @@ import kwcoco
 from os.path import join
 from geowatch.utils import util_raster
 from geowatch import exceptions
-# import geowatch.gis
 
 try:
     from line_profiler import profile
@@ -250,7 +249,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             Cannot keep keep geotiff metadata when using process parallelism.
 
             Need to serialize gdal objects (i.e. RPC transforms and
-            SwigPyObject) returned from ``geowatch.gis.geotiff.geotiff_metadata``
+            SwigPyObject) returned from ``kwgis.gis.geotiff.geotiff_metadata``
             to be able do this.
             '''))
 
@@ -440,7 +439,7 @@ def coco_populate_geo_img_heuristics2(
         >>> coco_img = dset2.coco_image(gid)
         >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
     """
-    import geowatch
+    from kwgis.gis.geotiff import geotiff_metadata
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
 
@@ -478,7 +477,7 @@ def coco_populate_geo_img_heuristics2(
                 metakw['elevation'] = 0
             primary_fname = primary_obj.get('file_name', None)
             primary_fpath = join(bundle_dpath, primary_fname)
-            info = geowatch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+            info = geotiff_metadata(primary_fpath, **metakw)
             primary_obj['geotiff_metadata'] = info
 
     # if 'default_nodata' not in img:
@@ -580,7 +579,7 @@ def _populate_valid_region(coco_img):
         canvasR = features.rasterize(shapes, out=canvas[:, :, 0].copy())
         kwplot.imshow(canvasR, doclf=1)
     """
-    import geowatch
+    from kwgis.gis.geotiff import geotiff_metadata
     # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
@@ -611,7 +610,7 @@ def _populate_valid_region(coco_img):
         dem_hint = primary_obj.get('dem_hint', 'use')
         if dem_hint == 'ignore':
             metakw['elevation'] = 0
-        info = geowatch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+        info = geotiff_metadata(primary_fpath, **metakw)
 
     warp_img_from_asset = kwimage.Affine.coerce(primary_obj.get('warp_aux_to_img', None))
     if warp_img_from_asset.isclose_identity():
@@ -655,7 +654,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         default_gsd = None
         keep_geotiff_metadata = False
     """
-    import geowatch
+    from kwgis.gis.geotiff import geotiff_metadata
     sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
@@ -688,7 +687,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 if info is None:
-                    info = geowatch.gis.geotiff.geotiff_metadata(
+                    info = geotiff_metadata(
                         fpath, strict=True, **metakw)
 
                 if keep_geotiff_metadata:
@@ -800,78 +799,6 @@ def _coerce_overwrite(overwrite):
         if unexpected:
             raise ValueError(f'Got unexpected overwrites: {unexpected}')
     return overwrite
-
-
-# def single_geotiff_metadata(bundle_dpath, img, serializable=False):
-#     import geowatch
-#     from os.path import exists
-#     import dateutil
-#     geotiff_metadata = None
-#     aux_metadata = []
-
-#     img['datetime_acquisition'] = (
-#         dateutil.parser.parse(img['date_captured'])
-#     )
-
-#     # if an image specified its "dem_hint" as ignore, then we set the
-#     # elevation to 0. NOTE: this convention might be generalized and
-#     # replaced in the future. I.e. in the future the dem_hint might simply
-#     # specify the constant elevation to use, or perhaps something else.
-#     dem_hint = img.get('dem_hint', 'use')
-#     metakw = {}
-#     if dem_hint == 'ignore':
-#         metakw['elevation'] = 0
-
-#     # only need rpc info, geos_corners, and and warps
-#     keys_of_interest = {
-#         'rpc_transform',
-#         'is_rpc',
-#         'wgs84_to_wld',
-#         'geos_corners',
-#         'wld_to_pxl',
-#     }
-
-#     fname = img.get('file_name', None)
-#     if fname is not None:
-#         src_gpath = join(bundle_dpath, fname)
-#         assert exists(src_gpath)
-#         img_info = geowatch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
-
-#         if serializable:
-#             raise NotImplementedError
-#         else:
-#             img_info = ub.dict_isect(img_info, keys_of_interest)
-#             geotiff_metadata = img_info
-
-#     for aux in img.get('auxiliary', []):
-#         aux_fpath = join(bundle_dpath, aux['file_name'])
-#         assert exists(aux_fpath)
-#         aux_info = geowatch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
-#         aux_info = ub.dict_isect(aux_info, keys_of_interest)
-#         if serializable:
-#             raise NotImplementedError
-#         else:
-#             aux_metadata.append(aux_info)
-#             aux['geotiff_metadata'] = aux_info
-
-#     if fname is None:
-#         # need to choose one of the auxiliary images as the "main" image.
-#         # We are assuming that there is one auxiliary image that exactly
-#         # corresponds.
-#         candidates = []
-#         for aux in img.get('auxiliary', []):
-#             if aux['width'] == img['width'] and aux['height'] == img['height']:
-#                 candidates.append(aux)
-
-#         if not candidates:
-#             raise AssertionError(
-#                 'Assumed at least one auxiliary image has identity '
-#                 'transform, but this seems to not be the case')
-#         aux = ub.peek(candidates)
-#         geotiff_metadata = aux['geotiff_metadata']
-
-#     img['geotiff_metadata'] = geotiff_metadata
-#     return geotiff_metadata, aux_metadata
 
 
 @profile
@@ -1727,8 +1654,8 @@ def transfer_geo_metadata(coco_dset, gid):
         >>> fpath = join(coco_dset.bundle_dpath, coco_dset.coco_image(gid).primary_asset()['file_name'])
         >>> _ = ub.cmd('gdalinfo ' + fpath, verbose=1)
     """
-    import geowatch
     from osgeo import gdal
+    from kwgis.gis.geotiff import geotiff_metadata
     coco_img = coco_dset.coco_image(gid)
 
     assets_with_geo_info = {}
@@ -1740,7 +1667,7 @@ def transfer_geo_metadata(coco_dset, gid):
         if fname is not None:
             fpath = join(coco_img.dset.bundle_dpath, fname)
             try:
-                info = geowatch.gis.geotiff.geotiff_metadata(fpath)
+                info = geotiff_metadata(fpath)
                 if info.get('crs_error', None) is not None:
                     raise Exception
             except Exception:
@@ -1768,7 +1695,7 @@ def transfer_geo_metadata(coco_dset, gid):
                                 fpath = join(coco_img.dset.bundle_dpath, fname)
                                 try:
                                     # Try until we find an image with real CRS info
-                                    info = geowatch.gis.geotiff.geotiff_metadata(fpath)
+                                    info = geotiff_metadata(fpath)
                                     if info.get('crs_error', None) is not None:
                                         raise Exception
                                 except Exception:
@@ -1856,7 +1783,7 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
     ### TODO: make use of me as a fallback in the transfer_geo_metadata2
     class Found(Exception):
         pass
-    import geowatch
+    from kwgis.gis.geotiff import geotiff_metadata
     asset_with_geo_info = None
     gid = coco_img.img['id']
     try:
@@ -1873,7 +1800,7 @@ def _search_video_for_other_geo_assets(coco_img, coco_dset):
                         fpath = join(coco_img.dset.bundle_dpath, fname)
                         try:
                             # Try until we find an image with real CRS info
-                            info = geowatch.gis.geotiff.geotiff_metadata(fpath)
+                            info = geotiff_metadata(fpath)
                             if info.get('crs_error', None) is not None:
                                 raise Exception
                         except Exception:
@@ -1907,10 +1834,10 @@ def transfer_geo_metadata2(coco_img, dry=0):
 
     ASSUMES THAT EVERYTHING IS ALREADY ALIGNED
     """
-    import geowatch
     # from osgeo import gdal
     import affine
     from os.path import exists
+    from kwgis.gis.geotiff import geotiff_metadata
 
     assets_with_geo_info = {}
     assets_without_geo_info = {}
@@ -1922,7 +1849,7 @@ def transfer_geo_metadata2(coco_img, dry=0):
             fpath = join(coco_img.bundle_dpath, fname)
             if exists(fpath):
                 try:
-                    info = geowatch.gis.geotiff.geotiff_metadata(fpath)
+                    info = geotiff_metadata(fpath)
                     if info.get('crs_error', None) is not None:
                         raise Exception
                 except Exception:
