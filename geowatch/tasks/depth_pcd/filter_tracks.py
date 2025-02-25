@@ -46,7 +46,7 @@ def main(cmdline=1, **kwargs):
     import kwcoco
     import safer
     from geowatch.geoannots import geomodels
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwcoco.util import util_json
     from geowatch.utils import process_context
 

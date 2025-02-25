@@ -239,7 +239,7 @@ def main(cmdline=1, **kwargs):
 
 def cluster_single_region_sites(input_region_model, scale, min_box_dim, max_box_dim, proc_context, config):
     import kwimage
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.utils import util_kwimage
     input_region_model.fixup()
 

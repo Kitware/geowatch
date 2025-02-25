@@ -1119,7 +1119,7 @@ def coco_populate_geo_video_stats(coco_dset, video_id, target_gsd='max-resolutio
 
         if 'valid_region_geos' in video:
             import geopandas as gpd
-            from geowatch.utils import util_gis
+            from kwgis.utils import util_gis
             # Project the valid region onto video space
             valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
             wld_crs = base_wld_crs_info['auth']
@@ -2288,7 +2288,7 @@ def coco_img_wld_info(coco_img):
     """
     TODO: candidate for kwcoco.CocoImage method
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     asset = coco_img.primary_asset(requires=['geos_corners'])
     if asset is None:
         raise KeyError(f'Geo-referenced asset not found for {coco_img}')
@@ -2365,7 +2365,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     """
     import pandas as pd
     import geopandas as gpd
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from shapely.geometry import shape
     crs84 = util_gis.get_crs84()
 
@@ -2450,7 +2450,7 @@ def warp_annot_segmentations_to_geos(coco_dset):
     """
     import pandas as pd
     import geopandas as gpd
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
 
     crs84 = util_gis.get_crs84()
     gdfs = []
@@ -2651,7 +2651,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
             'frame_index': img.get('frame_index', None),
         })
 
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     cov_poly_crs = util_gis.get_crs84()
     if merge:
         # df_input = [
@@ -2696,7 +2696,7 @@ def covered_video_geo_regions(coco_dset):
         >>> # video_gdf = covered_video_geo_regions(coco_dset)
     """
     import geopandas as gpd
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
 
     # TODO: build this more efficiently if possible.
 
@@ -2765,7 +2765,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
             aid_to_poly[aid] = sh_poly
 
     # annot_crs = 'epsg:4326'
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     annot_crs = util_gis.get_crs84()
     # annot_crs = 'OGC:CRS84'
     if merge:

@@ -113,7 +113,7 @@ def demo_khq_annots():
     import geojson
     import geopandas as gpd
     import ubelt as ub
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
@@ -328,7 +328,7 @@ def demo_smart_annots():
     import geojson
     import geopandas as gpd
     import ubelt as ub
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
@@ -518,7 +518,7 @@ def _show_demo_annots_on_map():
     import kwimage
     import kwplot
     import matplotlib
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     ox = _configure_osm()
     # https://geopandas.org/en/stable/gallery/plotting_basemap_background.html
     kwplot.autompl()

@@ -241,7 +241,7 @@ def main(cmdline=False, **kwargs):
         >>> df = new_region.pandas()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from shapely.geometry import MultiPolygon
     import geopandas as gpd
     import safer
@@ -372,7 +372,7 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
         >>> from geowatch.cli.crop_sites_to_regions import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwimage
-        >>> from geowatch.utils import util_gis
+        >>> from kwgis.utils import util_gis
         >>> crs84 = util_gis._get_crs84()
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly1 = region_poly.translate((0.0001, 0.0001))
@@ -416,7 +416,7 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
         >>> from geowatch.cli.crop_sites_to_regions import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwimage
-        >>> from geowatch.utils import util_gis
+        >>> from kwgis.utils import util_gis
         >>> crs84 = util_gis._get_crs84()
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly0 = region_poly
@@ -469,7 +469,7 @@ def filter_sites(region_gdf_crs84, sites, filter_config=None):
         >>> assert len(cropped_sites[2]['data']) == 0
         >>> assert len(cropped_region) == 2
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import pandas as pd
     output_crs = region_gdf_crs84.crs
 

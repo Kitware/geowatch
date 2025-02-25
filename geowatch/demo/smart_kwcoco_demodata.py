@@ -767,7 +767,7 @@ def _random_utm_box(rng=None):
     import numpy as np
     from kwarray.distributions import Uniform
     import kwarray
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from osgeo import osr
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
@@ -892,7 +892,7 @@ def demo_dataset_with_regions_and_sites(dpath=None):
     import geowatch
     from geowatch.geoannots import geomodels
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwimage
     import kwarray
 

@@ -359,7 +359,7 @@ def main(cmdline=False, **kwargs):
     rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     from kwutil import slugify_ext
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.mlops.pipeline_nodes import Pipeline
     from geowatch.monkey import monkey_kwutil
     monkey_kwutil.patch_kwutil_toplevel()

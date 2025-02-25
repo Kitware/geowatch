@@ -17,7 +17,7 @@ def run_metadata_test():
 
     import ubelt as ub
     from geowatch.demo import demo_region
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     region_fpath = demo_region.demo_smart_region_fpath()
     region_gdf = list(util_gis.coerce_geojson_datas(region_fpath))[0]['data']
     region_row = region_gdf[region_gdf['type'] == 'region'].iloc[0]

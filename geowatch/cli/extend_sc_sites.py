@@ -228,11 +228,12 @@ def main(region_models_pth,
         >>>     s = SiteStack(p)
 
     '''
-    mr_pths = geowatch.utils.util_gis.coerce_geojson_paths(
+    from kwgis.utils import util_gis
+    mr_pths = util_gis.coerce_geojson_paths(
         modify_region_models_pth)
-    rm_pths = geowatch.utils.util_gis.coerce_geojson_paths(region_models_pth)
-    ms_pths = geowatch.utils.util_gis.coerce_geojson_paths(modify_site_models_pth)
-    sm_pths = geowatch.utils.util_gis.coerce_geojson_paths(site_models_pth)
+    rm_pths = util_gis.coerce_geojson_paths(region_models_pth)
+    ms_pths = util_gis.coerce_geojson_paths(modify_site_models_pth)
+    sm_pths = util_gis.coerce_geojson_paths(site_models_pth)
     assert len(mr_pths) == 1, 'need 1 region -> n site models'
     assert len(rm_pths) == 1, 'need 1 region -> n site models'
     if len(sm_pths) < 1:

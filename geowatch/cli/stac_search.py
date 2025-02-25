@@ -214,7 +214,7 @@ def main(cmdline=True, **kwargs):
         >>> from geowatch.cli.stac_search import *  # NOQA
         >>> from geowatch.demo import demo_region
         >>> from geowatch.stac import stac_search_builder
-        >>> from geowatch.utils import util_gis
+        >>> from kwgis.utils import util_gis
         >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('geowatch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
@@ -253,7 +253,7 @@ def main(cmdline=True, **kwargs):
     import rich.markup
     rich.print('config = {}'.format(rich.markup.escape(ub.urepr(config, nl=1))))
 
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import slugify_ext
     from kwutil import util_progress
     from kwutil import util_parallel
@@ -529,7 +529,7 @@ class StacSearcher:
 
 
 def _auto_search_params_from_region(r_file_loc, config):
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
     from geowatch.stac.stac_search_builder import build_search_json
     region_df = util_gis.load_geojson(r_file_loc)

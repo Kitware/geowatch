@@ -276,7 +276,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         """
         Thin wrapper arround :func:`geowatch.util_gis.coerce_geojson_paths`
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         return util_gis.coerce_geojson_paths(data)
 
     @classmethod
@@ -334,7 +334,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> # assert len(regions4) == len(regions)
             >>> # assert len(sites4) == len(sites)
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
             data, format='json', allow_raw=allow_raw, workers=workers,
             mode=mode, verbose=verbose, desc=desc, parse_float=parse_float))
@@ -723,7 +723,7 @@ class RegionModel(_Model):
             >>> print(gdf)
             >>> assert len(gdf) == 0
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         crs84 = util_gis.get_crs84()
         site_summaries = list(self.site_summaries())
         if len(site_summaries):
@@ -749,7 +749,7 @@ class RegionModel(_Model):
             >>> self = RegionModel.random()
             >>> print(self.pandas_region())
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         crs84 = util_gis.get_crs84()
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
@@ -1004,7 +1004,7 @@ class SiteModel(_Model):
             >>> print(gdf)
             >>> assert len(gdf) == 0
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         crs84 = util_gis.get_crs84()
         features = list(self.observations())
         if len(features):
@@ -1024,7 +1024,7 @@ class SiteModel(_Model):
             >>> self = SiteModel.random()
             >>> print(self.pandas_site())
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         crs84 = util_gis.get_crs84()
         gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf

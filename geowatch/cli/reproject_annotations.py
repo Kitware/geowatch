@@ -245,7 +245,7 @@ def main(cmdline=False, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_parallel
     from kwutil.util_yaml import Yaml
     from geowatch import heuristics
@@ -827,7 +827,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     import geojson
     import json
     import kwimage
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
     # observation_properties = [
     #     'type', 'observation_date', 'source', 'sensor_name',
@@ -1009,7 +1009,7 @@ def assign_sites_to_images(coco_dset,
     from shapely.ops import unary_union
     from geowatch import heuristics
     from geowatch.utils import kwcoco_extensions
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
@@ -1178,7 +1178,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
     Given a set of site observations determines how to propogate them onto
     potential images in the assigned region.
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_time
     from geowatch import heuristics
     import rich
@@ -1883,7 +1883,7 @@ def draw_geospace(dvc_dpath, sites):
     """
     Developer function
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import geopandas as gpd
     import kwplot
     kwplot.autompl()

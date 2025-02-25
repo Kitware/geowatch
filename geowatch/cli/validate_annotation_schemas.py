@@ -89,7 +89,7 @@ def main(cmdline=1, **kwargs):
         >>> ValidateAnnotationConfig.main(cmdline=cmdline, **kwargs)
     """
     config = ValidateAnnotationConfig.cli(data=kwargs, cmdline=cmdline)
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import rich
     rich.print(ub.urepr(config))
 

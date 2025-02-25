@@ -262,7 +262,7 @@ class PolyFromPointCLI(scfg.DataConfig):
         # Transform the points into a UTM CRS. If we didn't determine a which UTM
         # crs to work with from the kwcoco file, then we need to infer a good one.
         if utm_crs is None:
-            from geowatch.utils import util_gis
+            from kwgis.utils import util_gis
 
             points_gdf_utm = util_gis.project_gdf_to_local_utm(
                 points_gdf_crs84, max_utm_zones=10, mode=1
@@ -603,7 +603,7 @@ def get_vidspace_info(video_obj):
     """
     Extract information about the videospace of a kwcoco video object
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwimage
 
     # Find the world-space CRS for this region

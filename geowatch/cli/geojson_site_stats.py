@@ -62,7 +62,7 @@ def main(cmdline=1, **kwargs):
     import pandas as pd
     from kwutil import util_time
     from geowatch.geoannots import geomodels
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_parallel
 
     site_models = []
@@ -308,7 +308,7 @@ def main(cmdline=1, **kwargs):
 
 def gdf_site_overlaps(summary_utm, region_start_date, region_end_date):
     import kwutil
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import numpy as np
     import rich
     import pandas as pd

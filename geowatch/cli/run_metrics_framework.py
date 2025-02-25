@@ -272,7 +272,7 @@ def main(cmdline=True, **kwargs):
     CommandLine:
         xdoctest -m geowatch.cli.run_metrics_framework main
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwcoco.util import util_json
     from geowatch.utils import process_context
     from tempfile import TemporaryDirectory

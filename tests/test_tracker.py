@@ -13,7 +13,7 @@ def test_tracker_with_sv():
     import pandas as pd
     import ubelt as ub
     from geowatch.cli import run_tracker
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import geowatch
 
     coco_dset = geowatch.coerce_kwcoco('geowatch-msi', heatmap=True, geodata=True, dates=True)
@@ -158,7 +158,7 @@ def test_tracker_bas_with_boundary_region():
     import geowatch
     from geowatch.geoannots import geomodels
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwimage
     import kwarray
 
@@ -400,7 +400,7 @@ def test_tracker_ac_refinement():
     import geowatch
     from geowatch.geoannots import geomodels
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwimage
     import kwarray
     import kwcoco

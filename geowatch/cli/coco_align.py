@@ -690,7 +690,7 @@ def main(cmdline=True, **kw):
     rich.print(ub.urepr(config))
 
     from kwcoco.util.util_json import ensure_json_serializable
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from kwutil import util_parallel
     from geowatch.utils import util_resolution
     from geowatch.utils import kwcoco_extensions
@@ -988,7 +988,7 @@ class SimpleDataCube:
     def __init__(cube, coco_dset, gids=None):
         import geopandas as gpd
         import shapely
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         from kwcoco.util import ensure_json_serializable
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
@@ -1047,7 +1047,7 @@ class SimpleDataCube:
         import kwcoco
         import kwimage
         import dateutil.parser
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         from geowatch.utils import kwcoco_extensions
         coco_dset = kwcoco.CocoDataset()
 
@@ -1162,7 +1162,7 @@ class SimpleDataCube:
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
         from kwutil import util_time
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         import kwimage
 
         # Quickly find overlaps using a spatial index
@@ -1382,7 +1382,7 @@ class SimpleDataCube:
         import subprocess
         from concurrent.futures import TimeoutError
         from geowatch.utils import kwcoco_extensions
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         from kwcoco.util.util_json import ensure_json_serializable
         from kwutil import util_time
         from kwutil.util_yaml import Yaml
@@ -1781,7 +1781,7 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
     """
     import geopandas as gpd
     from shapely import geometry
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     conflict_imges = coco_dset.images(gids)
     sensors = list(conflict_imges.lookup('sensor_coarse', None))
 
