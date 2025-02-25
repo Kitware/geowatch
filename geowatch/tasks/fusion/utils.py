@@ -3,7 +3,6 @@ import torch
 import os
 import math
 import ubelt as ub
-import kwimage
 import warnings
 
 millnames = ['', ' K', ' M', ' B', ' T']
@@ -202,7 +201,6 @@ def _try_fixed_package_import(package_path):
                 self._add_extern(extern_module)
 
             if len(self.errors):
-                import ubelt as ub
                 print('self.errors = {}'.format(ub.urepr(self.errors, nl=1)))
 
             for fname in self.zip_reader.get_all_records():
