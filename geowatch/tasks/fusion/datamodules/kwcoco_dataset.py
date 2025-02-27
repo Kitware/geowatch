@@ -2001,7 +2001,7 @@ class GetItemMixin(TruthMixin):
         try:
             final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
         except FailedSample as ex:
-            from kwutil.utils.util_exception import add_exception_note
+            from kwutil.util_exception import add_exception_note
             raise add_exception_note(ex, f'target_ = {ub.urepr(target_, nl=1)}')
         except Exception as ex:
             print(f'target_ = {ub.urepr(target_, nl=1)}')
