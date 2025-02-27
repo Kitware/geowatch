@@ -205,8 +205,17 @@ def parse_and_init_config(config):
         # https://stackoverflow.com/a/8719100
         package_name, method_name = class_path.rsplit(".", 1)
         package = importlib.import_module(package_name)
-        method = getattr(package, method_name)
-        module = method(**init_args)
+        module_cls = getattr(package, method_name)
+        try:
+            module = module_cls(**init_args)
+        except Exception:
+            # try to restrict to the arguments the class takes, if it supports
+            # introspecting this.
+            if hasattr(module_cls, 'compatible'):
+                init_args = module_cls.compatible(init_args)
+                module = module_cls(**init_args)
+            else:
+                raise
         return module
 
     return {
@@ -301,7 +310,7 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     context = inspect_checkpoint_context(checkpoint_fpath)
 
-    hparams = checkpoint['hyper_parameters']
+    hparams = checkpoint.get('hyper_parameters', None)
 
     HACK_WORKAROUND_HPARAM_MISMATCH = True
     if HACK_WORKAROUND_HPARAM_MISMATCH:
@@ -315,7 +324,10 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
             assert hparams_fpath.exists()
             import kwutil
             ondisk_hparams = kwutil.Yaml.load(hparams_fpath, backend='pyyaml')
-            common_ondisk_hparams = ub.udict(ondisk_hparams) & hparams.keys()
+            if hparams is None:
+                common_ondisk_hparams = ub.udict(ondisk_hparams)
+            else:
+                common_ondisk_hparams = ub.udict(ondisk_hparams) & hparams.keys()
 
             if hparams != common_ondisk_hparams:
                 print(ub.paragraph(
@@ -342,7 +354,17 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     if model_config_fpath is None:
         from geowatch.tasks.fusion import methods
-        model = methods.MultimodalTransformer(**hparams)
+        model_cls = methods.MultimodalTransformer
+        try:
+            model = model_cls(**hparams)
+        except Exception:
+            # try to restrict to the arguments the class takes, if it supports
+            # introspecting this.
+            if hasattr(model_cls, 'compatible'):
+                hparams = model_cls.compatible(hparams)
+                model = model_cls(**hparams)
+            else:
+                raise
     else:
         data = load_meta(model_config_fpath)
         if "model" in data:
@@ -351,7 +373,10 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
         model_config["init_args"] = hparams | model_config["init_args"]
         model = parse_and_init_config(model_config)
 
-    state_dict = checkpoint['state_dict']
+    if 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        state_dict = checkpoint
     model.load_state_dict(state_dict)
 
     if train_dpath_hint is not None:
