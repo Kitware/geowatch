@@ -108,6 +108,15 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
     return package_fpaths
 
 
+def looks_like_training_directory(candidate_dpath):
+    paths = [
+        candidate_dpath / 'fit_config.yaml',
+        candidate_dpath / 'hparams.yaml',
+        candidate_dpath / 'config.yaml',
+    ]
+    return sum(p.exists() for p in paths)
+
+
 def inspect_checkpoint_context(checkpoint_fpath):
     """
     Use heuristics to attempt to find the context in which this checkpoint was
@@ -124,6 +133,11 @@ def inspect_checkpoint_context(checkpoint_fpath):
         path_ = ub.Path(checkpoint_fpath).resolve()
         if path_.parent.stem == 'checkpoints':
             train_dpath_hint = path_.parent.parent
+        else:
+            if looks_like_training_directory(path_.parent):
+                train_dpath_hint = path_.parent
+            elif looks_like_training_directory(path_.parent.parent):
+                train_dpath_hint = path_.parent.parent
 
     fit_config_fpath = None
     hparams_fpath = None
