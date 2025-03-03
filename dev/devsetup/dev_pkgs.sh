@@ -17,6 +17,9 @@ Usage:
 # Place where the source packages are located
 CODE_DPATH=$HOME/code
 
+# TODO:
+# check that git-well is installed and error if it is not.
+
 mylibs=(
 ubelt
 mkinit
@@ -160,6 +163,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
         #pip install --no-build-isolation "${needs_install[@]}"
         # Looks like build isolation is probably important
         echo pip install "${needs_install[@]}"
+        # TODO: use uv
         pip install "${needs_install[@]}"
     fi
 
