@@ -63,6 +63,8 @@ DO_FETCH=1
 DO_INSTALL=1
 DO_CLONE=1
 
+_PIP_PREFIX=uv
+
 
 if [[ "$DO_FETCH" == "1" ]]; then
     echo "====================="
@@ -148,7 +150,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     Uninstalling:
     "
     if [[ ${#needs_uninstall[@]} -gt 0 ]]; then
-        pip uninstall -y "${needs_uninstall[@]}"
+        $_PIP_PREFIX pip uninstall -y "${needs_uninstall[@]}"
     fi
 
     echo "
@@ -164,7 +166,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
         # Looks like build isolation is probably important
         echo pip install "${needs_install[@]}"
         # TODO: use uv
-        pip install "${needs_install[@]}"
+        $_PIP_PREFIX pip install "${needs_install[@]}"
     fi
 
     echo "
