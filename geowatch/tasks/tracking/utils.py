@@ -544,6 +544,30 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     return result if _return_list else result[0]
 
 
+def _relative_mask_image(poly, image):
+    """
+    Unused, looking for a better API that can help extract image information
+    under a polygon.
+
+    Ignore:
+        >>> import kwimage
+        >>> poly = Polygon.random(rng=8).scale((128, 128)).translate(100, 100)
+        >>> image = np.random.rand(512, 512, 3)
+        >>> _relative_mask_image(poly, image)
+    """
+    import kwimage
+    import numpy as np
+    rel_mask, offset = poly.to_relative_mask(return_offset=True)
+    box = kwimage.Box.coerce(list(offset) + list(rel_mask.shape[::-1]), format='xywh')
+    rel_image = image[box.to_slice()]
+    # Probably just want to return the hard mask, and the relative image?
+    # Maybe we also return weights based on a distance transform?
+    mask_1chan = rel_mask.data.astype(bool)
+    mask_nchan = np.ones_like(rel_image, dtype=bool) * mask_1chan[:, :, None]
+    mskd_rel_probs = np.ma.array(rel_image, mask=~mask_nchan)
+    return mskd_rel_probs
+
+
 @profile
 def mask_to_polygons(probs,
                      thresh,

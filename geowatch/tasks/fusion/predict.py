@@ -149,9 +149,11 @@ class PredictConfig(DataModuleConfigMixin):
         requiring the user to know about this.
         '''))
 
-    track_emissions = scfg.Value(True, isflag=True, help=ub.paragraph(
+    track_emissions = scfg.Value('offline', isflag=True, help=ub.paragraph(
             '''
-            set to false to disable emission tracking
+            set to false to disable emission tracking, True to try online
+            emission tracking, and offline to use offline assumption based on
+            kwutil ProcessContext.
             '''))
     record_context = scfg.Value(True, help='If enabled records process context stats')
     quantize = scfg.Value(True, help='quantize outputs')
