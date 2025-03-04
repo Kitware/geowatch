@@ -103,8 +103,16 @@ class LightningTelemetry(pl.callbacks.Callback):
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         if trainer.global_rank != 0:
             return
-        print('Exception, dumping telemetry')
-        self._dump(trainer)
+        if hasattr(self.context, 'is_running', None):
+            is_running = self.context.is_running
+        else:
+            # old non-public API, remove after kwutil 0.3.5 is min dep
+            is_running = self.context._started
+        if is_running:
+            print('Telemetry encountered exception, dumping...')
+            self._dump(trainer)
+        else:
+            print('Telemetry encountered exception, but not dumping because telemetry is not running')
 
     def _dump(self, trainer):
         if not trainer.is_global_zero:
@@ -117,3 +125,4 @@ class LightningTelemetry(pl.callbacks.Callback):
         obj = self.context.flush()
         tel_fpath = log_dpath / 'telemetry.json'
         tel_fpath.write_text(json.dumps(obj))
+        print(f'Wrote telemetry to: {tel_fpath}')
