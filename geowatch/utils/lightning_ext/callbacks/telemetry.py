@@ -103,16 +103,16 @@ class LightningTelemetry(pl.callbacks.Callback):
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         if trainer.global_rank != 0:
             return
-        if hasattr(self.context, 'is_running', None):
-            is_running = self.context.is_running
+        if hasattr(self.context, 'is_started'):
+            is_started = self.context.is_started
         else:
             # old non-public API, remove after kwutil 0.3.5 is min dep
-            is_running = self.context._started
-        if is_running:
+            is_started = self.context._started
+        if is_started:
             print('Telemetry encountered exception, dumping...')
             self._dump(trainer)
         else:
-            print('Telemetry encountered exception, but not dumping because telemetry is not running')
+            print('Telemetry encountered exception, but not dumping because telemetry was not started')
 
     def _dump(self, trainer):
         if not trainer.is_global_zero:
