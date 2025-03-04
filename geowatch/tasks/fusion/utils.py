@@ -5,6 +5,9 @@ import math
 import ubelt as ub
 import warnings
 
+# backwards compatibility
+from geowatch.tasks.fusion.datamodules.util_positional_encoding import ordinal_position_encoding # NOQA
+
 millnames = ['', ' K', ' M', ' B', ' T']
 
 
