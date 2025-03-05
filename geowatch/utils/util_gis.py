@@ -25,9 +25,7 @@ from kwgis.utils.util_gis import _load_json_from_path  # NOQA
 from kwgis.utils.util_gis import load_geojson_datas  # NOQA
 from kwgis.utils.util_gis import crs_geojson_to_gdf  # NOQA
 from kwgis.utils.util_gis import coerce_crs  # NOQA
-
-
-# from kwgis.utils.util_gis import utm_epsg_from_latlon  # NOQA
+from kwgis.utils.util_gis import utm_epsg_from_latlon  # NOQA
 
 
 def utm_epsg_from_zoneletter(zone, letter):
