@@ -380,6 +380,7 @@ def convert_polygons_to_region_model(
     Given polygons in a CRS, convert them to CRS84 polygon-based RegionModels.
     """
     from geowatch.utils import util_resolution
+    from kwgis.utils import util_gis
 
     utm_gsd = util_resolution.ResolvedUnit.coerce("1mGSD")
 
@@ -509,7 +510,8 @@ def convert_polygons_to_region_model(
         )
 
     # Convert the new UTM geometrices back into CRS84
-    new_crs84_gdf = new_utm_gdf.to_crs("crs84")
+    crs84 = util_gis.get_crs84()
+    new_crs84_gdf = new_utm_gdf.to_crs(crs84)
 
     site_sums = []
     for props, geom in zip(new_properties, new_crs84_gdf.geometry):
