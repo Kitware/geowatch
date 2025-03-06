@@ -1499,6 +1499,10 @@ class ProcessNode(Node):
     def template_group_dpath(self):
         """
         The template for the directory where the configured node dpath will be placed.
+
+        Note:
+            Maybe this could be renamed to final_group_dpath, because there
+            isn't any template components to this.
         """
         if self._overwrite_group_dpath is not None:
             return ub.Path(self._overwrite_group_dpath)
@@ -1519,6 +1523,13 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def template_root_dpath(self):
+        """
+        Alias for root dpath
+
+        Note:
+            there are no template components for this property, so this
+            property may be removed
+        """
         return self.root_dpath
 
     @memoize_configured_method

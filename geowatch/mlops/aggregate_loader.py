@@ -9,7 +9,6 @@ from kwutil import util_parallel
 from geowatch.utils import util_dotdict
 import parse
 import json
-#from geowatch.mlops import smart_pipeline
 from geowatch.mlops import smart_result_parser
 
 
@@ -128,6 +127,9 @@ def build_tables(root_dpath, dag, io_workers, eval_nodes,
                         cols[k].append(v)
                 else:
                     num_ignored += 1
+
+            if num_ignored:
+                print(f'num_ignored = {ub.urepr(num_ignored, nl=1)}')
 
             results = {
                 'fpath': pd.DataFrame(cols['fpath'], columns=['fpath']),

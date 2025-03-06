@@ -182,6 +182,9 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for eval_type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
+            # NOTE: if there are multiple targets dirs, then dag will be
+            # configured with only the last target in the root directory.
+            # This may be a problem, or at the least a source of confusion.
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
                              display_metric_cols=config.display_metric_cols,
