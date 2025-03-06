@@ -125,4 +125,4 @@ class LightningTelemetry(pl.callbacks.Callback):
         obj = self.context.flush()
         tel_fpath = log_dpath / 'telemetry.json'
         tel_fpath.write_text(json.dumps(obj))
-        print(f'Wrote telemetry to: {tel_fpath}')
+        # print(f'Wrote telemetry to: {tel_fpath}')
