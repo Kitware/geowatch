@@ -111,7 +111,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.18.4'
+__version__ = '0.19.0'
 
 
 # ../dev/maintain/generate_authors.py
@@ -297,8 +297,8 @@ _execute_ordered_preimports()
 
 
 # This can be removed if we bump the min scriptconfig version to 0.7.14
-from geowatch.monkey import monkey_scriptconfig   # NOQA
-monkey_scriptconfig.patch_0_7_14()
+# from geowatch.monkey import monkey_scriptconfig   # NOQA
+# monkey_scriptconfig.patch_0_7_14()
 
 
 if 1:

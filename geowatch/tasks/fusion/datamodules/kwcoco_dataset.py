@@ -26,8 +26,7 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import ndsampler
     >>> import kwcoco
-    >>> import geowatch
-    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
     >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(300, 300),
     >>>                           channels='r|g|b')
@@ -50,8 +49,7 @@ Example:
     >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import ndsampler
     >>> import kwcoco
-    >>> import geowatch
-    >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
     >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(sampler, window_dims='full', channels='r|g|b')
     >>> self.disable_augmenter = True
@@ -193,10 +191,9 @@ from typing import NamedTuple
 
 from geowatch import heuristics
 from geowatch.utils import kwcoco_extensions
-from geowatch.utils import util_bands
 from geowatch.utils import util_kwarray
 from geowatch.utils import util_kwimage
-from geowatch.tasks.fusion import utils
+from geowatch.tasks.fusion.datamodules import util_positional_encoding
 from geowatch.tasks.fusion.datamodules import data_utils
 from geowatch.tasks.fusion.datamodules import balanced_sampling
 from geowatch.tasks.fusion.datamodules import spacetime_grid_builder
@@ -205,6 +202,7 @@ from geowatch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
 from geowatch.tasks.fusion.datamodules.network_io import HeterogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import HomogeneousBatchItem
 from geowatch.tasks.fusion.datamodules.network_io import RGBImageBatchItem
+from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
 
 from delayed_image.channel_spec import FusedChannelSpec
 from delayed_image.channel_spec import ChannelSpec
@@ -808,7 +806,7 @@ class TruthMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
         >>>                           channels='r|g|b', neg_to_pos_ratio=0)
@@ -1484,7 +1482,7 @@ class GetItemMixin(TruthMixin):
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
             >>> import ndsampler
             >>> import geowatch
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(sampler, mode="fit", time_dims=4, window_dims=(196, 196),
             >>>                           channels='r|g|b', neg_to_pos_ratio=0, autobuild=False, upweight_centers=True)
@@ -1563,7 +1561,7 @@ class GetItemMixin(TruthMixin):
         # TODO: this should be part of the model.
         # The dataloader should know nothing about positional encodings
         # except what is needed in order to pass the data to the model.
-        time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
+        time_index_encoding = util_positional_encoding.ordinal_position_encoding(len(frame_items), 8).numpy()
 
         for frame_item in frame_items:
 
@@ -1950,6 +1948,9 @@ class GetItemMixin(TruthMixin):
         CommandLine:
             LINE_PROFILE=1 xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem
 
+        CommandLine:
+            xdoctest -m geowatch.tasks.fusion.datamodules.kwcoco_dataset GetItemMixin.getitem --show
+
         Example:
             >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -1971,13 +1972,12 @@ class GetItemMixin(TruthMixin):
             >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = True
             >>> # Pretend that some external object has given us information about desired class weights
-            >>> from geowatch.tasks.fusion.methods import watch_module_mixins
+            >>> # this could be frequency based, but we will use random weights here.
             >>> dataset_stats = self.cached_dataset_stats()
-            >>> from geowatch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+            >>> import kwarray
+            >>> rng = kwarray.ensure_rng(0)
             >>> class_keys = dataset_stats['class_freq']
-            >>> total_freq = np.array(list(dataset_stats['class_freq'].values()))
-            >>> class_importance_weights = _class_weights_from_freq(total_freq)
-            >>> catname_to_weight = ub.dzip(class_keys, class_importance_weights)
+            >>> catname_to_weight = {c: rng.rand() for c in class_keys}
             >>> catname_to_weight['star'] = 2.0
             >>> self.catname_to_weight = catname_to_weight
             >>> #
@@ -2001,7 +2001,7 @@ class GetItemMixin(TruthMixin):
         try:
             final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
         except FailedSample as ex:
-            from geowatch.utils.util_exception import add_exception_note
+            from kwutil.util_exception import add_exception_note
             raise add_exception_note(ex, f'target_ = {ub.urepr(target_, nl=1)}')
         except Exception as ex:
             print(f'target_ = {ub.urepr(target_, nl=1)}')
@@ -2042,6 +2042,10 @@ class GetItemMixin(TruthMixin):
                         # TODO: use real nodata values? Ideally they have
                         # already been converted into nans
                         mask = (item != 0) & np.isfinite(item)
+
+                        # FIXME: The normalizer defaults are not the same
+                        # between perframe and peritem. Should they be? In
+                        # either case we need to let the user specify them.
                         norm_item = kwimage.normalize_intensity(item, params={
                             'high': 0.90,
                             'mid': 0.5,
@@ -2088,6 +2092,9 @@ class GetItemMixin(TruthMixin):
                 normalizer = kwarray.find_robust_normalizers(valid_raw_datas,
                                                              params=peritem_normalizer_params)
                 # Postprocess / regularize the normalizer
+                # FIXME: This postprocess step unintuitive and not easy to
+                # explain, we should mark this as legacy behavior and introduce
+                # a new more reasonable default for peritem normalization.
                 prior_min = min(0, normalizer['min_val'])
                 alpha = 0.5
                 normalizer['min_val'] * alpha + (1 - alpha) * prior_min
@@ -2321,6 +2328,8 @@ class GetItemMixin(TruthMixin):
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
                                    gid_to_isbad, gid_to_sample)
 
+        # TODO: remove the need to access sample_grid if the target is already
+        # resolved and we don't need to do any resampling.
         time_sampler = self.sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
 
@@ -2558,7 +2567,7 @@ class IntrospectMixin:
             >>> import geowatch
             >>> anchors = np.array([[0.1, 0.1]])
             >>> size = (96, 96)
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors, image_size=size)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=4, num_tracks=40, anchors=anchors, image_size=size)
             >>> self = KWCocoVideoDataset(coco_dset, time_dims=4, window_dims=size, default_class_behavior='ignore')
             >>> self._notify_about_tasks(predictable_classes=['star', 'eff'])
             >>> self.requested_tasks['change'] = False
@@ -2572,7 +2581,7 @@ class IntrospectMixin:
             >>>     node: data['color']
             >>>     for node, data in self.predictable_classes.graph.nodes.items()}
             >>> label_to_color = ub.sorted_keys(label_to_color)
-            >>> legend_img = utils._memo_legend(label_to_color)
+            >>> legend_img = kwplot.make_legend_img(label_to_color)
             >>> legend_img = kwimage.imresize(legend_img, scale=4.0)
             >>> show_canvas = kwimage.stack_images([canvas, legend_img], axis=1)
             >>> kwplot.imshow(show_canvas)
@@ -2670,7 +2679,7 @@ class IntrospectMixin:
         from geowatch import heuristics
         heuristics.ensure_heuristic_category_tree_colors(self.predictable_classes, force=True)
 
-        from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
+        # FIXME: requested_tasks from user input is not respected
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
             default_combinable_channels=default_combinable_channels,
@@ -2705,7 +2714,7 @@ class IntrospectMixin:
             >>> from geowatch.tasks.fusion.datamodules import kwcoco_dataset
             >>> import kwcoco
             >>> import geowatch
-            >>> coco_dset = geowatch.coerce_kwcoco('vidshapes1', num_frames=10)
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes1', num_frames=10)
             >>> self = kwcoco_dataset.KWCocoVideoDataset(
             >>>     coco_dset, time_dims=4, window_dims=(300, 300),
             >>>     channels='r|g|b')
@@ -2734,7 +2743,7 @@ class BalanceMixin:
         >>> from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import geowatch
-        >>> coco_dset = geowatch.coerce_kwcoco('vidshapes2', num_frames=10, rng=0)
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2', num_frames=10, rng=0)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> num_samples = 50
         >>> neg_to_pos_ratio = 0
@@ -3500,7 +3509,7 @@ class MiscMixin:
             bg_catname = ub.peek(sorted(predictable_bg_classes))
             self.bg_idx = self.predictable_classes.node_to_idx[bg_catname]
 
-        utils.category_tree_ensure_color(self.predictable_classes)
+        heuristics.category_tree_ensure_color(self.predictable_classes)
 
     def _notify_about_tasks(self, requested_tasks=None, model=None, predictable_classes=None):
         """
@@ -3770,7 +3779,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         # positive_labels = util_yaml.Yaml.coerce(config.positive_labels)
 
         self.classes = kwcoco.CategoryTree(graph)
-        utils.category_tree_ensure_color(self.classes)
+        heuristics.category_tree_ensure_color(self.classes)
 
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
@@ -3794,6 +3803,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
         self._setup_predictable_classes(sorted(self.background_classes | self.class_foreground_classes))
 
         self.disable_augmenter = False
+        self.prenormalizers = None
         self.augment_rng = kwarray.ensure_rng(None)
         self.mode = mode
         self.test_with_annot_info = test_with_annot_info
@@ -3942,15 +3952,17 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             chans = fused_sensorchan.chans
             _stream = chans.as_oset()
             _sample_stream = _stream.copy()
-            special_bands = _stream & util_bands.SPECIALIZED_BANDS
-            if special_bands:
-                raise NotImplementedError('This is broken ATM')
-                # TODO: introspect which extra bands are needed for to compute
-                # the sample, but hard code for now
-                # _sample_stream -= special_bands
-                # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                # self.special_inputs[key] = special_bands
-                # _stream = [s + p for p in _stream for s in ['', 'D']]
+            # TODO: Might be interesting to have a feature to compute
+            # specialized bands on the fly.
+            # special_bands = _stream & util_bands.SPECIALIZED_BANDS
+            # if special_bands:
+            #     raise NotImplementedError('This is broken ATM')
+            #     # TODO: introspect which extra bands are needed for to compute
+            #     # the sample, but hard code for now
+            #     # _sample_stream -= special_bands
+            #     # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+            #     # self.special_inputs[key] = special_bands
+            #     # _stream = [s + p for p in _stream for s in ['', 'D']]
             _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
             _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
             _input_channels.append('|'.join(_stream))
@@ -4045,8 +4057,6 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
                 self.length = min(self.length, config['max_epoch_length'])
 
         self.sample_grid = sample_grid
-
-        self.prenormalizers = None
 
         if self.config['prenormalize_inputs'] is not None:
             prenormalizers = None

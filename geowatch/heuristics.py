@@ -608,8 +608,8 @@ def ensure_heuristic_category_tree_colors(classes, force=False):
     TODO:
         - [ ] Move this non-heuristic functionality to
             :func:`kwcoco.CategoryTree.ensure_colors`
-        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_category_colors
         - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
         - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
 
@@ -628,6 +628,57 @@ def ensure_heuristic_category_tree_colors(classes, force=False):
                 node_data['color'] = hcat['color']
     data_dicts = [data for node, data in classes.graph.nodes(data=True)]
     _ensure_distinct_dict_colors(data_dicts)
+
+
+def category_tree_ensure_color(classes):
+    """
+    Ensures that each category in a CategoryTree has a color
+
+    TODO:
+        - [ ] Add to CategoryTree
+        - [ ] TODO: better function
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
+
+    Example:
+        >>> import kwcoco
+        >>> classes = kwcoco.CategoryTree.demo()
+        >>> assert not any('color' in data for data in classes.graph.nodes.values())
+        >>> category_tree_ensure_color(classes)
+        >>> assert all('color' in data for data in classes.graph.nodes.values())
+    """
+    import kwimage
+    backup_colors = iter(kwimage.Color.distinct(len(classes)))
+    for node in classes.graph.nodes:
+        color = classes.graph.nodes[node].get('color', None)
+        if color is None:
+            color = next(backup_colors)
+            classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()
+
+
+def category_category_colors(coco_dset):
+    """
+    Ensures that each category in a CategoryTree has a color
+
+    TODO:
+        - [ ] Add to CategoryTree
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
+    """
+    import kwimage
+    cats = coco_dset.dataset['categories']
+    # backup_colors = iter(kwimage.Color.distinct(len(cats)))
+    for cat in cats:
+        color = cat.get('color', None)
+        if color is None:
+            # color = next(backup_colors)
+            # cat['color'] = kwimage.Color(color).as01()
+            color = kwimage.Color.random()
+            cat['color'] = color.as01()
 
 
 def _ensure_distinct_dict_colors(data_dicts, force=False):
@@ -789,7 +840,7 @@ def build_image_header_text(**kwargs):
     header_line_infos.append([sensor_coarse, date_captured])
     header_lines = []
     for line_info in header_line_infos:
-        header_line = ' '.join([p for p in line_info if p])
+        header_line = ' '.join([str(p) for p in line_info if p])
         header_line = header_line.replace('\\n', '\n')  # hack
         if header_line:
             header_lines.append(header_line)

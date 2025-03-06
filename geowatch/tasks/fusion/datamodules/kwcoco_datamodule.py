@@ -13,8 +13,9 @@ import scriptconfig as scfg
 
 from geowatch.utils import util_globals
 from kwutil import util_parallel
-from geowatch.tasks.fusion import utils
+from geowatch import heuristics
 from geowatch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
+from geowatch.tasks.fusion.datamodules.batch_visualization import _memo_legend
 
 from typing import Dict
 
@@ -849,12 +850,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         if with_legend:
             if classes is None:
                 classes = dataset.classes
-            utils.category_tree_ensure_color(classes)
+            heuristics.category_tree_ensure_color(classes)
             label_to_color = {
                 node: data['color']
                 for node, data in classes.graph.nodes.items()}
             label_to_color = ub.sorted_keys(label_to_color)
-            legend_img = utils._memo_legend(label_to_color)
+            legend_img = _memo_legend(label_to_color)
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)
 
         return canvas

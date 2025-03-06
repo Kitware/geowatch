@@ -86,13 +86,23 @@ class Stage1_Evaluate(ProcessNode):
         flat_resolved = flat_resolved.insert_prefix(self.name, index=1)
         return flat_resolved
 
-    def _default_metrics(self):
-        _display_metrics_suffixes = [
-            'accuracy',
-            'hamming_distance',
+    def _default_metrics2(self):
+        """
+        Might be renamed to default_metrics in the future.
+        """
+        metric_infos = [
+            {
+                'suffix': 'accuracy',
+                'objective': 'maximize',
+                'primary': True,
+            },
+            {
+                'suffix': 'hamming_distance',
+                'objective': 'minimize',
+                'primary': True,
+            }
         ]
-        _primary_metrics_suffixes = _display_metrics_suffixes[0:2]
-        return _primary_metrics_suffixes, _display_metrics_suffixes
+        return metric_infos
 
     @property
     def default_vantage_points(self):

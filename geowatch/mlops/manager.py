@@ -856,6 +856,27 @@ class ExperimentState(ub.NiceRepr):
                     shrunk_packages.append(os.fspath(fpath))
                 ready_packages = shrunk_packages
 
+            HEURISTIC_PACKAGE_SORTING = 1
+            if HEURISTIC_PACKAGE_SORTING:
+                import parse
+                heuristic_pattern = parse.Parser('{prefix}_epoch{epoch_num:d}_step{step_num:d}{suffix}')
+                def sort_order_heuristic(pkg_fpath):
+                    """
+                    Attempt to sort the packages in a semi-meaningful way using a
+                    common naming heuristic, that should fallback on regular
+                    lexigraphical sorting if the heuristic pattern doesnt match.
+                    """
+                    pkg_fpath = str(pkg_fpath)
+                    result = heuristic_pattern.parse(pkg_fpath)
+                    if result is None:
+                        # pattern doesn't match, so use the entire string as the sort value prefix
+                        sort_value = (pkg_fpath, -1, -1, '')
+                    else:
+                        sort_value = tuple(result.named.values())
+                    return sort_value
+
+                ready_packages = sorted(ready_packages, key=sort_order_heuristic)
+
             from kwutil import util_yaml
             print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,

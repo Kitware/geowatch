@@ -861,7 +861,7 @@ def _merge_polys(p1, t1, p2, t2, poly_merge_method=None):
 
     elif poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         import geopandas as gpd
         geom_df = gpd.GeoDataFrame(geometry=p1 + p2)
         isect_idxs = util_gis.geopandas_pairwise_overlaps(geom_df, geom_df)

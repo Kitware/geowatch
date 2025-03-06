@@ -344,7 +344,7 @@ class ConfusionAnalysis:
         from geowatch.geoannots.geomodels import SiteModel
         from geowatch.geoannots.geomodels import RegionModel
         from geowatch.geoannots.geomodels import SiteModelCollection
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         import rich
         import itertools as it
 
@@ -747,7 +747,7 @@ class ConfusionAnalysis:
 
         2. Finds the false negative examples and increases their weight.
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         import rich
 
         true_sites = self.true_sites
@@ -1177,7 +1177,7 @@ class ConfusionAnalysis:
         """
         Build a set of cases that inspect the predictions of a single site.
         """
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         import numpy as np
         print('Building confusion cases')
 
@@ -1469,7 +1469,7 @@ def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     from shapely.ops import unary_union
     from geowatch import heuristics
     from geowatch.geoannots.geomodels import RegionModel
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.utils import util_kwimage
     import geopandas as gpd
     import kwarray

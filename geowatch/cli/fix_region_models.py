@@ -65,7 +65,7 @@ def defaultencode(o):
 
 
 def main(cmdline=1, **kwargs):
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.geoannots import geomodels
 
     import rich

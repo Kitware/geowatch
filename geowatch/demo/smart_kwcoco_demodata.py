@@ -7,7 +7,6 @@ import kwcoco
 import kwimage
 import numpy as np
 import ubelt as ub
-import geowatch
 
 
 def coerce_kwcoco(data='geowatch-msi', **kwargs):
@@ -767,7 +766,8 @@ def _random_utm_box(rng=None):
     import numpy as np
     from kwarray.distributions import Uniform
     import kwarray
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
+    from kwgis.gis.geotiff import make_crs_info_object
     from osgeo import osr
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
@@ -788,7 +788,7 @@ def _random_utm_box(rng=None):
     utm_crs.ImportFromEPSG(utm_epsg_int)
     utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
 
-    utm_crs_info = geowatch.gis.geotiff.make_crs_info_object(utm_crs)
+    utm_crs_info = make_crs_info_object(utm_crs)
 
     utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
     # keep the aspect ratio more or less squareish
@@ -892,7 +892,7 @@ def demo_dataset_with_regions_and_sites(dpath=None):
     import geowatch
     from geowatch.geoannots import geomodels
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwimage
     import kwarray
 

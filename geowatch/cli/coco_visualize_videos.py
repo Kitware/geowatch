@@ -481,7 +481,8 @@ def main(cmdline=True, **kwargs):
                 'name': 'loose-images',
             }
 
-        sub_dpath = viz_dpath / video['name']
+        video_name = str(video['name'])
+        sub_dpath = viz_dpath / video_name
         if vidid is None:
             loose_gids = [
                 gid for gid, v in coco_dset.images().lookup('video_id', None, keepid=1).items()
@@ -498,7 +499,7 @@ def main(cmdline=True, **kwargs):
             continue
 
         sub_dpath.ensuredir()
-        video_names.append(video['name'])
+        video_names.append(video_name)
 
         if config['animate'] == 'oops':
             rich.print('Got animate=oops. '

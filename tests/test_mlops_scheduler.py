@@ -339,6 +339,7 @@ def test_simple_but_real_custom_pipeline():
     )
     eval_type_to_aggregator = aggregate.run_aggregate(agg_config)
     agg = eval_type_to_aggregator['step1']
+    print(f'agg = {ub.urepr(agg, nl=1)}')
 
 
 if __name__ == '__main__':

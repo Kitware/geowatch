@@ -17,6 +17,9 @@ Usage:
 # Place where the source packages are located
 CODE_DPATH=$HOME/code
 
+# TODO:
+# check that git-well is installed and error if it is not.
+
 mylibs=(
 ubelt
 mkinit
@@ -59,6 +62,8 @@ declare -A REPO_REMOTE_LUT=(
 DO_FETCH=1
 DO_INSTALL=1
 DO_CLONE=1
+
+_PIP_PREFIX=uv
 
 
 if [[ "$DO_FETCH" == "1" ]]; then
@@ -145,7 +150,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     Uninstalling:
     "
     if [[ ${#needs_uninstall[@]} -gt 0 ]]; then
-        pip uninstall -y "${needs_uninstall[@]}"
+        $_PIP_PREFIX pip uninstall -y "${needs_uninstall[@]}"
     fi
 
     echo "
@@ -160,7 +165,8 @@ if [[ "$DO_INSTALL" == "1" ]]; then
         #pip install --no-build-isolation "${needs_install[@]}"
         # Looks like build isolation is probably important
         echo pip install "${needs_install[@]}"
-        pip install "${needs_install[@]}"
+        # TODO: use uv
+        $_PIP_PREFIX pip install "${needs_install[@]}"
     fi
 
     echo "

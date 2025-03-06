@@ -149,9 +149,11 @@ class PredictConfig(DataModuleConfigMixin):
         requiring the user to know about this.
         '''))
 
-    track_emissions = scfg.Value(True, isflag=True, help=ub.paragraph(
+    track_emissions = scfg.Value('offline', isflag=True, help=ub.paragraph(
             '''
-            set to false to disable emission tracking
+            set to false to disable emission tracking, True to try online
+            emission tracking, and offline to use offline assumption based on
+            kwutil ProcessContext.
             '''))
     record_context = scfg.Value(True, help='If enabled records process context stats')
     quantize = scfg.Value(True, help='quantize outputs')
@@ -987,8 +989,24 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
 
                         output_weights = frame_info.get('output_weights', None)
                         if head_key == 'hidden_layers':
-                            # hardcode knowing features are 1/8 down sample of the image
-                            featspace_from_outspace = kwimage.Affine.scale(1 / 8)
+
+                            # TODO: we need a better way to determine what the
+                            # real transform between the hidden features and
+                            # the output stitching space is.
+                            HACK_HIDDEN_FEATURE_SCALE_FACTOR = True
+                            if HACK_HIDDEN_FEATURE_SCALE_FACTOR:
+                                # This assumes that the features are perfectly
+                                # aligned, which is not a good assumption, but
+                                # it is better than a hardcoded scale factor.
+                                # It also assumes that the weights aren't at a
+                                # scalefactor. Needs to be improved.
+                                _ph, _pw, _pd = probs.shape
+                                _ow, _oh = kwimage.Box.from_slice(output_space_slice).dsize
+                                featspace_from_outspace = kwimage.Affine.scale((_pw / _ow, _ph / _oh))
+                            else:
+                                # hardcode knowing features are 1/8 down sample of the image
+                                featspace_from_outspace = kwimage.Affine.scale(1 / 8)
+
                             featspace_output_box = kwimage.Box.from_slice(output_space_slice).warp(featspace_from_outspace)
                             featspace_image_box = kwimage.Box.from_dsize(output_image_dsize).warp(featspace_from_outspace)
                             featspace_from_vid = featspace_from_outspace @ kwimage.Affine.scale(scale_outspace_from_vid)
@@ -1019,6 +1037,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                             rich.print(f'output_weights.shape    = {output_weights.shape}')
                             rich.print(f'output_image_dsize      = {output_image_dsize}')
                             rich.print(f'scale_outspace_from_vid = {scale_outspace_from_vid}')
+                            item = fixed_batch[bx]
                             item_summary = test_dataloader.dataset.summarize_item(item)
                             print(f'item_summary = {ub.urepr(item_summary, nl=-1)}')
                             raise

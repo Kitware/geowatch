@@ -4,7 +4,23 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.18.4 - Unreleased
+## Version 0.19.0 - Unreleased
+
+### Added
+* Add `DataFrame.argextrema`
+* Add suboptimize to `Aggregator.report_best`
+* Added experimental way to specify metric metadata in a mlop ProcessNode via the `_default_metrics2` method, which will likely change in the future.
+
+### Changed
+* mlops manager package list command now sorts the package name in a reasonable way. 
+* refactored utilities to reduce inter-dependencies and allow for easier porting
+
+### Fixed
+* Bug in prediction error reporting
+* Issue in visualize if video names were not strings
+* Issue with video names that contain invalid path characters.
+
+## Version 0.18.4 - Released 2024-12-18
 
 ### Changed
 

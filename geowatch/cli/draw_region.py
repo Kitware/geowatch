@@ -91,7 +91,7 @@ class DrawRegionCLI(scfg.DataConfig):
         import pandas as pd
         # from kwutil import util_time
         from geowatch.geoannots import geomodels
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         from kwutil import util_parallel
         import kwimage
         import kwplot

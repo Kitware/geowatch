@@ -170,7 +170,7 @@ def transfer_features_main(cmdline=1, **kwargs):
     if src_vidnames != dst_vidnames:
         # If video names do not agree, we need to check for overlaps
         from geowatch.utils import kwcoco_extensions
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         src_vid_gdf = kwcoco_extensions.covered_video_geo_regions(src)
         dst_vid_gdf = kwcoco_extensions.covered_video_geo_regions(dst)
         dst_to_src_idxs = util_gis.geopandas_pairwise_overlaps(dst_vid_gdf, src_vid_gdf)

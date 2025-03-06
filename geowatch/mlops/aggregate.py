@@ -58,6 +58,14 @@ Ignore:
         --target ./my_aggregate/bas_pxl_eval_2023-02-22T215702-5.csv.zip \
         --plot_params=True --rois KR_R001,KR_R002
 
+
+
+TODO:
+    - [ ] The package_fpath (i.e. model_cols) reporting does heuristics to
+          shorten the path to the package, but we shouldn't do this. We should
+          make a new column that indicates it is a shortened name for the
+          model, otherwise it is confusing.
+
 """
 import math
 import ubelt as ub
@@ -96,7 +104,7 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
-    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance')
+    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance used to sort the output')
 
     display_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
 
@@ -207,7 +215,7 @@ class AggregateEvluationConfig(AggregateLoader):
         "resolved_params.bas_pxl.channels"]}``
         '''))
 
-    stdout_report = Value(True, isflag=True, help=ub.paragraph(
+    stdout_report = Value(True, type=str, isflag=True, help=ub.paragraph(
         '''
         if True, print a report to stdout. This can also be a YAML dictionary.
         An example set if items might look like:
@@ -257,6 +265,7 @@ class AggregateEvluationConfig(AggregateLoader):
             self.plot_params = {
                 'enabled': bool(self.plot_params)
             }
+        self.stdout_report = Yaml.coerce(self.stdout_report)
 
     @profile
     def coerce_aggregators(config):
@@ -397,6 +406,7 @@ def run_aggregate(config):
             report_config = Yaml.coerce(config.stdout_report)
         else:
             report_config = {}
+        print(f'report_config = {ub.urepr(report_config, nl=1)}')
         for eval_type, agg in eval_type_to_aggregator.items():
             if len(agg):
 
@@ -465,7 +475,7 @@ class AggregatorAnalysisMixin:
         if len(macro_keys) == 0:
             raise Exception('Build a macro result first')
 
-        regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
+        # regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
         tables = util_pandas.DotDictDataFrame(agg.region_to_tables[agg.primary_macro_region])
 
         resolved_params = tables['resolved_params']
@@ -493,22 +503,6 @@ class AggregatorAnalysisMixin:
         # self = analysis
         analysis.analysis()
         analysis.report()
-        if 0:
-            model_cols = agg.model_cols
-            import kwplot
-            sns = kwplot.autosns()
-            sns = kwplot.autosns()
-            plt = kwplot.autoplt()
-            kwplot.figure()
-            x = 'bas_poly_eval.params.bas_poly.thresh'
-            sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
-            ax = plt.gca()
-            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
-
-            x = 'bas_poly_eval.params.bas_pxl.output_space_scale'
-            sns.boxplot(data=table, x=x, y=main_metric)
-            ax = plt.gca()
-            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
         return analysis, table
 
     def varied_param_counts(agg, min_variations=2, dropna=False):
@@ -585,11 +579,6 @@ class AggregatorAnalysisMixin:
 
         param_summary = ub.udict(param_summary).sorted_values(lambda x: x['num_variations'])
 
-        # if 0:
-        #     from geowatch.utils import util_dotdict
-        #     nested = util_dotdict.dotdict_to_nested(varied_counts)
-        #     graph = util_dotdict.indexable_to_graph(nested)
-
         top_level_descendants = ub.ddict(set)
         for key in list(varied_counts.keys()):
             parts = key.split('.')
@@ -620,7 +609,6 @@ class AggregatorAnalysisMixin:
         resolved_params = util_pandas.DataFrame(agg.resolved_params)
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
-            # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
         metrics = agg.metrics[metrics_of_interest]
         resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
@@ -647,7 +635,7 @@ class AggregatorAnalysisMixin:
 
     def report_best(agg, top_k=100, shorten=True, per_group=None, verbose=1,
                     reference_region=None, print_models=False, concise=False,
-                    show_csv=False) -> TopResultsReport:
+                    show_csv=False, grouptop=None) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -675,6 +663,18 @@ class AggregatorAnalysisMixin:
             show_csv (bool):
                 also print as a CSV suitable for copy/paste into google sheets.
 
+            grouptop (str | List[str]):
+                if specified, these are a list of columns that a
+                "suboptimized", which means that we group the table by these
+                columns (e.g. the model column) and then only consider the
+                "best" scoring results within these groups. This can help
+                remove clutter if attempting to choose between a specific
+                parameter.
+
+        TODO:
+            This might need to become a class that builds the TopResultsReport
+            as it is getting somewhat complex.
+
         Returns:
             TopResultsReport:
                 contains:
@@ -682,6 +682,13 @@ class AggregatorAnalysisMixin:
                     mapping from region_id to top k results
                 top_param_lut (T2=Dict[str, DataFrame]):
                     mapping from param hash to invocation details
+
+        Example:
+            >>> from geowatch.mlops.aggregate import *  # NOQA
+            >>> agg = Aggregator.demo(rng=0, num=100).build()
+            >>> agg.report_best(print_models=True, top_k=3)
+            >>> agg.report_best(print_models=True, top_k=3, grouptop='special:model')
+            >>> agg.report_best(print_models=True, top_k=3, grouptop='special:model', reference_region='region1')
         """
         import rich
         import pandas as pd
@@ -692,6 +699,11 @@ class AggregatorAnalysisMixin:
             per_group = None
         if isinstance(top_k, float) and math.isinf(top_k):
             top_k = None
+
+        primary_metric_objectives = [
+            agg._metric_info[c]['objective'] for c in
+            agg.primary_metric_cols
+        ]
 
         if reference_region:
             # In every region group, restrict to only the top values for the
@@ -709,11 +721,32 @@ class AggregatorAnalysisMixin:
                 print('region_to_len = {}'.format(ub.urepr(region_to_len, nl=1)))
                 raise Exception(f'reference {region_id=} group is empty')
 
+            # TODO: consolidate this logic with the similar per-region logic
+            # In the next section: `for region_id, group in _agg.region_to_tables.items()`
+            # of this function
+
             # Rank reference region param_hashids of the primary metrics
-            metric_cols = group.columns.intersection(agg.metrics.columns)
-            metric_group = group[metric_cols]
+            if grouptop is not None:
+                grouptop = _coerce_grouptop(grouptop, aliases={
+                    'special:model': agg.model_cols
+                })
+                # Find the top k results per group.
+                sublocs = []
+                for subkey, subgroup in group.groupby(grouptop['params']):
+                    locs = util_pandas.DataFrame.argextrema(
+                        subgroup, agg.primary_metric_cols,
+                        objective=primary_metric_objectives, k=grouptop['top_k'])
+                    sublocs.extend(locs)
+                group_to_rank = group.loc[sublocs]
+                if verbose > 3:
+                    print(f'Filtering by group to {len(sublocs)} / {len(group)} param hashids in reference region')
+            else:
+                group_to_rank = group
+
             try:
-                top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+                top_locs = util_pandas.DataFrame.argextrema(
+                    group_to_rank, agg.primary_metric_cols,
+                    objective=primary_metric_objectives, k=top_k)
             except Exception:
                 print("FIXME: Something when wrong when sorting the reference region")
                 raise
@@ -761,8 +794,25 @@ class AggregatorAnalysisMixin:
 
             if reference_hashids is None:
                 # Rank the rows for this region individually
-                ranked_locs = util_pandas.pandas_argmaxima(
-                    group, _agg.primary_metric_cols, k=top_k)
+
+                if grouptop is not None:
+                    grouptop = _coerce_grouptop(grouptop, aliases={
+                        'special:model': _agg.model_cols
+                    })
+                    # Find the top k results per group.
+                    sublocs = []
+                    for subkey, subgroup in group.groupby(grouptop['params']):
+                        locs = util_pandas.DataFrame.argextrema(
+                            subgroup, _agg.primary_metric_cols,
+                            objective=primary_metric_objectives, k=grouptop['top_k'])
+                        sublocs.extend(locs)
+                    group_to_rank = group.loc[sublocs]
+                else:
+                    group_to_rank = group
+
+                ranked_locs = util_pandas.DataFrame.argextrema(
+                    group_to_rank, _agg.primary_metric_cols,
+                    objective=primary_metric_objectives, k=top_k)
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)
@@ -966,8 +1016,6 @@ class AggregatorAnalysisMixin:
                 # models together in a folder, but this is not robust, so we Only
                 # do this grouping if the parent folder has a special name
 
-                # import xdev
-                # with xdev.embed_on_exception_context:
                 model_paths = [
                     ub.Path(p)
                     if not pd.isnull(p) else None
@@ -997,13 +1045,6 @@ class AggregatorAnalysisMixin:
                     rank = chosen_row['rank']
                     rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
                     print(Yaml.dumps([model_fpath]).strip())
-
-                # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-                # known_models = Yaml.coerce(all_models_fpath)
-                # set(known_models).issuperset(set(chosen_models))
-                # if 0:
-                #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
-                # new_models_fpath.write_text(shortlist_text)
 
         report = TopResultsReport(region_id_to_summary, top_param_lut)
         return report
@@ -1321,6 +1362,23 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
     results over different "regions" with the same parameters.
 
     Set config based on your problem
+
+    Example:
+        >>> from geowatch.mlops.aggregate import *  # NOQA
+        >>> agg = Aggregator.demo(rng=0, num=3).build()
+        >>> print(f'agg.config = {ub.urepr(agg.config, nl=1)}')
+        >>> print('--- The table of only metrics ---')
+        >>> print(agg.metrics)
+        >>> print('--- The table of resource utilization ---')
+        >>> print(agg.resources)
+        >>> print('--- The table of explicitly requested hyperparameters (to distinguish from defaults) ---')
+        >>> print(agg.resolved_params)
+        >>> print('--- The table of resolved hyperparameters ---')
+        >>> print(agg.resolved_params)
+        >>> print('--- The table with unique indexes for each experiment ---')
+        >>> print(agg.index)
+        >>> print('--- The entire joined table ---')
+        >>> print(agg.table)
     """
     def __init__(agg, table, output_dpath=None,
                  node_type=None,
@@ -1395,6 +1453,9 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         Args:
             num (int): number of rows
             rng (int | None): random number generator / state
+
+        Returns:
+            Aggregator
 
         Example:
             >>> from geowatch.mlops.aggregate import *  # NOQA
@@ -1491,19 +1552,13 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
                   display_metric_cols=display_metric_cols)
         return agg
 
-    # def __export(agg):
-    #     ...
-    #     agg.table
-    #     fname = f'{agg.node_type}_{agg.output_dpath.parent.name}.csv'
-    #     agg.table.to_csv(fpath, index_label=False)
-    #     fpath = 'bas_results_2023-01.csv.zip'
-    #     agg.table.to_csv(fpath, index_label=False)
-
     def build(agg):
         """
         Inspect the aggregator's table and build supporting information
+
+        Returns:
+            Self: returns self for method chaining
         """
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
         from geowatch.utils import util_pandas
         agg.__dict__.update(**agg.config)
 
@@ -1535,26 +1590,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         if agg.node_type is None:
             agg.node_type = agg.table['node'].iloc[0]
 
-        metrics_prefix = f'metrics.{agg.node_type}'
-        # params_prefix = f'params.{agg.node_type}'
-        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            try:
-                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
-            except Exception:
-                node = agg.dag.nodes[agg.node_type]
-                if hasattr(node, '_default_metrics'):
-                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
-                    # should we prevent double prefixes?
-                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
-                else:
-                    # fallback to something
-                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
-                    _primary_metrics = _display_metrics[0:1]
-                if agg.primary_metric_cols == 'auto':
-                    agg.primary_metric_cols = _primary_metrics
-                if agg.display_metric_cols == 'auto':
-                    agg.display_metric_cols = _display_metrics
+        # Construct primary / display model columns and metric column info lut
+        agg._build_metrics_column_preferences()
 
         # FIXME: HARD CODED from SMART
         # TODO: add mechanism where nodes can tag their parameters with these
@@ -1593,6 +1630,112 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         for region_id, idx_group in agg.index.groupby('region_id'):
             agg.region_to_tables[region_id] = agg.table.loc[idx_group.index]
         agg.macro_compatible = agg.find_macro_comparable()
+        return agg
+
+    def _build_metrics_column_preferences(agg):
+        """
+        Builds a table indexed by column name for the metrics columns.
+
+        The table attribute is ``_metric_info``. Each value should have keys:
+
+            name
+            suffix
+            objective
+            primary
+            display
+            aggregator
+
+        """
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
+        import warnings
+        # TODO: need to be able to specify what the objective is for each
+        # metric. Either minimize or maximize.
+        metrics_prefix = f'metrics.{agg.node_type}'
+        agg._metric_info = {}
+
+        if agg.dag is not None:
+            node = agg.dag.nodes[agg.node_type]
+        else:
+            node = None
+        # Build a lookup table about how different metrics are interpreted
+        try:
+            user_metric_info = node._default_metrics2()
+        except (AttributeError, NotImplementedError):
+            print(f'User did not specify _default_metrics2 for {node}')
+        else:
+            for info in user_metric_info:
+                suffix = info['suffix']
+                name = f'{metrics_prefix}.{suffix}'
+                agg._metric_info[name] = info.copy()
+                agg._metric_info[name]['name'] = name
+
+        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
+            if agg._metric_info:
+                # If the metrics info was specified, then dont use the old _default_metrics
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
+                    if len(agg.primary_metric_cols) == 0:
+                        warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
+                        agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
+                    agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+            else:
+                # TODO: deprecate the old _default_metrics stuff entirely
+                try:
+                    # TODO: deprecate SMART-stuff
+                    _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+                except Exception:
+                    if hasattr(node, '_default_metrics'):
+                        _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                        # should we prevent double prefixes?
+                        _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                        _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                    else:
+                        # fallback to something
+                        _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                        _primary_metrics = _display_metrics[0:1]
+                    if agg.primary_metric_cols == 'auto':
+                        agg.primary_metric_cols = _primary_metrics
+                    if agg.display_metric_cols == 'auto':
+                        agg.display_metric_cols = _display_metrics
+
+        # If specified primary metrics are not in the info table, use
+        # assumptions
+        for c in ub.flatten([agg.primary_metric_cols, agg.display_metric_cols]):
+            info = agg._metric_info.get(c, {})
+            if 'suffix' not in info:
+                info['suffix'] = c.split('.')[-1]
+            if 'name' not in info:
+                info['name'] = c
+            if c not in agg._metric_info:
+                agg._metric_info[c] = info
+
+        for info in agg._metric_info.values():
+            if 'objective' not in info:
+                # Assumption
+                warnings.warn(f'Assuming {info} has objective=maximize')
+                info['objective'] = 'maximize'
+
+        for c in agg.primary_metric_cols:
+            info = agg._metric_info[c]
+            if not info.get('primary', False):
+                info['primary'] = True
+
+        for c in agg.display_metric_cols:
+            info = agg._metric_info[c]
+            if not info.get('display', False):
+                info['display'] = True
+
+        # Normalize key names
+        for info in agg._metric_info.values():
+            objective = info['objective']
+            if objective in {'max'}:
+                info['objective'] = 'maximize'
+            if objective in {'min'}:
+                info['objective'] = 'minimize'
+
+        print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
 
     def __nice__(self):
         return f'{self.node_type}, n={len(self)}'
@@ -1805,33 +1948,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             mappings[colname] = mapper
             effective_params[colname] = condensed
 
-        # TODO: Give the user more customization and control over how effective
-        # params are built. I'm going to hard code my use-case for now,
-        # refactor later.
-        # Q: Do we need to be using "resolved parameters" here?
-        if 0:
-            resolved_params = util_pandas.DataFrame(self.subtables['resolved_params'])
-            channel_cols = resolved_params.match_columns('*.channels')
-            unique_channels = sorted(set(ub.flatten(resolved_params[channel_cols].value_counts().index)))
-
-            CHANNEL_LUT = {
-                'blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse': 'COLD.0:18',
-            }
-            import delayed_image
-            channel_mapping = {}
-            for orig_c in unique_channels:
-                c = orig_c
-                for k, v in CHANNEL_LUT.items():
-                    c = c.replace(k, v)
-                c = delayed_image.sensorchan_spec.SensorChanSpec.coerce(c)
-                print(c.normalize().concise())
-                channel_mapping[orig_c] = c
-
-            for col in channel_cols:
-                self.subtables['resolved_params'][col] = self.subtables['resolved_params'][col].apply(channel_mapping.get)
-
-            effective_params = util_pandas.DataFrame(effective_params)
-
         for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
             effective_params[colname] = 'ignore'
 
@@ -1880,8 +1996,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         # Preallocate a series with the appropriate index
         hashids_v1 = pd.Series([None] * len(self.index), index=self.index.index)
         hashid_to_effective_params = {}
-        # import xdev
-        # with xdev.embed_on_exception_context:
+
         if len(param_cols) > 0:
             param_groups = effective_params.groupby(param_cols, dropna=False)
         else:
@@ -2068,6 +2183,22 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         # FIXME: SMART-specific
         ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
 
+        # NEW: this is a more general way to handle definition of aggregators
+        # This code can be cleaned up considerably
+        _hacked_col_types = {
+            'mean': average_cols,
+            'sum': sum_cols,
+            'ignore': ignore_cols,
+            'min': start_time_cols,
+            'max': stop_time_cols,
+        }
+        for metric_info in agg._metric_info.values():
+            column_name = metric_info['name']
+            aggregator = metric_info.get('aggregator', 'mean')
+            col_type = _hacked_col_types[aggregator]
+            if column_name not in col_type:
+                col_type.append(column_name)
+
         average_cols = agg.metrics.columns.intersection(average_cols)
         other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(average_cols)
         other_metric_cols = other_metric_cols.difference(ignore_cols)
@@ -2119,6 +2250,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
 
 def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
+    # FIXME: SMART specific
     from geowatch.utils import util_pandas
     # eval_fpath = group_agg.fpaths[id]
     eval_fpath = ub.Path(group_agg.table['fpath'].loc[id])
@@ -2163,9 +2295,6 @@ def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
                 true_site_dpath=true_site_dpath,
                 true_region_dpath=true_region_dpath,
             )
-            # rich.print(ub.urepr(confusor_config))
-            # cmdline = 0
-            # kwargs = confusor_config
             confusor_analysis.main(cmdline=0, **confusor_config)
 
         confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
@@ -2192,6 +2321,9 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
         hash_cols (None | List[str]):
             columns whos values should be hashed together.
 
+    Returns:
+        pandas.Series: a single row representing the combined rows
+
     TODO:
         - [ ] optimize this
         - [ ] Rectify with ~/code/watch/geowatch/utils/util_pandas.py :: aggregate_columns
@@ -2208,7 +2340,8 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
         >>> hash_cols = 'param_hashid'
         >>> allow_nonuniform = True
         >>> hash_cols = ['region_id'] + agg.test_dset_cols
-        >>> aggregate_param_cols(df, aggregator=aggregator, hash_cols=hash_cols, allow_nonuniform=allow_nonuniform)
+        >>> agg_row = aggregate_param_cols(df, aggregator=aggregator, hash_cols=hash_cols, allow_nonuniform=allow_nonuniform)
+        >>> print(agg_row)
     """
     import pandas as pd
     import numpy as np
@@ -2317,6 +2450,7 @@ def hash_param(row, version=1):
     """
     Rule of thumb for probability of a collision:
 
+    Ignore:
         base, length = 16, 8
         rule_of_thumb = np.sqrt(base ** length)
         rule_of_thumb = base ** (length // 2)
@@ -2355,6 +2489,84 @@ def nan_eq(a, b):
         return True
     else:
         return a == b
+
+
+def _coerce_grouptop(grouptop, aliases=None):
+    """
+    Given a user input for "grouptop", coerce it into dictionary form. This is
+    a helper for :func:`Aggregator.report_best`
+
+    Args:
+        grouptop (List[str] | str | dict):
+            parameter name(s) or a dictionary of precise options.
+
+        aliases (None | Dict[str, str | List[str]]):
+            parameter aliases. User inputs that match keys will be expanded to
+            the corresponding values.
+
+    Returns:
+        Dict[str, Any]: the dictionary form of "grouptop" with the form:
+            .. code::
+                {
+                    'params': List[str],
+                    'k': int,
+                }
+
+    Example:
+        >>> from geowatch.mlops.aggregate import *  # NOQA
+        >>> from geowatch.mlops.aggregate import _coerce_grouptop
+        >>> grouptop = 'param1'
+        >>> result1 = _coerce_grouptop(grouptop)
+        >>> grouptop = ['param1', 'param2']
+        >>> result2 = _coerce_grouptop(grouptop)
+        >>> special_cols = {
+        >>>     'special:1': 'a.special.alias',
+        >>>     'special:2': ['two.special.alias', 'and.the.second.one'],
+        >>> }
+        >>> grouptop = {'params': ['special:1', 'param2', 'special:2'], 'top_k': 3}
+        >>> result3 = _coerce_grouptop(grouptop, special_cols)
+        >>> print(f'result1 = {ub.urepr(result1, nl=1)}')
+        >>> print(f'result2 = {ub.urepr(result2, nl=1)}')
+        >>> print(f'result3 = {ub.urepr(result3, nl=1)}')
+        result1 = {
+            'params': ['param1'],
+            'top_k': 1,
+        }
+        result2 = {
+            'params': ['param1', 'param2'],
+            'top_k': 1,
+        }
+        result3 = {
+            'params': ['a.special.alias', 'param2', 'two.special.alias', 'and.the.second.one'],
+            'top_k': 3,
+        }
+    """
+    new_grouptop = {
+        'params': [],
+        'top_k': 1,
+    }
+    if isinstance(grouptop, dict):
+        # Given as a full dictionary
+        new_grouptop.update(grouptop)
+    else:
+        # Given as a str | List[str]
+        new_grouptop['params'] = grouptop
+
+    # Now in a dictionary form, coerce params to always be a List[str]
+    if isinstance(new_grouptop['params'], str):
+        # Coerce params to always be a list
+        new_grouptop['params'] = [new_grouptop['params']]
+
+    # Resolve parameter aliases
+    if aliases:
+        resolved = []
+        for param in new_grouptop["params"]:
+            param = aliases.get(param, param)
+            if isinstance(param, str):
+                param = [param]
+            resolved.extend(param)
+        new_grouptop['params'] = resolved
+    return new_grouptop
 
 
 __cli__ = AggregateEvluationConfig

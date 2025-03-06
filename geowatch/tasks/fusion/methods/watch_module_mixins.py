@@ -839,9 +839,9 @@ class CoerceMixins:
             else:
                 raise TypeError('Unexpected saliency weights type')
         except Exception as ex:
-            from geowatch.utils import util_exception
+            from kwutil.util_exception import add_exception_note
             notes = f'saliency_weights : {type(saliency_weights)} = {saliency_weights!r}'
-            new_ex = util_exception.add_exception_note(ex, notes)
+            new_ex = add_exception_note(ex, notes)
             raise new_ex
 
         print(f'saliency_weights_ = {ub.urepr(saliency_weights_, nl=1)}')

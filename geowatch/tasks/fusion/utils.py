@@ -3,8 +3,10 @@ import torch
 import os
 import math
 import ubelt as ub
-import kwimage
 import warnings
+
+# backwards compatibility
+from geowatch.tasks.fusion.datamodules.util_positional_encoding import ordinal_position_encoding # NOQA
 
 millnames = ['', ' K', ' M', ' B', ' T']
 
@@ -202,7 +204,6 @@ def _try_fixed_package_import(package_path):
                 self._add_extern(extern_module)
 
             if len(self.errors):
-                import ubelt as ub
                 print('self.errors = {}'.format(ub.urepr(self.errors, nl=1)))
 
             for fname in self.zip_reader.get_all_records():
@@ -296,40 +297,6 @@ class DimensionDropout(nn.Module):
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
 
         return x[index]
-
-
-def ordinal_position_encoding(num_items, feat_size, method='sin', device='cpu'):
-    """
-    A positional encoding that represents ordinal
-
-    Args:
-        num_items (int): number of dimensions to be encoded (
-            e.g. this is a spatial or temporal index)
-        feat_size (int): this is the number of dimensions in the positional
-             encoding generated for each dimension / item
-
-    Example:
-        >>> # Use 5 feature dimensions to encode 3 timesteps
-        >>> from geowatch.tasks.fusion.utils import *  # NOQA
-        >>> num_timesteps = num_items = 3
-        >>> feat_size = 5
-        >>> encoding = ordinal_position_encoding(num_items, feat_size)
-    """
-    assert method == 'sin'
-    sf = 10000
-    parts = []
-    base = torch.arange(num_items, device=device)
-    for idx in range(feat_size):
-        exponent = (idx / feat_size)
-        modulator = (1 / (sf ** exponent))
-        theta = base * modulator
-        if idx % 2 == 0:
-            part = torch.sin(theta)
-        else:
-            part = torch.cos(theta)
-        parts.append(part)
-    encoding = torch.stack(parts, dim=1)
-    return encoding
 
 
 class SinePositionalEncoding(nn.Module):
@@ -428,37 +395,3 @@ def model_json(model, max_depth=float('inf'), depth=0):
             }
             info['children'] = children
     return info
-
-
-@ub.memoize
-def _memo_legend(label_to_color):
-    import kwplot
-    legend_img = kwplot.make_legend_img(label_to_color)
-    return legend_img
-
-
-def category_tree_ensure_color(classes):
-    """
-    Ensures that each category in a CategoryTree has a color
-
-    TODO:
-        - [ ] Add to CategoryTree
-        - [ ] TODO: better function
-        - [ ] Consolidate with ~/code/watch/geowatch/tasks/fusion/utils :: category_tree_ensure_color
-        - [ ] Consolidate with ~/code/watch/geowatch/utils/kwcoco_extensions :: category_category_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_category_tree_colors
-        - [ ] Consolidate with ~/code/watch/geowatch/heuristics.py :: ensure_heuristic_coco_colors
-
-    Example:
-        >>> import kwcoco
-        >>> classes = kwcoco.CategoryTree.demo()
-        >>> assert not any('color' in data for data in classes.graph.nodes.values())
-        >>> category_tree_ensure_color(classes)
-        >>> assert all('color' in data for data in classes.graph.nodes.values())
-    """
-    backup_colors = iter(kwimage.Color.distinct(len(classes)))
-    for node in classes.graph.nodes:
-        color = classes.graph.nodes[node].get('color', None)
-        if color is None:
-            color = next(backup_colors)
-            classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()

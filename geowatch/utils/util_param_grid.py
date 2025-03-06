@@ -1,12 +1,18 @@
 """
 Handles github actions like parameter matrices
+
+The main function of interest here is :func:`expand_param_grid` and
+its underlying workhorse: :func:`extended_github_action_matrix`.
 """
 import ubelt as ub
 
 
 def handle_yaml_grid(default, auto, arg):
     """
+    Unused
+
     Example:
+        >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> default = {}
         >>> auto = {}
         >>> arg = ub.codeblock(
@@ -16,7 +22,8 @@ def handle_yaml_grid(default, auto, arg):
         >>>     include:
         >>>         - {'foo': 'buz', 'bug': 'boop'}
         >>>     ''')
-        >>> handle_yaml_grid(default, auto, arg)
+        >>> grid = handle_yaml_grid(default, auto, arg)
+        >>> print(f'grid = {ub.urepr(grid, nl=1)}')
 
         >>> default = {'baz': [1, 2, 3]}
         >>> arg = '''
@@ -128,6 +135,7 @@ def prevalidate_param_grid(arg):
     action_matrices = coerce_list_of_action_matrices(arg)
 
     # TODO: this doesn't belong in a utils folder.
+    # Do we want to inject prevalidation into this process?
     src_pathlike_keys = [
         'trk.pxl.model',
         'trk.pxl.data.test_dataset',
@@ -158,7 +166,21 @@ def expand_param_grid(arg, max_configs=None):
     Our own method for specifying many combinations. Uses the github actions
     method under the hood with our own
 
-    Ignore:
+    Args:
+        arg (str | Dict):
+            text or parsed yaml that defines the grid.
+            Handled by :func:`coerce_list_of_action_matrices`.
+
+        max_configs (int | None): if specified restrict to generating
+            at most this number of configs.
+            NOTE: may be removed in the future to reduce complexity.
+            It is easy enough to get this behavior with
+            :func:`itertools.islice`.
+
+    Yields:
+        dict : a concrete item from the grid
+
+    Example:
         >>> from geowatch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
             '''
@@ -213,7 +235,7 @@ def expand_param_grid(arg, max_configs=None):
         >>> print(ub.urepr([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
         >>> print(len(grid_items))
     """
-    prevalidate_param_grid(arg)
+    prevalidate_param_grid(arg)  # TODO: may remove prevalidate in the future
     action_matrices = coerce_list_of_action_matrices(arg)
     num_yeilded = 0
     for item in action_matrices:
@@ -243,7 +265,7 @@ def github_action_matrix(arg):
             specified at the same level of "matrix" for convinience.
 
     Yields:
-        item : a single entry in the grid.
+        dict: a single entry in the grid.
 
     References:
         https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
@@ -410,7 +432,7 @@ def extended_github_action_matrix(arg):
         arg (Dict | str): See github_action_matrix, but with new submatrices
 
     Yields:
-        item : a single entry in the grid.
+        dict: a single entry in the grid.
 
     CommandLine:
         xdoctest -m geowatch.utils.util_param_grid extended_github_action_matrix:2
@@ -423,7 +445,7 @@ def extended_github_action_matrix(arg):
                    matrix:
                      fruit: [apple, pear]
                      animal: [cat, dog]
-                     submatrix:
+                     submatrices1:
                        - color: green
                        - color: pink
                          animal: cat
@@ -579,6 +601,7 @@ def extended_github_action_matrix(arg):
                 final.append(item)
         return final
 
+    # HACK:
     # Special submatrices for more cartesian products, it would be good to come
     # up with a solution that does not require hard coded and a fixed number of
     # variables.
@@ -656,15 +679,6 @@ def extended_github_action_matrix(arg):
             yield from submatrix_variants(item, submatrices_)
 
     def submatrix_variants(mat_item, submatrices_):
-        """
-        For each object in the include list, the key:value pairs in the object
-        will be added to each of the matrix combinations if none of the
-        key:value pairs overwrite any of the original matrix values. If the
-        object cannot be added to any of the matrix combinations, a new matrix
-        combination will be created instead. Note that the original matrix
-        values will not be overwritten, but added matrix values can be
-        overwritten.
-        """
         grid_item = ub.udict(mat_item)
         any_modified = False
         for submat_item in submatrices_:

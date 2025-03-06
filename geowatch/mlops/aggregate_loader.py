@@ -156,13 +156,17 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
     import safer
     import rich
     from kwutil import util_json
+    from kwutil.util_exception import add_exception_note
     fpath = ub.Path(fpath)
 
     resolved_json_fpath = fpath.parent / 'resolved_result_row_v012.json'
 
     if use_cache and resolved_json_fpath.exists():
         # Load the cached row data
-        result = json.loads(resolved_json_fpath.read_text())
+        try:
+            result = json.loads(resolved_json_fpath.read_text())
+        except Exception as ex:
+            raise add_exception_note(ex, f'Failed to read {resolved_json_fpath!r}')
     else:
         node_dpath = fpath.parent
 
@@ -170,12 +174,11 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
         # Read the requested config
         job_config_fpath = node_dpath / 'job_config.json'
         if job_config_fpath.exists():
-            job_config_text = job_config_fpath.read_text()
             try:
+                job_config_text = job_config_fpath.read_text()
                 _requested_params = json.loads(job_config_text)
-            except Exception:
-                print(f'Failed to parse json job config {job_config_fpath}')
-                raise
+            except Exception as ex:
+                raise add_exception_note(ex, f'Failed to parse json job config {job_config_fpath}')
         else:
             _requested_params = {}
 

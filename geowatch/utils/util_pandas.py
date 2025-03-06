@@ -52,6 +52,50 @@ class DataFrame(pd.DataFrame):
         self = cls(random_data, index=index, columns=columns)
         return self
 
+    @classmethod
+    def coerce(cls, data):
+        """
+        Ensures that the input is an instance of our extended DataFrame.
+
+        Pandas is generally good about input coercion via its normal
+        constructors, the purpose of this classmethod is to quickly ensure that
+        a DataFrame has all of the extended methods defined by this class
+        without incurring a copy. In this sense it is more similar to
+        :func:numpy.asarray`.
+
+        Args:
+            data (DataFrame | ndarray | Iterable | dict):
+                generally another dataframe, otherwise normal inputs that would
+                be given to the regular pandas dataframe constructor
+
+        Returns:
+            DataFrame:
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--benchmark)
+            >>> # This example demonstrates the speed difference between
+            >>> # recasting as a DataFrame versus using coerce
+            >>> from geowatch.utils.util_pandas import DataFrame
+            >>> data = DataFrame.random(rows=10_000)
+            >>> import timerit
+            >>> ti = timerit.Timerit(100, bestof=10, verbose=2)
+            >>> for timer in ti.reset('constructor'):
+            >>>     with timer:
+            >>>         DataFrame(data)
+            >>> for timer in ti.reset('coerce'):
+            >>>     with timer:
+            >>>         DataFrame.coerce(data)
+            >>> # xdoctest: +IGNORE_WANT
+            Timed constructor for: 100 loops, best of 10
+                time per loop: best=2.594 µs, mean=2.783 ± 0.1 µs
+            Timed coerce for: 100 loops, best of 10
+                time per loop: best=246.000 ns, mean=283.000 ± 32.4 ns
+        """
+        if isinstance(data, cls):
+            return data
+        else:
+            return cls(data)
+
     def safe_drop(self, labels, axis=0):
         """
         Like :func:`self.drop`, but does not error if the specified labels do
@@ -287,6 +331,63 @@ class DataFrame(pd.DataFrame):
         methods to this class?)
         """
         return DotDictDataFrame(self)
+
+    def argextrema(self, columns, objective='maximize', k=1):
+        """
+        Finds the top K indexes (locs) for given columns.
+
+        Args:
+            columns (str | List[str]) : columns to find extrema of.
+                If multiple are given, then secondary columns are used as
+                tiebreakers.
+
+            objective (str | List[str]) :
+                Either maximize or minimize (max and min are also accepted).
+                If given as a list, it specifies the criteria for each column,
+                which allows for a mix of maximization and minimization.
+
+            k : number of top entries
+
+        Returns:
+            List: indexes into subset of data that are in the top k for any of the
+                requested columns.
+
+        Example:
+            >>> from geowatch.utils.util_pandas import DataFrame
+            >>> # If all suffixes are unique, then they are used.
+            >>> self = DataFrame.random(columns=['id', 'f1', 'loss'], rows=10)
+            >>> self.loc[3, 'f1'] = 1.0
+            >>> self.loc[4, 'f1'] = 1.0
+            >>> self.loc[5, 'f1'] = 1.0
+            >>> self.loc[3, 'loss'] = 0.2
+            >>> self.loc[4, 'loss'] = 0.3
+            >>> self.loc[5, 'loss'] = 0.1
+            >>> columns = ['f1', 'loss']
+            >>> k = 4
+            >>> top_indexes = self.argextrema(columns=columns, k=k, objective=['max', 'min'])
+            >>> assert len(top_indexes) == k
+            >>> print(self.loc[top_indexes])
+        """
+        ascending = None
+        def rectify_ascending(objective_str):
+            if objective_str in {'max', 'maximize'}:
+                ascending = False
+            elif objective_str in {'min', 'minimize'}:
+                ascending = True
+            else:
+                raise KeyError(objective)
+            return ascending
+
+        if isinstance(objective, str):
+            ascending = rectify_ascending(objective)
+        else:
+            ascending = [rectify_ascending(o) for o in objective]
+
+        ranked_data = self.sort_values(columns, ascending=ascending)
+        if isinstance(k, float) and math.isinf(k):
+            k = None
+        top_locs = ranked_data.index[0:k]
+        return top_locs
 
 
 def pandas_reorder_columns(df, columns):

@@ -56,7 +56,7 @@ class CocoGeoVideo(AliasedDictProxy, ub.NiceRepr):
 
     @property
     def wld_crs(self):
-        from geowatch.utils import util_gis
+        from kwgis.utils import util_gis
         wld_crs = util_gis.coerce_crs(self._proxy['wld_crs_info'])
         return wld_crs
 

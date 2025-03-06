@@ -37,6 +37,18 @@ WITH_COLD=${WITH_COLD:=0}
 WITH_MATERIALS=${WITH_MATERIALS:=0}
 WITH_COMPAT=${WITH_COMPAT:=0}
 WITH_APT_ENSURE=${WITH_APT_ENSURE:="auto"}
+USE_UV=${USE_UV:=1}
+
+
+if [[ "$USE_UV" == "1" ]]; then
+    PIP_COMMAND="uv pip"
+    PIP_INSTALL_PREFER_BINARY_COMMAND="$PIP_COMMAND install"
+else
+    PIP_COMMAND="pip"
+    PIP_INSTALL_PREFER_BINARY_COMMAND="$PIP_COMMAND install --prefer-binary"
+fi
+
+PIP_INSTALL_COMMAND="$PIP_COMMAND install"
 
 
 
@@ -185,7 +197,7 @@ install_pytorch(){
         https://pytorch.org/
     '
 
-    pip install ubelt parse packaging
+    $PIP_INSTALL_COMMAND ubelt parse packaging
 
     # Find the appropriate torch version for the devices available on this
     # machine
@@ -234,16 +246,16 @@ install_pytorch(){
     ")
     echo "TARGET_TORCH_DEVICE = $TARGET_TORCH_DEVICE"
     if [[ "$TARGET_TORCH_DEVICE" == "cpu" ]]; then
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        $PIP_INSTALL_COMMAND torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
     elif [[ "$TARGET_TORCH_DEVICE" == "11.6" ]]; then
         # For CUDA 11.6, the last supported version of torch was 1.13.1
-        pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
+        $PIP_INSTALL_COMMAND torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
     elif [[ "$TARGET_TORCH_DEVICE" == "11.8" ]]; then
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+        $PIP_INSTALL_COMMAND torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
     elif [[ "$TARGET_TORCH_DEVICE" == "12.1" ]]; then
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        $PIP_INSTALL_COMMAND torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
     elif [[ "$TARGET_TORCH_DEVICE" == "12.4" ]]; then
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+        $PIP_INSTALL_COMMAND torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
     fi
 }
 
@@ -288,16 +300,16 @@ fix_opencv_conflicts(){
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            python -m pip uninstall opencv-python opencv-python-headless -y
-            #python -m pip install opencv-python-headless
-            python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
+            $PIP_COMMAND uninstall opencv-python opencv-python-headless -y
+            #$PIP_INSTALL_COMMAND opencv-python-headless
+            $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            python -m pip uninstall opencv-python -y
+            $PIP_COMMAND uninstall opencv-python -y
         fi
-        #python -m pip install opencv-python-headless
-        python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
+        #$PIP_INSTALL_COMMAND opencv-python-headless
+        $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
     fi
 }
 
@@ -314,7 +326,7 @@ torch_on_3090(){
     # if you are updating an existing checkout
     git submodule sync
     git submodule update --init --recursive --jobs 0
-    python -m pip install . -v
+    $PIP_COMMAND install . -v
 }
 
 
@@ -339,7 +351,7 @@ check_metrics_framework(){
 
         To enable evaluating your results, run this command:
 
-        pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
+        $PIP_COMMAND git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
 
         For more information, see:
         https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
@@ -431,7 +443,11 @@ main(){
         print('[' + ','.join(extras) + ']')
         ")
 
-    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
+    if [[ "$USE_UV" == "1" ]]; then
+        pip install uv
+    fi
+
+    $PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
 
     # Note: on aarch64 / arm64, we need to install gdal before we can install
     # rasterio because it does not ship with arm64 binaries.
@@ -455,12 +471,12 @@ main(){
     fi
 
     # Install the geowatch module in development mode
-    python -m pip install --prefer-binary -e ".$EXTRAS"
+    $PIP_INSTALL_PREFER_BINARY_COMMAND -e ".$EXTRAS"
 
     # Post geowatch install requirements
     python -m geowatch finish_install "--strict=$WATCH_STRICT"
 
-    # python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
+    # $PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/gdal.txt
     #if [[ "$WITH_COLD" == "1" ]]; then
     #    # HACK FOR COLD ISSUE
     #    #curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -469,11 +485,11 @@ main(){
     #    #curl https://ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew > pycold-311.whl
     #    #curl ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew -o pycold-311.whl
     #    #pip install "pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-    #    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/cold.txt
+    #    $PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/cold.txt
     #fi
 
     if [[ "$WITH_AWS" == "1" ]]; then
-        python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
+        $PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/aws.txt
     fi
 
     if [[ "$WITH_MMCV" == "1" ]]; then
@@ -518,11 +534,11 @@ main(){
         ")
         echo "MMCV_INSTALL_COMMAND = $MMCV_INSTALL_COMMAND"
         $MMCV_INSTALL_COMMAND
-        #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
+        #$PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/mmcv.txt
     fi
 
     if [[ "$WITH_TENSORFLOW" == "1" ]]; then
-        python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/tensorflow.txt
+        $PIP_INSTALL_PREFER_BINARY_COMMAND -r "$REQUIREMENTS_DPATH"/tensorflow.txt
     fi
 
     fix_opencv_conflicts

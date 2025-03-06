@@ -174,7 +174,7 @@ def main(cmdline=1, **kwargs):
     rich.print('config = ' + ub.urepr(config, nl=1))
 
     from geowatch.geoannots import geomodels
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import kwcoco
     from geowatch.cli import reproject_annotations
     from kwcoco.util import util_json

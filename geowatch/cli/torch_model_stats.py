@@ -37,11 +37,13 @@ def main(cmdline=False, **kwargs):
 
     """
     config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import geowatch
     import rich
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    from rich.markup import escape
+    rich.print('config = {}'.format(escape(ub.urepr(config, nl=1))))
     package_paths = config['src']
 
+    import geowatch
+    import warnings
     if not ub.iterable(package_paths):
         package_paths = [package_paths]
 
@@ -56,17 +58,108 @@ def main(cmdline=False, **kwargs):
         print(f'package_fpath={package_fpath}')
 
         stem_stats = config['stem_stats']
-        row = torch_model_stats(package_fpath, stem_stats=stem_stats, dvc_dpath=dvc_dpath)
-        model_stats = row.get('model_stats', None)
-        fit_config = row.pop('fit_config', None)
-        config_cli_yaml = row.pop('config_cli_yaml', None)
-        if config.hparams:
-            rich.print('fit_config = {}'.format(ub.urepr(fit_config, nl=1)))
-            rich.print('config_cli_yaml = {}'.format(ub.urepr(config_cli_yaml, nl=2)))
-        rich.print('model_stats = {}'.format(ub.urepr(model_stats, nl=2, sort=0, precision=2)))
-        package_rows.append(row)
+        try:
+            row = torch_model_stats(package_fpath, stem_stats=stem_stats, dvc_dpath=dvc_dpath)
+        except RuntimeError as pkg_ex:
+            print('Reading as a package failed, attempting to read as a checkpoint')
+            checkpoint_fpath = package_fpath
+            try:
+                checkpoint_stats = torch_checkpoint_stats(checkpoint_fpath)
+            except Exception as ckpt_ex:
+                warnings.warn(f'Unable to read input as a checkpoint due to: {ckpt_ex}.')
+                raise pkg_ex
+            else:
+                warnings.warn(f'Unable to read input as a package due to: {pkg_ex}. Interpreting as a checkpoint instead')
+
+            rich.print('checkpoint_stats = {}'.format(ub.urepr(checkpoint_stats, nl=2, sort=0, precision=2)))
+        else:
+            model_stats = row.get('model_stats', None)
+            fit_config = row.pop('fit_config', None)
+            config_cli_yaml = row.pop('config_cli_yaml', None)
+            if config.hparams:
+                rich.print('fit_config = {}'.format(ub.urepr(fit_config, nl=1)))
+                rich.print('config_cli_yaml = {}'.format(ub.urepr(config_cli_yaml, nl=2)))
+            rich.print('model_stats = {}'.format(ub.urepr(model_stats, nl=2, sort=0, precision=2)))
+            package_rows.append(row)
 
     print('package_rows = {}'.format(ub.urepr(package_rows, nl=2, sort=0)))
+
+
+def torch_checkpoint_stats(checkpoint_fpath):
+    """
+    A fallback set of statistics we can make for checkpoints only.
+
+    Summarizes a PyTorch checkpoint by extracting useful metadata about the model's state_dict
+    and optimizer states.
+
+    Args:
+        checkpoint_path (str | PathLike): Path to the checkpoint file.
+
+    Returns:
+        dict: Summary statistics of the checkpoint.
+    """
+    import torch
+    data = torch.load(checkpoint_fpath)
+    top_level_keys = list(data.keys())
+    print(f'top_level_keys = {ub.urepr(top_level_keys, nl=1)}')
+
+    # TODO: Given a checkpoint path, we may be able to read more information
+    # about it if we can find the corresponding haprams.yaml or
+    # train_config.yaml
+
+    nested_keys = {
+        'state_dict',
+        'optimizer_states',
+        'loops'
+    }
+    nested = ub.udict.intersection(data, nested_keys)
+    non_nested = ub.udict.difference(data, nested_keys)
+    stats = {
+        'path': checkpoint_fpath,
+        **non_nested
+    }
+
+    if 'optimizer_states' in nested:
+        optimizer_states_stats = {}
+        optimizer_states = nested['optimizer_states']
+        optimizer_states_stats['num_optimizer_states'] = len(optimizer_states)
+        opt_stat_list = []
+        for opt_state in optimizer_states:
+            opt_state_stats = {}
+            # TODO: Can we do more here?
+            opt_state_stats['num_param_groups'] = len(opt_state['param_groups'])
+            opt_stat_list.append(opt_state_stats)
+        optimizer_states_stats['total_num_param_groups'] = sum(r['num_param_groups'] for r in opt_stat_list)
+    else:
+        optimizer_states_stats = None
+
+    if 'state_dict' in nested:
+        state_dict_stats = {}
+        state_dict = nested['state_dict']
+        len(state_dict)
+        # state_shape = ub.udict.map_values(state_dict, lambda x: x.shape)
+        state_numel = ub.udict.map_values(state_dict, lambda x: x.numel())
+        total_params = sum(state_numel.values())
+        # TODO: Can we use the optimizer to determine the trainable params?
+        state_dict_stats['num_tensors'] = len(state_dict)
+        state_dict_stats['total_params'] = total_params
+    else:
+        state_dict_stats = None
+
+    if 'loops' in nested:
+        loop_stats = {}
+        # TODO: extract appopriate stats
+        loops = nested['loops']
+    else:
+        loops = None
+        loop_stats = None
+    # Just use the loops
+    loop_stats = loops
+
+    stats['loops'] = loop_stats
+    stats['state_dict'] = state_dict_stats
+    stats['optimizer_states_stats'] = optimizer_states_stats
+    return stats
 
 
 def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
@@ -281,6 +374,15 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         row['input_channels'] = input_channels
 
     return row
+
+
+def fallback(fpath):
+    import zipfile
+    zfile = zipfile.ZipFile(fpath)
+    for internal_path in zfile.namelist():
+        if internal_path.endswith('.yaml'):
+            data = zfile.read(internal_path)
+            print(data.decode('utf8'))
 
 
 __cli__ = TorchModelStatsConfig

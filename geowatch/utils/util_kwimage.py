@@ -1348,7 +1348,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
     import numpy as np
     import geopandas as gpd
     import ubelt as ub
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     import networkx as nx
 
     if len(polygons) == 0:

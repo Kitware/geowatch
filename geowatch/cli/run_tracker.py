@@ -900,7 +900,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
         List[Tuple[str, Dict]]
            Each tuple is a (region_id, site_summary) pair
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.geoannots import geomodels
     import jsonschema
 
@@ -974,7 +974,7 @@ def assign_sites_to_videos(coco_dset, site_summaries, viz_out_dir=None):
     Compute assignments between which sites summaries should be projected onto
     which videos for scoring.
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.geoannots.geomodels import RegionModel
     import rich
     from geowatch.utils import kwcoco_extensions
@@ -1187,7 +1187,7 @@ def main(argv=None, **kwargs):
         >>> from geowatch.cli.run_tracker import *  # NOQA
         >>> from geowatch.cli.run_tracker import main
         >>> from geowatch.demo import smart_kwcoco_demodata
-        >>> from geowatch.utils import util_gis
+        >>> from kwgis.utils import util_gis
         >>> import json
         >>> import kwcoco
         >>> import ubelt as ub
@@ -1287,7 +1287,7 @@ def main(argv=None, **kwargs):
         >>> argv = []
         >>> # Test case for no results
         >>> main(argv=argv, **kwargs)
-        >>> from geowatch.utils import util_gis
+        >>> from kwgis.utils import util_gis
         >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) == 0
         >>> # Try to get results here
         >>> track_kwargs = json.dumps({
@@ -1372,7 +1372,7 @@ def main(argv=None, **kwargs):
     from kwutil.util_yaml import Yaml
     from geowatch.geoannots import geomodels
     from geowatch.utils import process_context
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -1672,7 +1672,7 @@ def main(argv=None, **kwargs):
 def coco_video_gdf(coco_dset):
     # TODO: rectify with covered_video_geo_regions
     import pandas as pd
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from geowatch.geoannots.geococo_objects import CocoGeoVideo
     crs84 = util_gis.get_crs84()
     crs84_parts = []
@@ -1689,7 +1689,7 @@ def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
     """
     Assign each video to a region (usually for BAS)
     """
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
     video_region_assignments = []
     for idx1, idxs2 in idx1_to_idxs2.items():
@@ -1738,7 +1738,7 @@ def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
 def coco_remove_out_of_bound_tracks(coco_dset, video_region_assignments):
     # Remove any tracks that are outside of region bounds.
     # First find which regions correspond to which videos.
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     from shapely.geometry import shape
     import rich
     import geopandas as gpd

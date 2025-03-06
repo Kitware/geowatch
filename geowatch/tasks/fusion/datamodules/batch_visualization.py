@@ -1099,3 +1099,10 @@ def colorize_weights(weights):
         rs, cs = np.where(is_gt_one)
         canvas[rs, cs, :] = colors01
     return canvas
+
+
+@ub.memoize
+def _memo_legend(label_to_color):
+    import kwplot
+    legend_img = kwplot.make_legend_img(label_to_color)
+    return legend_img

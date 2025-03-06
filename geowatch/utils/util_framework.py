@@ -768,7 +768,7 @@ def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
     """
     # Validate and fix all outputs
     from geowatch.geoannots import geomodels
-    from geowatch.utils import util_gis
+    from kwgis.utils import util_gis
     region_infos = list(util_gis.coerce_geojson_datas(region_dpath, format='json'))
     site_infos = list(util_gis.coerce_geojson_datas(site_dpath, format='json'))
 
