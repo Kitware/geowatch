@@ -1633,6 +1633,19 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         return agg
 
     def _build_metrics_column_preferences(agg):
+        """
+        Builds a table indexed by column name for the metrics columns.
+
+        The table attribute is ``_metric_info``. Each value should have keys:
+
+            name
+            suffix
+            objective
+            primary
+            display
+            aggregator
+
+        """
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         import warnings
         # TODO: need to be able to specify what the objective is for each
@@ -1640,7 +1653,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         metrics_prefix = f'metrics.{agg.node_type}'
         agg._metric_info = {}
 
-        node = agg.dag.nodes[agg.node_type]
+        if agg.dag is not None:
+            node = agg.dag.nodes[agg.node_type]
+        else:
+            node = None
         # Build a lookup table about how different metrics are interpreted
         try:
             user_metric_info = node._default_metrics2()
@@ -1695,12 +1711,14 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             if c not in agg._metric_info:
                 agg._metric_info[c] = info
 
-        for c in agg.primary_metric_cols:
-            info = agg._metric_info[c]
+        for info in agg._metric_info.values():
             if 'objective' not in info:
                 # Assumption
                 warnings.warn(f'Assuming {info} has objective=maximize')
                 info['objective'] = 'maximize'
+
+        for c in agg.primary_metric_cols:
+            info = agg._metric_info[c]
             if not info.get('primary', False):
                 info['primary'] = True
 
@@ -1708,6 +1726,14 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             info = agg._metric_info[c]
             if not info.get('display', False):
                 info['display'] = True
+
+        # Normalize key names
+        for info in agg._metric_info.values():
+            objective = info['objective']
+            if objective in {'max'}:
+                info['objective'] = 'maximize'
+            if objective in {'min'}:
+                info['objective'] = 'minimize'
 
         print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
 
