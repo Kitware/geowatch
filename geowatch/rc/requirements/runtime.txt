@@ -170,7 +170,7 @@ lxml>=4.2.4     ; python_version < '3.8'  and python_version >= '3.7'     # Pyth
 
 tempenv>=0.2.0
 pystac_client>=0.5.1
-scriptconfig>=0.7.10
+scriptconfig>=0.8.2
 
 pygtrie>=2.5.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 pygtrie>=2.5.0     ; python_version < '3.13' and python_version >= '3.6'     # Python 3.6
