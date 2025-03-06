@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Add `DataFrame.argextrema`
 * Add suboptimize to `Aggregator.report_best`
+* Added experimental way to specify metric metadata in a mlop ProcessNode via the `_default_metrics2` method, which will likely change in the future.
 
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 

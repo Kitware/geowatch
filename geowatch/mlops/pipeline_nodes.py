@@ -874,6 +874,53 @@ class ProcessNode(Node):
     CommandLine:
         xdoctest -m geowatch.mlops.pipeline_nodes ProcessNode
 
+    Notes:
+        When a ProcessNode is used for an evaluation node, it can / should be
+        extended with the following methods:
+
+            * load_result - for evaluation nodes
+                In your pipeline class you a method ``def load_result(self,
+                node_dpath):`` which returns a flat dot-dictionary of params and
+                results from the node.
+
+            * _default_metrics - returns Tuple of primary and display metric
+                suffixes for the node that will be interpreted as the metrics.
+                Note: this is likely to change so the user can specify if
+                metrics need to be minimized / maximized.
+
+            * _default_metrics2 - experimental new way of specifying metric info.
+               Should be a list of dictionaries with keys
+
+                   suffix (str): the name of the metric
+
+                   objective (Optional[str]):
+                       minimize or maximize (defaults to maximize)
+
+                   primary (Optional[bool]):
+                       if the metric is primary (defaults to False, unless no
+                       other metric is primary in which case the first one
+                       defaults to True).
+
+                   display (Optional[bool]):
+                       show the column in the stdout table. Defaults to False.
+                       Note: any column marked as primary is also displayed.
+
+                   aggregator (Optional[bool]):
+                       how to aggregate this metric when computing macro averages.
+                       Can be "mean", "gmean", "sum", "max", "min", or "ignore".
+                       Defaults to "mean".
+
+            * default_vantage_points - should return a List[Dict] with
+                  metric1 and metric2, used for inspecting relationships
+                  between metrics.
+
+        These methods are currently used in aggregate_loader and aggregate, but
+        they need to be more clearly defined here. Currently they are hacked in
+        with hasattr, so we can't define them as abstract methods yet, but in
+        the future we will refactor to make it more clear that these methods
+        should be implemented for evaluation nodes (i.e. nodes that produce
+        metric results).
+
     Example:
         >>> from geowatch.mlops.pipeline_nodes import *  # NOQA
         >>> from geowatch.mlops.pipeline_nodes import _classvar_init

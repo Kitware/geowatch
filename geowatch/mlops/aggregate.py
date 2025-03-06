@@ -104,7 +104,7 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
-    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance')
+    primary_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order of importance used to sort the output')
 
     display_metric_cols = Value('auto', help='Either auto, or a YAML list of metrics in order for display')
 
@@ -609,7 +609,6 @@ class AggregatorAnalysisMixin:
         resolved_params = util_pandas.DataFrame(agg.resolved_params)
         if metrics_of_interest is None:
             metrics_of_interest = agg.primary_metric_cols
-            # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
 
         metrics = agg.metrics[metrics_of_interest]
         resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
@@ -701,6 +700,11 @@ class AggregatorAnalysisMixin:
         if isinstance(top_k, float) and math.isinf(top_k):
             top_k = None
 
+        primary_metric_objectives = [
+            agg._metric_info[c]['objective'] for c in
+            agg.primary_metric_cols
+        ]
+
         if reference_region:
             # In every region group, restrict to only the top values for the
             # reference region. The idea is to make things comparable to the
@@ -731,7 +735,7 @@ class AggregatorAnalysisMixin:
                 for subkey, subgroup in group.groupby(grouptop['params']):
                     locs = util_pandas.DataFrame.argextrema(
                         subgroup, agg.primary_metric_cols,
-                        objective='maximize', k=grouptop['top_k'])
+                        objective=primary_metric_objectives, k=grouptop['top_k'])
                     sublocs.extend(locs)
                 group_to_rank = group.loc[sublocs]
                 if verbose > 3:
@@ -740,11 +744,9 @@ class AggregatorAnalysisMixin:
                 group_to_rank = group
 
             try:
-                # FIXME: need to know if the metrics should be minimized or
-                # maximized. We cant just assume maximized.
                 top_locs = util_pandas.DataFrame.argextrema(
                     group_to_rank, agg.primary_metric_cols,
-                    objective='maximize', k=top_k)
+                    objective=primary_metric_objectives, k=top_k)
             except Exception:
                 print("FIXME: Something when wrong when sorting the reference region")
                 raise
@@ -802,17 +804,15 @@ class AggregatorAnalysisMixin:
                     for subkey, subgroup in group.groupby(grouptop['params']):
                         locs = util_pandas.DataFrame.argextrema(
                             subgroup, _agg.primary_metric_cols,
-                            objective='maximize', k=grouptop['top_k'])
+                            objective=primary_metric_objectives, k=grouptop['top_k'])
                         sublocs.extend(locs)
                     group_to_rank = group.loc[sublocs]
                 else:
                     group_to_rank = group
 
-                # FIXME: need to know if the metrics should be minimized or
-                # maximized.  We cant just assume maximized.
                 ranked_locs = util_pandas.DataFrame.argextrema(
                     group_to_rank, _agg.primary_metric_cols,
-                    objective='maximize', k=top_k)
+                    objective=primary_metric_objectives, k=top_k)
             else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)
@@ -1559,7 +1559,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         Returns:
             Self: returns self for method chaining
         """
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
         from geowatch.utils import util_pandas
         agg.__dict__.update(**agg.config)
 
@@ -1591,29 +1590,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         if agg.node_type is None:
             agg.node_type = agg.table['node'].iloc[0]
 
-        metrics_prefix = f'metrics.{agg.node_type}'
-        # params_prefix = f'params.{agg.node_type}'
-
-        # TODO: need to be able to specify what the objective is for each
-        # metric. Either minimize or maximize.
-        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            try:
-                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
-            except Exception:
-                node = agg.dag.nodes[agg.node_type]
-                if hasattr(node, '_default_metrics'):
-                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
-                    # should we prevent double prefixes?
-                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
-                else:
-                    # fallback to something
-                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
-                    _primary_metrics = _display_metrics[0:1]
-                if agg.primary_metric_cols == 'auto':
-                    agg.primary_metric_cols = _primary_metrics
-                if agg.display_metric_cols == 'auto':
-                    agg.display_metric_cols = _display_metrics
+        # Construct primary / display model columns and metric column info lut
+        agg._build_metrics_column_preferences()
 
         # FIXME: HARD CODED from SMART
         # TODO: add mechanism where nodes can tag their parameters with these
@@ -1653,6 +1631,85 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             agg.region_to_tables[region_id] = agg.table.loc[idx_group.index]
         agg.macro_compatible = agg.find_macro_comparable()
         return agg
+
+    def _build_metrics_column_preferences(agg):
+        from geowatch.mlops.smart_global_helper import SMART_HELPER
+        import warnings
+        # TODO: need to be able to specify what the objective is for each
+        # metric. Either minimize or maximize.
+        metrics_prefix = f'metrics.{agg.node_type}'
+        agg._metric_info = {}
+
+        node = agg.dag.nodes[agg.node_type]
+        # Build a lookup table about how different metrics are interpreted
+        try:
+            user_metric_info = node._default_metrics2()
+        except (AttributeError, NotImplementedError):
+            print(f'User did not specify _default_metrics2 for {node}')
+        else:
+            for info in user_metric_info:
+                suffix = info['suffix']
+                name = f'{metrics_prefix}.{suffix}'
+                agg._metric_info[name] = info.copy()
+                agg._metric_info[name]['name'] = name
+
+        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
+            if agg._metric_info:
+                # If the metrics info was specified, then dont use the old _default_metrics
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
+                    if len(agg.primary_metric_cols) == 0:
+                        warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
+                        agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
+                    agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+            else:
+                # TODO: deprecate the old _default_metrics stuff entirely
+                try:
+                    # TODO: deprecate SMART-stuff
+                    _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+                except Exception:
+                    if hasattr(node, '_default_metrics'):
+                        _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                        # should we prevent double prefixes?
+                        _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                        _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                    else:
+                        # fallback to something
+                        _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                        _primary_metrics = _display_metrics[0:1]
+                    if agg.primary_metric_cols == 'auto':
+                        agg.primary_metric_cols = _primary_metrics
+                    if agg.display_metric_cols == 'auto':
+                        agg.display_metric_cols = _display_metrics
+
+        # If specified primary metrics are not in the info table, use
+        # assumptions
+        for c in ub.flatten([agg.primary_metric_cols, agg.display_metric_cols]):
+            info = agg._metric_info.get(c, {})
+            if 'suffix' not in info:
+                info['suffix'] = c.split('.')[-1]
+            if 'name' not in info:
+                info['name'] = c
+            if c not in agg._metric_info:
+                agg._metric_info[c] = info
+
+        for c in agg.primary_metric_cols:
+            info = agg._metric_info[c]
+            if 'objective' not in info:
+                # Assumption
+                warnings.warn(f'Assuming {info} has objective=maximize')
+                info['objective'] = 'maximize'
+            if not info.get('primary', False):
+                info['primary'] = True
+
+        for c in agg.display_metric_cols:
+            info = agg._metric_info[c]
+            if not info.get('display', False):
+                info['display'] = True
+
+        print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
 
     def __nice__(self):
         return f'{self.node_type}, n={len(self)}'
@@ -2099,6 +2156,22 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         # FIXME: SMART-specific
         ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
+
+        # NEW: this is a more general way to handle definition of aggregators
+        # This code can be cleaned up considerably
+        _hacked_col_types = {
+            'mean': average_cols,
+            'sum': sum_cols,
+            'ignore': ignore_cols,
+            'min': start_time_cols,
+            'max': stop_time_cols,
+        }
+        for metric_info in agg._metric_info.values():
+            column_name = metric_info['name']
+            aggregator = metric_info.get('aggregator', 'mean')
+            col_type = _hacked_col_types[aggregator]
+            if column_name not in col_type:
+                col_type.append(column_name)
 
         average_cols = agg.metrics.columns.intersection(average_cols)
         other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(average_cols)
