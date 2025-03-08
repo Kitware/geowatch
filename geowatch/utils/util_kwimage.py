@@ -1272,7 +1272,8 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
 
 
 def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
-                                    merge_thresh=0.001, max_iters=100):
+                                    merge_thresh=0.001, max_iters=100,
+                                    verbose=1):
     """
     Given a set of polygons we want to find a small set of boxes that
     completely cover all of those polygons.
@@ -1436,14 +1437,18 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
         if num_old == num_new:
             residual = (old_candidate_bbs.data - candidate_bbs.data).max()
             if residual > 0:
-                print('improving residual = {}'.format(ub.urepr(residual, nl=1)))
+                if verbose:
+                    print('improving residual = {}'.format(ub.urepr(residual, nl=1)))
             else:
-                print('converged')
+                if verbose:
+                    print('converged')
                 break
         else:
-            print(f'improving: {num_old} -> {num_new}')
+            if verbose:
+                print(f'improving: {num_old} -> {num_new}')
     else:
-        print('did not converge')
+        if verbose:
+            print('did not converge')
     keep_bbs = candidate_bbs
     overlap_idxs = new_cand_overlaps
 
