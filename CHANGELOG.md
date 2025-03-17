@@ -6,6 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.20.0 - Unreleased
 
+### Changed
+* Reworked `BatchPlotter` so it has the ability to notify the pl-module if it
+  wants to draw something. This lets us skip processing on training if we
+  aren't drawing the output of the batch.
+
 
 ## Version 0.19.0 - Released 2025-03-06
 

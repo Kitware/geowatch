@@ -53,21 +53,22 @@ class BatchPlotter(pl.callbacks.Callback):
         - [ ] Doctest
 
     Example:
-        >>> #
         >>> from geowatch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
+        >>> import ubelt as ub
+        >>> import pytorch_lightning as pl
         >>> from geowatch.utils.lightning_ext import demo
         >>> from geowatch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> model = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/BatchPlotter').ensuredir()
         >>> #
-        >>> trainer = pl.Trainer(callbacks=[BatchPlotter()],
+        >>> self = BatchPlotter()
+        >>> trainer = pl.Trainer(callbacks=[self],
         >>>                      default_root_dir=default_root_dir,
         >>>                      max_epochs=3, accelerator='cpu', devices=1)
         >>> trainer.fit(model)
-        >>> import pathlib
-        >>> train_dpath = pathlib.Path(trainer.log_dir)
-        >>> list((train_dpath / 'monitor').glob('*'))
+        >>> train_dpath = ub.Path(trainer.log_dir)
+        >>> outputs = list((train_dpath / 'monitor/train/batch').glob('*'))
         >>> print('trainer.logger.log_dir = {!r}'.format(train_dpath))
 
     Ignore:
@@ -109,6 +110,7 @@ class BatchPlotter(pl.callbacks.Callback):
 
         self.draw_interval_seconds = num_seconds
         self.draw_timer = None
+        self._ready_to_draw = False
 
     def setup(self, trainer, pl_module, stage):
         self.draw_timer = ub.Timer().tic()
@@ -137,6 +139,50 @@ class BatchPlotter(pl.callbacks.Callback):
     # TODO
     # def demo(cls):
     #     utils()
+
+    def _on_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        if self._is_ready_to_draw(trainer, pl_module, batch, batch_idx):
+            # Mark state to indicate that we are ready to draw.
+            self._ready_to_draw = True
+            # If the model or batch supports it, notify it that we require
+            # drawable outputs for this batch. TODO: we need to define this
+            # protocol clearly and in a way that is easy to add to models.
+            # For now we will use a special internal method belonging to the
+            # lightning module called "_notify"
+            if hasattr(pl_module, '_notify'):
+                pl_module._notify({'draw': True}, str(id(self)))
+
+    def _on_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        try:
+            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        except Exception as e:
+            print("========")
+            print("Exception raised during batch rendering callback: _on_batch_end")
+            print("========")
+            print(traceback.format_exc())
+            print(repr(e))
+        self._ready_to_draw = False
+        if hasattr(pl_module, '_notify'):
+            pl_module._notify({'draw': False}, str(id(self)))
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_start(trainer, pl_module, batch, batch_idx, dataloader_idx=dataloader_idx)
+
+    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_start(trainer, pl_module, batch, batch_idx, dataloader_idx=dataloader_idx)
+
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_start(trainer, pl_module, batch, batch_idx, dataloader_idx=dataloader_idx)
+
+    #  New
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_end(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_end(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        self._on_batch_end(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
 
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
@@ -172,9 +218,11 @@ class BatchPlotter(pl.callbacks.Callback):
             stage = trainer.state.stage.value
             if stage == 'validate':
                 stage = 'vali'
-            canvas = datamodule.draw_batch(batch, outputs=outputs,
-                                           stage=stage,
-                                           **self.draw_batch_kwargs)
+            import xdev
+            with xdev.embed_on_exception_context:
+                canvas = datamodule.draw_batch(batch, outputs=outputs,
+                                               stage=stage,
+                                               **self.draw_batch_kwargs)
 
         canvas = np.nan_to_num(canvas)
 
@@ -206,13 +254,12 @@ class BatchPlotter(pl.callbacks.Callback):
 
         # print(f'[rank {trainer.global_rank}] write to fpath = {fpath}')
         kwimage.imwrite(fpath, canvas)
+        self.draw_timer.tic()
 
-    # def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-    # @rank_zero_only
-    def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx):
-        # print(f'IN DRAW BATCH: trainer.global_rank={trainer.global_rank}')
-        # if trainer.global_rank != 0:
-        #     return
+    def _is_ready_to_draw(self, trainer, pl_module, outputs, batch_idx):
+        """
+        Check if we are ready to draw
+        """
         do_draw = batch_idx < self.num_draw
         if self.draw_interval_seconds > 0:
             do_draw |= self.draw_timer.toc() > self.draw_interval_seconds
@@ -223,43 +270,14 @@ class BatchPlotter(pl.callbacks.Callback):
             # quickly.
             if (ub.Path(trainer.log_dir) / 'please_draw').exists():
                 do_draw = True
-        # print(f'[rank {trainer.global_rank}] do_draw={do_draw}')
-        if do_draw:
+        return do_draw
+
+    # def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    # @rank_zero_only
+    def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx):
+        # print(f'IN DRAW BATCH: trainer.global_rank={trainer.global_rank}')
+        # if trainer.global_rank != 0:
+        #     return
+        if self._ready_to_draw:
             self.draw_batch(trainer, outputs, batch, batch_idx)
-            self.draw_timer.tic()
         # print(f'FINISH DRAW BATCH: trainer.global_rank={trainer.global_rank}')
-
-    #  New
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        try:
-            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
-        except Exception as e:
-            print("========")
-            print("Exception raised during batch rendering callback: on_train_batch_end")
-            print("========")
-            print(traceback.format_exc())
-            print(repr(e))
-
-    #  Old sig
-    # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-    #     self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
-
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        try:
-            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
-        except Exception as e:
-            print("========")
-            print("Exception raised during batch rendering callback: on_validation_batch_end")
-            print("========")
-            print(traceback.format_exc())
-            print(repr(e))
-
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        try:
-            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
-        except Exception as e:
-            print("========")
-            print("Exception raised during batch rendering callback: on_test_batch_end")
-            print("========")
-            print(traceback.format_exc())
-            print(repr(e))
