@@ -560,9 +560,16 @@ def make_cli(config=None):
         # pl_ext.callbacks.TensorboardPlotter()
         ...
 
+    # NOTE: We want to be able to swap the dataloader, but jsonargparse is
+    # becoming untenable. I think we just need do a rewrite with regular
+    # lightning, I'm pretty over LightningCLI. Its too intrusive.
+
+    # from kwcoco_dataloader.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
+    datamodule_class = KWCocoVideoDataModule
+
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
-        datamodule_class=KWCocoVideoDataModule,
+        datamodule_class=datamodule_class,
         trainer_class=SmartTrainer,
         subclass_mode_model=True,
 
