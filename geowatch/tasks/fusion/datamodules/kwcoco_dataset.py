@@ -1,4 +1,14 @@
 """
+NOTE:
+    THE MAJORITY OF THIS IMPLEMENTATION HAS MOVED TO:
+    https://gitlab.kitware.com/computer-vision/kwcoco_dataloader
+
+    ON A DEV MACHINE IS MIGHT EXIST AT
+    ~/code/kwcoco_dataloader/kwcoco_dataloader/tasks/fusion/datamodules/kwcoco_dataset.py
+
+    THE FILE IN GEOWATCH WILL GRADUALLY PHASE ITS IMPLEMENATION TO POINT
+    AT THE STANDALONE VERSION.
+
 Defines :class:`KWCocoVideoDataset`, a torch Dataset for kwcoco image and video
 data.
 
