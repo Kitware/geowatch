@@ -157,8 +157,7 @@ blake3>=0.2.1  ; python_version < '3.11' # Python 3.10-
 
 more_itertools>=8.12.0
 
-pint>=0.23      ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
-pint>=0.18      ; python_version < '3.12'                                 # Python 3.11-
+pint>=0.23 
 
 girder_client>=3.1.15
 
