@@ -1384,7 +1384,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels,
-            >>>     decouple_resolution=False, global_box_weight=1)
+            >>>     decouple_resolution=False, global_box_weight=1).eval()
             >>> batch = self.demo_batch(width=64, height=64, num_timesteps=3)
             >>> item = batch[0]
             >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
