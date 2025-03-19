@@ -1034,7 +1034,8 @@ class ProcessNode(Node):
     # there is a paramter that had its meaning change, but that wasn't captured
     # in a config spec (a common thing to happen). These parameters aren't
     # relied on for the hashid, but maybe other special handling can do
-    # something interesting with them.
+    # something interesting with them. There might be other flavors of this,
+    # "dynamic params", "volitle params", "hardcoded params"
 
     algo_params : Collection = None  # algorithm parameters - impacts output
 
