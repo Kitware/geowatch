@@ -182,13 +182,14 @@ import einops
 import kwarray
 import kwcoco
 import kwimage
+import kwutil
 import ndsampler
 import numpy as np
 import os
 import pandas as pd
+import rich
 import scriptconfig as scfg
 import torch
-import rich
 import ubelt as ub
 import warnings
 
@@ -759,6 +760,12 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         Can be heterogeneous, homogeneous, or rgb. This is a performance
         parameter that allows implementation assumptions to be made.
         Experimental in 0.18.4
+        '''))
+
+    requested_tasks = scfg.Value('auto', help=ub.paragraph(
+        '''
+        If auto, uses heuristics to define what task targets are generated.
+        Otherwise, can be a YAML dict that updates the defaults.
         '''))
 
     def __post_init__(self):
@@ -3526,6 +3533,12 @@ class MiscMixin:
         Hacky method. Given the multimodal model, tell all the datasets which
         tasks they will need to generate data for. (This helps make the
         visualizations cleaner).
+
+        TODO:
+            Come up with a better protocol for a model to notify the dataloader
+            about what it wants. Always let the user override this, but maybe
+            the model can warn if the user doesn't give it all of the things it
+            thinks it will want?
         """
         if model is not None:
             assert requested_tasks is None, 'requested tasks should be none'
@@ -3854,6 +3867,12 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
 
         # TODO: better "notification of heads" specification and implementation
         # TODO: modify these names to be less ambiguous.
+        if self.config['requested_tasks'] == 'auto':
+            # for auto, just use defaults for now.
+            _task_updates = {}
+        else:
+            _task_updates = kwutil.Yaml.coerce(self.config['requested_tasks'])
+
         self.requested_tasks = {
             'change': True,  # Note: this is sequential frame change segmentation.
 
@@ -3867,6 +3886,7 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin,
             # predict-time stitching.
             'outputs': mode != 'fit',
         }
+        self.requested_tasks.update(_task_updates)
 
         # Hacks: combinable channels can be visualized as RGB images.
         # The only reason this is a hack is because of the hardcoded names
