@@ -1030,6 +1030,12 @@ class ProcessNode(Node):
 
     executable : Optional[str] = None
 
+    # TODO: maybe we want the idea of "unstable" params the user can mark if
+    # there is a paramter that had its meaning change, but that wasn't captured
+    # in a config spec (a common thing to happen). These parameters aren't
+    # relied on for the hashid, but maybe other special handling can do
+    # something interesting with them.
+
     algo_params : Collection = None  # algorithm parameters - impacts output
 
     perf_params : Collection = None  # performance parameters - no output impact
