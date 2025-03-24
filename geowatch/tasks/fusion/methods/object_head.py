@@ -23,6 +23,29 @@ from einops import rearrange
 
 
 class DetrDecoderForObjectDetection(nn.Module):
+    """
+    Ignore:
+        >>> from geowatch.tasks.fusion.methods.object_head import *  # NOQA
+        >>> import torch
+        >>> import kwimage
+        >>> batch_size = 3
+        >>> inputs = torch.rand(batch_size, 14, 14, 256)
+        >>> config = DetrConfig()
+        >>> self = DetrDecoderForObjectDetection(config, 256)
+        >>> #
+        >>> labels = []
+        >>> for batch_idx in range(batch_size):
+        >>>     num_item_truth = 0
+        >>>     true_boxes = kwimage.Boxes.random(num_item_truth).tensor()
+        >>>     labels.append({
+        >>>         'class_labels': torch.LongTensor([0] * len(true_boxes)),
+        >>>         'boxes': true_boxes.to_cxywh().data.float()
+        >>>     })
+        >>> output = self.forward(inputs, labels=labels, return_dict=True)
+        >>> print(f'output.loss = {ub.urepr(output.loss, nl=1)}')
+        >>> # A set of boxes for each batch item
+        >>> out_boxes = kwimage.Boxes(output.pred_boxes, 'cxywh')
+    """
     def __init__(self, config: DetrConfig, d_model=10, d_hidden=100):
         super().__init__()
         self.config = config
@@ -140,27 +163,3 @@ class DetrDecoderForObjectDetection(nn.Module):
             logits=logits,
             pred_boxes=pred_boxes,
         )
-
-
-def _test():
-    import torch
-    import kwimage
-    num = 10
-    true_boxes = kwimage.Boxes.random(num).tensor()
-    print(true_boxes.tensor)
-    inputs = torch.rand(num, 14, 14, 256)
-    config = DetrConfig()
-    regress = DetrDecoderForObjectDetection(config, 256)
-    energy = regress(inputs)
-    energy.retain_grad()
-    outputs = energy.sigmoid()
-    outputs.retain_grad()
-    out_boxes = kwimage.Boxes(outputs, 'cxywh')
-    ious = out_boxes.ious(true_boxes)
-    loss = ious.sum()
-    print(loss)
-    loss.backward()
-
-
-if __name__ == '__main__':
-    _test()

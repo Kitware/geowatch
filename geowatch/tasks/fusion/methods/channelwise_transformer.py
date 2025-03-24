@@ -1996,6 +1996,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     box_valid_logits = []
                     box_valid_preds = []
                     for frame_idx, boxes in enumerate(item_truths['box']):
+                        # FIXME; this looks like a bug, will misalign the truth
                         if boxes.numel() != 0:
                             if len(boxes.shape) == 1:
                                 boxes = boxes.unsqueeze(0)
