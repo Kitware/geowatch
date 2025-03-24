@@ -218,11 +218,9 @@ class BatchPlotter(pl.callbacks.Callback):
             stage = trainer.state.stage.value
             if stage == 'validate':
                 stage = 'vali'
-            import xdev
-            with xdev.embed_on_exception_context:
-                canvas = datamodule.draw_batch(batch, outputs=outputs,
-                                               stage=stage,
-                                               **self.draw_batch_kwargs)
+            canvas = datamodule.draw_batch(batch, outputs=outputs,
+                                           stage=stage,
+                                           **self.draw_batch_kwargs)
 
         canvas = np.nan_to_num(canvas)
 

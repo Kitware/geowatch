@@ -767,7 +767,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                                     # Handle box head separately.
                                     # TODO: Should the network handle this conversion?
                                     box_ltrb = head_item_output['box_ltrb'].data.cpu().numpy()
-                                    box_probs = head_item_output['box_probs'].data.cpu().numpy()
+                                    box_probs = head_item_output['box_probs'].data.cpu().float().numpy()
                                     for frame_box_ltrb, frame_box_probs in zip(box_ltrb, box_probs):
                                         item_output[head_key].append({
                                             'box_ltrb': frame_box_ltrb,
