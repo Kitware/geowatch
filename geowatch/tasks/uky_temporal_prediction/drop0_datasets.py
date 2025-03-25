@@ -232,7 +232,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
 
         aids = self.dset.index.gid_to_aids[gid]
         dets = kwimage.Detections.from_coco_annots(
-            self.dset.annots(aids).objs, dset=self.dset)
+            list(self.dset.annots(aids).objs), dset=self.dset)
 
         # bbox = dets.data['boxes'].data
         segmentation = dets.data['segmentations'].data
