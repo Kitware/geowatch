@@ -300,15 +300,13 @@ fix_opencv_conflicts(){
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            $PIP_COMMAND uninstall opencv-python opencv-python-headless -y
-            #$PIP_INSTALL_COMMAND opencv-python-headless
+            $PIP_COMMAND uninstall opencv-python opencv-python-headless
             $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            $PIP_COMMAND uninstall opencv-python -y
+            $PIP_COMMAND uninstall opencv-python
         fi
-        #$PIP_INSTALL_COMMAND opencv-python-headless
         $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
     fi
 }
