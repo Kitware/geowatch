@@ -269,9 +269,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     Example:
         >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from geowatch.tasks.fusion import datamodules
+        >>> import geowatch
         >>> print('(STEP 0): SETUP THE DATA MODULE')
+        >>> dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes-geowatch', num_workers=4, channels='auto')
+        >>>     train_dataset=dset, num_workers=4, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
@@ -1153,8 +1155,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from geowatch.tasks.fusion import methods
             >>> from geowatch.tasks.fusion import datamodules
             >>> import geowatch
+            >>> dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes-geowatch',
+            >>>     train_dataset=dset,
             >>>     num_workers=0, chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
             >>>     channels='auto',
