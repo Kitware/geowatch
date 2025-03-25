@@ -367,10 +367,12 @@ def generalized_box_iou(boxes1, boxes2):
     """
     # degenerate boxes gives inf / nan results
     # so do an early check
-    if not (boxes1[:, 2:] >= boxes1[:, :2]).all():
-        raise ValueError(f"boxes1 must be in [x0, y0, x1, y1] (corner) format, but got {boxes1}")
-    if not (boxes2[:, 2:] >= boxes2[:, :2]).all():
-        raise ValueError(f"boxes2 must be in [x0, y0, x1, y1] (corner) format, but got {boxes2}")
+    flags1 = (boxes1[:, 2:] >= boxes1[:, :2])
+    flags2 = (boxes2[:, 2:] >= boxes2[:, :2])
+    if not flags1.all():
+        raise ValueError(f"boxes1 must be in [x0, y0, x1, y1] (corner) format, but got {boxes1[~flags1]}")
+    if not flags2.all():
+        raise ValueError(f"boxes2 must be in [x0, y0, x1, y1] (corner) format, but got {boxes2[~flags2]}")
     iou, union = box_iou(boxes1, boxes2)
 
     top_left = torch.min(boxes1[:, None, :2], boxes2[:, :2])
