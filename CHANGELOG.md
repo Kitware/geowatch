@@ -11,6 +11,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   wants to draw something. This lets us skip processing on training if we
   aren't drawing the output of the batch.
 
+* Add dependency on `kwcoco_dataloader` module, which was ported from this codebase.
+
+* Remove `balanced_sampling` and point at `kwcoco_dataloader`.
+
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
 
