@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   aren't drawing the output of the batch.
 * Add dependency on `kwcoco_dataloader` module, which was ported from this codebase.
 * Replace `balanced_sampling` with version from `kwcoco_dataloader`.
+* Replace `temporal_sampling` with version from `kwcoco_dataloader`.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
