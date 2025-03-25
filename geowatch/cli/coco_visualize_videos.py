@@ -1209,14 +1209,22 @@ def _write_ann_visualizations2(coco_dset,
     # Determine if we need to scale the image for visualization
     viz_scale_factor = 1.0
     if min_dim is not None:
-        chan_min_dim = min(delayed.dsize) * viz_scale_factor
-        if chan_min_dim < min_dim:
-            viz_scale_factor *= min_dim / chan_min_dim
+        try:
+            chan_min_dim = min(delayed.dsize) * viz_scale_factor
+            if chan_min_dim < min_dim:
+                viz_scale_factor *= min_dim / chan_min_dim
+        except TypeError:
+            # We dont know the size (delayed image bug)
+            viz_scale_factor = 1.0
 
     if max_dim is not None:
-        chan_max_dim = max(delayed.dsize) * viz_scale_factor
-        if chan_max_dim > max_dim:
-            viz_scale_factor *= max_dim / chan_max_dim
+        try:
+            chan_max_dim = max(delayed.dsize) * viz_scale_factor
+            if chan_max_dim > max_dim:
+                viz_scale_factor *= max_dim / chan_max_dim
+        except TypeError:
+            # We dont know the size (delayed image bug)
+            viz_scale_factor = 1.0
 
     if viz_scale_factor != 1:
         viz_warp = kwimage.Affine.scale(viz_scale_factor)
@@ -1414,7 +1422,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
     view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
 
-    if chan_group_obj is not None:
+    if chan_group_obj is not None and delayed.channels is not None:
         chan = delayed.take_channels(chan_group)
     else:
         chan = delayed

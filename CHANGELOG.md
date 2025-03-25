@@ -11,6 +11,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   wants to draw something. This lets us skip processing on training if we
   aren't drawing the output of the batch.
 
+### Fix
+* Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
+
 
 ## Version 0.19.0 - Released 2025-03-06
 
