@@ -19,6 +19,7 @@ Ignore:
     lib.current_sourcecode()
 
 Example:
+    >>> # xdoctest: +SKIP("not ready")
     >>> from geowatch.tasks.fusion import _jsonargparse_introspect
     >>> import ubelt as ub
     >>> function_or_class = _jsonargparse_introspect.get_signature_parameters
@@ -26,6 +27,7 @@ Example:
     >>> print(f'params = {ub.urepr(params, nl=1)}')
 
 Ignore:
+    >>> # xdoctest: +SKIP("not ready")
     >>> from scriptconfig.introspection.complex_introspection import *  # NOQA
     >>> from lightning import Trainer
     >>> import ubelt as ub
@@ -2393,6 +2395,7 @@ def get_signature_parameters(
         logger: Useful for debugging. Only logs at ``DEBUG`` level.
 
     Example:
+        >>> # xdoctest: +SKIP("not ready")
         >>> from scriptconfig.introspection.complex_introspection import *  # NOQA
         >>> function_or_class = get_signature_parameters
         >>> params = get_signature_parameters(function_or_class)
