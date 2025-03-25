@@ -8,12 +8,12 @@ transformers library changed the way detr loss was handled in 4.46.2, which was
 originally working in 4.37.2
 """
 
-try:
-    from transformers.models.detr.modeling_detr import DetrHungarianMatcher
-    from transformers.models.detr.modeling_detr import DetrLoss
-except ImportError:
-    from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrHungarianMatcher
-    from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrLoss
+# try:
+#     from transformers.models.detr.modeling_detr import DetrHungarianMatcher
+#     from transformers.models.detr.modeling_detr import DetrLoss
+# except ImportError:
+from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrHungarianMatcher
+from geowatch.tasks.fusion.methods._vendor.modeling_detr import DetrLoss
 
 from transformers import DetrConfig
 import torch
