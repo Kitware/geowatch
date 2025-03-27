@@ -6,7 +6,10 @@ cd "$HOME"/code/geowatch
 
 #pint "1day" "seconds"
 
-git-of-theseus-analyze . --interval "86400" --procs 4 \
+git-of-theseus-analyze . \
+    --interval "86400" \
+    --procs 4 \
+    --ignore-whitespace \
     --ignore "geowatch_tpl/submodules/**" \
     --ignore "geowatch_tpl/submodules_static/**" \
     --outdir ./git-of-theseus
