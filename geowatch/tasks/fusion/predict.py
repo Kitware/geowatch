@@ -1587,8 +1587,8 @@ class Predictor:
 
         print('devices = {!r}'.format(config['devices']))
         print('accelerator = {!r}'.format(config['accelerator']))
+        from geowatch.utils.lightning_ext import util_device
         if config['accelerator'] == 'auto':
-            from geowatch.utils.lightning_ext import util_device
             devices = util_device.coerce_devices(config['devices'])
         else:
             devices = util_device.coerce_accelerator_devices(config['accelerator'], config['devices'])
