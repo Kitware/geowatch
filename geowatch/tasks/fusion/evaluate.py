@@ -346,8 +346,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             else:
                 unit_sseg_share = 1
 
-        true_sseg.area / initial_total_weight
-
         # background should be background, do nothing with it
         sseg_groups['background']
         # Ignore context classes in saliency
