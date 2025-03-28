@@ -1058,6 +1058,9 @@ def nan_eq(a, b):
 class GroupbyFutureWrapper(wrapt.ObjectProxy):
     """
     Wraps a groupby object to get the new behavior sooner.
+
+    TODO:
+        - [ ] remove this when pandas 1.x no longer supported
     """
 
     def __iter__(self):
@@ -1072,6 +1075,10 @@ class GroupbyFutureWrapper(wrapt.ObjectProxy):
 
 
 def _fix_groupby(groups):
+    """
+    TODO:
+        - [ ] remove this when pandas 1.x no longer supported
+    """
     keys = groups.keys
     if isinstance(keys, list) and len(keys) == 1:
         return GroupbyFutureWrapper(groups)
