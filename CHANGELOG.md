@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Replace `balanced_sampling` with version from `kwcoco_dataloader`.
 * Replace `temporal_sampling` with version from `kwcoco_dataloader`.
 * Replace all `kwcoco_dataloader.tasks.fusion.datamodules` code with `kwcoco_dataloader`.
+* Removed SMART-specific region-id handling.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata

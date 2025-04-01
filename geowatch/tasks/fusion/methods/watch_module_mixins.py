@@ -564,7 +564,7 @@ class PackageMixin:
                     'geowatch.tasks.fusion.methods.*'
                 ])
                 # exp.intern('geowatch.tasks.fusion.methods.*', allow_empty=False)
-                exp.intern('geowatch.tasks.fusion.**', allow_empty=False)
+                exp.intern('geowatch.tasks.fusion.**', allow_empty=True)
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements
