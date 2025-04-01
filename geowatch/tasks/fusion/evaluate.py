@@ -319,7 +319,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             for catname in classes_of_interest
         }
         class_weights = np.ones(shape, dtype=np.float32)
-        initial_total_weight = class_weights.size
 
         sseg_groups = {
             'background': [],
