@@ -63,6 +63,7 @@ class DataModuleConfigMixin(scfg.DataConfig):
     __INFERABLE_DATAMODULE_KEYS__ = [
         'channels',
         'normalize_peritem',
+        'robust_normalize',
         'chip_dims',
         'time_steps',
         'time_sampling',
