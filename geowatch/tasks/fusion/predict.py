@@ -622,10 +622,10 @@ def _debug_grid(test_dataloader):
 
 def _jsonify(data):
     # This will be serailized in kwcoco, so make sure it can be coerced to json
-    from kwcoco.util import util_json
-    jsonified = util_json.ensure_json_serializable(data)
+    import kwutil
+    jsonified = kwutil.Json.ensure_serializable(data)
     walker = ub.IndexableWalker(jsonified)
-    for problem in util_json.find_json_unserializable(jsonified):
+    for problem in kwutil.Json.find_unserializable(jsonified):
         bad_data = problem['data']
         if hasattr(bad_data, 'spec'):
             walker[problem['loc']] = bad_data.spec
@@ -812,8 +812,8 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     config_resolved = _jsonify(config.asdict())
     fit_config = _jsonify(fit_config)
 
-    from kwcoco.util import util_json
-    unresolvable = list(util_json.find_json_unserializable(config_resolved))
+    import kwutil
+    unresolvable = list(kwutil.Json.find_unserializable(config_resolved))
     if unresolvable:
         import warnings
         warnings.warn(f'NotReproducibleWarning: Found unresolvable configuration options: {unresolvable!r}')
@@ -822,11 +822,11 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
             _value = unresolvable_item['data']
             config_walker[unresolvable_item['loc']] = f'Unresolvable: {_value}'
 
-        unresolvable = list(util_json.find_json_unserializable(config_resolved))
+        unresolvable = list(kwutil.Json.find_unserializable(config_resolved))
         assert not unresolvable, 'should have entered dummy values for unresolvable data'
 
     if config['record_context']:
-        from geowatch.utils import process_context
+        from kwutil import process_context
         proc_context = process_context.ProcessContext(
             name='geowatch.tasks.fusion.predict',
             type='process',
@@ -840,7 +840,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                 'fit_config': fit_config
             }
         )
-        # assert not list(util_json.find_json_unserializable(proc_context.obj))
+        # assert not list(kwutil.Json.find_unserializable(proc_context.obj))
         info.append(proc_context.obj)
         proc_context.start()
         test_coco_dataset = datamodule.coco_datasets['test']
