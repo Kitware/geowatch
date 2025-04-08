@@ -1,4 +1,4 @@
-pip install git-of-theseus
+uv pip install git-of-theseus
 
 cd "$HOME"/code/geowatch
 #git-of-theseus-analyze "$HOME"/code/watch --procs 4

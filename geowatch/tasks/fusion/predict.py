@@ -64,6 +64,7 @@ class DataModuleConfigMixin(scfg.DataConfig):
         'channels',
         'normalize_peritem',
         'robust_normalize',
+        'dynamic_channels',
         'chip_dims',
         'time_steps',
         'time_sampling',
