@@ -724,6 +724,9 @@ class PeriodicMemoryMonitor:
 
 def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset, device):
     import rich
+    import kwutil
+    import warnings
+    from kwutil import util_progress
 
     print('Predict on device = {!r}'.format(device))
     downweight_edges = config.downweight_edges
@@ -752,7 +755,6 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     test_dataloader = datamodule.test_dataloader()
     batch_iter = iter(test_dataloader)
 
-    from kwutil import util_progress
     pman = util_progress.ProgressManager(backend='rich')
 
     # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
@@ -812,10 +814,8 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     config_resolved = _jsonify(config.asdict())
     fit_config = _jsonify(fit_config)
 
-    import kwutil
     unresolvable = list(kwutil.Json.find_unserializable(config_resolved))
     if unresolvable:
-        import warnings
         warnings.warn(f'NotReproducibleWarning: Found unresolvable configuration options: {unresolvable!r}')
         config_walker = ub.IndexableWalker(config_resolved)
         for unresolvable_item in unresolvable:
@@ -900,7 +900,6 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
             except RuntimeError as ex:
                 msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
                 print(msg)
-                import warnings
                 warnings.warn(msg)
                 from kwutil import util_environ
                 # import xdev
@@ -1506,6 +1505,7 @@ class Predictor:
             #             traintime_params['channels'] = model.input_channels.spec
             #         else:
             #             traintime_params['channels'] = list(model.input_norms.keys())[0]
+
         config.fit_config = fit_config
         self.model = model
         self.fit_config = fit_config
@@ -1565,6 +1565,7 @@ class Predictor:
         datamodule = self.datamodule
         model = self.model
         config = self.config
+        fit_config = self.fit_config
 
         test_coco_dataset = datamodule.coco_datasets['test']
 
@@ -1599,8 +1600,6 @@ class Predictor:
         if len(devices) > 1:
             raise NotImplementedError('TODO: handle multiple devices')
         device = devices[0]
-
-        fit_config = self.fit_config
 
         result_dataset = _predict_critical_loop(config, fit_config, model,
                                                 datamodule, result_dataset,
