@@ -257,3 +257,11 @@ def test_predict_with_dummy_model_lower_resolution():
         import ubelt as ub
         ub.cmd(f'geowatch stats {result_dataset.fpath}', verbose=3, system=True)
         ub.cmd(f'geowatch visualize {result_dataset.fpath} --channels="r|g|b,star|superstar|eff,salient" --stack=True', verbose=3, system=True)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/geowatch/tests/test_predict_dummy_model.py
+    """
+    test_predict_with_dummy_model_lower_resolution()
