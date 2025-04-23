@@ -273,7 +273,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset=dset, num_workers=4, channels='auto')
+        >>>     train_dataset=dset, num_workers=2, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
