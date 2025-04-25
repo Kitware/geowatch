@@ -245,7 +245,8 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     else:
         smoothing_values = [smoothing]
 
-    plot_keys = [k for k in tb_data.keys() if '/' not in k]
+    # plot_keys = [k for k in tb_data.keys() if '/' not in k]
+    plot_keys = list(tb_data.keys())
     keys = set(tb_data.keys()).intersection(set(plot_keys))
     # no idea what hp metric is, but it doesn't seem important
     # keys = keys - {'hp_metric'}
@@ -262,7 +263,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             attributes:
               - pattern: [
                     '*_acc*', '*_ap*', '*_mAP*', '*_auc*', '*_mcc*', '*_brier*', '*_mauc*',
-                    '*_f1*', '*_iou*',
+                    '*_f1*', '*_iou*', '*/ap', '*/auc', '*/max_f1',
                   ]
                 ymax: 1
                 ymin: 0
@@ -301,14 +302,14 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     else:
         y01_measures = [
             '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
-            '_f1', '_iou',
+            '_f1', '_iou', '/ap', '/auc', '/max_f1',
         ]
         y0_measures = ['error', 'loss']
         HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
         key_table = []
         for plot_key in tb_data.keys():
             row = {'key': plot_key}
-            if plot_key == 'hp_metric' or '/' in plot_key:
+            if plot_key == 'hp_metric':
                 row['ignore'] = True
                 continue
             if plot_key in y01_measures:
@@ -430,7 +431,9 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             ax.set_title(title)
 
             # png is smaller than jpg for this kind of plot
-            fpath = out_dpath / (key + '.png')
+            fname = kwutil.util_path.sanitize_path_name(key)
+            # replacement_map='_')
+            fpath = out_dpath / (fname + '.png')
             if verbose:
                 print('Save plot: ' + str(fpath))
             ax.figure.savefig(fpath)
@@ -577,6 +580,13 @@ class TensorboardPlotterCLI(scfg.DataConfig):
 
     @classmethod
     def main(cls, cmdline=1, **kwargs):
+        """
+        Ignore:
+            from geowatch.utils.lightning_ext.callbacks.tensorboard_plotter import *
+            cls = TensorboardPlotterCLI
+            cmdline = 0
+            kwargs = {}
+        """
         import rich
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + ub.urepr(config, nl=1))
