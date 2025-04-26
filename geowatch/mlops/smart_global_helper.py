@@ -433,7 +433,7 @@ class SmartGlobalHelper:
 
     def _default_metrics(self, agg):
         _display_metrics_suffixes = []
-        if agg.type in { 'bas_poly_eval', 'sv_poly_eval'}:
+        if agg.node_type in { 'bas_poly_eval', 'sv_poly_eval'}:
             _display_metrics_suffixes = [
                 'bas_tp',
                 'bas_fp',
@@ -449,7 +449,7 @@ class SmartGlobalHelper:
                 # 'bas_faa_f1'
                 'bas_faa_f1',
             ]
-        elif agg.type == 'sc_poly_eval':
+        elif agg.node_type == 'sc_poly_eval':
             _display_metrics_suffixes = [
                 'macro_f1_siteprep',
                 'macro_f1_active',
@@ -464,20 +464,20 @@ class SmartGlobalHelper:
             _primary_metrics_suffixes = [
                 'bas_faa_f1', 'sc_macro_f1',
             ]
-        elif agg.type == 'bas_pxl_eval':
+        elif agg.node_type == 'bas_pxl_eval':
             _primary_metrics_suffixes = [
                 'salient_AP',
                 # 'salient_APUC',
                 'salient_AUC',
             ]
-        elif agg.type == 'sc_pxl_eval':
+        elif agg.node_type == 'sc_pxl_eval':
             _primary_metrics_suffixes = [
                 'coi_mAP',
                 # 'coi_mAPUC',
                 'coi_mAUC',
             ]
         else:
-            raise NotImplementedError(agg.type)
+            raise NotImplementedError(agg.node_type)
         return _primary_metrics_suffixes, _display_metrics_suffixes
 
     def mark_star_models(self, macro_table):
