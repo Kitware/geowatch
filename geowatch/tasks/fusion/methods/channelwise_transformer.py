@@ -1615,7 +1615,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         H, W = output_shape
 
         # Only build probs if we need to.
-        compute_probabilities = self._requests['draw'] or not self.training
+        compute_probabilities = not self.training or self._requests['draw']
         probs = {}
 
         if not self.hparams.decouple_resolution:
