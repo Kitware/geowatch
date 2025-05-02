@@ -40,28 +40,19 @@ def add_safe_globals():
 
     # Safely get multiarray module
     try:
-        ma = np._core.multiarray  # Newer NumPy versions
+        np_core = np._core  # Newer NumPy versions
     except AttributeError:
-        try:
-            ma = np.core.multiarray  # Older NumPy versions
-        except AttributeError:
-            ma = None
+        np_core = np.core  # Older NumPy versions
 
     # Build safe globals list dynamically
     safe_globals = []
 
     # Add kwcoco.CategoryTree if available
-    try:
-        safe_globals.append(kwcoco.category_tree.CategoryTree)
-    except AttributeError:
-        pass
+    safe_globals.append(kwcoco.category_tree.CategoryTree)
 
     # Add numpy multiarray reconstruct if available
-    if ma is not None:
-        try:
-            safe_globals.append(ma._reconstruct)
-        except AttributeError:
-            pass
+    safe_globals.append(np_core.multiarray._reconstruct)
+    safe_globals.append(np_core.multiarray.scalar)
 
     # Add basic numpy types
     safe_globals.extend([
