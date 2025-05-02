@@ -28,7 +28,8 @@ def fix_package_modules():
 def add_safe_globals():
     """
     Stop gap to allow for loading of common classes now that torch load
-    disallows de-serialization of unknown classes.
+    disallows de-serialization of unknown classes. Safely handles cases where
+    attributes might not exist in different Python/NumPy versions.
 
     References:
         https://github.com/huggingface/transformers/pull/34632
@@ -37,19 +38,56 @@ def add_safe_globals():
     import kwcoco
     import numpy as np
 
+    # Safely get multiarray module
     try:
-        ma = np._core.multiarray
+        ma = np._core.multiarray  # Newer NumPy versions
     except AttributeError:
-        ma = np.core.multiarray
+        try:
+            ma = np.core.multiarray  # Older NumPy versions
+        except AttributeError:
+            ma = None
+
+    # Build safe globals list dynamically
+    safe_globals = []
+
+    # Add kwcoco.CategoryTree if available
     try:
-        torch.serialization.add_safe_globals(
-            [
-                kwcoco.category_tree.CategoryTree,
-                ma._reconstruct,
-                np.ndarray,
-                np.dtype,
-                np.dtypes.UInt32DType,
-            ]
-        )
+        safe_globals.append(kwcoco.category_tree.CategoryTree)
     except AttributeError:
-        ...
+        pass
+
+    # Add numpy multiarray reconstruct if available
+    if ma is not None:
+        try:
+            safe_globals.append(ma._reconstruct)
+        except AttributeError:
+            pass
+
+    # Add basic numpy types
+    safe_globals.extend([
+        np.ndarray,
+        np.dtype,
+    ])
+
+    # Add numpy dtype classes if they exist
+    dtype_classes = [
+        'UInt8DType', 'UInt16DType', 'UInt32DType', 'UInt64DType',
+        'Int8DType', 'Int16DType', 'Int32DType', 'Int64DType',
+        'Float16DType', 'Float32DType', 'Float64DType',
+        'Complex64DType', 'Complex128DType',
+        'BoolDType'
+    ]
+
+    for dtype_name in dtype_classes:
+        try:
+            dtype_class = getattr(np.dtypes, dtype_name)
+            safe_globals.append(dtype_class)
+        except AttributeError:
+            continue
+
+    # Only try to add safe globals if we found any and torch supports it
+    if safe_globals:
+        try:
+            torch.serialization.add_safe_globals(safe_globals)
+        except AttributeError:
+            pass
