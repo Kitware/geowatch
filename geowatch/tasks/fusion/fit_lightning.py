@@ -31,8 +31,10 @@ from jsonargparse import set_loader, set_dumper
 
 
 from geowatch.monkey import monkey_numpy  # NOQA
+from geowatch.monkey import monkey_torch  # NOQA
 # monkey_numpy.patch_numpy_dtypes()
 monkey_numpy.patch_numpy_2x()
+monkey_torch.add_safe_globals()
 
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats

@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Replace all `kwcoco_dataloader.tasks.fusion.datamodules` code with `kwcoco_dataloader`.
 * Removed SMART-specific region-id handling.
 * Allow metrics with forward slashes to be logged by tensorboard plotter.
+* Mark certain globals as safe for serialization in fusion fit.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata

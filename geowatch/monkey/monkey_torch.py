@@ -17,3 +17,15 @@ def fix_package_modules():
             _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
         except Exception:
             pass
+
+
+def add_safe_globals():
+    import torch
+    import kwcoco
+    try:
+        context = torch.serialization.safe_globals([kwcoco.category_tree.CategoryTree])()
+        context.__enter__()
+    except AttributeError:
+        ...
+    else:
+        assert kwcoco.category_tree.CategoryTree in torch.serialization.get_safe_globals()
