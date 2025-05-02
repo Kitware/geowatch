@@ -23,7 +23,7 @@ def add_safe_globals():
     import torch
     import kwcoco
     try:
-        context = torch.serialization.safe_globals([kwcoco.category_tree.CategoryTree])()
+        context = torch.serialization.safe_globals([kwcoco.category_tree.CategoryTree])
         context.__enter__()
     except AttributeError:
         ...
