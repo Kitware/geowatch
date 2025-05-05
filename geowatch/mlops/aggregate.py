@@ -1667,6 +1667,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             _default_fn = getattr(node, 'default_metrics', None)
             if _default_fn is None:
                 _default_fn = getattr(node, '_default_metrics2', None)
+            if _default_fn is None:
+                raise AttributeError('No default_metrics')
             if callable(_default_fn):
                 user_metric_info = _default_fn()
             else:
@@ -1674,9 +1676,9 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
                 if not ub.iterable(user_metric_info):
                     raise ValueError(ub.paragraph(
                         '''
-                        Unexpected defenition of default_metrics. The
-                        cannonical definition is a function that returns a
-                        List[Dict]
+                        Unexpected definition of default_metrics in
+                        node={node}. The cannonical definition is a function
+                        that returns a List[Dict]. Got: {_default_fn!r}.
                         '''))
         except (AttributeError, NotImplementedError):
             print(f'User did not specify _default_metrics2 for {node}')
