@@ -1,10 +1,12 @@
 GEOWatch MLops Example
 ======================
 
+NOTE: These docs are sparse and need to be expanded.
+
 This folder contains a minimal example of how to use the GeoWATCH MLOps
-pipeline system.
-
-
+pipeline system. Look into the ``mlops_example_module/pipelines.py`` file to
+see examples of pipeline definitions, and ``run_pipeline.sh`` for how to
+execute pipelines and aggregate results.
 
 Other Demo Locations:
 

@@ -17,6 +17,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed SMART-specific region-id handling.
 * Allow metrics with forward slashes to be logged by tensorboard plotter.
 * Mark certain globals as safe for serialization in fusion fit.
+* In mlops, made `default_metrics` the canonical name for the old
+  `default_metrics2`. Behavior will be flexible, and warning will be given for
+  future backwards incompatibility.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
@@ -27,7 +30,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * Add `DataFrame.argextrema`
 * Add suboptimize to `Aggregator.report_best`
-* Added experimental way to specify metric metadata in a mlop ProcessNode via the `_default_metrics2` method, which will likely change in the future.
+* Added experimental way to specify metric metadata in a mlops ProcessNode via the `_default_metrics2` method, which will likely change in the future.
 
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 

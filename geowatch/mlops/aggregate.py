@@ -1662,12 +1662,36 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             node = None
         # Build a lookup table about how different metrics are interpreted
         try:
-            user_metric_info = node._default_metrics2()
+            # Get one of the backwards compatible ways to define the default
+            # metrics.
+            _default_fn = getattr(node, 'default_metrics', None)
+            if _default_fn is None:
+                _default_fn = getattr(node, '_default_metrics2', None)
+            if callable(_default_fn):
+                user_metric_info = _default_fn()
+            else:
+                user_metric_info = _default_fn
+                if not ub.iterable(user_metric_info):
+                    raise ValueError(ub.paragraph(
+                        '''
+                        Unexpected defenition of default_metrics. The
+                        cannonical definition is a function that returns a
+                        List[Dict]
+                        '''))
         except (AttributeError, NotImplementedError):
             print(f'User did not specify _default_metrics2 for {node}')
         else:
             for info in user_metric_info:
-                suffix = info['suffix']
+                suffix = info.get('metric', info.get('suffix', None))
+                if suffix is None:
+                    raise ValueError(ub.paragraph(
+                        f'''
+                        The info={info} specified in default_metrics for
+                        node={node} is missing required items.  You must
+                        specify ``"metric": <value>`` where value is the name
+                        of the metric relative to the node name.  I.e.
+                        ``{metrics_prefix}.<value>``.
+                        '''))
                 name = f'{metrics_prefix}.{suffix}'
                 agg._metric_info[name] = info.copy()
                 agg._metric_info[name]['name'] = name

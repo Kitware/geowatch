@@ -871,6 +871,9 @@ class ProcessNode(Node):
     You can create an instance of this directly, or inherit from it and set its
     class variables.
 
+    For examples on how to define a full pipeline see the
+    :doc:`the mlops tutorial <manual/tutorial/examples/mlops/README.rst>
+
     CommandLine:
         xdoctest -m geowatch.mlops.pipeline_nodes ProcessNode
 
@@ -889,7 +892,7 @@ class ProcessNode(Node):
                 metrics need to be minimized / maximized.
 
             * _default_metrics2 - experimental new way of specifying metric info.
-               Should be a list of dictionaries with keys
+               Should return a list of dictionaries with keys
 
                    suffix (str): the name of the metric
 
