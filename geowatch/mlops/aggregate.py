@@ -1649,85 +1649,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             aggregator
 
         """
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
         import warnings
-        # TODO: need to be able to specify what the objective is for each
-        # metric. Either minimize or maximize.
-        metrics_prefix = f'metrics.{agg.node_type}'
         agg._metric_info = {}
 
         if agg.dag is not None:
             node = agg.dag.nodes[agg.node_type]
         else:
             node = None
-        # Build a lookup table about how different metrics are interpreted
-        try:
-            # Get one of the backwards compatible ways to define the default
-            # metrics.
-            _default_fn = getattr(node, 'default_metrics', None)
-            if _default_fn is None:
-                _default_fn = getattr(node, '_default_metrics2', None)
-            if _default_fn is None:
-                raise AttributeError('No default_metrics')
-            if callable(_default_fn):
-                user_metric_info = _default_fn()
-            else:
-                user_metric_info = _default_fn
-                if not ub.iterable(user_metric_info):
-                    raise ValueError(ub.paragraph(
-                        '''
-                        Unexpected definition of default_metrics in
-                        node={node}. The cannonical definition is a function
-                        that returns a List[Dict]. Got: {_default_fn!r}.
-                        '''))
-        except (AttributeError, NotImplementedError):
-            print(f'User did not specify _default_metrics2 for {node}')
-        else:
-            for info in user_metric_info:
-                suffix = info.get('metric', info.get('suffix', None))
-                if suffix is None:
-                    raise ValueError(ub.paragraph(
-                        f'''
-                        The info={info} specified in default_metrics for
-                        node={node} is missing required items.  You must
-                        specify ``"metric": <value>`` where value is the name
-                        of the metric relative to the node name.  I.e.
-                        ``{metrics_prefix}.<value>``.
-                        '''))
-                name = f'{metrics_prefix}.{suffix}'
-                agg._metric_info[name] = info.copy()
-                agg._metric_info[name]['name'] = name
 
-        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            if agg._metric_info:
-                # If the metrics info was specified, then dont use the old _default_metrics
-                if agg.primary_metric_cols == 'auto':
-                    agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
-                    if len(agg.primary_metric_cols) == 0:
-                        warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
-                        agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
-                if agg.display_metric_cols == 'auto':
-                    agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
-                    agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
-            else:
-                # TODO: deprecate the old _default_metrics stuff entirely
-                try:
-                    # TODO: deprecate SMART-stuff
-                    _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
-                except Exception:
-                    if hasattr(node, '_default_metrics'):
-                        _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
-                        # should we prevent double prefixes?
-                        _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-                        _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
-                    else:
-                        # fallback to something
-                        _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
-                        _primary_metrics = _display_metrics[0:1]
-                    if agg.primary_metric_cols == 'auto':
-                        agg.primary_metric_cols = _primary_metrics
-                    if agg.display_metric_cols == 'auto':
-                        agg.display_metric_cols = _display_metrics
+        # Build a lookup table about how different metrics are interpreted
+        _build_metrics_info_table(agg, node)
 
         # If specified primary metrics are not in the info table, use
         # assumptions
@@ -1763,8 +1694,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
                 info['objective'] = 'maximize'
             if objective in {'min'}:
                 info['objective'] = 'minimize'
-
-        print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
+        # print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
 
     def __nice__(self):
         return f'{self.node_type}, n={len(self)}'
@@ -2596,6 +2526,85 @@ def _coerce_grouptop(grouptop, aliases=None):
             resolved.extend(param)
         new_grouptop['params'] = resolved
     return new_grouptop
+
+
+def _build_metrics_info_table(agg, node):
+    """
+    Still need to simplify this function
+    """
+    import warnings
+
+    metrics_prefix = f'metrics.{agg.node_type}'
+
+    # Build a lookup table about how different metrics are interpreted
+    try:
+        # Get one of the backwards compatible ways to define the default
+        # metrics.
+        _default_fn = getattr(node, 'default_metrics', None)
+        if _default_fn is None:
+            _default_fn = getattr(node, '_default_metrics2', None)
+        if _default_fn is None:
+            raise AttributeError('No default_metrics')
+        if callable(_default_fn):
+            user_metric_info = _default_fn()
+        else:
+            user_metric_info = _default_fn
+            if not ub.iterable(user_metric_info):
+                raise ValueError(ub.paragraph(
+                    '''
+                    Unexpected definition of default_metrics in
+                    node={node}. The cannonical definition is a function
+                    that returns a List[Dict]. Got: {_default_fn!r}.
+                    '''))
+    except (AttributeError, NotImplementedError):
+        print(f'User did not specify _default_metrics2 for {node}')
+    else:
+        for info in user_metric_info:
+            suffix = info.get('metric', info.get('suffix', None))
+            if suffix is None:
+                raise ValueError(ub.paragraph(
+                    f'''
+                    The info={info} specified in default_metrics for
+                    node={node} is missing required items.  You must
+                    specify ``"metric": <value>`` where value is the name
+                    of the metric relative to the node name.  I.e.
+                    ``{metrics_prefix}.<value>``.
+                    '''))
+            name = f'{metrics_prefix}.{suffix}'
+            agg._metric_info[name] = info.copy()
+            agg._metric_info[name]['name'] = name
+
+    if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
+        if agg._metric_info:
+            # If the metrics info was specified, then dont use the old _default_metrics
+            if agg.primary_metric_cols == 'auto':
+                agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
+                if len(agg.primary_metric_cols) == 0:
+                    warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
+                    agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
+            if agg.display_metric_cols == 'auto':
+                agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
+                agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+        else:
+            # TODO: deprecate the old _default_metrics stuff entirely
+            try:
+                from geowatch.mlops.smart_global_helper import SMART_HELPER
+                # TODO: deprecate SMART-stuff
+                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            except Exception:
+                if hasattr(node, '_default_metrics'):
+                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                    # should we prevent double prefixes?
+                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                else:
+                    # fallback to something
+                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                    _primary_metrics = _display_metrics[0:1]
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = _primary_metrics
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = _display_metrics
 
 
 __cli__ = AggregateEvluationConfig
