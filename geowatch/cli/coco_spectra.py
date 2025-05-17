@@ -27,11 +27,6 @@ import ubelt as ub
 import scriptconfig as scfg
 import math
 
-try:
-    from line_profiler import profile
-except ImportError:
-    profile = ub.identity
-
 
 class CocoSpectraConfig(scfg.DataConfig):
     """
@@ -182,7 +177,6 @@ class HistAccum:
         return full_df
 
 
-@profile
 def main(cmdline=True, **kwargs):
     r"""
     CommandLine:
@@ -404,15 +398,13 @@ def main(cmdline=True, **kwargs):
     return results
 
 
-# def try_with_statsmodels():
-#     import statsmodels.api as sm
-#     sm.nonparametric.KDEUnivariate?
-#     kde = sm.nonparametric.KDEUnivariate(obs_dist)
-
-
 def single_persensor_table(full_df):
     """
     Like sensor_stats_tables, but only used for intermediate stats
+
+    Args:
+        full_df (pd.DataFrame):
+            with columns: index  intensity_bin  value channel   sensor
     """
     import pandas as pd
     import numpy as np
@@ -461,6 +453,11 @@ def single_persensor_table(full_df):
 
 
 def sensor_stats_tables(full_df):
+    """
+    Args:
+        full_df (pd.DataFrame):
+            with columns: index  intensity_bin  value channel   sensor
+    """
     import itertools as it
     import scipy
     import kwarray
@@ -586,7 +583,6 @@ def sensor_stats_tables(full_df):
     return sensor_chan_stats, distance_metrics
 
 
-@profile
 def ensure_intensity_sidecar(fpath, cache_dpath=None, bundle_dpath=None,
                              recompute=False):
     """
@@ -687,7 +683,6 @@ def ensure_intensity_sidecar(fpath, cache_dpath=None, bundle_dpath=None,
     return stats_fpath
 
 
-@profile
 def ensure_intensity_stats(coco_img,
                            recompute=False,
                            cache_dpath=None,
@@ -797,11 +792,29 @@ def ensure_intensity_stats(coco_img,
     return intensity_stats
 
 
-@profile
 def plot_intensity_histograms(full_df, config, ax=None):
     """
     Args:
-        ax (Axes | None): if specified, we assume only 1 plot is made
+        full_df (pd.DataFrame):
+            with columns: index  intensity_bin  value channel   sensor
+        ax (Axes | None):
+            if specified, we assume only 1 plot is made
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> from geowatch.cli.coco_spectra import *  # NOQA
+        >>> import pandas as pd
+        >>> n = 256
+        >>> data = {
+        >>>     'intensity_bin': np.arange(0, n),
+        >>>     'value': np.random.randint(0, 256, n),
+        >>>     'channel': ['red'] * n,
+        >>>     'sensor': ['unknown'] * n,
+        >>> }
+        >>> full_df = pd.DataFrame(data)
+        >>> config = CocoSpectraConfig()
+        >>> kwplot.autompl()
+        >>> ax = plot_intensity_histograms(full_df, config)
     """
     unique_channels = full_df['channel'].unique()
     unique_sensors = full_df['sensor'].unique()
@@ -891,6 +904,10 @@ def plot_intensity_histograms(full_df, config, ax=None):
         # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
         # ub.find_duplicates(z)
         try:
+            # We have already computed the histogram, but we can get seaborn to
+            # show it using a simple trick: use weight to represent the
+            # frequency that should be used for every bin.
+
             # https://github.com/mwaskom/seaborn/issues/2709
             sns.histplot(ax=ax, data=sensor_df.reset_index(), **hist_data_kw_, **hist_style_kw)
         except Exception:
@@ -912,12 +929,6 @@ def plot_intensity_histograms(full_df, config, ax=None):
     return fig
 
 
-# def _weighted_quantile(weights, qs):
-#     cumtotal = np.cumsum(weights)
-#     quantiles = cumtotal / cumtotal[-1]
-
-
-@profile
 def _weighted_auto_bins(data, xvar, weightvar):
     """
     Generalized histogram bandwidth estimators for weighted univariate data
@@ -1056,7 +1067,6 @@ def _unsigned_subtract(a, b):
                            casting='unsafe', dtype=unsigned_dt)
 
 
-@profile
 def _fill_missing_colors(label_to_color):
     """
     label_to_color = {'foo': kwimage.Color('red').as01(), 'bar': None}
