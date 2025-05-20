@@ -107,7 +107,13 @@ class CocoVisualizeConfig(scfg.DataConfig):
 
         'draw_valid_region': scfg.Value(False, help='if True, draw the valid region if it exists'),
 
-        'cmap': scfg.Value('viridis', help='colormap for single channel data'),
+        'cmap': scfg.Value('viridis', type=str, help=ub.paragraph(
+            '''
+            Name of a colormap for single channel data.
+            Can also be a YAML mapping from channel name to colormap name.
+            The value of the __default__ key will be used for unspecified
+            channels.
+            ''')),
 
         'animate': scfg.Value('auto', isflag=True, help='if True, make an animated gif from the output. Defaults to False.'),
 
@@ -290,7 +296,8 @@ def main(cmdline=True, **kwargs):
         >>>     'draw_track_trails': True,
         >>>     'stack': 'only',
         >>>     'role_order': ['role1', 'role2'],
-        >>>     'cmap': 'gray',
+        >>>     # use mapping form of cmap
+        >>>     'cmap': '{r: gray, b: viridis}',
         >>>     'workers': 0,
         >>>     'verbose': 101,
         >>> }
@@ -1573,27 +1580,36 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
     if cmap is not None:
         if kwimage.num_channels(canvas) == 1:
-            if verbose > 100:
-                print('doing 1 channel cmap')
             import matplotlib as mpl
-            if chan_group == 'pan':
-                # Use grayscale for certain 1 band images
-                canvas = np.nan_to_num(canvas)
-                canvas = kwimage.atleast_3channels(canvas)
-                if len(canvas) == 3:
-                    canvas = canvas[..., 0]
-                # canvas = kwimage.ensure_float01(canvas)
-            else:
-                try:
-                    import matplotlib.cm  # NOQA
-                    cmap_ = mpl.cm.get_cmap(cmap)
-                except AttributeError:
-                    # https://github.com/matplotlib/matplotlib/issues/20853
-                    cmap_ = mpl.colormaps[cmap]
-                canvas = np.nan_to_num(canvas)
-                if len(canvas.shape) == 3:
-                    canvas = canvas[..., 0]
-                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+            import kwutil
+
+            if verbose > 100:
+                print(f'doing 1 channel cmap: {cmap!r}')
+
+            # Coerce chan_to_cmap
+            chan_to_cmap = kwutil.Yaml.coerce(cmap)
+            if isinstance(chan_to_cmap, str):
+                chan_to_cmap = {'__default__': chan_to_cmap}
+            elif not isinstance(chan_to_cmap, dict):
+                raise TypeError(f'Did not coerce chan_to_cmap: {type(chan_to_cmap)} correctly')
+
+            # Resolve to a colormap name.
+            default_cmap_name = chan_to_cmap.get('__default__', 'viridis')
+            cmap_name = chan_to_cmap.get(chan_group, default_cmap_name)
+
+            # Resolve to a colormap object.
+            try:
+                import matplotlib.cm  # NOQA
+                cmap_ = mpl.cm.get_cmap(cmap_name)
+            except AttributeError:
+                # https://github.com/matplotlib/matplotlib/issues/20853
+                cmap_ = mpl.colormaps[cmap_name]
+
+            # TODO: should we checkerboard the nans?
+            canvas = np.nan_to_num(canvas)
+            if len(canvas.shape) == 3:
+                canvas = canvas[..., 0]
+                canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
     if verbose > 100:
         print('after cmap part')

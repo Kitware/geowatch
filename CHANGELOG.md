@@ -20,6 +20,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * In mlops, made `default_metrics` the canonical name for the old
   `default_metrics2`. Behavior will be flexible, and warning will be given for
   future backwards incompatibility.
+* Removed specialized "pan" behavior in `geowatch visualize`. Can now use a
+  mapping to specify colormaps for specific channels.
+
+### Added
+* cmap argument to `geowatch visualize` can now accept a YAML mapping from channel name to colormap.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
