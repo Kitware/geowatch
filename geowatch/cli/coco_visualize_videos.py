@@ -62,7 +62,7 @@ class CocoVisualizeConfig(scfg.DataConfig):
     '''
 
     __default__ = {
-        'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
+        'src': scfg.Value('data.kwcoco.json', help='Input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
             '''
@@ -70,42 +70,49 @@ class CocoVisualizeConfig(scfg.DataConfig):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value('auto', help='number of parallel procs'),
+        'workers': scfg.Value('auto', help='Number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
-        'space': scfg.Value('video', help='can be image or video space'),
+        'space': scfg.Value('video', help='Can be image or video space'),
 
-        'max_dim': scfg.Value(None, help='if specified, the visualization will resize if it has a dimension larger than this'),
-        'min_dim': scfg.Value(384, help='if specified, the visualization will resize if it has a dimension smaller than this'),
+        'max_dim': scfg.Value(None, help='If specified, the visualization will resize if it has a dimension larger than this'),
+        'min_dim': scfg.Value(384, help='If specified, the visualization will resize if it has a dimension smaller than this'),
 
         'resolution': scfg.Value(None, help=ub.paragraph(
             '''
-            the resolution to make the output at.
-            If unspecified use the dataset default
+            The resolution to make the output at.
+            If unspecified use the dataset default.
             ''')),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
         'any3': scfg.Value(False, help=ub.paragraph(
             '''
-            if True, ensure the "any3" channels are drawn. If set to "only",
+            If True, ensure the "any3" channels are drawn. If set to "only",
             then other per-channel visualizations are supressed. TODO: better
             name?
 
             TODO: deprecate?
             ''')),
 
-        'draw_imgs': scfg.Value(True, isflag=True),
-        'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
+        'draw_imgs': scfg.Value(True, isflag=True, help=ub.paragraph(
+            '''
+            Control if images without annotations are drawn
+            ''')),
+        'draw_anns': scfg.Value('auto', isflag=True, help=ub.paragraph(
+            '''
+            Control if images with annotations are drawn. Using "auto" means
+            only draw anns if they exist.
+            ''')),
 
         'draw_track_trails': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
-            draw history of track locations (experimental and inefficient).
+            Draw history of track locations (experimental and inefficient).
             Other contexts might refer to this as a motion path, trace, trail,
             tail, track history, or trajectory.
             ''')),
 
-        'draw_valid_region': scfg.Value(False, help='if True, draw the valid region if it exists'),
+        'draw_valid_region': scfg.Value(False, help='If True, draw the valid region if it exists'),
 
         'cmap': scfg.Value('viridis', type=str, help=ub.paragraph(
             '''
@@ -115,7 +122,7 @@ class CocoVisualizeConfig(scfg.DataConfig):
             channels.
             ''')),
 
-        'animate': scfg.Value('auto', isflag=True, help='if True, make an animated gif from the output. Defaults to False.'),
+        'animate': scfg.Value('auto', isflag=True, help='If True, make an animated gif from the output. Defaults to False.'),
 
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
@@ -139,28 +146,28 @@ class CocoVisualizeConfig(scfg.DataConfig):
             draw_segmentations=0
             ''')),
 
-        'draw_segmentations': scfg.Value(True, help='if True draw annotation segmentation polygons'),
-        'draw_labels': scfg.Value(True, help='if True draw text labels on annotations'),
-        'draw_boxes': scfg.Value(True, help='if True draw bounding boxes around annotations'),
+        'draw_segmentations': scfg.Value(True, help='If True draw annotation segmentation polygons'),
+        'draw_labels': scfg.Value(True, help='If True draw text labels on annotations'),
+        'draw_boxes': scfg.Value(True, help='If True draw bounding boxes around annotations'),
         'alpha': scfg.Value(None, help='transparency / opacity of annotations'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
-        'zoom_to_tracks': scfg.Value(False, isflag=True, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
+        'zoom_to_tracks': scfg.Value(False, isflag=True, type=str, help='If True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
-        'norm_over_time': scfg.Value(False, isflag=True, help='if True, normalize data over time'),
+        'norm_over_time': scfg.Value(False, isflag=True, help='If True, normalize data over time'),
 
         'fixed_normalization_scheme': scfg.Value(
             None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
 
-        'extra_header': scfg.Value(None, help='extra text to include in the header'),
+        'extra_header': scfg.Value(None, help='Extra text to include in the header'),
 
-        'draw_header': scfg.Value(True, help='If false disables drawing the header'),
+        'draw_header': scfg.Value(True, help='If False disables drawing the header'),
 
-        'draw_chancode': scfg.Value(True, help='If false disables drawing the channel code'),
+        'draw_chancode': scfg.Value(True, help='If False disables drawing the channel code'),
 
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
-        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
+        'include_sensors': scfg.Value(None, help='If specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='If specified can be comma separated invalid sensors'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -205,16 +212,20 @@ class CocoVisualizeConfig(scfg.DataConfig):
 
         'verbose': scfg.Value(0, isflag=True, help='verbosity level'),
 
-        'stack': scfg.Value('auto', isflag=True, help='if True stack late fused channels in the same image'),
+        'stack': scfg.Value('auto', isflag=True, help=ub.paragraph(
+            '''
+            If True stack late fused channels in the same image.
+            ''')),
 
         'role_order': scfg.Value(None, help=ub.paragraph(
             '''
-            if specified, annotations are grouped by roles and drawn on different items in a channels stack in the given order
+            If specified, annotations are grouped by roles and drawn on
+            different items in a channels stack in the given order.
             ''')),
 
         'smart': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
-            if True, override params based on "smart" settings. This defaults
+            If True, override params based on "smart" settings. This defaults
             to going fast and using more resources, and stacked data.
             '''), alias=['fast']),
     }
