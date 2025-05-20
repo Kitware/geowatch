@@ -217,6 +217,13 @@ class CocoVisualizeConfig(scfg.DataConfig):
             If True stack late fused channels in the same image.
             ''')),
 
+        'stack_axis': scfg.Value(0, help=ub.paragraph(
+            '''
+            Temporary argument. May be refactored and combined with stack.
+            For now, if stack resolves to True, then this is the direction (0
+            for vertical 1 for horiztonal) that channels are stacked on.
+            ''')),
+
         'role_order': scfg.Value(None, help=ub.paragraph(
             '''
             If specified, annotations are grouped by roles and drawn on
@@ -306,6 +313,7 @@ def main(cmdline=True, **kwargs):
         >>>     'channels': 'r,b',
         >>>     'draw_track_trails': True,
         >>>     'stack': 'only',
+        >>>     'stack_axis': 1,
         >>>     'role_order': ['role1', 'role2'],
         >>>     # use mapping form of cmap
         >>>     'cmap': '{r: gray, b: viridis}',
@@ -584,7 +592,7 @@ def main(cmdline=True, **kwargs):
             'stack', 'min_dim', 'max_dim', 'verbose', 'only_boxes',
             'draw_boxes', 'draw_labels', 'fixed_normalization_scheme', 'any3',
             'cmap', 'role_order', 'smart', 'ann_score_thresh', 'alpha',
-            'draw_track_trails',
+            'draw_track_trails', 'stack_axis',
         }
 
         if config['zoom_to_tracks']:
@@ -1015,6 +1023,7 @@ def _write_ann_visualizations2(coco_dset,
                                local_max_frame=None,
                                valid_vidspace_region=None,
                                stack=False,
+                               stack_axis=0,
                                draw_valid_region=True,
                                verbose=0,
                                skip_aggressive=False,
@@ -1314,8 +1323,9 @@ def _write_ann_visualizations2(coco_dset,
                 delayed, chan_row, finalize_opts, verbose, skip_missing,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
                 valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_boxes,
-                draw_labels, draw_segmentations, role_to_drawables, valid_video_poly, stack,
-                draw_header, stack_idx, request_roles, ann_score_thresh, alpha,
+                draw_labels, draw_segmentations, role_to_drawables,
+                valid_video_poly, stack, draw_header, stack_idx, request_roles,
+                ann_score_thresh, alpha,
             )
             if stack:
                 img_stack.append(stack_img_item)
@@ -1342,6 +1352,8 @@ def _write_ann_visualizations2(coco_dset,
         stack_header_lines = header_lines.copy()
         header_text = '\n'.join(stack_header_lines)
 
+        channel_stack_axis = stack_axis
+
         def stack_infos(_stack):
             tostack = []
             for item in _stack:
@@ -1360,7 +1372,7 @@ def _write_ann_visualizations2(coco_dset,
                     tostack.append(canvas)
 
             if len(tostack) > 0:
-                canvas = kwimage.stack_images(tostack)
+                canvas = kwimage.stack_images(tostack, axis=channel_stack_axis)
             else:
                 canvas = kwimage.draw_text_on_image(None, text='X')
                 canvas = kwimage.imresize(canvas, dsize=(512, 512))
@@ -1378,7 +1390,8 @@ def _write_ann_visualizations2(coco_dset,
                 ann_header = kwimage.imresize(
                     # ann_header, dsize=(None, 100), letterbox=True)
                     ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+                ann_canvas = kwimage.stack_images(
+                    [ann_header, ann_stack_canvas], axis=0)
             else:
                 ann_canvas = ann_stack_canvas
 
@@ -1393,7 +1406,8 @@ def _write_ann_visualizations2(coco_dset,
                                                       fit='shrink', stack=False)
                 img_header = kwimage.imresize(
                     img_header, dsize=(img_header.shape[1], 100), letterbox=True)
-                img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+                img_canvas = kwimage.stack_images(
+                    [img_header, img_stack_canvas], axis=0)
             else:
                 img_canvas = img_stack_canvas
             view_img_fpath.parent.ensuredir()
@@ -1648,6 +1662,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
                                               fill=False, border=True, alpha=alpha)
 
+    # fixme: messy logic, needs refactor
     stack_imgs = draw_imgs and stack
     stack_anns = draw_anns and stack
     draw_anns_alone = draw_anns and stack != 'only'
@@ -1685,7 +1700,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                                                   text=header_text,
                                                   stack=False,
                                                   fit='shrink')
-            img_header = kwimage.stack_images([img_header, img_canvas])
+            img_header = kwimage.stack_images([img_header, img_canvas], axis=0)
             kwimage.imwrite(view_img_fpath, img_canvas)
 
     if draw_anns_alone or stack_anns:
@@ -1765,7 +1780,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                                                       fit='shrink')
                 ann_header = kwimage.imresize(
                     ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+                ann_canvas = kwimage.stack_images(
+                    [ann_header, ann_canvas], axis=0)
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
     if verbose > 100:
