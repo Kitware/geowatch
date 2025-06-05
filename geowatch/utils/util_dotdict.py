@@ -5,29 +5,6 @@ import ubelt as ub
 import pygtrie
 
 
-def dotdict_to_nested(d):
-    auto = ub.AutoDict()
-    walker = ub.IndexableWalker(auto)
-    for k, v in d.items():
-        path = k.split('.')
-        walker[path] = v
-    return auto.to_dict()
-
-
-def dotkeys_to_nested(keys):
-    """
-    Args:
-        keys (List[str]): a list of dotted key names
-    """
-    auto = ub.AutoDict()
-    walker = ub.IndexableWalker(auto)
-    for k in keys:
-        path = k.split('.')
-        walker[path] = k
-    # print(ub.urepr(auto))
-    return auto.to_dict()
-
-
 class DotDict(ub.UDict):
     """
     I'm sure this data structure exists on pypi.
@@ -108,7 +85,13 @@ class DotDict(ub.UDict):
                 },
             }
         """
-        return dotdict_to_nested(self)
+        auto = ub.AutoDict()
+        walker = ub.IndexableWalker(auto)
+        d = self
+        for k, v in d.items():
+            path = k.split('.')
+            walker[path] = v
+        return auto.to_dict()
 
     def to_nested_keys(self):
         """
@@ -136,7 +119,13 @@ class DotDict(ub.UDict):
                 },
             }
         """
-        return dotkeys_to_nested(self)
+        auto = ub.AutoDict()
+        walker = ub.IndexableWalker(auto)
+        for k in self:
+            path = k.split('.')
+            walker[path] = k
+        # print(ub.urepr(auto))
+        return auto.to_dict()
 
     @property
     def _prefix_trie(self):
@@ -146,13 +135,60 @@ class DotDict(ub.UDict):
             self._trie_cache['prefix_trie'] = _trie
         return self._trie_cache['prefix_trie']
 
-    # @property
-    # def _suffix_trie(self):
-    #     if self._trie_cache.get('suffix_trie', None) is None:
-    #         _trie_data = ub.dzip(self.keys(), self.keys())
-    #         _trie = pygtrie.StringTrie(_trie_data, separator='.')
-    #         self._trie_cache['suffix_trie'] = _trie
-    #     return self._trie_cache['suffix_trie']
+    @property
+    def _suffix_trie(self):
+        if 'suffix_trie' not in self._trie_cache:
+            reversed_keys = {
+                '.'.join(reversed(k.split('.'))): k
+                for k in self.keys()
+            }
+            _trie = pygtrie.StringTrie(reversed_keys, separator='.')
+            self._trie_cache['suffix_trie'] = _trie
+        return self._trie_cache['suffix_trie']
+
+    def suffix_get(self, suffix, default=ub.NoParam, backend='trie'):
+        """
+        Retrieve all key-value pairs whose keys end with a given dot-suffix.
+
+        Args:
+            suffix (str): dot-separated suffix string
+            default: fallback if no matches found
+            backend (str): 'trie' or 'loop'
+
+        Returns:
+            DotDict
+
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict({
+            >>>     'a.b.c': 1,
+            >>>     'x.b.c': 2,
+            >>>     'z.y': 3,
+            >>> })
+            >>> self.suffix_get('b.c')
+            {'a.b.c': 1, 'x.b.c': 2}
+        """
+        if backend == 'loop':
+            matches = DotDict({
+                k: v for k, v in self.items()
+                if k.endswith('.' + suffix) or k == suffix
+            })
+        elif backend == 'trie':
+            rev_suffix = '.'.join(reversed(suffix.split('.')))
+            try:
+                matches = DotDict({
+                    k: self[k] for k in self._suffix_trie.values(rev_suffix)
+                })
+            except KeyError:
+                if default is not ub.NoParam:
+                    return default
+                raise
+        else:
+            raise ValueError(f'Unknown backend={backend}')
+
+        if not matches and default is not ub.NoParam:
+            return default
+        return matches
 
     def prefix_get(self, key, default=ub.NoParam):
         """
@@ -180,6 +216,101 @@ class DotDict(ub.UDict):
                 sub_key = full_key[len(key) + 1:]
                 suffix_dict[sub_key] = self[full_key]
             return suffix_dict
+
+    def suffix_subdict(self, suffixes, backend='trie'):
+        """
+        Filter DotDict to only contain keys ending with any given suffixes.
+
+        Args:
+            suffixes (List[str]): list of dot-suffixes
+            backend (str): 'trie' or 'loop'
+
+        Returns:
+            DotDict
+
+        References:
+            https://chatgpt.com/c/6841a161-2cd4-8002-ad9b-5593f5a2d70c
+
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict({
+            >>>     'proc1.param1': 1,
+            >>>     'proc2.param1': 2,
+            >>>     'proc3.param2': 3,
+            >>>     'proc4.part1.param1': 4,
+            >>>     'proc4.part2.param2': 5,
+            >>> })
+            >>> new = self.suffix_subdict(['param1', 'part2.param2'])
+            >>> print(f'new = {ub.urepr(new, nl=1, sort=1)}')
+            new = {
+                'proc1.param1': 1,
+                'proc2.param1': 2,
+                'proc4.part1.param1': 4,
+                'proc4.part2.param2': 5,
+            }
+        """
+        if backend == 'loop':
+            result = {
+                k: v for k, v in self.items()
+                if any(k.endswith('.' + suf) or k == suf for suf in suffixes)
+            }
+        elif backend == 'trie':
+            reversed_trie = self._suffix_trie
+            result_keys = set()
+            for suf in suffixes:
+                rev_suf = '.'.join(reversed(suf.split('.')))
+                result_keys.update(reversed_trie.values(rev_suf))
+            result = {k: self[k] for k in result_keys}
+        else:
+            raise ValueError(f'Unknown backend={backend}')
+        return self.__class__(result)
+
+    def prefix_subdict(self, prefixes, backend='trie'):
+        """
+        Filter DotDict to only contain keys starting with any given prefixes.
+
+        Args:
+            prefixes (List[str]): list of dot-prefixes
+            backend (str): 'trie' or 'loop'
+
+        Returns:
+            DotDict
+
+        Example:
+            >>> from geowatch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict({
+            >>>     'proc1.param1': 1,
+            >>>     'proc1.param2': 2,
+            >>>     'proc2.param1': 3,
+            >>>     'proc3.param2': 4,
+            >>>     'proc4.part1.param1': 5,
+            >>>     'proc4.part2.param2': 6,
+            >>> })
+            >>> new = self.prefix_subdict(['proc1', 'proc4.part1'])
+            >>> print(f'new = {ub.urepr(new, nl=1, sort=1)}')
+            new = {
+                'proc1.param1': 1,
+                'proc1.param2': 2,
+                'proc4.part1.param1': 5,
+            }
+        """
+        if backend == 'loop':
+            result = {
+                k: v for k, v in self.items()
+                if any(k.startswith(pref + '.') or k == pref for pref in prefixes)
+            }
+        elif backend == 'trie':
+            trie = self._prefix_trie
+            result_keys = set()
+            for pref in prefixes:
+                try:
+                    result_keys.update(trie.values(pref))
+                except KeyError:
+                    pass  # It's okay if a prefix has no matches
+            result = {k: self[k] for k in result_keys}
+        else:
+            raise ValueError(f'Unknown backend={backend}')
+        return self.__class__(result)
 
     def add_prefix(self, prefix):
         """
@@ -220,9 +351,6 @@ class DotDict(ub.UDict):
         new = self.__class__(_generate_new_items())
         return new
 
-    def print_graph(self):
-        explore_nested_dict(self)
-
     def query_keys(self, col):
         """
         Finds columns where one level has this key
@@ -246,6 +374,9 @@ class DotDict(ub.UDict):
         for key in self.keys():
             if col in set(key.split('.')):
                 yield key
+
+    def print_graph(self):
+        explore_nested_dict(self)
 
     # def __contains__(self, key):
     #     if super().__contains__(key):
@@ -271,6 +402,18 @@ class DotDict(ub.UDict):
     #         subkeys = []
     #         subkeys.extend(self._prefix_trie.values(key))
     #         return self.__class__([(k, self[k]) for k in subkeys])
+
+
+def dotdict_to_nested(d):
+    return DotDict.dotdict_to_nested(d)
+
+
+def dotkeys_to_nested(keys):
+    """
+    Args:
+        keys (List[str]): a list of dotted key names
+    """
+    return DotDict.to_nested_keys(keys)
 
 
 def indexable_to_graph(data):

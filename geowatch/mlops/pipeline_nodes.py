@@ -439,6 +439,7 @@ class Pipeline:
                         # there is a cleaner way to do this.
                         extra_submitkw['output_fpath'] = node.final_node_dpath / f'slurm-output-{node_procid}.log'
 
+                    # TODO: we need to be able to pass per-job slurm options
                     node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
                                             name=node_procid,

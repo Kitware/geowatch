@@ -26,6 +26,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * cmap argument to `geowatch visualize` can now accept a YAML mapping from channel name to colormap.
 * Experimental and likely to be removed argument `stack_axis` for geowatch visualize.
+* Added suffix method to utils DotDict.
 
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
