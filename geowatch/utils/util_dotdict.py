@@ -405,7 +405,7 @@ class DotDict(ub.UDict):
 
 
 def dotdict_to_nested(d):
-    return DotDict.dotdict_to_nested(d)
+    return DotDict.to_nested(d)
 
 
 def dotkeys_to_nested(keys):
@@ -413,6 +413,7 @@ def dotkeys_to_nested(keys):
     Args:
         keys (List[str]): a list of dotted key names
     """
+    # this is abusing duck typing
     return DotDict.to_nested_keys(keys)
 
 
