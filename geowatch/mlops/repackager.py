@@ -78,6 +78,7 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
     """
     from kwutil import util_path
+    from kwutil import util_exception
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     print('Begin repackage')
     print('checkpoint_fpaths = {}'.format(ub.urepr(checkpoint_fpaths, nl=1)))
@@ -97,9 +98,10 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
                     repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                                                 train_dpath_hint, model_config_fpath)
                 except Exception as ex:
-                    print('ERROR: Failed to package: {!r}'.format(ex))
+                    msg = f'ERROR: Failed to package checkpoint={checkpoint_fpath!r}: ex={ex!r}'
+                    print(msg)
                     if strict:
-                        raise
+                        raise util_exception.add_exception_note(ex, msg)
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
     from kwutil import util_yaml
