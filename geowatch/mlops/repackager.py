@@ -314,6 +314,11 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     hparams = checkpoint.get('hyper_parameters', None)
 
+    if 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        state_dict = checkpoint
+
     HACK_WORKAROUND_HPARAM_MISMATCH = True
     if HACK_WORKAROUND_HPARAM_MISMATCH:
         # Due to issues with pytorch-lightning 2.3.0 we check for if hparams
@@ -340,15 +345,16 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                 hparams = common_ondisk_hparams
 
     if 'input_channels' in hparams:
-        import kwcoco
+        from delayed_image.channel_spec import ChannelSpec
         # Hack for strange pickle issue
         chan = hparams['input_channels']
+
         if chan is not None:
             if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = kwcoco.ChannelSpec.coerce(chan._info['spec'])
+                chan = ChannelSpec.coerce(chan._info['spec'])
                 hparams['input_channels'] = chan
             else:
-                hparams['input_channels'] = kwcoco.ChannelSpec.coerce(chan.spec)
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
 
     # Construct the model we want to repackage.  For now we just hard code
     # this. But in the future we could use context from the lightning output
@@ -368,17 +374,41 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
             else:
                 raise
     else:
+
+        # new stuff seems to be missing dataset stats and classes.
+
         data = load_meta(model_config_fpath)
         if "model" in data:
             model_config = data["model"]
 
         model_config["init_args"] = hparams | model_config["init_args"]
-        model = parse_and_init_config(model_config)
+        try:
+            model = parse_and_init_config(model_config)
+        except Exception as ex:
+            if 'input_sensorchan=None and dataset_stats=None' in str(ex):
+                # Can we hack the missing dataset stats case?
+                input_norm_keys = [k for k in state_dict if k.startswith('input_norms.')]
+                # head_keys = [k for k in state_dict if k.startswith('heads.')]
+                # class_keys = [k for k in state_dict if k.startswith('class')]
+                unique_sensor_modes = set()
+                input_stats = ub.ddict(dict)
+                for k in input_norm_keys:
+                    _, sensor, chan, stat = k.split('.')
+                    unique_sensor_modes.add((sensor, chan))
+                    value = state_dict[k]
+                    input_stats[(sensor, chan)][stat] = value
+                assert model_config['init_args'].get('input_sensorchan') is None, (
+                    'should not get this error if it is populated')
+                assert model_config['init_args'].get('dataset_stats') is None, (
+                    'should not get this error if it is populated')
+                # hacking in dataset stats for models that exclusively use it
+                model_config['init_args']['dataset_stats'] = {
+                    'input_stats': input_stats,
+                    'class_freq': None,
+                    'unique_sensor_modes': unique_sensor_modes,
+                }
+                model = parse_and_init_config(model_config)
 
-    if 'state_dict' in checkpoint:
-        state_dict = checkpoint['state_dict']
-    else:
-        state_dict = checkpoint
     model.load_state_dict(state_dict)
 
     if train_dpath_hint is not None:
