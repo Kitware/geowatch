@@ -225,6 +225,9 @@ def main(cmdline=True, **kwargs):
         # Add might be a bad verb for this. Maybe "gather"?
         import kwutil
         repackage_kwargs = kwutil.Yaml.coerce(config.repackage_kwargs)
+        if repackage_kwargs is None:
+            repackage_kwargs = {}
+        print(f'repackage_kwargs={repackage_kwargs}')
         manager.repackage_checkpoints(yes=config.yes, **repackage_kwargs)
 
     if ('add' in actions or 'gather' in actions) and 'packages' in targets:
