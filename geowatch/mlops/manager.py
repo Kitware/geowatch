@@ -160,6 +160,12 @@ class ManagerConfig(scfg.DataConfig):
         questions.
         '''))
 
+    repackage_kwargs = scfg.Value(None, help=ub.paragraph(
+        '''
+        YAML dict as keyword args for repackage.
+        Default is: {force: False, strict: False, dry: False}
+        '''))
+
 
 def main(cmdline=True, **kwargs):
     """
@@ -217,7 +223,9 @@ def main(cmdline=True, **kwargs):
 
     if ('repackage' in actions) and 'checkpoints' in targets:
         # Add might be a bad verb for this. Maybe "gather"?
-        manager.repackage_checkpoints(yes=config.yes)
+        import kwutil
+        repackage_kwargs = kwutil.Yaml.coerce(config.repackage_kwargs)
+        manager.repackage_checkpoints(yes=config.yes, **repackage_kwargs)
 
     if ('add' in actions or 'gather' in actions) and 'packages' in targets:
         # Add might be a bad verb for this. Maybe "gather"?
@@ -351,14 +359,14 @@ class DVCExptManager(ub.NiceRepr):
 
     add_packages = gather_packages
 
-    def repackage_checkpoints(manager, yes=None):
+    def repackage_checkpoints(manager, yes=None, **kwargs):
         """
         TODO: break this up into smaller components.
         """
         # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.repackage_checkpoints(yes=yes)
+            state.repackage_checkpoints(yes=yes, **kwargs)
 
     def push_packages(manager, yes=None):
         """
@@ -904,7 +912,7 @@ class ExperimentState(ub.NiceRepr):
         tables = self.cross_referenced_tables()
         summarize_tables(tables)
 
-    def repackage_checkpoints(self, yes=None):
+    def repackage_checkpoints(self, yes=None, **kwargs):
         from geowatch.mlops import repackager
         from rich.prompt import Confirm
 
@@ -928,7 +936,7 @@ class ExperimentState(ub.NiceRepr):
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
-            _ = repackager.repackage(to_repackage)
+            _ = repackager.repackage(to_repackage, **kwargs)
 
     def copy_packages_to_dvc(self, yes=None):
         # Rebuild the tables to ensure we are up to date
