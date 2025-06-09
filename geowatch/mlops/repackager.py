@@ -99,7 +99,7 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
                                                 train_dpath_hint, model_config_fpath)
                 except Exception as ex:
                     note = f'ERROR: Failed to package checkpoint={checkpoint_fpath!r}'
-                    print('{note} ex={ex!r}')
+                    print(f'{note} ex={ex!r}')
                     if strict:
                         raise util_exception.add_exception_note(ex, note)
         package_fpaths.append(os.fspath(package_fpath))
