@@ -351,14 +351,14 @@ class DVCExptManager(ub.NiceRepr):
                 raise UserAbort
             manager.dvc.pull(pull_fpaths)
 
-    def gather_packages(manager, yes=None):
+    def gather_packages(manager, yes=None, repackage_kwargs=None):
         """
         TODO: break this up into smaller components.
         """
         # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.gather_packages(yes=yes)
+            state.gather_packages(yes=yes, repackage_kwargs=repackage_kwargs)
 
     add_packages = gather_packages
 
