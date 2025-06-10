@@ -235,6 +235,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
                 for item in input_stats:
                     sens_chan_key = (item['sensor'], item['channels'])
                     input_stats_dict[sens_chan_key] = ub.udict(item) - {'sensor', 'channels'}
+                input_stats = input_stats_dict
 
             for sens_chan_key, stats in input_stats.items():
                 sensor, channel = sens_chan_key
