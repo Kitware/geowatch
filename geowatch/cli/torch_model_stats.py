@@ -228,6 +228,14 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         input_stats = dataset_stats.get('input_stats', None)
         unique_sensor_modes = dataset_stats.get('unique_sensor_modes', None)
         if input_stats is not None:
+
+            if isinstance(input_stats, list):
+                # Convert to dictionary form
+                input_stats_dict = {}
+                for item in input_stats:
+                    sens_chan_key = (item['sensor'], item['channels'])
+                    input_stats_dict[sens_chan_key] = ub.udict(item) - {'sensor', 'channels'}
+
             for sens_chan_key, stats in input_stats.items():
                 sensor, channel = sens_chan_key
                 channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
