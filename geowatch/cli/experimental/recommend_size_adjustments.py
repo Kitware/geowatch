@@ -91,11 +91,11 @@ class RecommendSizeAdjustmentsCLI(scfg.DataConfig):
         print(f'step_difference={step_difference.evalf()}')
 
         if step_difference == 0:
-            print('Parameters are perfectly balanced')
+            rich.print(':white_check_mark: Parameters are perfectly balanced :balance_scale:')
         elif step_difference > 0:
-            print('Not enough total steps to fill MAX_STEPS')
+            rich.print(':x: Not enough total steps to fill MAX_STEPS')
         else:
-            print('MAX STEPS will stop training short')
+            rich.print(':x: MAX STEPS will stop training short')
 
         def numeric_solve(to_zero, k):
             from scipy.optimize import minimize
