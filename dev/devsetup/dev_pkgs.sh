@@ -3,22 +3,59 @@ __doc__="
 Tries to ensures development version of Jon's libs are installed.
 This makes the assumption the repos are already checked out.
 
+
+Make sure you are already in the venv you want and you have pip installed
+git-well and uv.
+
 Requirements:
     # For auto-branch upgrades
     pip install git_well
-
-    # Not the best way, but a way.
-    curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh > erotemic_utils.sh
+    pip install uv
 
 Usage:
-    source ~/code/geowatch/dev/devsetup/dev_pkgs.sh
+    bash ~/code/geowatch/dev/devsetup/dev_pkgs.sh
 "
+set -euo pipefail
+
+
+check_command_exists() {
+    local cmd="$1"
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "ERROR: Required command '$cmd' not found. Please install it first." >&2
+        return 1
+    fi
+}
+
+
+bash_array_repr(){
+    __doc__='
+    Given a bash array, this should print a literal copy-pastable
+    representation
+
+    Example:
+        ARR=(1 "2 3" 4)
+        bash_array_repr "${ARR[@]}"
+
+    Dependency Free Alternative:
+        echo "${ARR[@]}"
+    ...
+    '
+    local ARGS=("$@")
+    if [ "${#ARGS[@]}" -gt 0 ]; then
+        # Not sure if the double or single quotes is better here
+        echo "($(printf "'%s' " "${ARGS[@]}"))"
+    else
+        echo "()"
+    fi
+}
 
 # Place where the source packages are located
 CODE_DPATH=$HOME/code
 
-# TODO:
-# check that git-well is installed and error if it is not.
+# Options (currently hard coded)
+DO_FETCH=1
+DO_INSTALL=1
+DO_CLONE=1
 
 mylibs=(
 ubelt
@@ -33,6 +70,7 @@ kwarray
 kwimage
 kwplot
 kwcoco
+kwcoco_dataloader
 kwutil
 kwgis
 ndsampler
@@ -52,24 +90,29 @@ declare -A REPO_REMOTE_LUT=(
     ["kwimage"]="https://gitlab.kitware.com/computer-vision/kwimage.git"
     ["kwplot"]="https://gitlab.kitware.com/computer-vision/kwplot.git"
     ["kwcoco"]="https://gitlab.kitware.com/computer-vision/kwcoco.git"
+    ["kwcoco_dataloader"]="https://gitlab.kitware.com/computer-vision/kwcoco_dataloader.git"
     ["kwutil"]="https://gitlab.kitware.com/computer-vision/kwutil.git"
     ["kwgis"]="https://gitlab.kitware.com/computer-vision/kwgis.git"
     ["ndsampler"]="https://gitlab.kitware.com/computer-vision/ndsampler.git"
     ["simple_dvc"]="https://gitlab.kitware.com/computer-vision/simple_dvc.git"
 )
 
+if ! check_command_exists uv; then
+    echo "Could not find uv, falling back to pip. Install uv for faster installs"
+    _PIP_PREFIX=
+else
+    _PIP_PREFIX=uv
+    echo "Found uv"
+fi
 
-DO_FETCH=1
-DO_INSTALL=1
-DO_CLONE=1
-
-_PIP_PREFIX=uv
 
 
 if [[ "$DO_FETCH" == "1" ]]; then
     echo "====================="
     echo "Start Pull and Update"
     echo "====================="
+    check_command_exists git-well || return 1
+
     ### Pull and update
     for name in "${mylibs[@]}"
     do

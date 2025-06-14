@@ -12,6 +12,7 @@ TODO:
     - [x] Rename to coco_spectra
 
 CommandLine:
+    geowatch spectra geowatch-msi --dst foo.png
     geowatch spectra --src special:geowatch-msi --show=True --stat=density
     geowatch spectra --src special:photos --show=True --fill=False
     geowatch spectra --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
