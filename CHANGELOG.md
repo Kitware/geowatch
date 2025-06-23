@@ -32,6 +32,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fix
 * Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
 * Issue where stitcher would not write a file if its directory was not existing
+* Fixed issue when mlops got an unhashable dictionary parameter.
 
 
 ## Version 0.19.0 - Released 2025-03-06

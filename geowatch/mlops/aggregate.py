@@ -1446,7 +1446,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         agg.macro_compatible = None
 
     @classmethod
-    def demo(cls, num=10, rng=None):
+    def demo(cls, num=10, rng=None, include_unhashable=False):
         """
         Construct a demo aggregator for testing.
 
@@ -1456,6 +1456,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         Args:
             num (int): number of rows
             rng (int | None): random number generator / state
+            include_unhashable (bool):
+                if true include columns with unhashable values for testing.
 
         Returns:
             Aggregator
@@ -1471,6 +1473,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         """
         from kwarray import distributions as dmod
         import pandas as pd
+        import numpy as np
         import kwarray
         import uuid
         rng = kwarray.ensure_rng(rng)
@@ -1508,6 +1511,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             f'{node}.kwh': dmod.Uniform(1, 100, rng=rng),
             f'{node}.co2_kg': dmod.Uniform(1, 100, rng=rng),
         }
+
+        if include_unhashable:
+            listvals = np.array([
+                [1, 2, 3],
+                [],
+                ["a", [2]],
+            ], dtype=object)
+            dictvals = np.array([
+                {'type': 'special_algo', 'params': {'a': 'b', 'c': 'd'}},
+                {'type': 'special_algo', 'params': {'a': 'e', 'c': 'f'}},
+                {'type': 'null'},
+            ], dtype=object)
+            distributions['params'][f'{node}.unhashable_list'] = dmod.Categorical(listvals, rng=rng)
+            distributions['params'][f'{node}.unhashable_dict'] = dmod.Categorical(dictvals, rng=rng)
 
         columns = {}
 
@@ -1549,8 +1566,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         table = pd.DataFrame(columns)
 
+        # FIXME: How do we specify the objective for the metrics here?
+        # Does the constructive python API allow for this? If not it should.
         primary_metric_cols = [f'metrics.{node}.metric1']
         display_metric_cols = [f'metrics.{node}.metric3']
+
         agg = cls(table, primary_metric_cols=primary_metric_cols,
                   display_metric_cols=display_metric_cols)
         return agg
@@ -1881,6 +1901,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         """
         import pandas as pd
+        import itertools as it
         from geowatch.utils import util_pandas
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         requested_params = self.requested_params
@@ -1922,10 +1943,12 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         param_cols = ub.oset(effective_params.columns).difference(hashid_ignore_columns)
         param_cols = list(param_cols - {'region_id', 'node'})
 
+        # Check for unhashable columns and coerce them into a hashable representation
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            # effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, (list, dict)) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
@@ -1958,11 +1981,38 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         if len(param_cols) > 0:
             param_groups = effective_params.groupby(param_cols, dropna=False)
+
+            orig_param_groups_iter = iter(param_groups)
+
+            # Check that nothing goes wrong in the groupby operation.
+            try:
+                first_item = next(orig_param_groups_iter)
+                # Reconstruct the full iterator by chaining the first item with the rest
+                param_groups_iter = it.chain([first_item], orig_param_groups_iter)
+            except (TypeError, StopIteration) as ex:
+                from kwutil import util_exception
+                # TODO: could be a utility function: check_hashable or
+                # something.
+                unhashable_columns = []
+                for col in param_cols:
+                    # TODO: Check for hashability of columnns
+                    try:
+                        effective_params[col].apply(hash)
+                    except Exception:
+                        print(f'ERROR: Found unhashable column: {col}')
+                        unhashable_columns.append(col)
+
+                raise util_exception.add_exception_note(ex, ub.paragraph(
+                    f'''
+                    Parameter grouping failed, likely due to an unhashable
+                    parameter column: unhashable_columns={unhashable_columns}
+                    '''))
+
         else:
             # fallback case, something is probably wrong if we are here
-            param_groups = {None: effective_params}.items()
+            param_groups_iter = {None: effective_params}.items()
 
-        for param_vals, group in param_groups:
+        for param_vals, group in param_groups_iter:
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             is_group_included = is_param_included.loc[group.index]
