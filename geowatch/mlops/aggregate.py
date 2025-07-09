@@ -1173,7 +1173,7 @@ class AggregatorAnalysisMixin:
             'kwh': 'electricity',
             'co2_kg': 'emissions',
         }
-        friendly['resource'] = friendly['resource'].map(lambda x: mapper.get(x, x))
+        friendly['resource'] = friendly['resource'].apply(lambda x: mapper.get(x, x))
         return friendly
 
     def report_resources(agg):
@@ -1948,7 +1948,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
             # effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
-            effective_params = effective_params.map(lambda x: str(x) if isinstance(x, (list, dict)) else x)
+            effective_params = effective_params.apply(lambda x: str(x) if isinstance(x, (list, dict)) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
