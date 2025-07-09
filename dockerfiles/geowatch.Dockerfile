@@ -183,7 +183,7 @@ echo "
     cd ~/code/geowatch
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "geowatch:uv0.7.19-python3.13-strict" \
-        --build-arg BUILD_STRICT=0 \
+        --build-arg BUILD_STRICT=1 \
         --build-arg DEV_TRACE=0 \
         -f ./dockerfiles/geowatch.Dockerfile .
 

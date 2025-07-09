@@ -98,9 +98,13 @@ mgrs>=1.4.3     ; python_version < '3.11' and python_version >= '3.10'    # Pyth
 kwarray>=0.6.19
 xarray>=2023.10.0
 #filterpy>=1.4.5
-einops>=0.6.0
+
+einops>=0.8.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+einops>=0.6.0     ; python_version < '3.13'
 # dask[array]>=2023.8.1
-dask[array]>=2023.5.0
+
+dask[array]>=2025.2.0    ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+dask[array]>=2023.5.0    ; python_version < '3.13' 
 
 # Dask related
 # cytoolz>=0.11.2
@@ -131,8 +135,9 @@ blake3>=0.3.1  ; python_version < '3.12' and python_version >= '3.11'    # Pytho
 blake3>=0.2.1  ; python_version < '3.11' # Python 3.10- 
 
 more_itertools>=8.12.0
-
-pint>=0.23 
+ 
+pint>=0.24.4  ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+pint>=0.23    ; python_version < '3.13' 
 
 girder_client>=3.1.15
 
@@ -218,7 +223,8 @@ pytorch_lightning>=2.0.8,!=2.3.*,!=2.4.0
 #pytorch_lightning>=2.0.8
 #jsonargparse[signatures]>=4.24.1
 
-monai>=0.8.0     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+monai>=1.3.2     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13
+monai>=0.8.0     ; python_version < '3.13'  and python_version >= '3.11'   # Python 3.11
 monai>=0.6.0     ; python_version < '3.11' 
 
 torch_optimizer>=0.1.0
