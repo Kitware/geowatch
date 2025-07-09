@@ -542,7 +542,8 @@ main(){
 
     fix_opencv_conflicts
 
-    check_metrics_framework
+    # Dont need to do this anymore
+    # check_metrics_framework
 
     # Newer versions of torchmetrics enable pretty-errors by default, which
     # breaks tracebacks. Just uninstall it to disable this "feature".

@@ -66,6 +66,10 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     -f ./dockerfiles/uv.Dockerfile .
 
 docker run --gpus=all -it uv:313 bash
+
+SeeAlso:
+~/code/ci-docker/uv.Dockerfile
+
 '
 EOF
 
