@@ -150,4 +150,3 @@ def build_recurring_sites_coco():
         ub.cmd(f'geowatch visualize {coco_dset.fpath} --stack=only --smart', system=1)
 
     return coco_dset
-

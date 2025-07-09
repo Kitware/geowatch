@@ -165,7 +165,7 @@ lark_cython >= 0.0.16
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.11.1
+kwimage>=0.11.2
 kwcoco>=0.8.5
 kwcoco_dataloader>=0.1.1
 delayed_image>=0.4.5
