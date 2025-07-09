@@ -189,7 +189,7 @@ echo "
 
     docker run \
         --volume "$HOME/code/geowatch":/host-geowatch:ro \
-        --runtime=nvidia -it geowatch:311-strict bash
+        --gpus=all -it geowatch:uv0.7.19-python3.13-strict bash
 
     IMAGE_VERSION=$(docker run --runtime=nvidia -it geowatch:311-strict python -c "import geowatch; print(geowatch.__version__)")
     IMAGE_VERSION=$(python -c "import geowatch; print(geowatch.__version__)")
