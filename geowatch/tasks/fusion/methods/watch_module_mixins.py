@@ -564,7 +564,7 @@ class PackageMixin:
                     'geowatch.tasks.fusion.methods.*'
                 ])
                 # exp.intern('geowatch.tasks.fusion.methods.*', allow_empty=False)
-                exp.intern('geowatch.tasks.fusion.**', allow_empty=False)
+                exp.intern('geowatch.tasks.fusion.**', allow_empty=True)
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements
@@ -949,11 +949,19 @@ class DatasetStatsMixin:
 
             if input_stats is not None:
                 _fixed_input_stats = {}
-                for k, v in input_stats.items():
-                    s, c = k
-                    if s is None:
-                        s = '*'
-                    _fixed_input_stats[(s, c)] = v
+                if isinstance(input_stats, list):
+                    # Allow list input form
+                    for item in input_stats:
+                        assert isinstance(item, dict)
+                        s = item['sensor']
+                        c = item['channels']
+                        _fixed_input_stats[(s, c)] = item
+                else:
+                    for k, v in input_stats.items():
+                        s, c = k
+                        if s is None:
+                            s = '*'
+                        _fixed_input_stats[(s, c)] = v
                 input_stats = _fixed_input_stats
 
         self.class_freq = class_freq

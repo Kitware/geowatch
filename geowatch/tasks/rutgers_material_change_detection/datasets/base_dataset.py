@@ -194,7 +194,7 @@ class BaseDataset(Dataset):
                     rgb_image = self.to_rgb(example["video"][index])
 
                     axes[i].imshow(rgb_image)
-                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i].axis("off")
             else:
                 # Fewer images in sequence than number of plot images.
@@ -202,7 +202,7 @@ class BaseDataset(Dataset):
                     rgb_image = self.to_rgb(example["video"][i])  # TODO:
 
                     axes[i].imshow(rgb_image)
-                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i].axis("off")
 
             if "region_name" in list(example.keys()):
@@ -243,7 +243,7 @@ class BaseDataset(Dataset):
                     )
 
                     axes[i].imshow(rgb_image)
-                    axes[i].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i].axis("off")
             else:
                 # Fewer images in sequence than number of plot images.
@@ -253,7 +253,7 @@ class BaseDataset(Dataset):
                     )
 
                     axes[i].imshow(rgb_image)
-                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i].axis("off")
 
             # Add title to entire resquence.
@@ -302,7 +302,7 @@ class BaseDataset(Dataset):
                         axes[i + 1].imshow(mpl_label_image, interpolation="none", alpha=0.4, cmap="cool")
                     else:
                         axes[i + 1].imshow(rgb_image)
-                    axes[i + 1].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i + 1].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i + 1].axis("off")
             else:
                 # Fewer images in sequence than number of plot images.
@@ -318,7 +318,7 @@ class BaseDataset(Dataset):
                     else:
                         axes[i + 1].imshow(rgb_image)
 
-                    axes[i + 1].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i + 1].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i + 1].axis("off")
 
             if "region_name" in list(example.keys()):
@@ -358,7 +358,7 @@ class BaseDataset(Dataset):
                     rgb_image = self.to_rgb(example["video"][index])
 
                     axes[i + 1].imshow(rgb_image)
-                    axes[i + 1].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i + 1].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i + 1].axis("off")
             else:
                 # Fewer images in sequence than number of plot images.
@@ -366,7 +366,7 @@ class BaseDataset(Dataset):
                     rgb_image = self.to_rgb(example["video"][i])
 
                     axes[i + 1].imshow(rgb_image)
-                    axes[i + 1].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i + 1].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                     axes[i + 1].axis("off")
 
             if "region_name" in list(example.keys()):
@@ -404,10 +404,10 @@ class BaseDataset(Dataset):
                 if i == change_index:
                     # Format label image
                     axes[i].set_title(
-                        f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]', color="red"
+                        f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F - 1}]', color="red"
                     )
                 else:
-                    axes[i].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
+                    axes[i].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F - 1}]')
                 axes[i].axis("off")
 
             if "region_name" in list(example.keys()):
@@ -449,7 +449,7 @@ class BaseDataset(Dataset):
             # Add date and frame number to images.
             if overlay_dates:
                 img_text = [
-                    f"[{i+1}/{len(example['datetimes'])}]: " + dt.strftime("%m-%d-%Y")
+                    f"[{i + 1}/{len(example['datetimes'])}]: " + dt.strftime("%m-%d-%Y")
                     for i, dt in enumerate(example["datetimes"])
                 ]
             else:
@@ -473,7 +473,7 @@ class BaseDataset(Dataset):
             # Add date and frame number to images.
             if overlay_dates:
                 img_text = [
-                    f"[{i+1}/{len(example['datetimes'])}]: " + dt.strftime("%m-%d-%Y")
+                    f"[{i + 1}/{len(example['datetimes'])}]: " + dt.strftime("%m-%d-%Y")
                     for i, dt in enumerate(example["datetimes"])
                 ]
             else:

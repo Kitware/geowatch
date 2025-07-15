@@ -4,12 +4,43 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.19.0 - Unreleased
+## Version 0.20.0 - Unreleased
+
+### Changed
+* Reworked `BatchPlotter` so it has the ability to notify the pl-module if it
+  wants to draw something. This lets us skip processing on training if we
+  aren't drawing the output of the batch.
+* Add dependency on `kwcoco_dataloader` module, which was ported from this codebase.
+* Replace `balanced_sampling` with version from `kwcoco_dataloader`.
+* Replace `temporal_sampling` with version from `kwcoco_dataloader`.
+* Replace all `kwcoco_dataloader.tasks.fusion.datamodules` code with `kwcoco_dataloader`.
+* Removed SMART-specific region-id handling.
+* Allow metrics with forward slashes to be logged by tensorboard plotter.
+* Mark certain globals as safe for serialization in fusion fit.
+* In mlops, made `default_metrics` the canonical name for the old
+  `default_metrics2`. Behavior will be flexible, and warning will be given for
+  future backwards incompatibility.
+* Removed specialized "pan" behavior in `geowatch visualize`. Can now use a
+  mapping to specify colormaps for specific channels.
+
+### Added
+* cmap argument to `geowatch visualize` can now accept a YAML mapping from channel name to colormap.
+* Experimental and likely to be removed argument `stack_axis` for geowatch visualize.
+* Added suffix method to utils DotDict.
+* Added `repackage_kwargs` to mlops manager.
+
+### Fix
+* Fixed issue in geowatch visualize for very simple kwcoco files with little to no metadata
+* Issue where stitcher would not write a file if its directory was not existing
+* Fixed issue when mlops got an unhashable dictionary parameter.
+
+
+## Version 0.19.0 - Released 2025-03-06
 
 ### Added
 * Add `DataFrame.argextrema`
 * Add suboptimize to `Aggregator.report_best`
-* Added experimental way to specify metric metadata in a mlop ProcessNode via the `_default_metrics2` method, which will likely change in the future.
+* Added experimental way to specify metric metadata in a mlops ProcessNode via the `_default_metrics2` method, which will likely change in the future.
 
 ### Changed
 * mlops manager package list command now sorts the package name in a reasonable way. 

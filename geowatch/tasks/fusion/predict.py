@@ -63,6 +63,8 @@ class DataModuleConfigMixin(scfg.DataConfig):
     __INFERABLE_DATAMODULE_KEYS__ = [
         'channels',
         'normalize_peritem',
+        'robust_normalize',
+        'dynamic_channels',
         'chip_dims',
         'time_steps',
         'time_sampling',
@@ -620,10 +622,10 @@ def _debug_grid(test_dataloader):
 
 def _jsonify(data):
     # This will be serailized in kwcoco, so make sure it can be coerced to json
-    from kwcoco.util import util_json
-    jsonified = util_json.ensure_json_serializable(data)
+    import kwutil
+    jsonified = kwutil.Json.ensure_serializable(data)
     walker = ub.IndexableWalker(jsonified)
-    for problem in util_json.find_json_unserializable(jsonified):
+    for problem in kwutil.Json.find_unserializable(jsonified):
         bad_data = problem['data']
         if hasattr(bad_data, 'spec'):
             walker[problem['loc']] = bad_data.spec
@@ -722,6 +724,9 @@ class PeriodicMemoryMonitor:
 
 def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset, device):
     import rich
+    import kwutil
+    import warnings
+    from kwutil import util_progress
 
     print('Predict on device = {!r}'.format(device))
     downweight_edges = config.downweight_edges
@@ -750,7 +755,6 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     test_dataloader = datamodule.test_dataloader()
     batch_iter = iter(test_dataloader)
 
-    from kwutil import util_progress
     pman = util_progress.ProgressManager(backend='rich')
 
     # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
@@ -810,21 +814,19 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
     config_resolved = _jsonify(config.asdict())
     fit_config = _jsonify(fit_config)
 
-    from kwcoco.util import util_json
-    unresolvable = list(util_json.find_json_unserializable(config_resolved))
+    unresolvable = list(kwutil.Json.find_unserializable(config_resolved))
     if unresolvable:
-        import warnings
         warnings.warn(f'NotReproducibleWarning: Found unresolvable configuration options: {unresolvable!r}')
         config_walker = ub.IndexableWalker(config_resolved)
         for unresolvable_item in unresolvable:
             _value = unresolvable_item['data']
             config_walker[unresolvable_item['loc']] = f'Unresolvable: {_value}'
 
-        unresolvable = list(util_json.find_json_unserializable(config_resolved))
+        unresolvable = list(kwutil.Json.find_unserializable(config_resolved))
         assert not unresolvable, 'should have entered dummy values for unresolvable data'
 
     if config['record_context']:
-        from geowatch.utils import process_context
+        from kwutil import process_context
         proc_context = process_context.ProcessContext(
             name='geowatch.tasks.fusion.predict',
             type='process',
@@ -838,7 +840,7 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
                 'fit_config': fit_config
             }
         )
-        # assert not list(util_json.find_json_unserializable(proc_context.obj))
+        # assert not list(kwutil.Json.find_unserializable(proc_context.obj))
         info.append(proc_context.obj)
         proc_context.start()
         test_coco_dataset = datamodule.coco_datasets['test']
@@ -898,7 +900,6 @@ def _predict_critical_loop(config, fit_config, model, datamodule, result_dataset
             except RuntimeError as ex:
                 msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
                 print(msg)
-                import warnings
                 warnings.warn(msg)
                 from kwutil import util_environ
                 # import xdev
@@ -1504,6 +1505,7 @@ class Predictor:
             #             traintime_params['channels'] = model.input_channels.spec
             #         else:
             #             traintime_params['channels'] = list(model.input_norms.keys())[0]
+
         config.fit_config = fit_config
         self.model = model
         self.fit_config = fit_config
@@ -1563,6 +1565,7 @@ class Predictor:
         datamodule = self.datamodule
         model = self.model
         config = self.config
+        fit_config = self.fit_config
 
         test_coco_dataset = datamodule.coco_datasets['test']
 
@@ -1587,8 +1590,8 @@ class Predictor:
 
         print('devices = {!r}'.format(config['devices']))
         print('accelerator = {!r}'.format(config['accelerator']))
+        from geowatch.utils.lightning_ext import util_device
         if config['accelerator'] == 'auto':
-            from geowatch.utils.lightning_ext import util_device
             devices = util_device.coerce_devices(config['devices'])
         else:
             devices = util_device.coerce_accelerator_devices(config['accelerator'], config['devices'])
@@ -1597,8 +1600,6 @@ class Predictor:
         if len(devices) > 1:
             raise NotImplementedError('TODO: handle multiple devices')
         device = devices[0]
-
-        fit_config = self.fit_config
 
         result_dataset = _predict_critical_loop(config, fit_config, model,
                                                 datamodule, result_dataset,

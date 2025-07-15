@@ -95,6 +95,12 @@ from ._util import (
 __all__ = ["ActionsContainer", "ArgumentParser"]
 
 
+HAS_ARGPARSE_GH_125355 = (
+    (sys.version_info[0:2] == (3, 12) and sys.version_info[2] >= 8) or
+    (sys.version_info[0:3] >= (3, 13, 1))
+)
+
+
 class ActionsContainer(SignatureArguments, argparse._ActionsContainer):
     """Extension of argparse._ActionsContainer to support additional functionalities."""
 
@@ -261,7 +267,11 @@ class ArgumentParser(ParserDeprecations, ActionsContainer, ArgumentLinking, argp
             with patch_namespace(), parser_context(
                 parent_parser=self, lenient_check=True
             ), ActionTypeHint.subclass_arg_context(self):
-                namespace, args = self._parse_known_args(args, namespace)
+                if HAS_ARGPARSE_GH_125355:
+                    namespace, args = self._parse_known_args(args, namespace, intermixed=False)
+                else:
+                    namespace, args = self._parse_known_args(args, namespace)
+
         except argparse.ArgumentError as ex:
             self.error(str(ex), ex)
 

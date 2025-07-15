@@ -1,4 +1,4 @@
-pip install git-of-theseus
+uv pip install git-of-theseus
 
 cd "$HOME"/code/geowatch
 #git-of-theseus-analyze "$HOME"/code/watch --procs 4
@@ -6,18 +6,24 @@ cd "$HOME"/code/geowatch
 
 #pint "1day" "seconds"
 
-git-of-theseus-analyze . --interval "86400" --procs 4
+git-of-theseus-analyze . \
+    --interval "86400" \
+    --procs 4 \
+    --ignore-whitespace \
+    --ignore "geowatch_tpl/submodules/**" \
+    --ignore "geowatch_tpl/submodules_static/**" \
+    --outdir ./git-of-theseus
 
 
-git-of-theseus-line-plot authors.json --outfile authors-line.png
-git-of-theseus-line-plot authors.json --outfile authors-line-norm.png --normalize
+git-of-theseus-line-plot ./git-of-theseus/authors.json --outfile ./git-of-theseus/authors-line.png
+git-of-theseus-line-plot ./git-of-theseus/authors.json --outfile ./git-of-theseus/authors-line-norm.png --normalize
 
-git-of-theseus-stack-plot cohorts.json --outfile cohorts-stack.png
-git-of-theseus-stack-plot authors.json --outfile authors-stack.png
-git-of-theseus-stack-plot authors.json --normalize --outfile authors-stack-norm.png
-git-of-theseus-stack-plot exts.json --outfile ext-stack.png
+git-of-theseus-stack-plot ./git-of-theseus/cohorts.json --outfile ./git-of-theseus/cohorts-stack.png
+git-of-theseus-stack-plot ./git-of-theseus/authors.json --outfile ./git-of-theseus/authors-stack.png
+git-of-theseus-stack-plot ./git-of-theseus/authors.json --normalize --outfile ./git-of-theseus/authors-stack-norm.png
+git-of-theseus-stack-plot ./git-of-theseus/exts.json --outfile ./git-of-theseus/ext-stack.png
 
-git-of-theseus-survival-plot survival.json --outfile survival-survival.png
+git-of-theseus-survival-plot ./git-of-theseus/survival.json --outfile ./git-of-theseus/survival-survival.png
 
 
 # See Also

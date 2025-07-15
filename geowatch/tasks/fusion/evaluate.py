@@ -319,7 +319,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             for catname in classes_of_interest
         }
         class_weights = np.ones(shape, dtype=np.float32)
-        initial_total_weight = class_weights.size
 
         sseg_groups = {
             'background': [],
@@ -345,8 +344,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 unit_sseg_share = fg_poly.area / len(sseg_groups['foreground'])
             else:
                 unit_sseg_share = 1
-
-        true_sseg.area / initial_total_weight
 
         # background should be background, do nothing with it
         sseg_groups['background']

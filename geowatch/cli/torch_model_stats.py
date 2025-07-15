@@ -225,35 +225,52 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         unknown_input_stats = []
         sensor_modes_with_stats = set()
 
-        for sens_chan_key, stats in dataset_stats['input_stats'].items():
-            sensor, channel = sens_chan_key
-            channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
-            sensor_modes_with_stats.add((sensor, channel))
-            unique_sensors.add(sensor)
-            sensor_stat = {
-                'sensor': sensor,
-                'channel': channel,
-            }
-            if stem_stats:
-                import numpy as np
-                sensor_stat.update({
-                    'mean': np.asarray(stats['mean']).ravel().tolist(),
-                    'std': np.asarray(stats['std']).ravel().tolist(),
-                })
-            known_input_stats.append(sensor_stat)
+        input_stats = dataset_stats.get('input_stats', None)
+        unique_sensor_modes = dataset_stats.get('unique_sensor_modes', None)
+        if input_stats is not None:
 
-        unique_sensor_modes = list(dataset_stats['unique_sensor_modes'])
-        for sensor, channel in unique_sensor_modes:
-            channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
-            key = (sensor, channel)
-            if key not in sensor_modes_with_stats:
+            if isinstance(input_stats, list):
+                # Convert to dictionary form
+                input_stats_dict = {}
+                for item in input_stats:
+                    sens_chan_key = (item['sensor'], item['channels'])
+                    input_stats_dict[sens_chan_key] = ub.udict(item) - {'sensor', 'channels'}
+                input_stats = input_stats_dict
+
+            for sens_chan_key, stats in input_stats.items():
+                sensor, channel = sens_chan_key
+                channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
+                sensor_modes_with_stats.add((sensor, channel))
                 unique_sensors.add(sensor)
-                unknown_input_stats.append(
-                    {
-                        'sensor': sensor,
-                        'channel': channel,
-                    }
-                )
+                sensor_stat = {
+                    'sensor': sensor,
+                    'channel': channel,
+                }
+                if stem_stats:
+                    import numpy as np
+                    sensor_stat.update({
+                        'mean': np.asarray(stats['mean']).ravel().tolist(),
+                        'std': np.asarray(stats['std']).ravel().tolist(),
+                    })
+                known_input_stats.append(sensor_stat)
+        else:
+            known_input_stats = None
+
+        if unique_sensor_modes is not None:
+            unique_sensor_modes = list(dataset_stats['unique_sensor_modes'])
+            for sensor, channel in unique_sensor_modes:
+                channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
+                key = (sensor, channel)
+                if key not in sensor_modes_with_stats:
+                    unique_sensors.add(sensor)
+                    unknown_input_stats.append(
+                        {
+                            'sensor': sensor,
+                            'channel': channel,
+                        }
+                    )
+        else:
+            unknown_input_stats = None
 
         mb_size = file_stat.st_size / (2.0 ** 20)
         size_str = ub.urepr(mb_size, precision=2) + ' MB'

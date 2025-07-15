@@ -62,7 +62,7 @@ class CocoVisualizeConfig(scfg.DataConfig):
     '''
 
     __default__ = {
-        'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
+        'src': scfg.Value('data.kwcoco.json', help='Input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
             '''
@@ -70,46 +70,59 @@ class CocoVisualizeConfig(scfg.DataConfig):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value('auto', help='number of parallel procs'),
+        'workers': scfg.Value('auto', help='Number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
-        'space': scfg.Value('video', help='can be image or video space'),
+        'space': scfg.Value('video', help='Can be image or video space'),
 
-        'max_dim': scfg.Value(None, help='if specified, the visualization will resize if it has a dimension larger than this'),
-        'min_dim': scfg.Value(384, help='if specified, the visualization will resize if it has a dimension smaller than this'),
+        'max_dim': scfg.Value(None, help='If specified, the visualization will resize if it has a dimension larger than this'),
+        'min_dim': scfg.Value(384, help='If specified, the visualization will resize if it has a dimension smaller than this'),
 
         'resolution': scfg.Value(None, help=ub.paragraph(
             '''
-            the resolution to make the output at.
-            If unspecified use the dataset default
+            The resolution to make the output at.
+            If unspecified use the dataset default.
             ''')),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
         'any3': scfg.Value(False, help=ub.paragraph(
             '''
-            if True, ensure the "any3" channels are drawn. If set to "only",
+            If True, ensure the "any3" channels are drawn. If set to "only",
             then other per-channel visualizations are supressed. TODO: better
             name?
 
             TODO: deprecate?
             ''')),
 
-        'draw_imgs': scfg.Value(True, isflag=True),
-        'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
+        'draw_imgs': scfg.Value(True, isflag=True, help=ub.paragraph(
+            '''
+            Control if images without annotations are drawn
+            ''')),
+        'draw_anns': scfg.Value('auto', isflag=True, help=ub.paragraph(
+            '''
+            Control if images with annotations are drawn. Using "auto" means
+            only draw anns if they exist.
+            ''')),
 
         'draw_track_trails': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
-            draw history of track locations (experimental and inefficient).
+            Draw history of track locations (experimental and inefficient).
             Other contexts might refer to this as a motion path, trace, trail,
             tail, track history, or trajectory.
             ''')),
 
-        'draw_valid_region': scfg.Value(False, help='if True, draw the valid region if it exists'),
+        'draw_valid_region': scfg.Value(False, help='If True, draw the valid region if it exists'),
 
-        'cmap': scfg.Value('viridis', help='colormap for single channel data'),
+        'cmap': scfg.Value('viridis', type=str, help=ub.paragraph(
+            '''
+            Name of a colormap for single channel data.
+            Can also be a YAML mapping from channel name to colormap name.
+            The value of the __default__ key will be used for unspecified
+            channels.
+            ''')),
 
-        'animate': scfg.Value('auto', isflag=True, help='if True, make an animated gif from the output. Defaults to False.'),
+        'animate': scfg.Value('auto', isflag=True, help='If True, make an animated gif from the output. Defaults to False.'),
 
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
@@ -133,28 +146,28 @@ class CocoVisualizeConfig(scfg.DataConfig):
             draw_segmentations=0
             ''')),
 
-        'draw_segmentations': scfg.Value(True, help='if True draw annotation segmentation polygons'),
-        'draw_labels': scfg.Value(True, help='if True draw text labels on annotations'),
-        'draw_boxes': scfg.Value(True, help='if True draw bounding boxes around annotations'),
+        'draw_segmentations': scfg.Value(True, help='If True draw annotation segmentation polygons'),
+        'draw_labels': scfg.Value(True, help='If True draw text labels on annotations'),
+        'draw_boxes': scfg.Value(True, help='If True draw bounding boxes around annotations'),
         'alpha': scfg.Value(None, help='transparency / opacity of annotations'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
-        'zoom_to_tracks': scfg.Value(False, isflag=True, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
+        'zoom_to_tracks': scfg.Value(False, isflag=True, type=str, help='If True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
-        'norm_over_time': scfg.Value(False, isflag=True, help='if True, normalize data over time'),
+        'norm_over_time': scfg.Value(False, isflag=True, help='If True, normalize data over time'),
 
         'fixed_normalization_scheme': scfg.Value(
             None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
 
-        'extra_header': scfg.Value(None, help='extra text to include in the header'),
+        'extra_header': scfg.Value(None, help='Extra text to include in the header'),
 
-        'draw_header': scfg.Value(True, help='If false disables drawing the header'),
+        'draw_header': scfg.Value(True, help='If False disables drawing the header'),
 
-        'draw_chancode': scfg.Value(True, help='If false disables drawing the channel code'),
+        'draw_chancode': scfg.Value(True, help='If False disables drawing the channel code'),
 
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
-        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
+        'include_sensors': scfg.Value(None, help='If specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='If specified can be comma separated invalid sensors'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -199,16 +212,27 @@ class CocoVisualizeConfig(scfg.DataConfig):
 
         'verbose': scfg.Value(0, isflag=True, help='verbosity level'),
 
-        'stack': scfg.Value('auto', isflag=True, help='if True stack late fused channels in the same image'),
+        'stack': scfg.Value('auto', isflag=True, help=ub.paragraph(
+            '''
+            If True stack late fused channels in the same image.
+            ''')),
+
+        'stack_axis': scfg.Value(0, help=ub.paragraph(
+            '''
+            Temporary argument. May be refactored and combined with stack.
+            For now, if stack resolves to True, then this is the direction (0
+            for vertical 1 for horiztonal) that channels are stacked on.
+            ''')),
 
         'role_order': scfg.Value(None, help=ub.paragraph(
             '''
-            if specified, annotations are grouped by roles and drawn on different items in a channels stack in the given order
+            If specified, annotations are grouped by roles and drawn on
+            different items in a channels stack in the given order.
             ''')),
 
         'smart': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
-            if True, override params based on "smart" settings. This defaults
+            If True, override params based on "smart" settings. This defaults
             to going fast and using more resources, and stacked data.
             '''), alias=['fast']),
     }
@@ -289,8 +313,10 @@ def main(cmdline=True, **kwargs):
         >>>     'channels': 'r,b',
         >>>     'draw_track_trails': True,
         >>>     'stack': 'only',
+        >>>     'stack_axis': 1,
         >>>     'role_order': ['role1', 'role2'],
-        >>>     'cmap': 'gray',
+        >>>     # use mapping form of cmap
+        >>>     'cmap': '{r: gray, b: viridis}',
         >>>     'workers': 0,
         >>>     'verbose': 101,
         >>> }
@@ -566,7 +592,7 @@ def main(cmdline=True, **kwargs):
             'stack', 'min_dim', 'max_dim', 'verbose', 'only_boxes',
             'draw_boxes', 'draw_labels', 'fixed_normalization_scheme', 'any3',
             'cmap', 'role_order', 'smart', 'ann_score_thresh', 'alpha',
-            'draw_track_trails',
+            'draw_track_trails', 'stack_axis',
         }
 
         if config['zoom_to_tracks']:
@@ -997,6 +1023,7 @@ def _write_ann_visualizations2(coco_dset,
                                local_max_frame=None,
                                valid_vidspace_region=None,
                                stack=False,
+                               stack_axis=0,
                                draw_valid_region=True,
                                verbose=0,
                                skip_aggressive=False,
@@ -1209,14 +1236,22 @@ def _write_ann_visualizations2(coco_dset,
     # Determine if we need to scale the image for visualization
     viz_scale_factor = 1.0
     if min_dim is not None:
-        chan_min_dim = min(delayed.dsize) * viz_scale_factor
-        if chan_min_dim < min_dim:
-            viz_scale_factor *= min_dim / chan_min_dim
+        try:
+            chan_min_dim = min(delayed.dsize) * viz_scale_factor
+            if chan_min_dim < min_dim:
+                viz_scale_factor *= min_dim / chan_min_dim
+        except TypeError:
+            # We dont know the size (delayed image bug)
+            viz_scale_factor = 1.0
 
     if max_dim is not None:
-        chan_max_dim = max(delayed.dsize) * viz_scale_factor
-        if chan_max_dim > max_dim:
-            viz_scale_factor *= max_dim / chan_max_dim
+        try:
+            chan_max_dim = max(delayed.dsize) * viz_scale_factor
+            if chan_max_dim > max_dim:
+                viz_scale_factor *= max_dim / chan_max_dim
+        except TypeError:
+            # We dont know the size (delayed image bug)
+            viz_scale_factor = 1.0
 
     if viz_scale_factor != 1:
         viz_warp = kwimage.Affine.scale(viz_scale_factor)
@@ -1288,8 +1323,9 @@ def _write_ann_visualizations2(coco_dset,
                 delayed, chan_row, finalize_opts, verbose, skip_missing,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
                 valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_boxes,
-                draw_labels, draw_segmentations, role_to_drawables, valid_video_poly, stack,
-                draw_header, stack_idx, request_roles, ann_score_thresh, alpha,
+                draw_labels, draw_segmentations, role_to_drawables,
+                valid_video_poly, stack, draw_header, stack_idx, request_roles,
+                ann_score_thresh, alpha,
             )
             if stack:
                 img_stack.append(stack_img_item)
@@ -1316,6 +1352,8 @@ def _write_ann_visualizations2(coco_dset,
         stack_header_lines = header_lines.copy()
         header_text = '\n'.join(stack_header_lines)
 
+        channel_stack_axis = stack_axis
+
         def stack_infos(_stack):
             tostack = []
             for item in _stack:
@@ -1334,7 +1372,7 @@ def _write_ann_visualizations2(coco_dset,
                     tostack.append(canvas)
 
             if len(tostack) > 0:
-                canvas = kwimage.stack_images(tostack)
+                canvas = kwimage.stack_images(tostack, axis=channel_stack_axis)
             else:
                 canvas = kwimage.draw_text_on_image(None, text='X')
                 canvas = kwimage.imresize(canvas, dsize=(512, 512))
@@ -1352,7 +1390,8 @@ def _write_ann_visualizations2(coco_dset,
                 ann_header = kwimage.imresize(
                     # ann_header, dsize=(None, 100), letterbox=True)
                     ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+                ann_canvas = kwimage.stack_images(
+                    [ann_header, ann_stack_canvas], axis=0)
             else:
                 ann_canvas = ann_stack_canvas
 
@@ -1367,7 +1406,8 @@ def _write_ann_visualizations2(coco_dset,
                                                       fit='shrink', stack=False)
                 img_header = kwimage.imresize(
                     img_header, dsize=(img_header.shape[1], 100), letterbox=True)
-                img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+                img_canvas = kwimage.stack_images(
+                    [img_header, img_stack_canvas], axis=0)
             else:
                 img_canvas = img_stack_canvas
             view_img_fpath.parent.ensuredir()
@@ -1414,7 +1454,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
     view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
 
-    if chan_group_obj is not None:
+    if chan_group_obj is not None and delayed.channels is not None:
         chan = delayed.take_channels(chan_group)
     else:
         chan = delayed
@@ -1565,27 +1605,36 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
     if cmap is not None:
         if kwimage.num_channels(canvas) == 1:
-            if verbose > 100:
-                print('doing 1 channel cmap')
             import matplotlib as mpl
-            if chan_group == 'pan':
-                # Use grayscale for certain 1 band images
-                canvas = np.nan_to_num(canvas)
-                canvas = kwimage.atleast_3channels(canvas)
-                if len(canvas) == 3:
-                    canvas = canvas[..., 0]
-                # canvas = kwimage.ensure_float01(canvas)
-            else:
-                try:
-                    import matplotlib.cm  # NOQA
-                    cmap_ = mpl.cm.get_cmap(cmap)
-                except AttributeError:
-                    # https://github.com/matplotlib/matplotlib/issues/20853
-                    cmap_ = mpl.colormaps[cmap]
-                canvas = np.nan_to_num(canvas)
-                if len(canvas.shape) == 3:
-                    canvas = canvas[..., 0]
-                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+            import kwutil
+
+            if verbose > 100:
+                print(f'doing 1 channel cmap: {cmap!r}')
+
+            # Coerce chan_to_cmap
+            chan_to_cmap = kwutil.Yaml.coerce(cmap)
+            if isinstance(chan_to_cmap, str):
+                chan_to_cmap = {'__default__': chan_to_cmap}
+            elif not isinstance(chan_to_cmap, dict):
+                raise TypeError(f'Did not coerce chan_to_cmap: {type(chan_to_cmap)} correctly')
+
+            # Resolve to a colormap name.
+            default_cmap_name = chan_to_cmap.get('__default__', 'viridis')
+            cmap_name = chan_to_cmap.get(chan_group, default_cmap_name)
+
+            # Resolve to a colormap object.
+            try:
+                import matplotlib.cm  # NOQA
+                cmap_ = mpl.cm.get_cmap(cmap_name)
+            except AttributeError:
+                # https://github.com/matplotlib/matplotlib/issues/20853
+                cmap_ = mpl.colormaps[cmap_name]
+
+            # TODO: should we checkerboard the nans?
+            canvas = np.nan_to_num(canvas)
+            if len(canvas.shape) == 3:
+                canvas = canvas[..., 0]
+                canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
     if verbose > 100:
         print('after cmap part')
@@ -1613,6 +1662,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
                                               fill=False, border=True, alpha=alpha)
 
+    # fixme: messy logic, needs refactor
     stack_imgs = draw_imgs and stack
     stack_anns = draw_anns and stack
     draw_anns_alone = draw_anns and stack != 'only'
@@ -1650,7 +1700,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                                                   text=header_text,
                                                   stack=False,
                                                   fit='shrink')
-            img_header = kwimage.stack_images([img_header, img_canvas])
+            img_header = kwimage.stack_images([img_header, img_canvas], axis=0)
             kwimage.imwrite(view_img_fpath, img_canvas)
 
     if draw_anns_alone or stack_anns:
@@ -1730,7 +1780,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                                                       fit='shrink')
                 ann_header = kwimage.imresize(
                     ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+                ann_canvas = kwimage.stack_images(
+                    [ann_header, ann_canvas], axis=0)
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
     if verbose > 100:

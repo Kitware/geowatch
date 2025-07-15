@@ -7,59 +7,44 @@
 # pip install xdev
 # xdev availpkg numpy
 
-numpy>=2.1.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
-numpy>=1.26.0    ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
+numpy>=2.1.0   ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+numpy>=1.26.0  ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 numpy>=1.23.2  ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
-numpy>=1.21.6  ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
-numpy>=1.19.3  ; python_version < '3.10' and python_version >= '3.9'   # Python 3.9
-numpy>=1.19.3  ; python_version < '3.9' and python_version >= '3.8'    # Python 3.8
+numpy>=1.23.2  ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
 
 scipy>=1.14.1    ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 scipy>=1.11.2    ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 scipy>=1.9.2     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 scipy>=1.8.0     ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
-scipy>=1.8.0     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
-scipy>=1.8.0     ; python_version < '3.9' and python_version >= '3.8'    # Python 3.8
 
 shapely>=2.0.6     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 shapely>=2.0.2     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 shapely>=2.0.1 ; python_version < '3.12'  and python_version >= '3.11'  # Python 3.11+
 shapely>=2.0.1 ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
-shapely>=2.0.1 ; python_version < '3.10' and python_version >= '3.9'   # Python 3.9
-shapely>=2.0.1 ; python_version < '3.9' and python_version >= '3.8'    # Python 3.8
 
 rasterio>=1.3.11    ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 rasterio>=1.3.9     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12+
 rasterio>=1.3.5     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 rasterio>=1.3.5     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-rasterio>=1.3.5     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
-rasterio>=1.3.5     ; python_version < '3.9'  and python_version >= '3.8'     # Python 3.8
 
 pandas>=2.2.3  ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 pandas>=2.1.1  ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 pandas>=1.5.3  ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 pandas>=1.5.3  ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
-pandas>=1.5.3  ; python_version < '3.10' and python_version >= '3.9'   # Python 3.9
-pandas>=1.5.3  ; python_version < '3.9'  and python_version >= '3.8'   # Python 3.8
 
-scikit-learn>=1.3.1     ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
+scikit-learn>=1.5.2     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+scikit-learn>=1.3.1     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 scikit-learn>=1.1.3     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 scikit-learn>=1.1.0     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-scikit-learn>=1.0.2     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
-scikit-learn>=1.0.2     ; python_version < '3.9' and python_version >= '3.8'    # Python 3.8
 
 scikit-image>=0.25.1    ; python_version < '4.0'  and python_version >= '3.13'   # Python 3.13+
 scikit-image>=0.22.0    ; python_version < '3.13' and python_version >= '3.12'   # Python 3.12
 scikit-image>=0.20.0    ; python_version < '3.12' and python_version >= '3.11'   # Python 3.11
 scikit-image>=0.19.0    ; python_version < '3.11' and python_version >= '3.10'   # Python 3.10
-scikit-image>=0.18.0    ; python_version < '3.10' and python_version >= '3.9'   # Python 3.9
-scikit-image>=0.17.2    ; python_version < '3.9' and python_version >= '3.8'    # Python 3.8
-scikit-image>=0.17.2    ; python_version < '3.8' and python_version >= '3.7'    # Python 3.7
 
 jq>=1.8.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 jq>=1.7.0     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 jq>=1.2.2     ; python_version < '3.11' and python_version >= '3.10' and platform_system!="Windows"    # Python 3.10
-jq>=1.2.1     ; python_version < '3.10' and platform_system!="Windows"    # Python 3.8-3.9
 
 jsonschema>=4.19.2
 
@@ -69,62 +54,57 @@ pyproj>=3.7.0        ; python_version < '4.0'  and python_version >= '3.13'    #
 pyproj>=3.6.1        ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 pyproj>=3.4.1,<3.5.0 ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11+
 pyproj>=3.3.1,<3.5.0 ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-pyproj>=3.2.1,<3.5.0 ;  python_version <  '3.10'    # Python 3.8-3.9
 
 # Need to update to 1.9.5
-fiona>=1.8.22         ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12
-fiona>=1.8.22,<1.9.0  ; python_version < '3.12'  and python_version >= '3.11'    # Python 3.11
+fiona>=1.10.0         ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+fiona>=1.9.5          ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
+fiona>=1.8.22,<1.9.0  ; python_version < '3.12'  and python_version >= '3.11'   # Python 3.11
 fiona>=1.8.22,<1.9.0  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-fiona>=1.8.22,<1.9.0  ;  python_version <  '3.10'    # Python 3.8-3.9
 
 matplotlib>=3.9.2  ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 matplotlib>=3.8.2  ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 matplotlib>=3.8.2  ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 matplotlib>=3.8.2  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-matplotlib>=3.4.1  ; python_version <  '3.10'    # Python 3.8-3.9
 
-Pillow>=10.2.0
+Pillow>=11.3.0 ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13
+Pillow>=10.2.0 ; python_version < '3.13'  
 
 psutil>=5.9.6     ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
 psutil>=5.9.6     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 psutil>=5.9.6     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-psutil>=5.9.6     ; python_version <  '3.10'    # Python 3.8-3.9
 
-rtree>=1.0.1  ;                             python_version >= '3.11'    # Python 3.11+
+rtree>=1.2.0  ;                             python_version >= '3.11'    # Python 3.11+
 rtree>=1.0.0  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-rtree>=0.9.7  ; python_version <  '3.10'    # Python 3.8-3.9
 
 sqlalchemy>=1.4.50  ;                             python_version >= '3.11'    # Python 3.11+
 sqlalchemy>=1.4.37  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-sqlalchemy>=1.3.22  ; python_version <  '3.10'    # Python 3.8-3.9
 
 xxhash>=3.4.1     ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
 xxhash>=3.4.1     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 xxhash>=3.0.0     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-xxhash>=3.0.0     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
-xxhash>=1.4.4     ; python_version <= '3.8'    # Python 3.8
 
 # xdev availpkg numexpr
-numexpr>=2.8.4     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+numexpr>=2.10.2    ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+numexpr>=2.8.7     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
+numexpr>=2.8.4     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 numexpr>=2.8.1     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-numexpr>=2.7.3     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
-numexpr>=2.7.3     ; python_version < '3.9'  and python_version >= '3.8'    # Python 3.8
 
 # xdev availpkg mgrs
 mgrs>=1.4.6     ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
 mgrs>=1.4.6     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 mgrs>=1.4.3     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-mgrs>=1.4.3     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
-mgrs>=1.4.3     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
-mgrs>=1.3.7     ; python_version < '3.9'  and python_version >= '3.8'    # Python 3.8
 
 # Numeric
 kwarray>=0.6.19
-xarray>=0.17.0
+xarray>=2023.10.0
 #filterpy>=1.4.5
-einops>=0.6.0
+
+einops>=0.8.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+einops>=0.6.0     ; python_version < '3.13'
 # dask[array]>=2023.8.1
-dask[array]>=2023.5.0
+
+dask[array]>=2025.2.0    ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+dask[array]>=2023.5.0    ; python_version < '3.13' 
 
 # Dask related
 # cytoolz>=0.11.2
@@ -138,7 +118,7 @@ dask[array]>=2023.5.0
 rich>=12.5.1
 textual>=0.1.18
 text_unidecode>=1.3
-configargparse>=1.7.0
+configargparse>=1.7.1
 parse>=1.19.0
 affine>=2.3.0
 ubelt>=1.3.6
@@ -147,7 +127,6 @@ Pygments>=2.12.0
 requests>=2.27.1
 fasteners>=0.17.3
 kwutil>=0.3.4
-kwgis>=0.1.0
 simple_dvc>=0.2.1
 
 blake3>=1.0.1  ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
@@ -156,27 +135,25 @@ blake3>=0.3.1  ; python_version < '3.12' and python_version >= '3.11'    # Pytho
 blake3>=0.2.1  ; python_version < '3.11' # Python 3.10- 
 
 more_itertools>=8.12.0
-
-pint>=0.23      ; python_version < '4.0'  and python_version >= '3.12'    # Python 3.12+
-pint>=0.18      ; python_version < '3.12'                                 # Python 3.11-
+ 
+pint>=0.24.4  ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+pint>=0.23    ; python_version < '3.13' 
 
 girder_client>=3.1.15
 
-lxml>=4.9.2     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+lxml>=5.3.0     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
 lxml>=4.6.3     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-lxml>=4.5.2     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
-lxml>=4.4.1     ; python_version < '3.9'  and python_version >= '3.8'     # Python 3.8
-lxml>=4.2.4     ; python_version < '3.8'  and python_version >= '3.7'     # Python 3.7
 
 tempenv>=0.2.0
 pystac_client>=0.5.1
 scriptconfig>=0.8.2
 
-pygtrie>=2.5.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
-pygtrie>=2.5.0     ; python_version < '3.13' and python_version >= '3.6'     # Python 3.6
+pygtrie>=2.5.0    
 
 # protobuf>=3.15.8
-networkx>=2.8.0
+networkx>=3.0.0   ; python_version < '4.0' and python_version >= '3.13'    # Python 3.12
+networkx>=2.8.0   ; python_version < '3.12' 
+
 python_dateutil>=2.8.2
 pytimeparse>=1.1.8
 progiter>=2.0.0
@@ -184,19 +161,22 @@ fire>=0.4.0
 
 # Parsing
 lark >= 1.1.7
-lark_cython >= 0.0.15
+lark_cython >= 0.0.16
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.10.0
-kwcoco>=0.8.2
-delayed_image>=0.3.1
+kwimage>=0.11.2
+kwcoco>=0.8.5
+kwcoco_dataloader>=0.1.1
+delayed_image>=0.4.5
 
 # Try 1.3.1?
 albumentations==1.0.0  # pinned for invariants model
 
-ndsampler>=0.7.8
-tifffile>=2021.4.8
+ndsampler>=0.8.0
+
+tifffile>=2022.8.12 ; python_version < '4.0' and python_version >= '3.13'    # Python 3.12
+tifffile>=2021.4.8  ; python_version < '3.12' 
 
 # Plotting
 kwplot>=0.4.14
@@ -206,8 +186,12 @@ seaborn>=0.13.0
 # Note: kwgis contains tools that have historically lived in geowatch 
 # We are gradually transitioning this codebase to use those instead of
 # internal variants to maintain a more modular software stack. 
-kwgis>=0.1.0
-geopandas>=0.10.2,<1.0.0
+kwgis>=0.1.1
+
+# TODO: we need to unpin geopandas at some point
+geopandas>=0.14.4,<1.0.0  ; python_version < '4.0'  and python_version >= '3.13'   # Python 3.13
+geopandas>=0.10.2,<1.0.0  ; python_version < '3.12' and python_version >= '3.8'   
+
 utm>=0.7.0
 rgd_imagery_client>=0.2.7
 rgd_client>=0.2.7
@@ -217,14 +201,16 @@ geojson>=3.0.1     ; python_version < '3.12' and python_version >= '3.8'    # Py
 # Machine learning
 
 # Note: torch 1.10 does not run latest models
-torch>=2.5.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+torch>=2.6.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
 torch>=2.2.0     ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 torch>=2.0.0     ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11+
 torch>=1.12.0       ; python_version < '3.11'                               # Python 3.10-
 
 # TODO: support 1.13.1 
 
-torchvision>=0.15.1 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
+torchvision>=0.21.0 ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
+torchvision>=0.17.0 ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
+torchvision>=0.15.1 ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 torchvision>=0.13.0 ; python_version < '3.11'                               # Python 3.10-
 
 
@@ -241,7 +227,8 @@ pytorch_lightning>=2.0.8,!=2.3.*,!=2.4.0
 #pytorch_lightning>=2.0.8
 #jsonargparse[signatures]>=4.24.1
 
-monai>=0.8.0     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+monai>=1.3.2     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13
+monai>=0.8.0     ; python_version < '3.13'  and python_version >= '3.11'   # Python 3.11
 monai>=0.6.0     ; python_version < '3.11' 
 
 torch_optimizer>=0.1.0
@@ -261,8 +248,7 @@ ujson>=5.2.0 ; python_version < '3.11'                               # Python 3.
 
 kwimage_ext >= 0.2.1; platform_system=="Linux" and python_version < '3.12'    
 
-py-cpuinfo>=9.0.0     ; python_version < '4.0'  and python_version >= '3.13'    # Python 3.13+
-py-cpuinfo>=9.0.0     ; python_version < '3.13' and python_version >= '3.6'     # Python 3.6
+py-cpuinfo>=9.0.0     
 
 
 ruamel.yaml>=0.17.22,<=0.17.32
@@ -271,9 +257,8 @@ ijson>=3.2.1 ; python_version < '4.0'  and python_version >= '3.13'    # Python 
 ijson>=3.2.1 ; python_version < '3.13' and python_version >= '3.12'    # Python 3.12
 ijson>=3.2.1 ; python_version < '3.12' and python_version >= '3.11'    # Python 3.11
 ijson>=3.2.1 ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-ijson>=3.1.4 ; python_version < '3.10' and python_version >= '3.6'     # Python 3.6-3.9
 
-lazy_loader>=0.3
+lazy_loader>=0.4
 
 colormath>=3.0.0
 

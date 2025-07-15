@@ -182,6 +182,9 @@ class AggregateLoader(DataConfig):
         eval_type_to_aggregator = {}
         for eval_type, tables in eval_type_to_tables.items():
             table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
+            # NOTE: if there are multiple targets dirs, then dag will be
+            # configured with only the last target in the root directory.
+            # This may be a problem, or at the least a source of confusion.
             agg = Aggregator(table,
                              primary_metric_cols=config.primary_metric_cols,
                              display_metric_cols=config.display_metric_cols,
@@ -1170,7 +1173,7 @@ class AggregatorAnalysisMixin:
             'kwh': 'electricity',
             'co2_kg': 'emissions',
         }
-        friendly['resource'] = friendly['resource'].map(lambda x: mapper.get(x, x))
+        friendly['resource'] = friendly['resource'].apply(lambda x: mapper.get(x, x))
         return friendly
 
     def report_resources(agg):
@@ -1443,7 +1446,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         agg.macro_compatible = None
 
     @classmethod
-    def demo(cls, num=10, rng=None):
+    def demo(cls, num=10, rng=None, include_unhashable=False):
         """
         Construct a demo aggregator for testing.
 
@@ -1453,6 +1456,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         Args:
             num (int): number of rows
             rng (int | None): random number generator / state
+            include_unhashable (bool):
+                if true include columns with unhashable values for testing.
 
         Returns:
             Aggregator
@@ -1468,6 +1473,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         """
         from kwarray import distributions as dmod
         import pandas as pd
+        import numpy as np
         import kwarray
         import uuid
         rng = kwarray.ensure_rng(rng)
@@ -1505,6 +1511,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             f'{node}.kwh': dmod.Uniform(1, 100, rng=rng),
             f'{node}.co2_kg': dmod.Uniform(1, 100, rng=rng),
         }
+
+        if include_unhashable:
+            listvals = np.array([
+                [1, 2, 3],
+                [],
+                ["a", [2]],
+            ], dtype=object)
+            dictvals = np.array([
+                {'type': 'special_algo', 'params': {'a': 'b', 'c': 'd'}},
+                {'type': 'special_algo', 'params': {'a': 'e', 'c': 'f'}},
+                {'type': 'null'},
+            ], dtype=object)
+            distributions['params'][f'{node}.unhashable_list'] = dmod.Categorical(listvals, rng=rng)
+            distributions['params'][f'{node}.unhashable_dict'] = dmod.Categorical(dictvals, rng=rng)
 
         columns = {}
 
@@ -1546,8 +1566,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         table = pd.DataFrame(columns)
 
+        # FIXME: How do we specify the objective for the metrics here?
+        # Does the constructive python API allow for this? If not it should.
         primary_metric_cols = [f'metrics.{node}.metric1']
         display_metric_cols = [f'metrics.{node}.metric3']
+
         agg = cls(table, primary_metric_cols=primary_metric_cols,
                   display_metric_cols=display_metric_cols)
         return agg
@@ -1646,59 +1669,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
             aggregator
 
         """
-        from geowatch.mlops.smart_global_helper import SMART_HELPER
         import warnings
-        # TODO: need to be able to specify what the objective is for each
-        # metric. Either minimize or maximize.
-        metrics_prefix = f'metrics.{agg.node_type}'
         agg._metric_info = {}
 
         if agg.dag is not None:
             node = agg.dag.nodes[agg.node_type]
         else:
             node = None
-        # Build a lookup table about how different metrics are interpreted
-        try:
-            user_metric_info = node._default_metrics2()
-        except (AttributeError, NotImplementedError):
-            print(f'User did not specify _default_metrics2 for {node}')
-        else:
-            for info in user_metric_info:
-                suffix = info['suffix']
-                name = f'{metrics_prefix}.{suffix}'
-                agg._metric_info[name] = info.copy()
-                agg._metric_info[name]['name'] = name
 
-        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
-            if agg._metric_info:
-                # If the metrics info was specified, then dont use the old _default_metrics
-                if agg.primary_metric_cols == 'auto':
-                    agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
-                    if len(agg.primary_metric_cols) == 0:
-                        warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
-                        agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
-                if agg.display_metric_cols == 'auto':
-                    agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
-                    agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
-            else:
-                # TODO: deprecate the old _default_metrics stuff entirely
-                try:
-                    # TODO: deprecate SMART-stuff
-                    _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
-                except Exception:
-                    if hasattr(node, '_default_metrics'):
-                        _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
-                        # should we prevent double prefixes?
-                        _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
-                        _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
-                    else:
-                        # fallback to something
-                        _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
-                        _primary_metrics = _display_metrics[0:1]
-                    if agg.primary_metric_cols == 'auto':
-                        agg.primary_metric_cols = _primary_metrics
-                    if agg.display_metric_cols == 'auto':
-                        agg.display_metric_cols = _display_metrics
+        # Build a lookup table about how different metrics are interpreted
+        _build_metrics_info_table(agg, node)
 
         # If specified primary metrics are not in the info table, use
         # assumptions
@@ -1734,8 +1714,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
                 info['objective'] = 'maximize'
             if objective in {'min'}:
                 info['objective'] = 'minimize'
-
-        print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
+        # print(f'agg._metric_info = {ub.urepr(agg._metric_info, nl=2)}')
 
     def __nice__(self):
         return f'{self.node_type}, n={len(self)}'
@@ -1922,6 +1901,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         """
         import pandas as pd
+        import itertools as it
         from geowatch.utils import util_pandas
         from geowatch.mlops.smart_global_helper import SMART_HELPER
         requested_params = self.requested_params
@@ -1963,10 +1943,12 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
         param_cols = ub.oset(effective_params.columns).difference(hashid_ignore_columns)
         param_cols = list(param_cols - {'region_id', 'node'})
 
+        # Check for unhashable columns and coerce them into a hashable representation
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
-            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            # effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, (list, dict)) else x)
 
         if 0:
             # dev helper to check which params are being varied. This can help
@@ -1999,11 +1981,38 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin, _AggregatorDeprecatedMixi
 
         if len(param_cols) > 0:
             param_groups = effective_params.groupby(param_cols, dropna=False)
+
+            orig_param_groups_iter = iter(param_groups)
+
+            # Check that nothing goes wrong in the groupby operation.
+            try:
+                first_item = next(orig_param_groups_iter)
+                # Reconstruct the full iterator by chaining the first item with the rest
+                param_groups_iter = it.chain([first_item], orig_param_groups_iter)
+            except (TypeError, StopIteration) as ex:
+                from kwutil import util_exception
+                # TODO: could be a utility function: check_hashable or
+                # something.
+                unhashable_columns = []
+                for col in param_cols:
+                    # TODO: Check for hashability of columnns
+                    try:
+                        effective_params[col].apply(hash)
+                    except Exception:
+                        print(f'ERROR: Found unhashable column: {col}')
+                        unhashable_columns.append(col)
+
+                raise util_exception.add_exception_note(ex, ub.paragraph(
+                    f'''
+                    Parameter grouping failed, likely due to an unhashable
+                    parameter column: unhashable_columns={unhashable_columns}
+                    '''))
+
         else:
             # fallback case, something is probably wrong if we are here
-            param_groups = {None: effective_params}.items()
+            param_groups_iter = {None: effective_params}.items()
 
-        for param_vals, group in param_groups:
+        for param_vals, group in param_groups_iter:
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             is_group_included = is_param_included.loc[group.index]
@@ -2567,6 +2576,85 @@ def _coerce_grouptop(grouptop, aliases=None):
             resolved.extend(param)
         new_grouptop['params'] = resolved
     return new_grouptop
+
+
+def _build_metrics_info_table(agg, node):
+    """
+    Still need to simplify this function
+    """
+    import warnings
+
+    metrics_prefix = f'metrics.{agg.node_type}'
+
+    # Build a lookup table about how different metrics are interpreted
+    try:
+        # Get one of the backwards compatible ways to define the default
+        # metrics.
+        _default_fn = getattr(node, 'default_metrics', None)
+        if _default_fn is None:
+            _default_fn = getattr(node, '_default_metrics2', None)
+        if _default_fn is None:
+            raise AttributeError('No default_metrics')
+        if callable(_default_fn):
+            user_metric_info = _default_fn()
+        else:
+            user_metric_info = _default_fn
+            if not ub.iterable(user_metric_info):
+                raise ValueError(ub.paragraph(
+                    '''
+                    Unexpected definition of default_metrics in
+                    node={node}. The cannonical definition is a function
+                    that returns a List[Dict]. Got: {_default_fn!r}.
+                    '''))
+    except (AttributeError, NotImplementedError):
+        print(f'User did not specify _default_metrics2 for {node}')
+    else:
+        for info in user_metric_info:
+            suffix = info.get('metric', info.get('suffix', None))
+            if suffix is None:
+                raise ValueError(ub.paragraph(
+                    f'''
+                    The info={info} specified in default_metrics for
+                    node={node} is missing required items.  You must
+                    specify ``"metric": <value>`` where value is the name
+                    of the metric relative to the node name.  I.e.
+                    ``{metrics_prefix}.<value>``.
+                    '''))
+            name = f'{metrics_prefix}.{suffix}'
+            agg._metric_info[name] = info.copy()
+            agg._metric_info[name]['name'] = name
+
+    if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
+        if agg._metric_info:
+            # If the metrics info was specified, then dont use the old _default_metrics
+            if agg.primary_metric_cols == 'auto':
+                agg.primary_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('primary', False)]
+                if len(agg.primary_metric_cols) == 0:
+                    warnings.warn(f'No metrics for {node} were marked as primary, forcing at least one')
+                    agg.primary_metric_cols = [ub.peek(agg._metric_info.values())['name']]
+            if agg.display_metric_cols == 'auto':
+                agg.display_metric_cols = [info['name'] for info in agg._metric_info.values() if info.get('display', False)]
+                agg.display_metric_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+        else:
+            # TODO: deprecate the old _default_metrics stuff entirely
+            try:
+                from geowatch.mlops.smart_global_helper import SMART_HELPER
+                # TODO: deprecate SMART-stuff
+                _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+            except Exception:
+                if hasattr(node, '_default_metrics'):
+                    _primary_metrics_suffixes, _display_metrics_suffixes = node._default_metrics()
+                    # should we prevent double prefixes?
+                    _primary_metrics = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+                    _display_metrics = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
+                else:
+                    # fallback to something
+                    _display_metrics = list(agg.table.search_columns('metrics'))[0:3]
+                    _primary_metrics = _display_metrics[0:1]
+                if agg.primary_metric_cols == 'auto':
+                    agg.primary_metric_cols = _primary_metrics
+                if agg.display_metric_cols == 'auto':
+                    agg.display_metric_cols = _display_metrics
 
 
 __cli__ = AggregateEvluationConfig

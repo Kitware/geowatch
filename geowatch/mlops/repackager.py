@@ -25,20 +25,8 @@ class RepackageConfig(scfg.DataConfig):
         more hints for determening how to construct model instances either from
         context or via these configuration arguments.
 
-    Ignore:
-        python -m geowatch.mlops.repackager  \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=32-step=445566.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=36-step=499574.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=89-step=1215180.ckpt
-
-
-        python -m geowatch.mlops.repackager \
-            $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=3*.ckpt
+    Usage:
+        python -m geowatch.mlops.repackager <path-to-ckpt>
     """
     __command__ = 'repackage'
     checkpoint_fpath = scfg.Value(None, position=1, nargs='+', help=ub.paragraph(
@@ -78,6 +66,7 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
     """
     from kwutil import util_path
+    from kwutil import util_exception
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     print('Begin repackage')
     print('checkpoint_fpaths = {}'.format(ub.urepr(checkpoint_fpaths, nl=1)))
@@ -97,9 +86,10 @@ def repackage(checkpoint_fpath, force=False, strict=False, dry=False):
                     repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                                                 train_dpath_hint, model_config_fpath)
                 except Exception as ex:
-                    print('ERROR: Failed to package: {!r}'.format(ex))
+                    note = f'ERROR: Failed to package checkpoint={checkpoint_fpath!r}'
+                    print(f'{note} ex={ex!r}')
                     if strict:
-                        raise
+                        raise util_exception.add_exception_note(ex, note)
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
     from kwutil import util_yaml
@@ -312,6 +302,11 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
     hparams = checkpoint.get('hyper_parameters', None)
 
+    if 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        state_dict = checkpoint
+
     HACK_WORKAROUND_HPARAM_MISMATCH = True
     if HACK_WORKAROUND_HPARAM_MISMATCH:
         # Due to issues with pytorch-lightning 2.3.0 we check for if hparams
@@ -338,15 +333,16 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
                 hparams = common_ondisk_hparams
 
     if 'input_channels' in hparams:
-        import kwcoco
+        from delayed_image.channel_spec import ChannelSpec
         # Hack for strange pickle issue
         chan = hparams['input_channels']
+
         if chan is not None:
             if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = kwcoco.ChannelSpec.coerce(chan._info['spec'])
+                chan = ChannelSpec.coerce(chan._info['spec'])
                 hparams['input_channels'] = chan
             else:
-                hparams['input_channels'] = kwcoco.ChannelSpec.coerce(chan.spec)
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
 
     # Construct the model we want to repackage.  For now we just hard code
     # this. But in the future we could use context from the lightning output
@@ -366,17 +362,41 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
             else:
                 raise
     else:
+
+        # new stuff seems to be missing dataset stats and classes.
+
         data = load_meta(model_config_fpath)
         if "model" in data:
             model_config = data["model"]
 
         model_config["init_args"] = hparams | model_config["init_args"]
-        model = parse_and_init_config(model_config)
+        try:
+            model = parse_and_init_config(model_config)
+        except Exception as ex:
+            if 'input_sensorchan=None and dataset_stats=None' in str(ex):
+                # Can we hack the missing dataset stats case?
+                input_norm_keys = [k for k in state_dict if k.startswith('input_norms.')]
+                # head_keys = [k for k in state_dict if k.startswith('heads.')]
+                # class_keys = [k for k in state_dict if k.startswith('class')]
+                unique_sensor_modes = set()
+                input_stats = ub.ddict(dict)
+                for k in input_norm_keys:
+                    _, sensor, chan, stat = k.split('.')
+                    unique_sensor_modes.add((sensor, chan))
+                    value = state_dict[k]
+                    input_stats[(sensor, chan)][stat] = value
+                assert model_config['init_args'].get('input_sensorchan') is None, (
+                    'should not get this error if it is populated')
+                assert model_config['init_args'].get('dataset_stats') is None, (
+                    'should not get this error if it is populated')
+                # hacking in dataset stats for models that exclusively use it
+                model_config['init_args']['dataset_stats'] = {
+                    'input_stats': input_stats,
+                    'class_freq': None,
+                    'unique_sensor_modes': unique_sensor_modes,
+                }
+                model = parse_and_init_config(model_config)
 
-    if 'state_dict' in checkpoint:
-        state_dict = checkpoint['state_dict']
-    else:
-        state_dict = checkpoint
     model.load_state_dict(state_dict)
 
     if train_dpath_hint is not None:

@@ -80,7 +80,7 @@ class VideoPlotMaker:
             if frame_index == n_frames:
                 axes[0][0].set_title("")
             else:
-                axes[0][0].set_title(f"[{frame_index+1}/{n_frames}] - " + datetime_str)
+                axes[0][0].set_title(f"[{frame_index + 1}/{n_frames}] - " + datetime_str)
             axes[0][0].axis("off")
 
             axes[0][1].imshow(conf_mask, "viridis", vmin=0, vmax=1)

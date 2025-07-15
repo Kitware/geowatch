@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+SeeAlso:
+    git log --all --format='%aN <%aE>' | sort -u
+"""
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -61,6 +65,9 @@ KNOWN_ENTITIES = [
     {'email': '49699333+dependabot[bot]@users.noreply.github.com', 'keyname': 'dependabot[bot]'},
     {'email': 'mgorny@gentoo.org', 'keyname': 'Michał Górny'},
     {'email': 'erezshin@gmail.com', 'keyname': 'Erez Shinan'},
+
+    {'email': 'vincenzo.dimatteo@khq-1881.khq.kitware.com', 'keyname': 'Vinnie DiMatteo'},
+    {'email': 'vincenzo.dimatteo@horologic.khq.kitware.com', 'keyname': 'Vinnie DiMatteo'},
 
     {'email': 'ci@circleci.com', 'keyname': 'CircleCI'},
     {'email': 'gaphor@gmail.com', 'keyname': 'Arjan Molenaar'},
@@ -140,6 +147,7 @@ def main(cmdline=1, **kwargs):
     for line in lines:
         result = parser.parse(line)
         row = dict(result.named)
+        print(f'row = {ub.urepr(row, nl=1)}')
         row['id'] = row['keyname'].lower().replace(' ', '')
         rows.append(row)
 
@@ -224,7 +232,7 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/dev/maintain/generate_authors.py
+        python ~/code/geowatch/dev/maintain/generate_authors.py
         python -m generate_authors
     """
     main()

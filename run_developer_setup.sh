@@ -180,6 +180,7 @@ WITH_COMPAT=$WITH_COMPAT
 WITH_MATERIALS=$WITH_MATERIALS
 WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
+USE_UV=$USE_UV
 
 ''', lexer_name='bash'))
     "
@@ -300,15 +301,13 @@ fix_opencv_conflicts(){
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            $PIP_COMMAND uninstall opencv-python opencv-python-headless -y
-            #$PIP_INSTALL_COMMAND opencv-python-headless
+            $PIP_COMMAND uninstall opencv-python opencv-python-headless
             $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            $PIP_COMMAND uninstall opencv-python -y
+            $PIP_COMMAND uninstall opencv-python
         fi
-        #$PIP_INSTALL_COMMAND opencv-python-headless
         $PIP_INSTALL_COMMAND -r "$REQUIREMENTS_DPATH"/headless.txt
     fi
 }
@@ -543,7 +542,8 @@ main(){
 
     fix_opencv_conflicts
 
-    check_metrics_framework
+    # Dont need to do this anymore
+    # check_metrics_framework
 
     # Newer versions of torchmetrics enable pretty-errors by default, which
     # breaks tracebacks. Just uninstall it to disable this "feature".

@@ -838,6 +838,7 @@ class CocoStitchingManager(object):
                 }
 
             try:
+                new_fpath.parent.ensuredir()
                 kwimage.imwrite(
                     os.fspath(new_fpath), write_data, space=None, backend=imwrite_backend,
                     **write_kwargs,

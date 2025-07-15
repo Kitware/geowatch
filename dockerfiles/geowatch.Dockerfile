@@ -2,9 +2,7 @@
 
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
-
-
-ARG BASE_IMAGE=pyenv:311
+ARG BASE_IMAGE=gitlab.kitware.com:4567/computer-vision/ci-docker/uv:0.7.19-python3.13
 
 FROM $BASE_IMAGE
 
@@ -143,7 +141,7 @@ pwd
 ls -altr
 
 echo "Run GeoWATCH developer setup:"
-WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_COLD=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_COMPAT=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
+WATCH_STRICT=$BUILD_STRICT WITH_MMCV=0 WITH_DVC=0 WITH_COLD=0 WITH_TENSORFLOW=0 WITH_AWS=1 WITH_COMPAT=1 WITH_APT_ENSURE=0 DEV_TRACE="$DEV_TRACE" bash run_developer_setup.sh
 
 EOF
 
@@ -179,32 +177,19 @@ echo "
     # SeeAlso:
     # ~/code/watch-smartflow-dags/prepare_system.sh
 
-    # docker login
-    # docker pull docker/dockerfile:1.3.0-labs
-
-    #### You need to build the pyenv image first:
-    # ./pyenv.Dockerfile
-
     # An invocation for basic end-to-end building is:
 
-    # Build the pyenv image
-    cd $HOME/code/geowatch
-    DOCKER_BUILDKIT=1 docker build --progress=plain \
-        -t pyenv:3.11.2 \
-        --build-arg PYTHON_VERSION=3.11.2 \
-        -f ./dockerfiles/pyenv.Dockerfile .
-
     # Build the geowatch image
+    cd ~/code/geowatch
     DOCKER_BUILDKIT=1 docker build --progress=plain \
-        -t "geowatch:311-strict" \
+        -t "geowatch:uv0.7.19-python3.13-strict" \
         --build-arg BUILD_STRICT=1 \
-        --build-arg DEV_TRACE=1 \
-        --build-arg BASE_IMAGE=pyenv:3.11.2 \
+        --build-arg DEV_TRACE=0 \
         -f ./dockerfiles/geowatch.Dockerfile .
 
     docker run \
         --volume "$HOME/code/geowatch":/host-geowatch:ro \
-        --runtime=nvidia -it geowatch:311-strict bash
+        --gpus=all -it geowatch:uv0.7.19-python3.13-strict bash
 
     IMAGE_VERSION=$(docker run --runtime=nvidia -it geowatch:311-strict python -c "import geowatch; print(geowatch.__version__)")
     IMAGE_VERSION=$(python -c "import geowatch; print(geowatch.__version__)")

@@ -8,11 +8,12 @@ def test_heterogeneous_with_split_attention_backbone():
     from geowatch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
     from geowatch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
     import ubelt as ub
-
     from geowatch.tasks.fusion import datamodules
+    import geowatch
     print('(STEP 0): SETUP THE DATA MODULE')
+    dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
     datamodule = datamodules.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes-geowatch', num_workers=0, channels='auto')
+        train_dataset=dset, num_workers=0, channels='auto')
     datamodule.setup('fit')
     dataset = datamodule.torch_datasets['train']
     print('(STEP 1): ESTIMATE DATASET STATS')

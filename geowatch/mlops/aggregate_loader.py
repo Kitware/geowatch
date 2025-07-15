@@ -9,7 +9,6 @@ from kwutil import util_parallel
 from geowatch.utils import util_dotdict
 import parse
 import json
-#from geowatch.mlops import smart_pipeline
 from geowatch.mlops import smart_result_parser
 
 
@@ -129,6 +128,9 @@ def build_tables(root_dpath, dag, io_workers, eval_nodes,
                 else:
                     num_ignored += 1
 
+            if num_ignored:
+                print(f'num_ignored = {ub.urepr(num_ignored, nl=1)}')
+
             results = {
                 'fpath': pd.DataFrame(cols['fpath'], columns=['fpath']),
                 'index': pd.DataFrame(cols['index']),
@@ -205,9 +207,12 @@ def load_result_worker(fpath, node_name, node=None, dag=None, use_cache=True):
                         '''))
                     region_ids = 'unknown'
                 else:
-                    import re
-                    region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
-                    region_ids = ','.join(list(region_pat.findall(region_ids)))
+                    IS_SMART = 0
+                    if IS_SMART:
+                        # Disable hack for smart region id names
+                        import re
+                        region_pat = re.compile(r'[A-Z][A-Za-z]*_[A-Z]\d\d\d')
+                        region_ids = ','.join(list(region_pat.findall(region_ids)))
 
             resolved_params_keys = list(flat.query_keys('resolved_params'))
             metrics_keys = list(flat.query_keys('metrics'))

@@ -160,6 +160,12 @@ class ManagerConfig(scfg.DataConfig):
         questions.
         '''))
 
+    repackage_kwargs = scfg.Value(None, help=ub.paragraph(
+        '''
+        YAML dict as keyword args for repackage.
+        Default is: {force: False, strict: False, dry: False}
+        '''))
+
 
 def main(cmdline=True, **kwargs):
     """
@@ -206,6 +212,11 @@ def main(cmdline=True, **kwargs):
     expt_dvc_dpath = config['expt_dvc_dpath']
     print('expt_dvc_dpath = {}'.format(ub.urepr(expt_dvc_dpath, nl=1)))
 
+    import kwutil
+    repackage_kwargs = kwutil.Yaml.coerce(config.repackage_kwargs)
+    if repackage_kwargs is None:
+        repackage_kwargs = {}
+
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
         model_pattern=config['model_pattern'],
@@ -217,14 +228,14 @@ def main(cmdline=True, **kwargs):
 
     if ('repackage' in actions) and 'checkpoints' in targets:
         # Add might be a bad verb for this. Maybe "gather"?
-        manager.repackage_checkpoints(yes=config.yes)
+        manager.repackage_checkpoints(yes=config.yes, **repackage_kwargs)
 
     if ('add' in actions or 'gather' in actions) and 'packages' in targets:
         # Add might be a bad verb for this. Maybe "gather"?
-        manager.gather_packages(yes=config.yes)
+        manager.gather_packages(yes=config.yes, repackage_kwargs=repackage_kwargs)
 
     if 'push' in actions and 'packages' in targets:
-        manager.push_packages(yes=config.yes)
+        manager.push_packages(yes=config.yes, repackage_kwargs=repackage_kwargs)
 
     # if 'push' in actions:
     #     raise NotImplementedError
@@ -340,25 +351,25 @@ class DVCExptManager(ub.NiceRepr):
                 raise UserAbort
             manager.dvc.pull(pull_fpaths)
 
-    def gather_packages(manager, yes=None):
+    def gather_packages(manager, yes=None, repackage_kwargs=None):
         """
         TODO: break this up into smaller components.
         """
         # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.gather_packages(yes=yes)
+            state.gather_packages(yes=yes, repackage_kwargs=repackage_kwargs)
 
     add_packages = gather_packages
 
-    def repackage_checkpoints(manager, yes=None):
+    def repackage_checkpoints(manager, yes=None, **kwargs):
         """
         TODO: break this up into smaller components.
         """
         # from geowatch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.repackage_checkpoints(yes=yes)
+            state.repackage_checkpoints(yes=yes, **kwargs)
 
     def push_packages(manager, yes=None):
         """
@@ -904,7 +915,7 @@ class ExperimentState(ub.NiceRepr):
         tables = self.cross_referenced_tables()
         summarize_tables(tables)
 
-    def repackage_checkpoints(self, yes=None):
+    def repackage_checkpoints(self, yes=None, **kwargs):
         from geowatch.mlops import repackager
         from rich.prompt import Confirm
 
@@ -928,7 +939,7 @@ class ExperimentState(ub.NiceRepr):
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
-            _ = repackager.repackage(to_repackage)
+            _ = repackager.repackage(to_repackage, **kwargs)
 
     def copy_packages_to_dvc(self, yes=None):
         # Rebuild the tables to ensure we are up to date
@@ -995,18 +1006,20 @@ class ExperimentState(ub.NiceRepr):
             python -m geowatch.mlops.manager "status packages" --expt_dvc_dpath=$DVC_EXPT_DPATH
             """))
 
-    def gather_packages(self, yes=None):
+    def gather_packages(self, yes=None, repackage_kwargs=None):
         """
         This does what repackage used to do.
         Repackages checkpoints as torch packages, copies them to the DVC repo,
         and then adds them to DVC.
         """
-        self.repackage_checkpoints(yes=yes)
+        if repackage_kwargs is None:
+            repackage_kwargs = {}
+        self.repackage_checkpoints(yes=yes, **repackage_kwargs)
         self.copy_packages_to_dvc(yes=yes)
 
     add_packages = gather_packages   # backwards compat
 
-    def push_packages(self, yes=None):
+    def push_packages(self, yes=None, repackage_kwargs=None):
         """
         This does what repackage used to do.
         Repackages checkpoints as torch packages, copies them to the DVC repo,
@@ -1021,7 +1034,9 @@ class ExperimentState(ub.NiceRepr):
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
         >>> self.summarize()
         """
-        self.repackage_checkpoints(yes=yes)
+        if repackage_kwargs is None:
+            repackage_kwargs = {}
+        self.repackage_checkpoints(yes=yes, **repackage_kwargs)
         self.copy_packages_to_dvc(yes=yes)
         self.add_packages_to_dvc(yes=yes)
 

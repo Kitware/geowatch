@@ -48,5 +48,6 @@ python -m geowatch.mlops.aggregate \
     " \
     --plot_params="
         enabled: 1
-    "
+    " \
+    --cache_resolved_results=False
 

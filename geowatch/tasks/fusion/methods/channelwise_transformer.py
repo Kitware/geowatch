@@ -269,9 +269,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
     Example:
         >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from geowatch.tasks.fusion import datamodules
+        >>> import geowatch
         >>> print('(STEP 0): SETUP THE DATA MODULE')
+        >>> dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes-geowatch', num_workers=4, channels='auto')
+        >>>     train_dataset=dset, num_workers=2, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
@@ -728,6 +730,47 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.automatic_optimization = True
 
+        # A place to dynamically update what is requested of the model.
+        # Depending on what downstream users want we may be able to skip
+        # processing. This can be updated via the experimental "_notify"
+        # function.  Currently contains only "draw" to test out this idea.
+        self._requests = {
+            'draw': False,
+        }
+        self._callback_requests = {}
+
+    def _notify(self, requests: dict, callback_id: str = '__generic__'):
+        """
+        Tracks which callbacks requested what. Turns a request on if anyone
+        wants it and off if nobody wants it.
+
+        Example:
+            >>> from geowatch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> assert not self._requests['draw']
+            >>> self._notify({'draw': True}, 'callback1')
+            >>> assert self._requests['draw']
+            >>> self._notify({'draw': True}, 'callback2')
+            >>> assert self._requests['draw']
+            >>> self._notify({'draw': False}, 'callback2')
+            >>> assert self._requests['draw']
+            >>> self._notify({'draw': False}, 'callback1')
+            >>> assert not self._requests['draw']
+        """
+        if callback_id not in self._callback_requests:
+            self._callback_requests[callback_id] = {}
+
+        # Update requests for this callback
+        self._callback_requests[callback_id].update(requests)
+
+        # Compute final state: active if any callback requested it
+        final_state = {}
+        for cb_reqs in self._callback_requests.values():
+            for key, value in cb_reqs.items():
+                final_state[key] = final_state.get(key, False) or value
+
+        self._requests = final_state
+
     @classmethod
     def add_argparse_args(cls, parent_parser):
         """
@@ -1112,8 +1155,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from geowatch.tasks.fusion import methods
             >>> from geowatch.tasks.fusion import datamodules
             >>> import geowatch
+            >>> dset = geowatch.coerce_kwcoco('special:vidshapes-geowatch')
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes-geowatch',
+            >>>     train_dataset=dset,
             >>>     num_workers=0, chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
             >>>     channels='auto',
@@ -1135,7 +1179,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
             >>>     decoder='segmenter',
             >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
-            >>>     classes=datamodule.predictable_classes, input_sensorchan=datamodule.input_sensorchan)
+            >>>     classes=datamodule.predictable_classes, input_sensorchan=datamodule.input_sensorchan).eval()
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_items=3, overlay_on_image=False)
@@ -1326,7 +1370,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels).eval()
             >>> item = self.demo_batch(width=64, height=65)[0]
             >>> outputs = self.forward_item(item, with_loss=True)
             >>> print('item')
@@ -1343,7 +1387,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels,
-            >>>     decouple_resolution=False, global_box_weight=1)
+            >>>     decouple_resolution=False, global_box_weight=1).eval()
             >>> batch = self.demo_batch(width=64, height=64, num_timesteps=3)
             >>> item = batch[0]
             >>> from geowatch.utils.util_netharn import _debug_inbatch_shapes
@@ -1570,6 +1614,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         output_shape = list(max(all_shapes, key=lambda x: x[0] * x[1]))
         H, W = output_shape
 
+        # Only build probs if we need to.
+        compute_probabilities = not self.training or self._requests['draw']
+        probs = {}
+
         if not self.hparams.decouple_resolution:
             # Optimization for case where frames have same shape
             spacetime_features = torch.stack(perframe_stackable_encodings)
@@ -1613,44 +1661,44 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Convert logits into probabilities for output
             # Remove batch index in both cases
-            probs = {}
-            if 'change' in resampled_logits:
-                probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
-            if 'class' in resampled_logits:
-                criterion_encoding = self.criterions["class"].target_encoding
-                _logits = resampled_logits['class'].detach()
-                if criterion_encoding == "onehot":
-                    probs['class'] = _logits.sigmoid()[0]
-                elif criterion_encoding == "index":
-                    probs['class'] = _logits.softmax(dim=-1)[0]
-                else:
-                    raise NotImplementedError
-            if 'saliency' in resampled_logits:
-                probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
-            if 'box' in resampled_logits:
-                perframe_output_dims = [frame['output_dims'] for frame in item['frames']]
+            if compute_probabilities:
+                if 'change' in resampled_logits:
+                    probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
+                if 'class' in resampled_logits:
+                    criterion_encoding = self.criterions["class"].target_encoding
+                    _logits = resampled_logits['class'].detach()
+                    if criterion_encoding == "onehot":
+                        probs['class'] = _logits.sigmoid()[0]
+                    elif criterion_encoding == "index":
+                        probs['class'] = _logits.softmax(dim=-1)[0]
+                    else:
+                        raise NotImplementedError
+                if 'saliency' in resampled_logits:
+                    probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
+                if 'box' in resampled_logits:
+                    perframe_output_dims = [frame['output_dims'] for frame in item['frames']]
 
-                _raw_cxywh, _raw_scores = resampled_logits['box']
-                # Hack because we know we did boxes with only 2 classes
-                _raw_binary_scores = _raw_scores[:, :, 0].detach()
-                perframe_norm_boxes = kwimage.Boxes(_raw_cxywh.detach(), 'cxywh').to_ltrb()
-                # Rescale each box from predicted 0-1 coords to the size of the
-                # input frames.
-                perframe_ltrb_list = []
-                for norm_boxes, dims in zip(perframe_norm_boxes, perframe_output_dims):
-                    boxes = norm_boxes.scale(dims)
-                    # uncomment if we want to clip boxes
-                    # boxes = boxes.clip(0, 0, dims[1], dims[0])
-                    perframe_ltrb_list.append(boxes.data[None, ...])
-                # Create final Tx100x4 tensor of boxes
-                # todo perhaps we don't concat and just return a list
-                # to make it more clear that these are per-frame boxes:w
-                perframe_ltrb = torch.concat(perframe_ltrb_list, dim=0)
-                perframe_boxes = kwimage.Boxes(perframe_ltrb, 'ltrb')
-                probs['box'] = {
-                    'box_ltrb': perframe_boxes.to_ltrb().data,
-                    'box_probs': _raw_binary_scores.sigmoid()
-                }
+                    _raw_cxywh, _raw_scores = resampled_logits['box']
+                    # Hack because we know we did boxes with only 2 classes
+                    _raw_binary_scores = _raw_scores[:, :, 0].detach()
+                    perframe_norm_boxes = kwimage.Boxes(_raw_cxywh.detach(), 'cxywh').to_ltrb()
+                    # Rescale each box from predicted 0-1 coords to the size of the
+                    # input frames.
+                    perframe_ltrb_list = []
+                    for norm_boxes, dims in zip(perframe_norm_boxes, perframe_output_dims):
+                        boxes = norm_boxes.scale(dims)
+                        # uncomment if we want to clip boxes
+                        # boxes = boxes.clip(0, 0, dims[1], dims[0])
+                        perframe_ltrb_list.append(boxes.data[None, ...])
+                    # Create final Tx100x4 tensor of boxes
+                    # todo perhaps we don't concat and just return a list
+                    # to make it more clear that these are per-frame boxes:w
+                    perframe_ltrb = torch.concat(perframe_ltrb_list, dim=0)
+                    perframe_boxes = kwimage.Boxes(perframe_ltrb, 'ltrb')
+                    probs['box'] = {
+                        'box_ltrb': perframe_boxes.to_ltrb().data,
+                        'box_probs': _raw_binary_scores.sigmoid()
+                    }
         else:
             # NOTE: decoupled resolution lacks support here and may be removed.
             # For class / saliency frames are indepenent
@@ -1688,22 +1736,23 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Convert logits into probabilities for output
             # Remove batch index in both cases
-            probs = {}
-            if 'change' in resampled_logits:
-                probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
-            if 'class' in resampled_logits:
-                criterion_encoding = self.criterions["class"].target_encoding
-                logits = resampled_logits['class'].detach()
-                if criterion_encoding == "onehot":
-                    probs['class'] = logits.sigmoid()[0]
-                elif criterion_encoding == "index":
-                    probs['class'] = logits.softmax(dim=-1)[0]
-                else:
+            if compute_probabilities:
+                # Only build probs if we need to.
+                if 'change' in resampled_logits:
+                    probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
+                if 'class' in resampled_logits:
+                    criterion_encoding = self.criterions["class"].target_encoding
+                    logits = resampled_logits['class'].detach()
+                    if criterion_encoding == "onehot":
+                        probs['class'] = logits.sigmoid()[0]
+                    elif criterion_encoding == "index":
+                        probs['class'] = logits.softmax(dim=-1)[0]
+                    else:
+                        raise NotImplementedError
+                if 'saliency' in resampled_logits:
+                    probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
+                if 'box' in resampled_logits:
                     raise NotImplementedError
-            if 'saliency' in resampled_logits:
-                probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
-            if 'box' in resampled_logits:
-                raise NotImplementedError
 
         if with_loss:
             item_loss_parts, item_truths = self._build_item_loss_parts(
@@ -1950,6 +1999,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     box_valid_logits = []
                     box_valid_preds = []
                     for frame_idx, boxes in enumerate(item_truths['box']):
+                        # FIXME; this looks like a bug, will misalign the truth
                         if boxes.numel() != 0:
                             if len(boxes.shape) == 1:
                                 boxes = boxes.unsqueeze(0)

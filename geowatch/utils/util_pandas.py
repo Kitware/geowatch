@@ -6,7 +6,10 @@ import pygtrie
 import kwarray
 import wrapt
 from kwutil import slugify_ext
+from packaging.version import parse as Version
 from geowatch.utils.util_stringalgo import shortest_unique_suffixes
+
+PANDAS_GE_2_0_0 = Version(pd.__version__) >= Version('2.0.0')
 
 
 class DataFrame(pd.DataFrame):
@@ -1055,6 +1058,9 @@ def nan_eq(a, b):
 class GroupbyFutureWrapper(wrapt.ObjectProxy):
     """
     Wraps a groupby object to get the new behavior sooner.
+
+    TODO:
+        - [ ] remove this when pandas 1.x no longer supported
     """
 
     def __iter__(self):
@@ -1069,6 +1075,10 @@ class GroupbyFutureWrapper(wrapt.ObjectProxy):
 
 
 def _fix_groupby(groups):
+    """
+    TODO:
+        - [ ] remove this when pandas 1.x no longer supported
+    """
     keys = groups.keys
     if isinstance(keys, list) and len(keys) == 1:
         return GroupbyFutureWrapper(groups)
@@ -1091,11 +1101,15 @@ def pandas_fixed_groupby(df, by=None, **kwargs):
         >>>     'Color': ['Blue', 'Blue', 'Blue', 'Yellow'],
         >>>     'Max Speed': [380., 370., 24., 26.]
         >>>     })
-        >>> # Old behavior
+        >>> # Old behavior: In pandas 1.x groupbing by a legth-one list
+        >>> # would return a single item instead of a length-one tuple
+        >>> # as a key. In pandas 2.x this changed.
         >>> old1 = dict(list(df.groupby(['Animal', 'Color'])))
+        >>> # In 1.x the keys will be a str, In 2.x the keys will be a List[str] for old2.
         >>> old2 = dict(list(df.groupby(['Animal'])))
         >>> old3 = dict(list(df.groupby('Animal')))
         >>> new1 = dict(list(pandas_fixed_groupby(df, ['Animal', 'Color'])))
+        >>> # In 1.x and 2.x the keys will alwyas be a List[str] for new2.
         >>> new2 = dict(list(pandas_fixed_groupby(df, ['Animal'])))
         >>> new3 = dict(list(pandas_fixed_groupby(df, 'Animal')))
         >>> assert sorted(new1.keys())[0] == ('Falcon', 'Blue')
@@ -1109,5 +1123,9 @@ def pandas_fixed_groupby(df, by=None, **kwargs):
         >>>     assert sorted(old2.keys())[0] == 'Falcon'
     """
     groups = df.groupby(by=by, **kwargs)
-    fixed_groups = _fix_groupby(groups)
-    return fixed_groups
+    if PANDAS_GE_2_0_0:
+        # No need to fix 2.x
+        return groups
+    else:
+        fixed_groups = _fix_groupby(groups)
+        return fixed_groups

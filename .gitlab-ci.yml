@@ -18,7 +18,9 @@ stages:
   variables:
     # Change pip's cache directory to be inside the project directory
     # since we can only cache local items.
-    PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+
   except:
     # Don't run the pipeline for new tags
   - tags
@@ -26,11 +28,13 @@ stages:
   cache:
     paths:
     - .cache/pip
+    - .cache/uv
 .build_sdist_template: &build_sdist_template
   <<: *common_template
   stage: build
   script:
-  - python -m pip install setuptools>=0.8 wheel build twine
+  - python -m pip install pip uv -U
+  - python -m uv pip install setuptools>=0.8 wheel build twine
   - python -m build --sdist --outdir dist
   - python -m twine check ./dist/geowatch*.tar.gz
   artifacts:
@@ -43,7 +47,8 @@ stages:
   - 'python -V  # Print out python version for debugging'
   - df -h
   script:
-  - python -m pip install setuptools>=0.8 wheel build twine
+  - python -m pip install pip uv -U
+  - python -m uv pip install setuptools>=0.8 wheel build twine
   - python -m build --wheel --outdir dist
   - python -m twine check ./dist/geowatch*.whl
   artifacts:
@@ -53,39 +58,52 @@ stages:
   <<: *common_template
   stage: test
   coverage: /TOTAL.+ ([0-9]{1,3}%)/
+  except:
+    refs:
+    - release
 .test_full-loose_template: &test_full-loose_template
   <<: *common_test_template
   before_script:
   - |-
     # Setup the correct version of python (which should be the same as this instance)
     python --version  # Print out python version for debugging
-    export PYVER=$(python -c "import sys; print('{}{}'.format(*sys.version_info[0:2]))")
+    export PYVER=$(python -c "import sys; print(''.join(map(str, sys.version_info[0:2])))")
     python -m pip install virtualenv
     python -m virtualenv venv$PYVER
     source venv$PYVER/bin/activate
-    pip install pip -U
-    pip install pip setuptools -U
-    pip install pygments
+    python -m pip install pip uv -U
+    python -m uv pip install setuptools -U
+    python -m uv pip install pygments
     python --version  # Print out python version for debugging
   script:
   - export INSTALL_EXTRAS="tests,optional,headless"
   - echo "Finding the path to the wheel"
   - ls dist || echo "dist does not exist"
   - echo "Installing helpers"
-  - pip install setuptools>=0.8 setuptools_scm wheel build -U
-  - pip install tomli pkginfo
-  - "export WHEEL_FPATH=$(python -c \"if 1:\n    import pathlib\n    dist_dpath =
-    pathlib.Path('dist')\n    candidates = list(dist_dpath.glob('geowatch*.whl'))\n\
-    \    candidates += list(dist_dpath.glob('geowatch*.tar.gz'))\n    fpath = sorted(candidates)[-1]\n\
-    \    print(str(fpath).replace(chr(92), chr(47)))\n\")"
-  - "export MOD_VERSION=$(python -c \"if 1:\n    from pkginfo import Wheel, SDist\n\
-    \    fpath = '$WHEEL_FPATH'\n    cls = Wheel if fpath.endswith('.whl') else SDist\n\
-    \    print(cls(fpath).version)\n\")"
-  - pip install -r requirements/gdal.txt
+  - python -m pip install pip uv -U
+  - python -m uv pip install setuptools>=0.8 setuptools_scm wheel build -U
+  - python -m uv pip install tomli pkginfo
+  - |-
+    export WHEEL_FPATH=$(python -c "if 1:
+        import pathlib
+        dist_dpath = pathlib.Path('dist')
+        candidates = list(dist_dpath.glob('geowatch*.whl'))
+        candidates += list(dist_dpath.glob('geowatch*.tar.gz'))
+        fpath = sorted(candidates)[-1]
+        print(str(fpath).replace(chr(92), chr(47)))
+    ")
+  - |-
+    export MOD_VERSION=$(python -c "if 1:
+        from pkginfo import Wheel, SDist
+        fpath = '$WHEEL_FPATH'
+        cls = Wheel if fpath.endswith('.whl') else SDist
+        print(cls(fpath).version)
+    ")
+  - python -m uv pip install -r requirements/gdal.txt
   - echo "WHEEL_FPATH=$WHEEL_FPATH"
   - echo "INSTALL_EXTRAS=$INSTALL_EXTRAS"
   - echo "MOD_VERSION=$MOD_VERSION"
-  - pip install --prefer-binary "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
+  - python -m uv pip install "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
   - echo "Install finished."
   - echo "Creating test sandbox directory"
   - export WORKSPACE_DNAME="sandbox"
@@ -114,33 +132,44 @@ stages:
   - |-
     # Setup the correct version of python (which should be the same as this instance)
     python --version  # Print out python version for debugging
-    export PYVER=$(python -c "import sys; print('{}{}'.format(*sys.version_info[0:2]))")
+    export PYVER=$(python -c "import sys; print(''.join(map(str, sys.version_info[0:2])))")
     python -m pip install virtualenv
     python -m virtualenv venv$PYVER
     source venv$PYVER/bin/activate
-    pip install pip -U
-    pip install pip setuptools -U
-    pip install pygments
+    python -m pip install pip uv -U
+    python -m uv pip install setuptools -U
+    python -m uv pip install pygments
     python --version  # Print out python version for debugging
   script:
   - export INSTALL_EXTRAS="tests-strict,runtime-strict,optional-strict,headless-strict"
   - echo "Finding the path to the wheel"
   - ls dist || echo "dist does not exist"
   - echo "Installing helpers"
-  - pip install setuptools>=0.8 setuptools_scm wheel build -U
-  - pip install tomli pkginfo
-  - "export WHEEL_FPATH=$(python -c \"if 1:\n    import pathlib\n    dist_dpath =
-    pathlib.Path('dist')\n    candidates = list(dist_dpath.glob('geowatch*.whl'))\n\
-    \    candidates += list(dist_dpath.glob('geowatch*.tar.gz'))\n    fpath = sorted(candidates)[-1]\n\
-    \    print(str(fpath).replace(chr(92), chr(47)))\n\")"
-  - "export MOD_VERSION=$(python -c \"if 1:\n    from pkginfo import Wheel, SDist\n\
-    \    fpath = '$WHEEL_FPATH'\n    cls = Wheel if fpath.endswith('.whl') else SDist\n\
-    \    print(cls(fpath).version)\n\")"
-  - pip install -r requirements/gdal.txt
+  - python -m pip install pip uv -U
+  - python -m uv pip install setuptools>=0.8 setuptools_scm wheel build -U
+  - python -m uv pip install tomli pkginfo
+  - |-
+    export WHEEL_FPATH=$(python -c "if 1:
+        import pathlib
+        dist_dpath = pathlib.Path('dist')
+        candidates = list(dist_dpath.glob('geowatch*.whl'))
+        candidates += list(dist_dpath.glob('geowatch*.tar.gz'))
+        fpath = sorted(candidates)[-1]
+        print(str(fpath).replace(chr(92), chr(47)))
+    ")
+  - |-
+    export MOD_VERSION=$(python -c "if 1:
+        from pkginfo import Wheel, SDist
+        fpath = '$WHEEL_FPATH'
+        cls = Wheel if fpath.endswith('.whl') else SDist
+        print(cls(fpath).version)
+    ")
+  - sed 's/>=/==/' "requirements/gdal.txt" > "requirements/gdal-strict.txt"
+  - python -m uv pip install -r requirements/gdal-strict.txt
   - echo "WHEEL_FPATH=$WHEEL_FPATH"
   - echo "INSTALL_EXTRAS=$INSTALL_EXTRAS"
   - echo "MOD_VERSION=$MOD_VERSION"
-  - pip install --prefer-binary "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
+  - python -m uv pip install "geowatch[$INSTALL_EXTRAS]==$MOD_VERSION" -f dist
   - echo "Install finished."
   - echo "Creating test sandbox directory"
   - export WORKSPACE_DNAME="sandbox"
@@ -165,10 +194,10 @@ stages:
     python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="$MOD_NAME" "$MOD_DPATH" ../tests --durations=100
 build/sdist:
   <<: *build_sdist_template
-  image: python:3.11
-test/sdist/full-loose/cp311-linux-x86_64:
+  image: python:3.13
+test/sdist/full-loose/cp313-linux-x86_64:
   <<: *test_full-loose_template
-  image: python:3.11
+  image: python:3.13
   needs:
   - build/sdist
 build/cp310-linux-x86_64:
@@ -197,19 +226,33 @@ test/full-strict/cp311-linux-x86_64:
   image: python:3.11
   needs:
   - build/cp311-linux-x86_64
+build/cp313-linux-x86_64:
+  <<: *build_wheel_template
+  image: python:3.13
+test/full-loose/cp313-linux-x86_64:
+  <<: *test_full-loose_template
+  image: python:3.13
+  needs:
+  - build/cp313-linux-x86_64
+test/full-strict/cp313-linux-x86_64:
+  <<: *test_full-strict_template
+  image: python:3.13
+  needs:
+  - build/cp313-linux-x86_64
 lint:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: lint
   before_script:
   - df -h
   script:
-  - pip install -r requirements/linting.txt
+  - python -m pip install pip uv -U
+  - python -m uv pip install -r requirements/linting.txt
   - ./run_linter.sh
   allow_failure: true
 gpgsign/wheels:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: gpgsign
   artifacts:
     paths:
@@ -238,14 +281,10 @@ gpgsign/wheels:
   - openssl version
   - $GPG_EXECUTABLE --list-keys
     # note CI_KITWARE_SECRET is a protected variables only available on main and release branch
-  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a
-    -in dev/ci_public_gpg_key.pgp.enc | $GPG_EXECUTABLE --import
-  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a
-    -in dev/gpg_owner_trust.enc | $GPG_EXECUTABLE --import-ownertrust
-  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a
-    -in dev/ci_secret_gpg_subkeys.pgp.enc | $GPG_EXECUTABLE --import
-  - GPG_SIGN_CMD="$GPG_EXECUTABLE --batch --yes --detach-sign --armor --local-user
-    $GPG_KEYID"
+  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a -in dev/ci_public_gpg_key.pgp.enc | $GPG_EXECUTABLE --import
+  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a -in dev/gpg_owner_trust.enc | $GPG_EXECUTABLE --import-ownertrust
+  - CIS=$CI_SECRET openssl enc -aes-256-cbc -pbkdf2 -md SHA512 -pass env:CIS -d -a -in dev/ci_secret_gpg_subkeys.pgp.enc | $GPG_EXECUTABLE --import
+  - GPG_SIGN_CMD="$GPG_EXECUTABLE --batch --yes --detach-sign --armor --local-user $GPG_KEYID"
   - |-
     WHEEL_PATHS=(dist/*.whl dist/*.tar.gz)
     WHEEL_PATHS_STR=$(printf '"%s" ' "${WHEEL_PATHS[@]}")
@@ -259,7 +298,8 @@ gpgsign/wheels:
         $GPG_EXECUTABLE --verify $WHEEL_PATH.asc $WHEEL_PATH
     done
   - ls dist
-  - python -m pip install opentimestamps-client
+  - python -m pip install pip uv -U
+  - python -m uv pip install opentimestamps-client
   - ots stamp dist/*.tar.gz dist/*.whl dist/*.asc
   needs:
   - job: build/sdist
@@ -268,17 +308,21 @@ gpgsign/wheels:
     artifacts: true
   - job: build/cp311-linux-x86_64
     artifacts: true
+  - job: build/cp313-linux-x86_64
+    artifacts: true
 deploy/wheels:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: deploy
   only:
     refs:
     - release
   script:
-  - pip install pyopenssl ndg-httpsclient pyasn1 requests[security] twine -U
+  - python -m pip install pip uv -U
+  - python -m uv pip install pyopenssl ndg-httpsclient pyasn1 requests[security] setuptools twine -U
   - ls dist
   - |-
+    set -e
     WHEEL_PATHS=(dist/*.whl dist/*.tar.gz)
     WHEEL_PATHS_STR=$(printf '"%s" ' "${WHEEL_PATHS[@]}")
     source dev/secrets_configuration.sh
@@ -287,10 +331,11 @@ deploy/wheels:
     echo "$WHEEL_PATHS_STR"
     for WHEEL_PATH in "${WHEEL_PATHS[@]}"
     do
-        twine check $WHEEL_PATH.asc $WHEEL_PATH
+        twine check $WHEEL_PATH
         twine upload --username $TWINE_USERNAME --password $TWINE_PASSWORD $WHEEL_PATH || echo "upload already exists"
     done
   - |-
+    set -e
     # Have the server git-tag the release and push the tags
     export PROJECT_VERSION=$(python -c "import setup; print(setup.VERSION)")
     # do sed twice to handle the case of https clone with and without a read token
@@ -316,6 +361,7 @@ deploy/wheels:
         git push --tags "https://git-push-token:${PUSH_TOKEN}@${URL_HOST}"
     fi
   - |-
+    set -e
     # https://docs.gitlab.com/ee/ci/variables/predefined_variables.html
     echo "CI_PROJECT_ID=$CI_PROJECT_ID"
     echo "CI_PROJECT_NAME=$CI_PROJECT_NAME"
@@ -333,7 +379,7 @@ deploy/wheels:
     fi
 
     # Loop over all of the assets in the wheelhouse (i.e.  dist)
-    # and upload them to a package registery. We also store the
+    # and upload them to a package registry. We also store the
     # links to the artifacts so we can attach them to a release
     # page.
     PACKAGE_ARTIFACT_ARRAY=()

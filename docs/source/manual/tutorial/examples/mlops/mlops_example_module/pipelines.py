@@ -74,6 +74,15 @@ class Stage1_Evaluate(ProcessNode):
     }
 
     def load_result(self, node_dpath):
+        """
+        The specific implementation uses convinience functions that rely on how
+        the script implemention stores results, but any manual implementation
+        will work if it returns a flat dict items of the form:
+        ``"metrics.<node_name>.<metric>": <value>``.
+
+        Returns:
+            Dict[str, Any]
+        """
         import json
         from geowatch.mlops.aggregate_loader import new_process_context_parser
         from geowatch.utils import util_dotdict
@@ -86,18 +95,20 @@ class Stage1_Evaluate(ProcessNode):
         flat_resolved = flat_resolved.insert_prefix(self.name, index=1)
         return flat_resolved
 
-    def _default_metrics2(self):
+    def default_metrics(self):
         """
-        Might be renamed to default_metrics in the future.
+        Returns:
+            List[Dict]: containing information on how to interpret and
+            prioritize the metrics returned here.
         """
         metric_infos = [
             {
-                'suffix': 'accuracy',
+                'metric': 'accuracy',
                 'objective': 'maximize',
                 'primary': True,
             },
             {
-                'suffix': 'hamming_distance',
+                'metric': 'hamming_distance',
                 'objective': 'minimize',
                 'primary': True,
             }
