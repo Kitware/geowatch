@@ -58,6 +58,9 @@ stages:
   <<: *common_template
   stage: test
   coverage: /TOTAL.+ ([0-9]{1,3}%)/
+  except:
+    refs:
+    - release
 .test_full-loose_template: &test_full-loose_template
   <<: *common_test_template
   before_script:
@@ -161,7 +164,8 @@ stages:
         cls = Wheel if fpath.endswith('.whl') else SDist
         print(cls(fpath).version)
     ")
-  - python -m uv pip install -r requirements/gdal.txt
+  - sed 's/>=/==/' "requirements/gdal.txt" > "requirements/gdal-strict.txt"
+  - python -m uv pip install -r requirements/gdal-strict.txt
   - echo "WHEEL_FPATH=$WHEEL_FPATH"
   - echo "INSTALL_EXTRAS=$INSTALL_EXTRAS"
   - echo "MOD_VERSION=$MOD_VERSION"
@@ -190,10 +194,10 @@ stages:
     python -m pytest --verbose -p pytester -p no:doctest --xdoctest --cov-config ../pyproject.toml --cov-report term --cov="$MOD_NAME" "$MOD_DPATH" ../tests --durations=100
 build/sdist:
   <<: *build_sdist_template
-  image: python:3.11
-test/sdist/full-loose/cp311-linux-x86_64:
+  image: python:3.13
+test/sdist/full-loose/cp313-linux-x86_64:
   <<: *test_full-loose_template
-  image: python:3.11
+  image: python:3.13
   needs:
   - build/sdist
 build/cp310-linux-x86_64:
@@ -222,9 +226,22 @@ test/full-strict/cp311-linux-x86_64:
   image: python:3.11
   needs:
   - build/cp311-linux-x86_64
+build/cp313-linux-x86_64:
+  <<: *build_wheel_template
+  image: python:3.13
+test/full-loose/cp313-linux-x86_64:
+  <<: *test_full-loose_template
+  image: python:3.13
+  needs:
+  - build/cp313-linux-x86_64
+test/full-strict/cp313-linux-x86_64:
+  <<: *test_full-strict_template
+  image: python:3.13
+  needs:
+  - build/cp313-linux-x86_64
 lint:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: lint
   before_script:
   - df -h
@@ -235,7 +252,7 @@ lint:
   allow_failure: true
 gpgsign/wheels:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: gpgsign
   artifacts:
     paths:
@@ -291,18 +308,21 @@ gpgsign/wheels:
     artifacts: true
   - job: build/cp311-linux-x86_64
     artifacts: true
+  - job: build/cp313-linux-x86_64
+    artifacts: true
 deploy/wheels:
   <<: *common_template
-  image: python:3.11
+  image: python:3.13
   stage: deploy
   only:
     refs:
     - release
   script:
   - python -m pip install pip uv -U
-  - python -m uv pip install pyopenssl ndg-httpsclient pyasn1 requests[security] twine -U
+  - python -m uv pip install pyopenssl ndg-httpsclient pyasn1 requests[security] setuptools twine -U
   - ls dist
   - |-
+    set -e
     WHEEL_PATHS=(dist/*.whl dist/*.tar.gz)
     WHEEL_PATHS_STR=$(printf '"%s" ' "${WHEEL_PATHS[@]}")
     source dev/secrets_configuration.sh
@@ -311,10 +331,11 @@ deploy/wheels:
     echo "$WHEEL_PATHS_STR"
     for WHEEL_PATH in "${WHEEL_PATHS[@]}"
     do
-        twine check $WHEEL_PATH.asc $WHEEL_PATH
+        twine check $WHEEL_PATH
         twine upload --username $TWINE_USERNAME --password $TWINE_PASSWORD $WHEEL_PATH || echo "upload already exists"
     done
   - |-
+    set -e
     # Have the server git-tag the release and push the tags
     export PROJECT_VERSION=$(python -c "import setup; print(setup.VERSION)")
     # do sed twice to handle the case of https clone with and without a read token
@@ -340,6 +361,7 @@ deploy/wheels:
         git push --tags "https://git-push-token:${PUSH_TOKEN}@${URL_HOST}"
     fi
   - |-
+    set -e
     # https://docs.gitlab.com/ee/ci/variables/predefined_variables.html
     echo "CI_PROJECT_ID=$CI_PROJECT_ID"
     echo "CI_PROJECT_NAME=$CI_PROJECT_NAME"
